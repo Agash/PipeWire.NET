@@ -1,0 +1,195 @@
+# ClangSharpPInvokeGenerator response file for libpipewire-0.3.
+# Invoked by generate/generate.sh - see that script for prerequisites.
+#
+# The .g.cs files in src/PipeWire.NET/generated/ are the committed library contract;
+# downstream consumers do not need PipeWire headers to build against this library.
+
+# Single composite root header at generate/pipewire_composite.h (re-exports the
+# upstream headers we want bindings for). A single --file root avoids the
+# duplicate-emission ClangSharp produces with multiple roots.
+#
+# --traverse: ClangSharp emits declarations only from files named here (it matches
+# whole paths - directory prefixes match nothing, and there is no "all reachable"
+# mode). This list is therefore the explicit set of native surface we expose; add a
+# header here to expose more. Keep it in sync when bumping the PipeWire version.
+
+# - PipeWire public surface -
+--traverse
+/usr/include/pipewire-0.3/pipewire/pipewire.h
+--traverse
+/usr/include/pipewire-0.3/pipewire/stream.h
+--traverse
+/usr/include/pipewire-0.3/pipewire/core.h
+--traverse
+/usr/include/pipewire-0.3/pipewire/context.h
+--traverse
+/usr/include/pipewire-0.3/pipewire/main-loop.h
+--traverse
+/usr/include/pipewire-0.3/pipewire/thread-loop.h
+--traverse
+/usr/include/pipewire-0.3/pipewire/loop.h
+--traverse
+/usr/include/pipewire-0.3/pipewire/properties.h
+--traverse
+/usr/include/pipewire-0.3/pipewire/proxy.h
+--traverse
+/usr/include/pipewire-0.3/pipewire/protocol.h
+--traverse
+/usr/include/pipewire-0.3/pipewire/mem.h
+# NB: pipewire/keys.h is intentionally NOT traversed. PW_KEY_* are #define string
+# macros; emitting them needs generate-macro-bindings, which fails fatally on this
+# header set (PW_MAP_RANGE_INIT / SPA_POD_INIT_* use CompoundLiteralExpr). The
+# handful of keys we use are hand-declared in Native.Extensions.cs instead.
+
+# - SPA support / buffers / pod -
+--traverse
+/usr/include/spa-0.2/spa/support/plugin.h
+--traverse
+/usr/include/spa-0.2/spa/support/loop.h
+--traverse
+/usr/include/spa-0.2/spa/support/system.h
+--traverse
+/usr/include/spa-0.2/spa/buffer/buffer.h
+--traverse
+/usr/include/spa-0.2/spa/buffer/meta.h
+--traverse
+/usr/include/spa-0.2/spa/utils/hook.h
+--traverse
+/usr/include/spa-0.2/spa/utils/list.h
+--traverse
+/usr/include/spa-0.2/spa/utils/dict.h
+--traverse
+/usr/include/spa-0.2/spa/utils/defs.h
+--traverse
+/usr/include/spa-0.2/spa/utils/type.h
+--traverse
+/usr/include/spa-0.2/spa/pod/pod.h
+--traverse
+/usr/include/spa-0.2/spa/pod/command.h
+
+# - SPA params (format negotiation + buffer negotiation) -
+--traverse
+/usr/include/spa-0.2/spa/param/format.h
+--traverse
+/usr/include/spa-0.2/spa/param/param.h
+--traverse
+/usr/include/spa-0.2/spa/param/buffers.h
+--traverse
+/usr/include/spa-0.2/spa/param/video/raw.h
+--traverse
+/usr/include/spa-0.2/spa/param/video/color.h
+--traverse
+/usr/include/spa-0.2/spa/param/video/chroma.h
+--traverse
+/usr/include/spa-0.2/spa/param/video/multiview.h
+--traverse
+/usr/include/spa-0.2/spa/param/video/encoded.h
+--traverse
+/usr/include/spa-0.2/spa/param/audio/raw.h
+
+--include-directory
+/usr/include/pipewire-0.3
+--include-directory
+/usr/include/spa-0.2
+--include-directory
+/usr/include/x86_64-linux-gnu
+--include-directory
+/usr/include
+
+--namespace
+PipeWire.NET.Generated
+
+--methodClassName
+Native
+
+--libraryPath
+libpipewire-0.3
+
+--language
+c
+
+# Exclude functions/types that pull in unresolvable libc types (FILE*, va_list, timespec)
+# or that target the internal PipeWire protocol/loop subsystem which the public C# API
+# does not expose. The opaque pointer types (pw_proxy*, pw_mempool*, pw_protocol*) are
+# left in: their forward declarations generate empty record types, which is correct.
+--exclude
+pw_log_log
+--exclude
+pw_log_logv
+--exclude
+pw_log_logt
+--exclude
+pw_log_logtv
+--exclude
+pw_log_log_object
+--exclude
+pw_logv
+--exclude
+pw_vlog
+--exclude
+pw_log_set_funcs
+--exclude
+pw_log_topic_register_enum
+--exclude
+pw_log_topic_unregister_enum
+--exclude
+pw_properties_setva
+--exclude
+pw_properties_new_va
+--exclude
+pw_properties_new
+--exclude
+pw_properties_serialize_dict
+--exclude
+pw_split_strv
+--exclude
+pw_free_strv
+--exclude
+pw_split_walk
+--exclude
+pw_strip
+--exclude
+pw_protocol_implementation
+--exclude
+pw_protocol_get_implementation
+--exclude
+spa_loop_utils_methods
+--exclude
+spa_system_methods
+--exclude
+spa_loop_control_methods
+--exclude
+spa_loop_control_hooks
+--exclude
+__va_list_tag
+--exclude
+_IO_FILE
+--exclude
+_IO_marker
+--exclude
+_IO_codecvt
+--exclude
+_IO_wide_data
+--exclude
+timespec
+--exclude
+itimerspec
+# thread-loop timed-wait variants take struct timespec* (excluded above);
+# we use the plain pw_thread_loop_wait instead.
+--exclude
+pw_thread_loop_get_time
+--exclude
+pw_thread_loop_timed_wait_full
+
+--config
+generate-disable-runtime-marshalling
+generate-file-scoped-namespaces
+generate-helper-types
+multi-file
+preview-codegen
+unix-types
+exclude-funcs-with-body
+# generate-macro-bindings is DISABLED: many PipeWire macros use CompoundLiteralExpr
+# and the SPA_POD_INIT_* family, which ClangSharp 21 cannot translate. Enabling it
+# causes a fatal generator error. Version-style macro constants (PW_VERSION_*) are
+# hand-defined in the high-level wrappers where needed.

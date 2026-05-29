@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a problem with PipeWire.NET
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal code or steps that trigger the problem.
+    validations:
+      required: true
+  - type: input
+    id: package-version
+    attributes:
+      label: PipeWire.NET version
+      placeholder: e.g. 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: pipewire-version
+    attributes:
+      label: PipeWire version
+      description: Output of `pipewire --version`.
+      placeholder: e.g. 1.0.5
+    validations:
+      required: true
+  - type: input
+    id: dotnet-version
+    attributes:
+      label: .NET version
+      placeholder: e.g. 10.0.100
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution / kernel
+      placeholder: e.g. Ubuntu 24.04, x86_64
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant exception or `PIPEWIRE_DEBUG=3` output, if any.
+      render: shell
+    validations:
+      required: false

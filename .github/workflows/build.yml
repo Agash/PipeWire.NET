@@ -1,0 +1,149 @@
+name: build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+
+env:
+  NuGetDirectory: ${{ github.workspace }}/nuget
+
+jobs:
+  build_and_test:
+    name: Build, Test, and Pack
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0   # MinVer needs full history
+
+      - name: Install PipeWire runtime + dev headers + libclang
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libpipewire-0.3-0 \
+            libpipewire-0.3-dev \
+            libclang-dev \
+            pkg-config
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          # net11.0 target requires the .NET 11 preview SDK alongside the .NET 10 SDK.
+          # global.json (rollForward latestMajor, allowPrerelease) then selects the 11 SDK,
+          # which builds both the net10.0 and net11.0 target frameworks.
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - name: Restore
+        run: dotnet restore PipeWire.NET.slnx
+
+      - name: Build
+        run: dotnet build PipeWire.NET.slnx --no-restore -c Release
+
+      - name: Test (non-integration on host runner)
+        run: dotnet test PipeWire.NET.slnx --no-build -c Release
+             --filter "TestCategory!=Integration"
+
+      - name: Install ClangSharpPInvokeGenerator + native runtime packages
+        run: |
+          dotnet tool install --global ClangSharpPInvokeGenerator --version 21.1.8.3
+          # The dotnet tool packaging does not bundle libclang/libClangSharp;
+          # pull matching native packages and let generate.sh point LD at them.
+          mkdir -p /tmp/clangsharp-bootstrap
+          cd /tmp/clangsharp-bootstrap
+          dotnet new console -o dummy -n dummy --force
+          cd dummy
+          dotnet add package libclang.runtime.linux-x64        --version 21.1.8
+          dotnet add package libClangSharp.runtime.linux-x64   --version 21.1.8
+
+      - name: Verify generated bindings are up to date
+        run: |
+          bash generate/generate.sh
+          if ! git diff --quiet -- src/PipeWire.NET/generated/; then
+            echo "::error::Generated bindings are out of date."
+            echo "Run 'bash generate/generate.sh' locally and commit the result."
+            git diff -- src/PipeWire.NET/generated/
+            exit 1
+          fi
+
+      - name: Run Linux integration tests (against installed runtime, no daemon required)
+        run: dotnet test PipeWire.NET.slnx --no-build -c Release
+             --filter "TestCategory=Integration&TestCategory!=RequiresDaemon"
+
+      - name: Daemon end-to-end tests (headless PipeWire + GStreamer real sources)
+        # Non-gating: these exercise a real GStreamer -> PipeWire graph and pass in a proper
+        # PipeWire session (e.g. a desktop or WSL), but GitHub's headless runners cannot
+        # reliably host pipewiresink producers, so frames never arrive and the tests time out.
+        # Kept for signal; run locally for authoritative end-to-end validation.
+        continue-on-error: true
+        run: |
+          sudo apt-get install -y --no-install-recommends \
+            pipewire wireplumber pipewire-bin \
+            gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pipewire
+          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          pipewire &           PW_PID=$!
+          wireplumber &        WP_PID=$!
+          for i in $(seq 1 40); do pw-cli info 0 >/dev/null 2>&1 && break; sleep 0.25; done
+          set +e
+          dotnet test PipeWire.NET.slnx --no-build -c Release \
+            --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu"
+          RC=$?
+          set -e
+          kill $WP_PID $PW_PID 2>/dev/null || true
+          exit $RC
+
+      - name: Pack
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        run: dotnet pack src/PipeWire.NET/PipeWire.NET.csproj --no-build -c Release -o ${{ env.NuGetDirectory }}
+
+      - name: Upload package artifact
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-package
+          if-no-files-found: error
+          retention-days: 1
+          path: ${{ env.NuGetDirectory }}/*.nupkg
+
+  publish_nuget:
+    name: Publish NuGet Packages
+    needs: [build_and_test]
+    # Publishing runs only when a GitHub release is published (or manually dispatched), matching
+    # the other Agash packages. Requires a NuGet.org trusted-publishing policy for this package.
+    if: (github.event_name == 'release' && github.event.action == 'published') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # OIDC for NuGet.org trusted publishing
+
+    steps:
+      - name: Download package artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: nuget-package
+          path: ${{ env.NuGetDirectory }}
+
+      - uses: actions/setup-dotnet@v5
+
+      - name: NuGet login (OIDC)
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: Agash
+
+      - name: Publish packages
+        run: |
+          for f in "${{ env.NuGetDirectory }}"/*.nupkg; do
+            echo "Pushing $f"
+            dotnet nuget push "$f" \
+              --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done

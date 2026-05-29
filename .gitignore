@@ -1,0 +1,17 @@
+## .NET
+bin/
+obj/
+*.user
+.vs/
+*.suo
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## NuGet
+*.nupkg
+*.snupkg
+nuget/
+
+# VS/Rider per-user launch profiles
+**/Properties/launchSettings.json

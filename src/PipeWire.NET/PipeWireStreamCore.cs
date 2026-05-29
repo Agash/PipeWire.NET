@@ -1,0 +1,276 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using PipeWire.NET.Generated;
+
+namespace PipeWire.NET;
+
+/// <summary>
+/// Owns the native lifecycle shared by every PipeWire stream wrapper: the
+/// <c>pw_stream</c>, its event struct + listener hook, the self <see cref="GCHandle"/>,
+/// buffer dequeue/queue, thread-loop locking, and disposal.
+/// </summary>
+/// <remarks>
+/// The four public stream classes (video/audio x capture/output) are thin policy
+/// layers over this core. They supply direction, properties, the format pod, and a
+/// per-buffer handler; the core handles everything native and error-prone.
+/// All <c>pw_stream</c> operations run under the context's thread-loop lock; the
+/// <c>process</c> callback is invoked by the loop thread with that lock already held.
+/// </remarks>
+[SupportedOSPlatform("linux")]
+internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
+{
+    /// <summary>
+    /// Timing snapshot for a processing cycle, from <c>pw_stream_get_time</c>. All on the one
+    /// graph clock shared by every stream - the basis for A/V sync and sample-accurate position.
+    /// </summary>
+    /// <param name="CaptureClockNs">Monotonic graph time (ns) of the cycle. The sync reference.</param>
+    /// <param name="MediaClockNs">Media position (ns) at the cycle, from <c>ticks * rate</c>; -1 if unknown.</param>
+    /// <param name="DelayNs">Signal delay/latency (ns) between this stream and the hardware.</param>
+    internal readonly record struct StreamClock(long CaptureClockNs, long MediaClockNs, long DelayNs);
+
+    /// <summary>Invoked from <c>process</c> with the first data plane of a dequeued buffer.</summary>
+    /// <param name="data">First data plane of the buffer.</param>
+    /// <param name="buffer">The dequeued buffer (for metadata access).</param>
+    /// <param name="clock">Timing snapshot for this cycle.</param>
+    /// <remarks>The core dequeues before and queues after (even if this throws).</remarks>
+    internal delegate void BufferHandler(spa_data* data, pw_buffer* buffer, in StreamClock clock);
+
+    /// <summary>Invoked from <c>state_changed</c>.</summary>
+    internal delegate void StateHandler(PipeWireStreamState oldState, PipeWireStreamState newState);
+
+    /// <summary>Invoked from <c>param_changed</c> for the negotiated Format param only.</summary>
+    internal delegate void FormatHandler(spa_pod* param);
+
+    /// <summary>
+    /// Invoked after <see cref="FormatHandler"/> so the stream can declare its buffer/meta
+    /// requirements (it now knows the negotiated geometry). Call <see cref="RequestParams"/>
+    /// from here. If not supplied, the core requests just the SPA_META_Header.
+    /// </summary>
+    internal delegate void PostFormatHandler(PipeWireStreamCore core);
+
+    private readonly PipeWireContext _ctx;
+    private readonly BufferHandler _onBuffer;
+    private readonly StateHandler? _onState;
+    private readonly FormatHandler? _onFormat;
+    private readonly PostFormatHandler? _onPostFormat;
+
+    private pw_stream*        _stream;
+    private pw_stream_events* _events;
+    private spa_hook          _hook;
+    private GCHandle          _selfHandle;
+    private volatile bool     _disposed;
+
+    /// <param name="ctx">A started <see cref="PipeWireContext"/>.</param>
+    /// <param name="props">Stream properties (consumed by pw_stream_new).</param>
+    /// <param name="streamName">node.name advertised by the stream.</param>
+    /// <param name="onBuffer">Per-buffer handler (read for capture / fill for output).</param>
+    /// <param name="onState">Optional state-change handler.</param>
+    /// <param name="onFormat">Optional format-negotiation handler.</param>
+    /// <param name="onPostFormat">Optional hook to declare buffer/meta params after format is set.</param>
+    internal PipeWireStreamCore(
+        PipeWireContext ctx,
+        StreamProperties props,
+        string streamName,
+        BufferHandler onBuffer,
+        StateHandler? onState = null,
+        FormatHandler? onFormat = null,
+        PostFormatHandler? onPostFormat = null)
+    {
+        _ctx          = ctx;
+        _onBuffer     = onBuffer;
+        _onState      = onState;
+        _onPostFormat = onPostFormat;
+        _onFormat = onFormat;
+
+        _selfHandle = GCHandle.Alloc(this, GCHandleType.Normal);
+
+        _events = (pw_stream_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_stream_events));
+        _events->version       = Native.PW_VERSION_STREAM_EVENTS;
+        _events->process       = &OnProcess;
+        _events->state_changed = &OnStateChanged;
+        _events->param_changed = &OnParamChanged;
+
+        pw_properties* nativeProps = props.ToNativeProperties();
+
+        ReadOnlySpan<byte> nameUtf8 = System.Text.Encoding.UTF8.GetBytes(streamName + '\0');
+        using (_ctx.Lock())
+        {
+            fixed (byte* n = nameUtf8)
+                _stream = Native.pw_stream_new(_ctx.CoreHandle, (sbyte*)n, nativeProps);
+
+            if (_stream is null)
+            {
+                _selfHandle.Free();
+                NativeMemory.Free(_events);
+                _events = null;
+                throw new InvalidOperationException("pw_stream_new failed.");
+            }
+
+            fixed (spa_hook* hookPtr = &_hook)
+                Native.pw_stream_add_listener(_stream, hookPtr, _events,
+                    (void*)GCHandle.ToIntPtr(_selfHandle));
+        }
+    }
+
+    /// <summary>Connects the stream. <paramref name="formatPod"/> is copied by PipeWire before returning.</summary>
+    /// <remarks>
+    /// The SPA_META_Header (which carries the presentation timestamp) is NOT requested here -
+    /// PipeWire's contract is to declare buffer/meta wants from the <c>param_changed</c> callback
+    /// once the format is set, via <c>pw_stream_update_params</c>. The core does that automatically.
+    /// </remarks>
+    internal void Connect(spa_direction direction, uint targetNodeId, pw_stream_flags flags, ReadOnlySpan<byte> formatPod)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        using (_ctx.Lock())
+        {
+            int rc;
+            fixed (byte* fp = formatPod)
+            {
+                spa_pod* param = (spa_pod*)fp;
+                rc = Native.pw_stream_connect(_stream, direction, targetNodeId, flags, &param, 1);
+            }
+            if (rc < 0)
+                throw new InvalidOperationException($"pw_stream_connect failed with code {rc}.");
+        }
+    }
+
+    /// <summary>
+    /// Declares that delivered buffers should carry a SPA_META_Header (presentation timestamp).
+    /// Must be called from the param_changed callback after the format is set - that is the
+    /// point at which PipeWire accepts buffer/meta requests via pw_stream_update_params.
+    /// </summary>
+    private void RequestHeaderMeta()
+    {
+        Span<byte> metaPod = stackalloc byte[64];
+        Spa.SpaFormat.WriteHeaderMetaParam(metaPod);
+        fixed (byte* mp = metaPod)
+        {
+            spa_pod* p = (spa_pod*)mp;
+            Native.pw_stream_update_params(_stream, &p, 1);
+        }
+    }
+
+    /// <inheritdoc/>
+    public ValueTask DisposeAsync()
+    {
+        if (_disposed) return ValueTask.CompletedTask;
+        _disposed = true;
+
+        // Disconnect/destroy must run under the loop lock to avoid racing a callback.
+        if (_stream is not null)
+        {
+            using (_ctx.Lock())
+            {
+                Native.pw_stream_disconnect(_stream);
+                Native.pw_stream_destroy(_stream);
+                _stream = null;
+            }
+        }
+        if (_events is not null)
+        {
+            NativeMemory.Free(_events);
+            _events = null;
+        }
+        if (_selfHandle.IsAllocated) _selfHandle.Free();
+
+        return ValueTask.CompletedTask;
+    }
+
+    // - Native callbacks (invoked by the loop thread with the lock held) -
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnProcess(void* data)
+    {
+        var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
+        if (self is null || self._disposed) return;
+
+        pw_buffer* buf = Native.pw_stream_dequeue_buffer(self._stream);
+        if (buf is null) return;
+        try
+        {
+            spa_buffer* spaBuf = buf->buffer;
+            if (spaBuf is null || spaBuf->n_datas == 0) return;
+
+            // Graph clock for this cycle - the common monotonic reference across all streams,
+            // plus media position (ticks*rate) and latency (delay*rate) per PipeWire's timing model.
+            StreamClock clock = new(-1, -1, 0);
+            pw_time t;
+            if (Native.pw_stream_get_time_n(self._stream, &t, (nuint)sizeof(pw_time)) == 0)
+            {
+                long num = t.rate.num, denom = t.rate.denom;     // seconds per tick = num/denom
+                long mediaNs = denom != 0 ? (long)((double)(ulong)t.ticks * num / denom * 1e9) : -1;
+                long delayNs = denom != 0 ? (long)((double)(long)t.delay * num / denom * 1e9) : 0;
+                clock = new StreamClock((long)t.now, mediaNs, delayNs);
+            }
+
+            spa_data* d = &spaBuf->datas[0];
+            self._onBuffer(d, buf, in clock);
+        }
+        catch
+        {
+            // A throwing user handler must not abort the realtime loop thread (unmanaged callback).
+        }
+        finally
+        {
+            Native.pw_stream_queue_buffer(self._stream, buf);
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnStateChanged(void* data, pw_stream_state old, pw_stream_state state, sbyte* error)
+    {
+        var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
+        self?._onState?.Invoke((PipeWireStreamState)(int)old, (PipeWireStreamState)(int)state);
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnParamChanged(void* data, uint id, spa_pod* param)
+    {
+        if (param is null || id != Spa.SpaParam.Format) return;
+        var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
+        if (self is null || self._disposed) return;
+
+        // This runs in an unmanaged callback - an escaping exception would abort the process,
+        // so contain it. (A managed bug here must not take down the host application.)
+        try
+        {
+            self._onFormat?.Invoke(param);
+            // Format is set -> declare buffer/meta requirements via pw_stream_update_params
+            // (documented point; the loop lock is already held in this callback).
+            if (self._onPostFormat is not null)
+                self._onPostFormat(self);
+            else
+                self.RequestHeaderMeta();
+        }
+        catch
+        {
+            // Swallow: negotiation continues with defaults rather than crashing the loop thread.
+        }
+    }
+
+    /// <summary>
+    /// Sends up to two param pods via pw_stream_update_params. Call only from the param_changed
+    /// callback (where the loop lock is held), e.g. from a <see cref="PostFormatHandler"/>.
+    /// </summary>
+    internal void RequestParams(ReadOnlySpan<byte> pod0, ReadOnlySpan<byte> pod1 = default)
+    {
+        fixed (byte* p0 = pod0)
+        fixed (byte* p1 = pod1)
+        {
+            if (pod1.IsEmpty)
+            {
+                spa_pod* one = (spa_pod*)p0;
+                Native.pw_stream_update_params(_stream, &one, 1);
+            }
+            else
+            {
+                spa_pod** arr = stackalloc spa_pod*[2];
+                arr[0] = (spa_pod*)p0;
+                arr[1] = (spa_pod*)p1;
+                Native.pw_stream_update_params(_stream, arr, 2);
+            }
+        }
+    }
+}
