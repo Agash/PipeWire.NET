@@ -97,7 +97,12 @@ public sealed class PipeWireVideoOutput : IAsyncDisposable
             .WithRole("Camera")
             .WithNodeName(_name);
 
-        _core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState);
+        // OnPostFormatHostMem declares the buffer requirements once the format is set. This is mandatory for a
+        // video producer: unlike audio (whose buffer size PipeWire derives from the graph clock), a video node
+        // must advertise the exact image size/stride, or the daemon cannot size the shared-memory buffers -
+        // negotiation then drives pw_impl_port_set_param into a bad dereference (a hard crash) and the consumer
+        // only ever dequeues empty (size-0) buffers. PipeWire's own video-src.c declares Buffers the same way.
+        _core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState, onPostFormat: OnPostFormatHostMem);
 
         Span<byte> pod = stackalloc byte[512];
         int len = SpaFormat.WriteVideoFormat(pod,
@@ -105,6 +110,21 @@ public sealed class PipeWireVideoOutput : IAsyncDisposable
         _core.Connect(spa_direction.SPA_DIRECTION_OUTPUT, Native.PW_ID_ANY,
             pw_stream_flags.PW_STREAM_FLAG_AUTOCONNECT | pw_stream_flags.PW_STREAM_FLAG_MAP_BUFFERS,
             pod[..len]);
+    }
+
+    // Host-memory buffer requirements: one contiguous MemPtr block holding the whole image (the OnBuffer path
+    // fills datas[0] with stride*height bytes), plus the SPA_META_Header so frames carry a PTS.
+    private void OnPostFormatHostMem(PipeWireStreamCore core)
+    {
+        int stride = SpaFormat.VideoStride(_format, _width);
+        int size = SpaFormat.VideoImageSize(_format, _width, _height);
+        Span<byte> buffers = stackalloc byte[256];
+        int bl = SpaFormat.WriteVideoBuffersParam(buffers, size, stride,
+            dataTypes: 1 << (int)SpaType.DataMemPtr, blocks: 1);
+
+        Span<byte> meta = stackalloc byte[64];
+        int ml = SpaFormat.WriteHeaderMetaParam(meta);
+        core.RequestParams(buffers[..bl], meta[..ml]);
     }
 
     /// <summary>
