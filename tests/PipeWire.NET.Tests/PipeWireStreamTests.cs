@@ -270,6 +270,171 @@ public sealed class MetadataMappingTests
 }
 
 [TestClass]
+public sealed class ModifierNegotiationTests
+{
+    // Two sample DRM format modifiers (values are opaque 64-bit tokens; the test only checks the wire
+    // round-trip, not their meaning). Linear plus an AMD GFX9 tiled-ish token exercise multi-value.
+    private const long ModLinear = 0;
+    private const long ModTiled  = 0x0300_0000_0000_0001L;
+
+    [TestMethod]
+    public void WriteVideoFormat_FirstPass_OffersLongChoiceWithMandatoryDontFixate()
+    {
+        Span<byte> buf = stackalloc byte[512];
+        ReadOnlySpan<PixelFormat> fmts = stackalloc[] { PixelFormat.Yuv420 };
+        ReadOnlySpan<long> mods = stackalloc[] { ModTiled, ModLinear };
+        int len = SpaFormat.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false, modifiers: mods);
+
+        var reader = new SpaPodReader(buf[..len]);
+        Assert.IsTrue(reader.EnterObject(out _, out _, out _));
+
+        bool sawModifier = false;
+        while (reader.TryReadProperty(out uint key, out uint flags, out var value))
+        {
+            if (key != SpaFormatVideo.Modifier) continue;
+            sawModifier = true;
+
+            // First pass MUST advertise MANDATORY|DONT_FIXATE so the producer narrows the modifier
+            // set to what it supports without collapsing it to a single value (the two-step handshake).
+            Assert.AreEqual(SpaPodPropFlag.Mandatory, flags & SpaPodPropFlag.Mandatory, "MANDATORY must be set");
+            Assert.AreEqual(SpaPodPropFlag.DontFixate, flags & SpaPodPropFlag.DontFixate, "DONT_FIXATE must be set");
+
+            Assert.IsTrue(value.TryReadModifier(out long first, out int count));
+            Assert.AreEqual(2, count, "both offered modifiers must be on the wire");
+            Assert.AreEqual(ModTiled, first, "the first offered modifier is the preferred one");
+        }
+        Assert.IsTrue(sawModifier, "EnumFormat must carry a modifier property when modifiers are offered");
+    }
+
+    [TestMethod]
+    public void WriteVideoFormat_FixatePass_ClearsDontFixate()
+    {
+        Span<byte> buf = stackalloc byte[512];
+        ReadOnlySpan<PixelFormat> fmts = stackalloc[] { PixelFormat.Yuv420 };
+        ReadOnlySpan<long> mods = stackalloc[] { ModTiled };
+        int len = SpaFormat.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false,
+            modifiers: mods, fixateModifier: true);
+
+        var reader = new SpaPodReader(buf[..len]);
+        Assert.IsTrue(reader.EnterObject(out _, out _, out _));
+        while (reader.TryReadProperty(out uint key, out uint flags, out _))
+        {
+            if (key != SpaFormatVideo.Modifier) continue;
+            // The fixate pass keeps MANDATORY but drops DONT_FIXATE, telling the producer to settle
+            // on the single modifier we now offer.
+            Assert.AreEqual(SpaPodPropFlag.Mandatory, flags & SpaPodPropFlag.Mandatory);
+            Assert.AreEqual(0u, flags & SpaPodPropFlag.DontFixate, "fixate pass must NOT set DONT_FIXATE");
+        }
+    }
+
+    [TestMethod]
+    public unsafe void ParseVideoFormat_MultiModifierChoice_FlagsFixationNeeded()
+    {
+        Span<byte> buf = stackalloc byte[512];
+        ReadOnlySpan<PixelFormat> fmts = stackalloc[] { PixelFormat.Yuv420 };
+        ReadOnlySpan<long> mods = stackalloc[] { ModTiled, ModLinear };
+        int len = SpaFormat.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false, modifiers: mods);
+
+        SpaFormat.VideoFormatInfo info;
+        fixed (byte* p = buf)
+            info = SpaFormat.ParseVideoFormat((spa_pod*)p,
+                new SpaFormat.VideoFormatInfo(PixelFormat.Yuv420, 0, 0, VideoColorInfo.Unknown));
+
+        Assert.AreEqual((ulong)ModTiled, info.Modifier, "preferred modifier is the first offered");
+        Assert.IsTrue(info.ModifierNeedsFixation, "more than one modifier => still needs fixation");
+    }
+
+    [TestMethod]
+    public unsafe void ParseVideoFormat_SingleModifier_IsFixated()
+    {
+        Span<byte> buf = stackalloc byte[512];
+        ReadOnlySpan<PixelFormat> fmts = stackalloc[] { PixelFormat.Yuv420 };
+        ReadOnlySpan<long> mods = stackalloc[] { ModTiled };
+        int len = SpaFormat.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false,
+            modifiers: mods, fixateModifier: true);
+
+        SpaFormat.VideoFormatInfo info;
+        fixed (byte* p = buf)
+            info = SpaFormat.ParseVideoFormat((spa_pod*)p,
+                new SpaFormat.VideoFormatInfo(PixelFormat.Yuv420, 0, 0, VideoColorInfo.Unknown));
+
+        Assert.AreEqual((ulong)ModTiled, info.Modifier);
+        Assert.IsFalse(info.ModifierNeedsFixation, "a single modifier is already fixated");
+    }
+
+    [TestMethod]
+    public void VideoFrame_CarriesModifierAndPlanes()
+    {
+        ReadOnlySpan<byte> px = default;
+        ReadOnlySpan<VideoPlane> planes = stackalloc VideoPlane[]
+        {
+            new VideoPlane(Fd: 7, Offset: 0,        Stride: 1920, Size: 1920 * 1080),
+            new VideoPlane(Fd: 7, Offset: 1920*1080, Stride: 1920, Size: 1920 * 1080 / 2),
+        };
+        var frame = new VideoFrame(px, 1920, 1920, 1080, PixelFormat.Yuv420, 1,
+            bufferType: PipeWireBufferType.DmaBuf, fd: 7,
+            modifier: (ulong)ModTiled, planes: planes);
+
+        Assert.AreEqual((ulong)ModTiled, frame.Modifier);
+        Assert.AreEqual(2, frame.Planes.Length);
+        Assert.AreEqual(1920 * 1080u, frame.Planes[1].Offset);
+        Assert.IsTrue(frame.IsFdBacked);
+    }
+}
+
+[TestClass]
+public sealed class DmaBufOutputTests
+{
+    [TestMethod]
+    public void PlaneCount_MatchesFormatLayout()
+    {
+        Assert.AreEqual(1, SpaFormat.PlaneCount(PixelFormat.Bgra));
+        Assert.AreEqual(1, SpaFormat.PlaneCount(PixelFormat.Yuyv));
+        Assert.AreEqual(2, SpaFormat.PlaneCount(PixelFormat.Nv12), "NV12 = Y + interleaved UV");
+        Assert.AreEqual(3, SpaFormat.PlaneCount(PixelFormat.Yuv420), "I420 = Y + U + V");
+    }
+
+    [TestMethod]
+    public void Nv12_RoundtripsThroughSpaFormat()
+    {
+        uint spa = SpaFormat.ToSpaVideoFormat(PixelFormat.Nv12);
+        Assert.AreEqual(SpaVideoFormat.NV12, spa);
+        Assert.AreEqual(PixelFormat.Nv12, SpaFormat.FromSpaVideoFormat(spa));
+    }
+
+    [TestMethod]
+    public void WriteVideoBuffersParam_DmaBufNv12_RequestsTwoBlocks()
+    {
+        // A dmabuf producer for NV12 must request one block per plane (2) so each plane gets its own
+        // spa_data (fd/offset/stride), and advertise the DMA-BUF data type only.
+        int blocks = SpaFormat.PlaneCount(PixelFormat.Nv12);
+        Span<byte> buf = stackalloc byte[256];
+        int len = SpaFormat.WriteVideoBuffersParam(buf,
+            size: SpaFormat.VideoImageSize(PixelFormat.Nv12, 1920, 1080),
+            stride: SpaFormat.VideoStride(PixelFormat.Nv12, 1920),
+            dataTypes: 1 << (int)SpaType.DataDmaBuf, blocks: blocks);
+
+        var reader = new SpaPodReader(buf[..len]);
+        Assert.IsTrue(reader.EnterObject(out uint objType, out _, out _));
+        Assert.AreEqual(SpaType.ObjectParamBuffers, objType);
+
+        int? sawBlocks = null, sawDataType = null;
+        while (reader.TryReadProperty(out uint key, out var value))
+        {
+            if (key == SpaParamBuffers.Blocks)
+                sawBlocks = value.TryUnwrapChoice(out var i) ? i.ReadInt() : value.ReadInt();
+            else if (key == SpaParamBuffers.DataType)
+                sawDataType = value.TryUnwrapChoice(out var i) ? i.ReadInt() : value.ReadInt();
+        }
+
+        Assert.AreEqual(2, sawBlocks, "NV12 dmabuf must request 2 blocks");
+        int dmaBufBit = 1 << (int)spa_data_type.SPA_DATA_DmaBuf;
+        Assert.IsNotNull(sawDataType);
+        Assert.AreEqual(dmaBufBit, sawDataType!.Value & dmaBufBit, "must advertise DMA-BUF");
+    }
+}
+
+[TestClass]
 public sealed class NativeLibraryResolutionTests
 {
     [TestMethod]

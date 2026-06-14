@@ -37,12 +37,14 @@ internal static class SpaFormat
     /// must be correct for the negotiated layout - see <see cref="VideoStride"/> /
     /// <see cref="VideoImageSize"/>, which handle packed and planar formats.
     /// </remarks>
-    internal static int WriteVideoBuffersParam(Span<byte> buf, int size, int stride, int dataTypes)
+    internal static int WriteVideoBuffersParam(Span<byte> buf, int size, int stride, int dataTypes, int blocks = 1)
     {
         var b = new SpaPodBuilder(buf);
         b.PushObject(SpaType.ObjectParamBuffers, SpaParam.Buffers);
         b.AddChoiceRangeInt(SpaParamBuffers.Buffers, 8, 2, 16);
-        b.AddInt(SpaParamBuffers.Blocks, 1);
+        // Blocks = number of dmabuf planes (one spa_data block per plane). A packed format / host buffer
+        // is a single block; planar dmabuf (NV12) needs one block per plane so each plane gets its own fd.
+        b.AddInt(SpaParamBuffers.Blocks, blocks);
         b.AddInt(SpaParamBuffers.Size, size);
         b.AddInt(SpaParamBuffers.Stride, stride);
         b.AddChoiceFlagsInt(SpaParamBuffers.DataType, dataTypes);
@@ -53,6 +55,7 @@ internal static class SpaFormat
     internal static int VideoStride(PixelFormat fmt, int width) => fmt switch
     {
         PixelFormat.Yuv420 => width,        // I420 Y-plane stride
+        PixelFormat.Nv12   => width,        // NV12 Y-plane stride
         PixelFormat.Yuyv   => width * 2,
         _                  => width * 4,    // packed 32bpp (BGRA/RGBA/BGRx/RGBx)
     };
@@ -61,6 +64,7 @@ internal static class SpaFormat
     internal static int VideoImageSize(PixelFormat fmt, int width, int height) => fmt switch
     {
         PixelFormat.Yuv420 => width * height * 3 / 2,   // Y + U/4 + V/4
+        PixelFormat.Nv12   => width * height * 3 / 2,   // Y + interleaved UV/2
         PixelFormat.Yuyv   => width * height * 2,
         _                  => width * height * 4,
     };
@@ -104,8 +108,29 @@ internal static class SpaFormat
     // - Format-pod parsing (param_changed) -
 
     /// <summary>The negotiated video format extracted from a Format pod.</summary>
+    /// <param name="Format">Negotiated pixel format.</param>
+    /// <param name="Width">Frame width in pixels.</param>
+    /// <param name="Height">Frame height in pixels.</param>
+    /// <param name="Color">Negotiated color metadata.</param>
+    /// <param name="Modifier">
+    /// The negotiated DRM format modifier, or <see cref="DrmFormatModifier.Invalid"/> when none was
+    /// negotiated (host-memory path). When <paramref name="ModifierNeedsFixation"/> is set this is the
+    /// producer's <em>preferred</em> (first-returned) modifier rather than a final value.
+    /// </param>
+    /// <param name="ModifierNeedsFixation">
+    /// True when the producer returned more than one modifier (it honoured <c>DONT_FIXATE</c>) and the
+    /// negotiation must be fixated by re-offering a single modifier.
+    /// </param>
+    // We deliberately keep ONLY the preferred modifier + a "needs fixation" flag, never the full
+    // returned set. The set is never needed: the consumer offers exactly the modifiers its GPU can
+    // import, so whatever subset the producer returns is entirely importable and the first one is
+    // always a safe choice to fixate on. Storing just a scalar keeps this a stack-friendly value type
+    // (a record struct held in a field) with zero heap allocation per negotiation - materialising the
+    // set into a long[] would allocate for no benefit and break the library's zero-copy discipline.
     internal readonly record struct VideoFormatInfo(
-        PixelFormat Format, int Width, int Height, VideoColorInfo Color);
+        PixelFormat Format, int Width, int Height, VideoColorInfo Color,
+        ulong Modifier = DrmFormatModifier.Invalid,
+        bool ModifierNeedsFixation = false);
 
     /// <summary>The negotiated audio format extracted from a Format pod.</summary>
     internal readonly record struct AudioFormatInfo(AudioSampleFormat Format, int SampleRate, int Channels);
@@ -115,6 +140,8 @@ internal static class SpaFormat
     {
         var (fmt, w, h, color) = (current.Format, current.Width, current.Height, current.Color);
         var (range, matrix, transfer, primaries) = (color.Range, color.Matrix, color.Transfer, color.Primaries);
+        ulong modifier = current.Modifier;
+        bool modifierNeedsFixation = current.ModifierNeedsFixation;
 
         uint size = ((uint*)param)[0];
         var pod = new ReadOnlySpan<byte>(param, 8 + (int)size);
@@ -127,6 +154,19 @@ internal static class SpaFormat
                 {
                     if (key == SpaFormatVideo.Format)
                         fmt = FromSpaVideoFormat(ReadId(ref value));
+                    else if (key == SpaFormatVideo.Modifier)
+                    {
+                        // The producer returns either a single fixated modifier or, when it honoured
+                        // DONT_FIXATE, a choice of several it supports. We only need the preferred one
+                        // (to use/fixate on) and whether more than one came back (must fixate) - both
+                        // read in place with no allocation. See VideoFormatInfo for why the full set
+                        // is intentionally discarded.
+                        if (value.TryReadModifier(out long first, out int n) && n > 0)
+                        {
+                            modifier = (ulong)first;
+                            modifierNeedsFixation = n > 1;
+                        }
+                    }
                     else if (key == SpaFormatVideo.Size)
                     {
                         var (rw, rh) = value.TryUnwrapChoice(out var i) ? i.ReadRectangle() : value.ReadRectangle();
@@ -144,7 +184,8 @@ internal static class SpaFormat
                 catch (InvalidOperationException) { /* malformed property - skip */ }
             }
         }
-        return new VideoFormatInfo(fmt, w, h, new VideoColorInfo(range, matrix, transfer, primaries));
+        return new VideoFormatInfo(fmt, w, h, new VideoColorInfo(range, matrix, transfer, primaries),
+            modifier, modifierNeedsFixation);
 
         static uint ReadId(ref SpaPodReader v) => v.TryUnwrapChoice(out var inner) ? inner.ReadId() : v.ReadId();
     }
@@ -182,11 +223,30 @@ internal static class SpaFormat
     /// Writes a video EnumFormat object. When <paramref name="formats"/> is empty a
     /// broad default set is offered; otherwise exactly the requested formats.
     /// </summary>
+    /// <param name="buf">Destination buffer for the POD bytes.</param>
+    /// <param name="formats">Pixel formats to offer (empty = broad default set).</param>
+    /// <param name="defaultWidth">Default/preferred width.</param>
+    /// <param name="defaultHeight">Default/preferred height.</param>
+    /// <param name="defaultFrameRate">Default/preferred frame rate (per second).</param>
+    /// <param name="fixedSize">True to offer a single fixed size/rate; false to offer a range.</param>
+    /// <param name="modifiers">
+    /// DRM format modifiers to offer for zero-copy dmabuf. When non-empty, a single
+    /// <paramref name="formats"/> entry should be supplied (modifiers are per-format). The first
+    /// modifier is preferred; the rest are alternatives.
+    /// </param>
+    /// <param name="fixateModifier">
+    /// On the first pass pass <see langword="false"/>: the modifier choice is offered with
+    /// <c>DONT_FIXATE</c> so the producer narrows it without collapsing. Once the consumer has
+    /// chosen a single modifier its GPU supports, re-submit with <see langword="true"/> (no
+    /// <c>DONT_FIXATE</c>) to fixate the negotiation.
+    /// </param>
     internal static int WriteVideoFormat(
         Span<byte> buf,
         ReadOnlySpan<PixelFormat> formats,
         uint defaultWidth, uint defaultHeight, uint defaultFrameRate,
-        bool fixedSize)
+        bool fixedSize,
+        ReadOnlySpan<long> modifiers = default,
+        bool fixateModifier = false)
     {
         var b = new SpaPodBuilder(buf);
         b.PushObject(SpaType.ObjectFormat, SpaParam.EnumFormat);
@@ -210,6 +270,17 @@ internal static class SpaFormat
             for (int i = 0; i < formats.Length; i++)
                 ids[i] = ToSpaVideoFormat(formats[i]);
             b.AddChoiceEnum(SpaFormatVideo.Format, ids);
+        }
+
+        // The modifier property must follow the format and precede size (PipeWire convention).
+        // First pass: MANDATORY|DONT_FIXATE so the producer returns its supported subset without
+        // fixating; fixation pass: MANDATORY only, with the single chosen modifier.
+        if (!modifiers.IsEmpty)
+        {
+            uint propFlags = fixateModifier
+                ? SpaPodPropFlag.Mandatory
+                : SpaPodPropFlag.Mandatory | SpaPodPropFlag.DontFixate;
+            b.AddChoiceEnumLong(SpaFormatVideo.Modifier, modifiers, propFlags);
         }
 
         if (fixedSize)
@@ -236,6 +307,7 @@ internal static class SpaFormat
         PixelFormat.Bgrx   => SpaVideoFormat.BGRx,
         PixelFormat.Yuyv   => SpaVideoFormat.YUY2,
         PixelFormat.Yuv420 => SpaVideoFormat.I420,
+        PixelFormat.Nv12   => SpaVideoFormat.NV12,
         _                  => SpaVideoFormat.BGRA,
     };
 
@@ -247,13 +319,27 @@ internal static class SpaFormat
         _ when spa == SpaVideoFormat.BGRx => PixelFormat.Bgrx,
         _ when spa == SpaVideoFormat.YUY2 => PixelFormat.Yuyv,
         _ when spa == SpaVideoFormat.I420 => PixelFormat.Yuv420,
+        _ when spa == SpaVideoFormat.NV12 => PixelFormat.Nv12,
         _                                  => PixelFormat.Bgra,
+    };
+
+    /// <summary>
+    /// Number of dmabuf planes (spa_data blocks) for a format: packed RGB and YUY2 are one plane;
+    /// NV12 is two (Y, interleaved UV); I420 is three (Y, U, V). Planes may share one fd at different
+    /// offsets, but each still occupies its own block so PipeWire allocates the right buffer shape.
+    /// </summary>
+    internal static int PlaneCount(PixelFormat fmt) => fmt switch
+    {
+        PixelFormat.Nv12   => 2,
+        PixelFormat.Yuv420 => 3,
+        _                  => 1,
     };
 
     /// <summary>Bytes per pixel in the primary plane (planar formats report the Y-plane stride unit).</summary>
     internal static int BytesPerPixel(PixelFormat fmt) => fmt switch
     {
         PixelFormat.Yuv420 => 1,
+        PixelFormat.Nv12   => 1,
         PixelFormat.Yuyv   => 2,
         _                  => 4,
     };

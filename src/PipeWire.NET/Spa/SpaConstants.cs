@@ -50,6 +50,18 @@ internal static class SpaType
     internal const uint DataDmaBuf  = (uint)spa_data_type.SPA_DATA_DmaBuf;
 }
 
+/// <summary>
+/// Flags for <c>spa_data.flags</c> (spa/buffer/buffer.h). A dmabuf a producer hands over for a
+/// consumer to read is marked <see cref="Readable"/>.
+/// </summary>
+internal static class SpaDataFlag
+{
+    internal const uint Readable    = 1u << 0;
+    internal const uint Writable    = 1u << 1;
+    internal const uint Dynamic     = 1u << 2;
+    internal const uint ReadWrite   = Readable | Writable;
+}
+
 /// <summary>Short aliases for the generated <see cref="spa_param_type"/> enum.</summary>
 internal static class SpaParam
 {
@@ -72,10 +84,27 @@ internal static class SpaFormatVideo
     internal const uint Format       = (uint)spa_format.SPA_FORMAT_VIDEO_format;
     internal const uint Size         = (uint)spa_format.SPA_FORMAT_VIDEO_size;
     internal const uint Framerate    = (uint)spa_format.SPA_FORMAT_VIDEO_framerate;
+    internal const uint Modifier     = (uint)spa_format.SPA_FORMAT_VIDEO_modifier;
     internal const uint ColorRange       = (uint)spa_format.SPA_FORMAT_VIDEO_colorRange;
     internal const uint ColorMatrix      = (uint)spa_format.SPA_FORMAT_VIDEO_colorMatrix;
     internal const uint TransferFunction = (uint)spa_format.SPA_FORMAT_VIDEO_transferFunction;
     internal const uint ColorPrimaries   = (uint)spa_format.SPA_FORMAT_VIDEO_colorPrimaries;
+}
+
+/// <summary>
+/// Flags carried in a <c>spa_pod_prop</c> header (spa/pod/pod.h). Used when offering DRM format
+/// modifiers: the first negotiation pass advertises the modifier choice with
+/// <see cref="Mandatory"/> | <see cref="DontFixate"/> so the producer returns the filtered set of
+/// modifiers it supports without collapsing it to one, letting the consumer fixate on a modifier
+/// its GPU can actually import (the canonical two-step dmabuf modifier handshake).
+/// </summary>
+internal static class SpaPodPropFlag
+{
+    internal const uint Readonly   = 1u << 0;
+    internal const uint Hardware   = 1u << 1;
+    internal const uint HintDict   = 1u << 2;
+    internal const uint Mandatory  = 1u << 3;
+    internal const uint DontFixate = 1u << 4;
 }
 
 /// <summary>Short aliases for the generated <see cref="spa_media_type"/> enum.</summary>

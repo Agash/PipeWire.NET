@@ -15,7 +15,8 @@ namespace PipeWire.NET.Spa;
 /// </summary>
 /// <remarks>
 /// Use one of the static <c>Read*</c> helpers to extract a single value, or call
-/// <see cref="EnterObject"/> + <see cref="TryReadProperty"/> in a loop to walk an object.
+/// <see cref="EnterObject"/> + <see cref="TryReadProperty(out uint, out SpaPodReader)"/> in a loop
+/// to walk an object.
 /// </remarks>
 internal ref struct SpaPodReader
 {
@@ -60,15 +61,23 @@ internal ref struct SpaPodReader
     /// <param name="key">SPA property key (e.g. <see cref="SpaFormatVideo.Format"/>).</param>
     /// <param name="value">Reader positioned at the property's value pod.</param>
     /// <returns><see langword="false"/> when no more properties remain in the current object body.</returns>
-    public bool TryReadProperty(out uint key, out SpaPodReader value)
+    public bool TryReadProperty(out uint key, out SpaPodReader value) =>
+        TryReadProperty(out key, out _, out value);
+
+    /// <summary>
+    /// Reads the next property and also reports its <c>spa_pod_prop</c> flags (e.g.
+    /// <see cref="SpaPodPropFlag.DontFixate"/> on an unfixated modifier choice).
+    /// </summary>
+    public bool TryReadProperty(out uint key, out uint flags, out SpaPodReader value)
     {
         key = 0;
+        flags = 0;
         value = default;
 
         // spa_pod_prop header = [uint32 key][uint32 flags][value pod...]
         if (_pos + 8 > _buf.Length) return false;
         if (!TryReadU32(out key))    return false;
-        if (!TryReadU32(out _))      return false; // flags
+        if (!TryReadU32(out flags))  return false; // flags
 
         // The value pod sits at the current offset. Peek its size.
         if (_pos + 8 > _buf.Length) return false;
@@ -147,6 +156,50 @@ internal ref struct SpaPodReader
         uint n = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4)); _pos += 4;
         uint d = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4)); _pos += 4;
         return (n, d);
+    }
+
+    /// <summary>
+    /// Reads a DRM format modifier value pod: either a plain <c>Long</c> or a Choice(Enum) of
+    /// <c>Long</c>s. Returns the first (preferred) modifier in <paramref name="first"/> and how many
+    /// the pod carried in <paramref name="count"/> - so a caller distinguishes a fixated single
+    /// modifier (count == 1) from a still-open choice (count &gt; 1) it must fixate. Allocation-free:
+    /// the values are scanned in place, none are materialised.
+    /// </summary>
+    /// <returns><see langword="false"/> when the pod is neither a Long nor a Long choice.</returns>
+    public bool TryReadModifier(out long first, out int count)
+    {
+        first = 0;
+        count = 0;
+        int savedPos = _pos;
+        if (!TryReadHeader(out uint size, out uint type)) { _pos = savedPos; return false; }
+
+        if (type == SpaType.Long)
+        {
+            if (size < 8 || _pos + 8 > _buf.Length) { _pos = savedPos; return false; }
+            first = MemoryMarshal.Read<long>(_buf.Slice(_pos, 8));
+            _pos += 8;
+            count = 1;
+            return true;
+        }
+
+        if (type != SpaType.Choice) { _pos = savedPos; return false; }
+
+        // spa_pod_choice_body: [choiceType][flags][childSize][childType], then the values.
+        if (_pos + 16 > _buf.Length) { _pos = savedPos; return false; }
+        if (!TryReadU32(out _))               { _pos = savedPos; return false; } // choiceType
+        if (!TryReadU32(out _))               { _pos = savedPos; return false; } // flags
+        if (!TryReadU32(out uint childSize))  { _pos = savedPos; return false; }
+        if (!TryReadU32(out uint childType))  { _pos = savedPos; return false; }
+        if (childType != SpaType.Long || childSize != 8) { _pos = savedPos; return false; }
+
+        // The choice body length (size) covers the 16-byte header + N child values. We only need the
+        // first value and the count, so read the first in place and skip the rest - nothing allocated.
+        int valuesBytes = (int)size - 16;
+        if (valuesBytes < 8 || _pos + valuesBytes > _buf.Length) { _pos = savedPos; return false; }
+        first = MemoryMarshal.Read<long>(_buf.Slice(_pos, 8));
+        count = valuesBytes / 8;
+        _pos += valuesBytes;
+        return true;
     }
 
     /// <summary>

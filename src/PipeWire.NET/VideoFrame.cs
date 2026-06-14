@@ -23,6 +23,15 @@ public readonly ref struct VideoFrame
     /// <param name="captureClockNs">Graph clock time (monotonic ns) of the capture cycle.</param>
     /// <param name="mediaClockNs">Media position (ns) at the cycle; -1 if unknown.</param>
     /// <param name="delayNs">Signal delay/latency (ns) from source to this stream.</param>
+    /// <param name="modifier">
+    /// Negotiated DRM format modifier for a dmabuf frame, or <see cref="DrmFormatModifier.Invalid"/>
+    /// when none (host-memory path). Drives the GPU import layout.
+    /// </param>
+    /// <param name="planes">
+    /// Per-plane dmabuf layout (fd/offset/stride/size). Multi-plane formats expose every plane here;
+    /// for a single-plane frame this carries the one plane and mirrors
+    /// <paramref name="fd"/>/<paramref name="stride"/>. Empty for a host-memory frame.
+    /// </param>
     public VideoFrame(
         ReadOnlySpan<byte> data,
         int stride,
@@ -37,7 +46,9 @@ public readonly ref struct VideoFrame
         VideoColorInfo color = default,
         long captureClockNs = -1,
         long mediaClockNs = -1,
-        long delayNs = 0)
+        long delayNs = 0,
+        ulong modifier = DrmFormatModifier.Invalid,
+        ReadOnlySpan<VideoPlane> planes = default)
     {
         Data               = data;
         Stride             = stride;
@@ -53,6 +64,8 @@ public readonly ref struct VideoFrame
         CaptureClockNs     = captureClockNs;
         MediaClockNs       = mediaClockNs;
         DelayNs            = delayNs;
+        Modifier           = modifier;
+        Planes             = planes;
     }
 
     /// <summary>Raw pixel bytes. Empty for an unmapped DMA-BUF frame (use <see cref="Fd"/>).</summary>
@@ -111,6 +124,20 @@ public readonly ref struct VideoFrame
     /// did not attach a header. Use for A/V sync over a transport like WebRTC.
     /// </summary>
     public long PresentationTimeNs { get; }
+
+    /// <summary>
+    /// Negotiated DRM format modifier for a DMA-BUF frame (tiling/compression layout), or
+    /// <see cref="DrmFormatModifier.Invalid"/> when none was negotiated. Pair with
+    /// <see cref="Planes"/> to import the frame zero-copy via <c>VK_EXT_image_drm_format_modifier</c>.
+    /// </summary>
+    public ulong Modifier { get; }
+
+    /// <summary>
+    /// Per-plane DMA-BUF layout (fd/offset/stride/size). Empty for a host-memory frame; for a
+    /// DMA-BUF frame this carries every plane (NV12 = 2, packed = 1, plus any modifier aux planes).
+    /// Valid only for the duration of the <see cref="PipeWireVideoCapture.FrameReady"/> handler.
+    /// </summary>
+    public ReadOnlySpan<VideoPlane> Planes { get; }
 
     /// <summary>True when the frame is backed by a DMA-BUF or MemFd file descriptor.</summary>
     public bool IsFdBacked => Fd >= 0;

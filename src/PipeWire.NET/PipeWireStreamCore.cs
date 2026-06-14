@@ -43,6 +43,13 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
     internal delegate void FormatHandler(spa_pod* param);
 
     /// <summary>
+    /// Invoked from <c>add_buffer</c>/<c>remove_buffer</c> when PipeWire allocates or frees a buffer in
+    /// the negotiated pool. A dmabuf producer uses these to back each buffer's <c>spa_data</c> with its
+    /// own dmabuf (in add) and release it (in remove). Both run on the loop thread with the lock held.
+    /// </summary>
+    internal delegate void BufferPoolHandler(pw_buffer* buffer);
+
+    /// <summary>
     /// Invoked after <see cref="FormatHandler"/> so the stream can declare its buffer/meta
     /// requirements (it now knows the negotiated geometry). Call <see cref="RequestParams"/>
     /// from here. If not supplied, the core requests just the SPA_META_Header.
@@ -54,6 +61,8 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
     private readonly StateHandler? _onState;
     private readonly FormatHandler? _onFormat;
     private readonly PostFormatHandler? _onPostFormat;
+    private readonly BufferPoolHandler? _onAddBuffer;
+    private readonly BufferPoolHandler? _onRemoveBuffer;
 
     private pw_stream*        _stream;
     private pw_stream_events* _events;
@@ -68,6 +77,8 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
     /// <param name="onState">Optional state-change handler.</param>
     /// <param name="onFormat">Optional format-negotiation handler.</param>
     /// <param name="onPostFormat">Optional hook to declare buffer/meta params after format is set.</param>
+    /// <param name="onAddBuffer">Optional hook to back a newly-allocated pool buffer with a dmabuf.</param>
+    /// <param name="onRemoveBuffer">Optional hook to release a pool buffer's dmabuf before it is freed.</param>
     internal PipeWireStreamCore(
         PipeWireContext ctx,
         StreamProperties props,
@@ -75,13 +86,17 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
         BufferHandler onBuffer,
         StateHandler? onState = null,
         FormatHandler? onFormat = null,
-        PostFormatHandler? onPostFormat = null)
+        PostFormatHandler? onPostFormat = null,
+        BufferPoolHandler? onAddBuffer = null,
+        BufferPoolHandler? onRemoveBuffer = null)
     {
-        _ctx          = ctx;
-        _onBuffer     = onBuffer;
-        _onState      = onState;
-        _onPostFormat = onPostFormat;
-        _onFormat = onFormat;
+        _ctx            = ctx;
+        _onBuffer       = onBuffer;
+        _onState        = onState;
+        _onPostFormat   = onPostFormat;
+        _onFormat       = onFormat;
+        _onAddBuffer    = onAddBuffer;
+        _onRemoveBuffer = onRemoveBuffer;
 
         _selfHandle = GCHandle.Alloc(this, GCHandleType.Normal);
 
@@ -90,6 +105,8 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
         _events->process       = &OnProcess;
         _events->state_changed = &OnStateChanged;
         _events->param_changed = &OnParamChanged;
+        if (onAddBuffer is not null)    _events->add_buffer    = &OnAddBuffer;
+        if (onRemoveBuffer is not null) _events->remove_buffer = &OnRemoveBuffer;
 
         pw_properties* nativeProps = props.ToNativeProperties();
 
@@ -216,6 +233,24 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
         {
             Native.pw_stream_queue_buffer(self._stream, buf);
         }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnAddBuffer(void* data, pw_buffer* buffer)
+    {
+        var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
+        if (self is null || self._disposed) return;
+        // Producer backs this buffer with its own dmabuf here. Contain exceptions: an escaping throw
+        // from this unmanaged callback would abort the process.
+        try { self._onAddBuffer?.Invoke(buffer); } catch { /* leave buffer unbacked; negotiation continues */ }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnRemoveBuffer(void* data, pw_buffer* buffer)
+    {
+        var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
+        if (self is null) return;
+        try { self._onRemoveBuffer?.Invoke(buffer); } catch { /* best-effort release */ }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

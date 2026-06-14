@@ -9,8 +9,12 @@ public enum PixelFormat
     /// <summary>32-bit BGRA, 8 bits per channel (common on X11/Wayland compositors).</summary>
     Bgra,
 
-    /// <summary>YUV 4:2:0 planar (Y plane followed by interleaved UV plane).</summary>
+    /// <summary>YUV 4:2:0 planar I420 (separate Y, U, V planes).</summary>
     Yuv420,
+
+    /// <summary>YUV 4:2:0 semi-planar NV12 (Y plane then a single interleaved UV plane). The native
+    /// output of most hardware video decoders (VAAPI), so the preferred zero-copy dmabuf format.</summary>
+    Nv12,
 
     /// <summary>YUV 4:2:2 packed (YUYV byte order).</summary>
     Yuyv,
