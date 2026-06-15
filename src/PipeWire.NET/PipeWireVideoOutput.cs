@@ -150,19 +150,15 @@ public sealed class PipeWireVideoOutput : IAsyncDisposable
         _core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState, OnFormat, OnPostFormat,
             OnAddBuffer, OnRemoveBuffer);
 
-        // Offer modifiers with DONT_FIXATE: a GL consumer (gst glupload, OBS) selects the modifier its EGL can
-        // import and echoes it back, then OnPostFormat re-offers it fixated (the standard dmabuf two-step). Do
-        // NOT fixate up front - that bypasses the consumer's EGL modifier selection and the negotiation errors.
+        // Offer modifiers with DONT_FIXATE so a GL consumer's EGL selects an importable modifier (radeonsi only
+        // imports the tiled AMD modifiers, not LINEAR). Connect as an active DRIVER (no AUTOCONNECT - a dmabuf
+        // source is targeted by name and linked by its consumer; no INACTIVE - on the 1.6.6 runtime the
+        // producer never receives SPA_PARAM_PeerCapability, that goes to the consumer, so an inactive producer
+        // would never activate). The driver paces its own cycles via TriggerFrame once streaming.
         Span<byte> pod = stackalloc byte[512];
         int len = SpaFormat.WriteVideoFormat(pod,
             stackalloc[] { _format }, (uint)_width, (uint)_height, (uint)_frameRate, fixedSize: true,
             modifiers: modifiers);
-        // Connect as an active DRIVER allocating buffers (the dmabuf producer shape from pipewire's
-        // video-src-fixate.c, minus its INACTIVE+activate-on-peer-capability step, which we cannot mirror -
-        // PipeWireStreamCore does not surface SPA_PARAM_PeerCapability - and which would otherwise deadlock,
-        // since an inactive stream never negotiates a format). No AUTOCONNECT: a dmabuf source is targeted by
-        // name and linked by its consumer; auto-linking races the consumer and fails "no target node
-        // available". A driver paces its own cycles via TriggerFrame (called when a new frame is staged).
         _core.Connect(spa_direction.SPA_DIRECTION_OUTPUT, Native.PW_ID_ANY,
             pw_stream_flags.PW_STREAM_FLAG_DRIVER | pw_stream_flags.PW_STREAM_FLAG_ALLOC_BUFFERS,
             pod[..len]);

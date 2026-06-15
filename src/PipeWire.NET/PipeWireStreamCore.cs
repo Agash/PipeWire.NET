@@ -56,6 +56,18 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
     /// </summary>
     internal delegate void PostFormatHandler(PipeWireStreamCore core);
 
+    /// <summary>
+    /// Invoked when a peer (consumer) links and the daemon reports <c>SPA_PARAM_PeerCapability</c>. A dmabuf
+    /// DRIVER producer connected INACTIVE uses this to (re-)announce its EnumFormat and activate the stream,
+    /// which is what kicks off format negotiation (pipewire's video-src-fixate.c does this).
+    /// </summary>
+    internal delegate void PeerConnectedHandler(PipeWireStreamCore core);
+
+    // SPA_PARAM_PeerCapability (spa/param/param.h). The generated bindings predate it (they stop at Tag=17:
+    // ... Tag(17), PeerEnumFormat(18), Capability(19), PeerCapability(20)); the enum is append-only so the
+    // value is stable on the 1.6 runtime.
+    private const uint SpaParamPeerCapability = 20;
+
     private readonly PipeWireContext _ctx;
     private readonly BufferHandler _onBuffer;
     private readonly StateHandler? _onState;
@@ -63,6 +75,7 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
     private readonly PostFormatHandler? _onPostFormat;
     private readonly BufferPoolHandler? _onAddBuffer;
     private readonly BufferPoolHandler? _onRemoveBuffer;
+    private readonly PeerConnectedHandler? _onPeerConnected;
 
     private pw_stream*        _stream;
     private pw_stream_events* _events;
@@ -79,6 +92,7 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
     /// <param name="onPostFormat">Optional hook to declare buffer/meta params after format is set.</param>
     /// <param name="onAddBuffer">Optional hook to back a newly-allocated pool buffer with a dmabuf.</param>
     /// <param name="onRemoveBuffer">Optional hook to release a pool buffer's dmabuf before it is freed.</param>
+    /// <param name="onPeerConnected">Optional hook invoked on SPA_PARAM_PeerCapability (a consumer linked).</param>
     internal PipeWireStreamCore(
         PipeWireContext ctx,
         StreamProperties props,
@@ -88,7 +102,8 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
         FormatHandler? onFormat = null,
         PostFormatHandler? onPostFormat = null,
         BufferPoolHandler? onAddBuffer = null,
-        BufferPoolHandler? onRemoveBuffer = null)
+        BufferPoolHandler? onRemoveBuffer = null,
+        PeerConnectedHandler? onPeerConnected = null)
     {
         _ctx            = ctx;
         _onBuffer       = onBuffer;
@@ -97,6 +112,7 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
         _onFormat       = onFormat;
         _onAddBuffer    = onAddBuffer;
         _onRemoveBuffer = onRemoveBuffer;
+        _onPeerConnected = onPeerConnected;
 
         _selfHandle = GCHandle.Alloc(this, GCHandleType.Normal);
 
@@ -268,9 +284,22 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnParamChanged(void* data, uint id, spa_pod* param)
     {
-        if (param is null || id != Spa.SpaParam.Format) return;
+        if (param is null) return;
         var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
         if (self is null || self._disposed) return;
+
+        // SPA_PARAM_PeerCapability (a newer PipeWire signal) would be the place to (re-)announce + activate a
+        // dmabuf producer (video-src-fixate.c), but it is unavailable on the 1.6.6 runtime - the daemon does
+        // not reliably deliver it, and re-announcing EnumFormat from this path crashed the daemon's set_param.
+        // On 1.6.6 the producer instead offers a fixated modifier up front (it owns the surfaces, so it knows
+        // the single modifier) and negotiates through the normal Format param flow below.
+        if (self._onPeerConnected is not null && id == SpaParamPeerCapability)
+        {
+            try { self._onPeerConnected.Invoke(self); } catch { /* keep the loop thread alive */ }
+            return;
+        }
+
+        if (id != Spa.SpaParam.Format) return;
 
         // This runs in an unmanaged callback - an escaping exception would abort the process,
         // so contain it. (A managed bug here must not take down the host application.)
