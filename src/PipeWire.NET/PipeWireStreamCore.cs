@@ -257,6 +257,11 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
     private static void OnStateChanged(void* data, pw_stream_state old, pw_stream_state state, sbyte* error)
     {
         var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
+        if (error is not null && Environment.GetEnvironmentVariable("STX_PW_DEBUG") is { Length: > 0 })
+        {
+            Console.Error.WriteLine($"[pw-core] stream error: {Marshal.PtrToStringUTF8((nint)error)}");
+        }
+
         self?._onState?.Invoke((PipeWireStreamState)(int)old, (PipeWireStreamState)(int)state);
     }
 

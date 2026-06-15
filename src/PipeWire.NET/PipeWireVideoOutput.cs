@@ -150,12 +150,19 @@ public sealed class PipeWireVideoOutput : IAsyncDisposable
         _core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState, OnFormat, OnPostFormat,
             OnAddBuffer, OnRemoveBuffer);
 
+        // Offer modifiers with DONT_FIXATE: a GL consumer (gst glupload, OBS) selects the modifier its EGL can
+        // import and echoes it back, then OnPostFormat re-offers it fixated (the standard dmabuf two-step). Do
+        // NOT fixate up front - that bypasses the consumer's EGL modifier selection and the negotiation errors.
         Span<byte> pod = stackalloc byte[512];
         int len = SpaFormat.WriteVideoFormat(pod,
             stackalloc[] { _format }, (uint)_width, (uint)_height, (uint)_frameRate, fixedSize: true,
             modifiers: modifiers);
+        // No AUTOCONNECT: a dmabuf source is discovered and linked by its consumer (which targets it by node
+        // name). Asking the session manager to auto-link the producer races the consumer and, with the extra
+        // dmabuf modifier-fixation round-trip, loses - failing with "no target node available" before the
+        // consumer attaches. The node still registers and is fully targetable; the consumer drives the link.
         _core.Connect(spa_direction.SPA_DIRECTION_OUTPUT, Native.PW_ID_ANY,
-            pw_stream_flags.PW_STREAM_FLAG_AUTOCONNECT | pw_stream_flags.PW_STREAM_FLAG_ALLOC_BUFFERS,
+            pw_stream_flags.PW_STREAM_FLAG_ALLOC_BUFFERS,
             pod[..len]);
     }
 
@@ -201,10 +208,22 @@ public sealed class PipeWireVideoOutput : IAsyncDisposable
         }
     }
 
-    private unsafe void OnFormat(spa_pod* param) => _fmt = SpaFormat.ParseVideoFormat(param, _fmt);
+    private unsafe void OnFormat(spa_pod* param)
+    {
+        _fmt = SpaFormat.ParseVideoFormat(param, _fmt);
+        if (Environment.GetEnvironmentVariable("STX_PW_DEBUG") is { Length: > 0 })
+        {
+            Console.Error.WriteLine($"[pw-out] OnFormat modifier=0x{_fmt.Modifier:x} needsFixation={_fmt.ModifierNeedsFixation}");
+        }
+    }
 
     private void OnPostFormat(PipeWireStreamCore core)
     {
+        if (Environment.GetEnvironmentVariable("STX_PW_DEBUG") is { Length: > 0 })
+        {
+            Console.Error.WriteLine($"[pw-out] OnPostFormat fixated={_modifierFixated} needsFixation={_fmt.ModifierNeedsFixation} planeCount={_planeCount}");
+        }
+
         // Mirror the consumer's two-step modifier fixation on the producer side: when the peer honoured
         // DONT_FIXATE we re-offer our preferred returned modifier alone (DONT_FIXATE cleared) to settle it.
         if (!_modifierFixated && _fmt.ModifierNeedsFixation)
