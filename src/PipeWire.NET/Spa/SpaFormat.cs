@@ -273,14 +273,21 @@ internal static class SpaFormat
         }
 
         // The modifier property must follow the format and precede size (PipeWire convention).
-        // First pass: MANDATORY|DONT_FIXATE so the producer returns its supported subset without
-        // fixating; fixation pass: MANDATORY only, with the single chosen modifier.
+        // First pass (negotiation): a MANDATORY|DONT_FIXATE Choice Enum so the peer narrows the modifier set
+        // without collapsing it. Fixation pass: a single MANDATORY plain Long (NOT a choice) - the modifier is
+        // settled. This mirrors pipewire's video-src-fixate.c (build_format uses a choice; fixate_format uses a
+        // plain long); a fixated modifier written as a 1-entry choice would read back as "still needs fixation".
         if (!modifiers.IsEmpty)
         {
-            uint propFlags = fixateModifier
-                ? SpaPodPropFlag.Mandatory
-                : SpaPodPropFlag.Mandatory | SpaPodPropFlag.DontFixate;
-            b.AddChoiceEnumLong(SpaFormatVideo.Modifier, modifiers, propFlags);
+            if (fixateModifier)
+            {
+                b.AddLong(SpaFormatVideo.Modifier, modifiers[0], SpaPodPropFlag.Mandatory);
+            }
+            else
+            {
+                b.AddChoiceEnumLong(SpaFormatVideo.Modifier, modifiers,
+                    SpaPodPropFlag.Mandatory | SpaPodPropFlag.DontFixate);
+            }
         }
 
         if (fixedSize)

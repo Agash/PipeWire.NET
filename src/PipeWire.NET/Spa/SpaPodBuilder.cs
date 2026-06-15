@@ -61,6 +61,7 @@ internal ref struct SpaPodBuilder
     public void AddId(uint key, uint value)            { WritePropHeader(key); AddId(value); }
     public void AddInt(uint key, int value)            { WritePropHeader(key); AddInt(value); }
     public void AddLong(uint key, long value)          { WritePropHeader(key); AddLong(value); }
+    public void AddLong(uint key, long value, uint propFlags) { WritePropHeader(key, propFlags); AddLong(value); }
     public void AddFraction(uint key, uint n, uint d)  { WritePropHeader(key); WriteFraction(n, d); }
     public void AddRectangle(uint key, uint w, uint h) { WritePropHeader(key); WriteRectangle(w, h); }
 
@@ -83,11 +84,24 @@ internal ref struct SpaPodBuilder
         WriteU32(0);                // choice flags
         WriteU32(8);                // child.size - Long is 8 bytes
         WriteU32(SpaType.Long);     // child.type
+        // SPA Choice Enum layout is { default, alt0, alt1, ... }: the FIRST child is the default/preferred
+        // value and the rest are the selectable alternatives, so the default must also appear among the
+        // alternatives. Emit values[0] once as the default and then every value. A single modifier written
+        // once would be a default with NO alternatives - the consumer then has nothing to select and dmabuf
+        // negotiation fails ("no more input formats"). Matches pipewire's video-src-fixate.c, which writes the
+        // first modifier twice.
+        if (!values.IsEmpty)
+        {
+            MemoryMarshal.Write(_buf.Slice(_pos, 8), values[0]);
+            _pos += 8;
+        }
+
         foreach (long v in values)
         {
             MemoryMarshal.Write(_buf.Slice(_pos, 8), v);
             _pos += 8;
         }
+
         Align8();
         PatchSize(start);
     }

@@ -65,6 +65,7 @@ public sealed class PipeWireVideoOutput : IAsyncDisposable
     // retain the offered modifier list (see VideoFormatInfo for why) - fixation re-offers _fmt.Modifier.
     private bool _dmaBufMode;
     private bool _modifierFixated;
+    private long[] _modifiers = [];
     private SpaFormat.VideoFormatInfo _fmt;
     private int _planeCount;
     private int _nextBufferIndex;
@@ -147,21 +148,37 @@ public sealed class PipeWireVideoOutput : IAsyncDisposable
 
         // add_buffer/remove_buffer let us back each pool buffer with an app-owned dmabuf; the producer
         // supplies the memory, so we use ALLOC_BUFFERS (and NOT MAP_BUFFERS - there is nothing to mmap).
+        _modifiers = modifiers.ToArray();
         _core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState, OnFormat, OnPostFormat,
-            OnAddBuffer, OnRemoveBuffer);
+            OnAddBuffer, OnRemoveBuffer, OnPeerConnected);
 
         // Offer modifiers with DONT_FIXATE so a GL consumer's EGL selects an importable modifier (radeonsi only
-        // imports the tiled AMD modifiers, not LINEAR). Connect as an active DRIVER (no AUTOCONNECT - a dmabuf
-        // source is targeted by name and linked by its consumer; no INACTIVE - on the 1.6.6 runtime the
-        // producer never receives SPA_PARAM_PeerCapability, that goes to the consumer, so an inactive producer
-        // would never activate). The driver paces its own cycles via TriggerFrame once streaming.
+        // imports the tiled AMD modifiers, not LINEAR). Connect INACTIVE|ALLOC_BUFFERS (NOT a DRIVER - the
+        // consumer drives the graph clock; a DRIVER would have to pace itself via trigger_process, which is
+        // unsafe to call from another thread and crashes libpipewire). On a consumer link the daemon delivers
+        // SPA_PARAM_PeerCapability, where OnPeerConnected re-announces the EnumFormat and activates the stream,
+        // kicking the (now-correct) modifier fixation; the consumer then drives FillDmaBuf.
         Span<byte> pod = stackalloc byte[512];
         int len = SpaFormat.WriteVideoFormat(pod,
             stackalloc[] { _format }, (uint)_width, (uint)_height, (uint)_frameRate, fixedSize: true,
             modifiers: modifiers);
         _core.Connect(spa_direction.SPA_DIRECTION_OUTPUT, Native.PW_ID_ANY,
-            pw_stream_flags.PW_STREAM_FLAG_DRIVER | pw_stream_flags.PW_STREAM_FLAG_ALLOC_BUFFERS,
+            pw_stream_flags.PW_STREAM_FLAG_INACTIVE | pw_stream_flags.PW_STREAM_FLAG_ALLOC_BUFFERS,
             pod[..len]);
+    }
+
+    // A consumer linked (SPA_PARAM_PeerCapability): re-announce the EnumFormat so the daemon negotiates a
+    // format with the peer, then activate the INACTIVE stream - the video-src-fixate.c producer flow. Loop
+    // lock is held here. (Earlier crashes from this path were the separate trigger_process threading race,
+    // now fixed by gating TriggerFrame on the streaming state.)
+    private unsafe void OnPeerConnected(PipeWireStreamCore core)
+    {
+        Span<byte> pod = stackalloc byte[512];
+        ReadOnlySpan<PixelFormat> fmt = [_format];
+        int len = SpaFormat.WriteVideoFormat(pod, fmt,
+            (uint)_width, (uint)_height, (uint)_frameRate, fixedSize: true, modifiers: _modifiers);
+        core.RequestParams(pod[..len]);
+        core.SetActive(true, lockHeld: true);
     }
 
     /// <summary>

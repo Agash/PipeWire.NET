@@ -300,8 +300,12 @@ public sealed class ModifierNegotiationTests
             Assert.AreEqual(SpaPodPropFlag.DontFixate, flags & SpaPodPropFlag.DontFixate, "DONT_FIXATE must be set");
 
             Assert.IsTrue(value.TryReadModifier(out long first, out int count));
-            Assert.AreEqual(2, count, "both offered modifiers must be on the wire");
-            Assert.AreEqual(ModTiled, first, "the first offered modifier is the preferred one");
+            // SPA Choice Enum body is { default, ...allowed }: the first value is the default AND must also
+            // appear in the allowed set, so the preferred modifier is written twice. For [Tiled, Linear] the
+            // wire is [Tiled(default), Tiled, Linear] = 3 longs. (A single modifier written once would leave
+            // the allowed set empty - the consumer then has nothing to select, the dmabuf negotiation bug.)
+            Assert.AreEqual(3, count, "default is repeated into the allowed set, then both modifiers follow");
+            Assert.AreEqual(ModTiled, first, "the first offered modifier is the preferred one (the default)");
         }
         Assert.IsTrue(sawModifier, "EnumFormat must carry a modifier property when modifiers are offered");
     }
