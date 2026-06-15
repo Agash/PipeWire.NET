@@ -319,6 +319,23 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
         }
     }
 
+    /// <summary>The graph node id of this stream once connected (0 if not yet assigned).</summary>
+    internal uint NodeId
+    {
+        get
+        {
+            if (_disposed || _stream is null)
+            {
+                return Native.PW_ID_ANY;
+            }
+
+            using (_ctx.Lock())
+            {
+                return Native.pw_stream_get_node_id(_stream);
+            }
+        }
+    }
+
     /// <summary>
     /// Activates or deactivates the stream (<c>pw_stream_set_active</c>). A dmabuf DRIVER connects INACTIVE and
     /// is activated once its format + buffers are negotiated. Safe to call from the param_changed callback (the

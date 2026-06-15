@@ -170,6 +170,9 @@ public sealed class PipeWireVideoOutput : IAsyncDisposable
     /// </summary>
     public void TriggerFrame() => _core?.TriggerProcess();
 
+    /// <summary>The graph node id of this output once connected (for a consumer to target it directly).</summary>
+    public uint NodeId => _core?.NodeId ?? Native.PW_ID_ANY;
+
     /// <inheritdoc/>
     public ValueTask DisposeAsync() => _core?.DisposeAsync() ?? ValueTask.CompletedTask;
 
