@@ -291,6 +291,53 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
     }
 
     /// <summary>
+    /// Activates or deactivates the stream (<c>pw_stream_set_active</c>). A dmabuf DRIVER connects INACTIVE and
+    /// is activated once its format + buffers are negotiated. Safe to call from the param_changed callback (the
+    /// loop lock is held there); otherwise it takes the loop lock itself.
+    /// </summary>
+    internal void SetActive(bool active, bool lockHeld = false)
+    {
+        if (_disposed || _stream is null)
+        {
+            return;
+        }
+
+        if (lockHeld)
+        {
+            Native.pw_stream_set_active(_stream, active);
+            return;
+        }
+
+        using (_ctx.Lock())
+        {
+            Native.pw_stream_set_active(_stream, active);
+        }
+    }
+
+    /// <summary>
+    /// Drives one processing cycle (<c>pw_stream_trigger_process</c>) - how a DRIVER producer paces output when
+    /// no other node drives the graph clock. No-op if the stream is gone. Takes the loop lock unless held.
+    /// </summary>
+    internal void TriggerProcess(bool lockHeld = false)
+    {
+        if (_disposed || _stream is null)
+        {
+            return;
+        }
+
+        if (lockHeld)
+        {
+            Native.pw_stream_trigger_process(_stream);
+            return;
+        }
+
+        using (_ctx.Lock())
+        {
+            Native.pw_stream_trigger_process(_stream);
+        }
+    }
+
+    /// <summary>
     /// Sends up to two param pods via pw_stream_update_params. Call only from the param_changed
     /// callback (where the loop lock is held), e.g. from a <see cref="PostFormatHandler"/>.
     /// </summary>

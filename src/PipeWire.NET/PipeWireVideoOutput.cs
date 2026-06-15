@@ -157,14 +157,22 @@ public sealed class PipeWireVideoOutput : IAsyncDisposable
         int len = SpaFormat.WriteVideoFormat(pod,
             stackalloc[] { _format }, (uint)_width, (uint)_height, (uint)_frameRate, fixedSize: true,
             modifiers: modifiers);
-        // No AUTOCONNECT: a dmabuf source is discovered and linked by its consumer (which targets it by node
-        // name). Asking the session manager to auto-link the producer races the consumer and, with the extra
-        // dmabuf modifier-fixation round-trip, loses - failing with "no target node available" before the
-        // consumer attaches. The node still registers and is fully targetable; the consumer drives the link.
+        // Connect as an active DRIVER allocating buffers (the dmabuf producer shape from pipewire's
+        // video-src-fixate.c, minus its INACTIVE+activate-on-peer-capability step, which we cannot mirror -
+        // PipeWireStreamCore does not surface SPA_PARAM_PeerCapability - and which would otherwise deadlock,
+        // since an inactive stream never negotiates a format). No AUTOCONNECT: a dmabuf source is targeted by
+        // name and linked by its consumer; auto-linking races the consumer and fails "no target node
+        // available". A driver paces its own cycles via TriggerFrame (called when a new frame is staged).
         _core.Connect(spa_direction.SPA_DIRECTION_OUTPUT, Native.PW_ID_ANY,
-            pw_stream_flags.PW_STREAM_FLAG_ALLOC_BUFFERS,
+            pw_stream_flags.PW_STREAM_FLAG_DRIVER | pw_stream_flags.PW_STREAM_FLAG_ALLOC_BUFFERS,
             pod[..len]);
     }
+
+    /// <summary>
+    /// Drives one publish cycle for the dmabuf DRIVER producer (calls <c>pw_stream_trigger_process</c>), which
+    /// fires <see cref="FillDmaBuf"/> on the loop thread. Call after staging a new frame; no-op until connected.
+    /// </summary>
+    public void TriggerFrame() => _core?.TriggerProcess();
 
     /// <inheritdoc/>
     public ValueTask DisposeAsync() => _core?.DisposeAsync() ?? ValueTask.CompletedTask;
