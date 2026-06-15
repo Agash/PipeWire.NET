@@ -79,7 +79,11 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
 
     private pw_stream*        _stream;
     private pw_stream_events* _events;
-    private spa_hook          _hook;
+    // The spa_hook MUST live in unmanaged memory, not as a managed field: pw_stream_add_listener stores this
+    // pointer in the stream's listener list, and the GC compacting the heap would move a managed field, leaving
+    // PipeWire with a dangling pointer that crashes (spa_list_remove on freed memory) the next time it emits an
+    // event. _selfHandle is GCHandleType.Normal (non-pinning), so it does not keep a field address stable.
+    private spa_hook*         _hook;
     private GCHandle          _selfHandle;
     private volatile bool     _disposed;
 
@@ -116,6 +120,7 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
 
         _selfHandle = GCHandle.Alloc(this, GCHandleType.Normal);
 
+        _hook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
         _events = (pw_stream_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_stream_events));
         _events->version       = Native.PW_VERSION_STREAM_EVENTS;
         _events->process       = &OnProcess;
@@ -137,12 +142,13 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
                 _selfHandle.Free();
                 NativeMemory.Free(_events);
                 _events = null;
+                NativeMemory.Free(_hook);
+                _hook = null;
                 throw new InvalidOperationException("pw_stream_new failed.");
             }
 
-            fixed (spa_hook* hookPtr = &_hook)
-                Native.pw_stream_add_listener(_stream, hookPtr, _events,
-                    (void*)GCHandle.ToIntPtr(_selfHandle));
+            Native.pw_stream_add_listener(_stream, _hook, _events,
+                (void*)GCHandle.ToIntPtr(_selfHandle));
         }
     }
 
@@ -205,6 +211,12 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
         {
             NativeMemory.Free(_events);
             _events = null;
+        }
+        // Free the hook only after the stream is destroyed (destroy removes the listener that points at it).
+        if (_hook is not null)
+        {
+            NativeMemory.Free(_hook);
+            _hook = null;
         }
         if (_selfHandle.IsAllocated) _selfHandle.Free();
 
