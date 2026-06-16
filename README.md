@@ -117,8 +117,11 @@ relying on the session manager's default routing.
 only for the duration of the handler.
 
 `VideoFrame` carries the pixels (`Data`, `Stride`, `Width`, `Height`, `Format`), the negotiated
-`Color` info, the backing memory (`BufferType`, `Fd`, `MapOffset`), and timing (see below).
-`AudioFrame` carries `Samples`, `SampleRate`, `Channels`, `Format`, `FrameCount`, and timing.
+`Color` info, the backing memory (`BufferType`, `Fd`, `MapOffset`), and timing (see below). For a
+DMA-BUF frame it also exposes the DRM format `Modifier` and the per-plane layout (`Planes`: fd,
+offset, stride, size per plane — e.g. two planes for `Nv12`), so a multi-plane tiled surface can be
+imported correctly. `AudioFrame` carries `Samples`, `SampleRate`, `Channels`, `Format`,
+`FrameCount`, and timing.
 
 ### Timing and A/V sync
 
@@ -140,6 +143,13 @@ CPU; `frame.BufferType` and `frame.Fd` expose the descriptor for GPU import.
 
 On publish, `FillFrame` and `FillSamples` give you a span over the daemon's buffer, so you write
 the frame once with no intermediate copy.
+
+For a fully GPU-resident publish, `PipeWireVideoOutput.ConnectDmaBuf(modifiers)` advertises a set of
+DRM format modifiers, negotiates one with the consumer, and backs the stream with DMA-BUF buffers you
+own. Allocate your GPU surfaces in the `AllocateDmaBuf` callback (export each once, e.g. via
+`vkGetMemoryFdKHR`) and write the chosen buffer in `FillDmaBuf`; `ReleaseDmaBuf` tears them down. The
+producer can self-pace with `TriggerFrame`, and `NodeId` lets a consumer target the node directly.
+This is the path a VAAPI/Vulkan pipeline uses to feed OBS with no CPU round-trip.
 
 ## Screen capture on Wayland
 
@@ -184,9 +194,11 @@ against a headless PipeWire.
 This library is the PipeWire layer: it delivers correctly formatted, correctly timed frames and
 samples in and out. Encoding and network transport live above it.
 
-Producing DMA-BUF output is intentionally left out. OBS and other consumers read the host-memory
-output efficiently, the frames would have to be GPU-resident to benefit, and it is not on the
-capture path. DMA-BUF on the capture side is supported because that path genuinely benefits.
+DMA-BUF is supported on **both** directions: capture imports DMA-BUF frames, and publish can hand out
+GPU-resident DMA-BUF buffers (`PipeWireVideoOutput.ConnectDmaBuf`, with DRM format-modifier
+negotiation — see "Zero copy"). A zero-copy GPU producer (e.g. a VAAPI/Vulkan pipeline) thus feeds a
+GPU consumer like OBS with no CPU round-trip; host-memory output (`Connect` + `FillFrame`) remains for
+sources already in CPU memory.
 
 ## License
 
