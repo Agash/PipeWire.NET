@@ -1,4 +1,5 @@
 using System.Runtime.Versioning;
+using Microsoft.Extensions.Logging;
 using PipeWire.NET.Generated;
 using PipeWire.NET.Spa;
 
@@ -13,7 +14,7 @@ namespace PipeWire.NET;
 /// is a <see langword="ref struct"/> whose data is valid only for the duration of the handler.
 /// </remarks>
 [SupportedOSPlatform("linux")]
-public sealed class PipeWireVideoCapture : IAsyncDisposable
+public sealed partial class PipeWireVideoCapture : IAsyncDisposable
 {
     /// <summary>Wildcard node id - let PipeWire auto-select a source.</summary>
     public const uint AnyNode = Native.PW_ID_ANY;
@@ -32,6 +33,7 @@ public sealed class PipeWireVideoCapture : IAsyncDisposable
 
     private readonly PipeWireContext _ctx;
     private readonly string _name;
+    private readonly ILogger _logger;
     private PipeWireStreamCore? _core;
     private ulong _sequence;
     private SpaFormat.VideoFormatInfo _fmt = new(PixelFormat.Bgra, 0, 0, VideoColorInfo.Unknown);
@@ -57,6 +59,7 @@ public sealed class PipeWireVideoCapture : IAsyncDisposable
         ArgumentException.ThrowIfNullOrEmpty(name);
         _ctx = context;
         _name = name;
+        _logger = context.LoggerFactory.CreateLogger($"PipeWire.NET.{name}");
     }
 
     /// <summary>Connects to a discovered source.</summary>
@@ -167,8 +170,11 @@ public sealed class PipeWireVideoCapture : IAsyncDisposable
     private void OnState(PipeWireStreamState oldState, PipeWireStreamState newState) =>
         StateChanged?.Invoke(this, oldState, newState);
 
-    private unsafe void OnFormat(spa_pod* param) =>
+    private unsafe void OnFormat(spa_pod* param)
+    {
         _fmt = SpaFormat.ParseVideoFormat(param, _fmt);
+        LogNegotiatedFormat(_fmt.Format, _fmt.Width, _fmt.Height, _fmt.Modifier, _fmt.ModifierNeedsFixation);
+    }
 
     // After the format is negotiated we know the geometry, so declare our buffer needs:
     // accept host memory AND DMA-BUF (zero-copy GPU), plus request the PTS header meta.
@@ -199,11 +205,22 @@ public sealed class PipeWireVideoCapture : IAsyncDisposable
         int size = SpaFormat.VideoImageSize(_fmt.Format, _fmt.Width, _fmt.Height);
         if (size <= 0) { core.RequestParams(meta[..ml]); return; }   // geometry not known yet
 
-        // Canonical buffer param (size/stride correct for packed or planar) advertising that we
-        // accept DMA-BUF and host memory - a GPU producer can then hand us zero-copy buffers.
+        // Block count = number of planes. A planar format (I420=3, NV12=2) is carried as one spa_data
+        // block per plane for BOTH host memory (one MemFd per plane) and DMA-BUF (one fd per plane) -
+        // gst's pipewiresink splits the planes either way. Declaring a single block for a multi-plane
+        // format makes the daemon reject buffer allocation ("alloc buffers: Invalid argument"); packed
+        // formats are a single block. Offer host memory and DMA-BUF so a GPU producer can go zero-copy.
+        int blocks = SpaFormat.VideoPlaneCount(_fmt.Format);
         Span<byte> buffers = stackalloc byte[256];
-        int bl = SpaFormat.WriteVideoBuffersParam(buffers, size, stride, SpaFormat.VideoCaptureDataTypeMask);
+        int bl = SpaFormat.WriteVideoBuffersParam(buffers, size, stride, SpaFormat.VideoCaptureDataTypeMask, blocks);
 
+        LogRequestedBuffers(blocks, size, stride, SpaFormat.VideoCaptureDataTypeMask);
         core.RequestParams(buffers[..bl], meta[..ml]);
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "negotiated format {Format} {Width}x{Height} modifier=0x{Modifier:x} needsFixation={NeedsFixation}")]
+    private partial void LogNegotiatedFormat(PixelFormat format, int width, int height, ulong modifier, bool needsFixation);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "requesting buffers blocks={Blocks} size={Size} stride={Stride} dataTypeMask=0x{DataTypeMask:x}")]
+    private partial void LogRequestedBuffers(int blocks, int size, int stride, int dataTypeMask);
 }

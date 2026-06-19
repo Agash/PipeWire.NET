@@ -63,6 +63,10 @@ internal sealed class GstTestSource : IAsyncDisposable
             psi.ArgumentList.Add(tok);
         psi.ArgumentList.Add("!");
         psi.ArgumentList.Add("pipewiresink");
+        // mode=provide makes pipewiresink act as a real source node that consumers pull from. Without it
+        // an Audio/Source branch advertises a node but never serves samples (a video source happens to
+        // still produce), so an audio capture connects, reaches Streaming, yet no buffer ever flows.
+        psi.ArgumentList.Add("mode=provide");
         psi.ArgumentList.Add($"stream-properties=props,node.name={nodeName},media.class={mediaClass}");
 
         var proc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start gst-launch-1.0.");
@@ -130,6 +134,7 @@ internal sealed class GstTestSource : IAsyncDisposable
             psi.ArgumentList.Add(tok);
         psi.ArgumentList.Add("!");
         psi.ArgumentList.Add("pipewiresink");
+        psi.ArgumentList.Add("mode=provide"); // see StartAsync: a source branch must provide to serve samples.
         psi.ArgumentList.Add($"stream-properties=props,node.name={node},media.class={mediaClass}");
     }
 

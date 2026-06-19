@@ -73,6 +73,19 @@ internal static class SpaFormat
     internal static int VideoCaptureDataTypeMask =>
         (1 << (int)SpaType.DataMemPtr) | (1 << (int)SpaType.DataMemFd) | (1 << (int)SpaType.DataDmaBuf);
 
+    /// <summary>
+    /// Number of memory blocks a buffer carries for the format: one block per plane. gst's pipewiresink
+    /// (and PipeWire's convention) splits a planar format into one <c>spa_data</c> per plane for both
+    /// host memory and DMA-BUF, so a consumer must declare a block per plane (I420=3, NV12=2). Packed
+    /// formats are a single block.
+    /// </summary>
+    internal static int VideoPlaneCount(PixelFormat fmt) => fmt switch
+    {
+        PixelFormat.Yuv420 => 3,   // Y + U + V
+        PixelFormat.Nv12   => 2,   // Y + interleaved UV
+        _                  => 1,   // packed
+    };
+
     // - Buffer metadata -
 
     /// <summary>Maps a raw <c>spa_data.type</c> to <see cref="PipeWireBufferType"/>.</summary>
