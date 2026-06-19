@@ -1,4 +1,5 @@
 using System.Runtime.Versioning;
+using Microsoft.Extensions.Logging;
 using PipeWire.NET.Generated;
 using PipeWire.NET.Spa;
 
@@ -16,7 +17,7 @@ namespace PipeWire.NET;
 /// </list>
 /// </summary>
 [SupportedOSPlatform("linux")]
-public sealed class PipeWireVideoOutput : IAsyncDisposable
+public sealed partial class PipeWireVideoOutput : IAsyncDisposable
 {
     /// <summary>Signature for <see cref="FillFrame"/>. Return <see langword="true"/> to publish the frame.</summary>
     public delegate bool FillFrameHandler(
@@ -59,6 +60,7 @@ public sealed class PipeWireVideoOutput : IAsyncDisposable
     private readonly string _name;
     private readonly int _width, _height, _frameRate;
     private readonly PixelFormat _format;
+    private readonly ILogger _logger;
     private PipeWireStreamCore? _core;
 
     // dmabuf-mode state. Set once at ConnectDmaBuf; the modifier is fixated during negotiation. We never
@@ -87,6 +89,7 @@ public sealed class PipeWireVideoOutput : IAsyncDisposable
         _ctx = context; _name = nodeName;
         _width = width; _height = height; _format = format; _frameRate = frameRate;
         _fmt = new SpaFormat.VideoFormatInfo(format, width, height, VideoColorInfo.Unknown);
+        _logger = context.LoggerFactory.CreateLogger($"PipeWire.NET.{nodeName}");
     }
 
     /// <summary>Starts publishing host-memory frames and registers the node in the graph.</summary>
@@ -235,18 +238,12 @@ public sealed class PipeWireVideoOutput : IAsyncDisposable
     private unsafe void OnFormat(spa_pod* param)
     {
         _fmt = SpaFormat.ParseVideoFormat(param, _fmt);
-        if (Environment.GetEnvironmentVariable("STX_PW_DEBUG") is { Length: > 0 })
-        {
-            Console.Error.WriteLine($"[pw-out] OnFormat modifier=0x{_fmt.Modifier:x} needsFixation={_fmt.ModifierNeedsFixation}");
-        }
+        LogOnFormat(_fmt.Modifier, _fmt.ModifierNeedsFixation);
     }
 
     private void OnPostFormat(PipeWireStreamCore core)
     {
-        if (Environment.GetEnvironmentVariable("STX_PW_DEBUG") is { Length: > 0 })
-        {
-            Console.Error.WriteLine($"[pw-out] OnPostFormat fixated={_modifierFixated} needsFixation={_fmt.ModifierNeedsFixation} planeCount={_planeCount}");
-        }
+        LogOnPostFormat(_modifierFixated, _fmt.ModifierNeedsFixation, _planeCount);
 
         // Mirror the consumer's two-step modifier fixation on the producer side: when the peer honoured
         // DONT_FIXATE we re-offer our preferred returned modifier alone (DONT_FIXATE cleared) to settle it.
@@ -319,4 +316,10 @@ public sealed class PipeWireVideoOutput : IAsyncDisposable
 
     private void OnState(PipeWireStreamState oldState, PipeWireStreamState newState) =>
         StateChanged?.Invoke(this, oldState, newState);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "OnFormat modifier=0x{Modifier:x} needsFixation={NeedsFixation}")]
+    private partial void LogOnFormat(ulong modifier, bool needsFixation);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "OnPostFormat fixated={Fixated} needsFixation={NeedsFixation} planeCount={PlaneCount}")]
+    private partial void LogOnPostFormat(bool fixated, bool needsFixation, int planeCount);
 }

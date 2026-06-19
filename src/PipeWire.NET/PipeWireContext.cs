@@ -1,5 +1,7 @@
 using System.Runtime.Versioning;
 using System.Text;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using PipeWire.NET.Generated;
 
 namespace PipeWire.NET;
@@ -29,10 +31,23 @@ public sealed class PipeWireContext : IAsyncDisposable
     private volatile bool          _started;
     private volatile bool          _disposed;
 
+    /// <summary>
+    /// The logger factory streams created against this context use for diagnostics. Defaults to
+    /// <see cref="NullLoggerFactory"/> (no output) when none is supplied. A host that wants PipeWire
+    /// stream tracing on its own <c>--verbose</c>/Debug switch passes its application factory here.
+    /// </summary>
+    internal ILoggerFactory LoggerFactory { get; }
+
     /// <summary>Initializes PipeWire and creates the thread-loop + context (not yet started).</summary>
-    public PipeWireContext(string name = "PipeWire.NET")
+    /// <param name="name">Context name advertised to the daemon and used as the loop-thread name.</param>
+    /// <param name="loggerFactory">
+    /// Optional factory for stream diagnostics. Pass the host's factory to surface PipeWire stream
+    /// state transitions, format/buffer negotiation, and errors at Debug/Trace level; omit for none.
+    /// </param>
+    public PipeWireContext(string name = "PipeWire.NET", ILoggerFactory? loggerFactory = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
+        LoggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
         InitializeNative(name);
     }
 

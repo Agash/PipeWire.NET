@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using Microsoft.Extensions.Logging;
 using PipeWire.NET.Generated;
 
 namespace PipeWire.NET;
@@ -18,7 +19,7 @@ namespace PipeWire.NET;
 /// <c>process</c> callback is invoked by the loop thread with that lock already held.
 /// </remarks>
 [SupportedOSPlatform("linux")]
-internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
+internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
 {
     /// <summary>
     /// Timing snapshot for a processing cycle, from <c>pw_stream_get_time</c>. All on the one
@@ -69,6 +70,9 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
     private const uint SpaParamPeerCapability = 20;
 
     private readonly PipeWireContext _ctx;
+    private readonly ILogger _logger;
+    private readonly string _streamName;
+    private bool _firstBufferLogged;
     private readonly BufferHandler _onBuffer;
     private readonly StateHandler? _onState;
     private readonly FormatHandler? _onFormat;
@@ -110,6 +114,8 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
         PeerConnectedHandler? onPeerConnected = null)
     {
         _ctx            = ctx;
+        _logger         = ctx.LoggerFactory.CreateLogger($"PipeWire.NET.{streamName}");
+        _streamName     = streamName;
         _onBuffer       = onBuffer;
         _onState        = onState;
         _onPostFormat   = onPostFormat;
@@ -232,11 +238,24 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
         if (self is null || self._disposed) return;
 
         pw_buffer* buf = Native.pw_stream_dequeue_buffer(self._stream);
-        if (buf is null) return;
+        if (buf is null)
+        {
+            // No buffer queued for this cycle: the producer hasn't filled one yet (start-up) or is
+            // underrunning. Common and benign at start, so Trace.
+            self.LogDequeueEmpty();
+            return;
+        }
         try
         {
             spa_buffer* spaBuf = buf->buffer;
             if (spaBuf is null || spaBuf->n_datas == 0) return;
+
+            if (!self._firstBufferLogged)
+            {
+                self._firstBufferLogged = true;
+                spa_data* d0 = &spaBuf->datas[0];
+                self.LogFirstBuffer(spaBuf->n_datas, d0->type, d0->chunk is null ? 0u : d0->chunk->size, d0->maxsize);
+            }
 
             // Graph clock for this cycle - the common monotonic reference across all streams,
             // plus media position (ticks*rate) and latency (delay*rate) per PipeWire's timing model.
@@ -285,12 +304,13 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
     private static void OnStateChanged(void* data, pw_stream_state old, pw_stream_state state, sbyte* error)
     {
         var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
-        if (error is not null && Environment.GetEnvironmentVariable("STX_PW_DEBUG") is { Length: > 0 })
-        {
-            Console.Error.WriteLine($"[pw-core] stream error: {Marshal.PtrToStringUTF8((nint)error)}");
-        }
+        if (self is null) return;
 
-        self?._onState?.Invoke((PipeWireStreamState)(int)old, (PipeWireStreamState)(int)state);
+        if (error is not null)
+            self.LogStreamError(Marshal.PtrToStringUTF8((nint)error) ?? "(null)");
+
+        self.LogStateChanged((PipeWireStreamState)(int)old, (PipeWireStreamState)(int)state);
+        self._onState?.Invoke((PipeWireStreamState)(int)old, (PipeWireStreamState)(int)state);
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -305,6 +325,8 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
         // not reliably deliver it, and re-announcing EnumFormat from this path crashed the daemon's set_param.
         // On 1.6.6 the producer instead offers a fixated modifier up front (it owns the surfaces, so it knows
         // the single modifier) and negotiates through the normal Format param flow below.
+        self.LogParamChanged(id);
+
         if (self._onPeerConnected is not null && id == SpaParamPeerCapability)
         {
             try { self._onPeerConnected.Invoke(self); } catch { /* keep the loop thread alive */ }
@@ -418,4 +440,23 @@ internal sealed unsafe class PipeWireStreamCore : IAsyncDisposable
             }
         }
     }
+
+    // - Diagnostics (source-generated, level-gated). Enable at Debug/Trace via the host's logger
+    //   factory passed to PipeWireContext (e.g. the agent's --verbose). The stream name is the
+    //   logger category, so each stream's lifecycle is filterable on its own. -
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "state {Old} -> {New}")]
+    private partial void LogStateChanged(PipeWireStreamState old, PipeWireStreamState @new);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "stream error: {Error}")]
+    private partial void LogStreamError(string error);
+
+    [LoggerMessage(Level = LogLevel.Trace, Message = "param_changed id={Id}")]
+    private partial void LogParamChanged(uint id);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "first buffer: n_datas={Blocks} type={DataType} size={Size} maxsize={MaxSize}")]
+    private partial void LogFirstBuffer(uint blocks, uint dataType, uint size, uint maxSize);
+
+    [LoggerMessage(Level = LogLevel.Trace, Message = "process: no buffer dequeued (producer underrun or not yet started)")]
+    private partial void LogDequeueEmpty();
 }

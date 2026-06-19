@@ -1,4 +1,5 @@
 using System.Runtime.Versioning;
+using Microsoft.Extensions.Logging;
 using PipeWire.NET.Generated;
 using PipeWire.NET.Spa;
 
@@ -9,7 +10,7 @@ namespace PipeWire.NET;
 /// monitor of an output sink).
 /// </summary>
 [SupportedOSPlatform("linux")]
-public sealed class PipeWireAudioCapture : IAsyncDisposable
+public sealed partial class PipeWireAudioCapture : IAsyncDisposable
 {
     /// <summary>Wildcard node id - let PipeWire auto-select a source.</summary>
     public const uint AnyNode = Native.PW_ID_ANY;
@@ -25,6 +26,7 @@ public sealed class PipeWireAudioCapture : IAsyncDisposable
 
     private readonly PipeWireContext _ctx;
     private readonly string _name;
+    private readonly ILogger _logger;
     private PipeWireStreamCore? _core;
     private ulong _sequence;
     private SpaFormat.AudioFormatInfo _fmt = new(AudioSampleFormat.F32Le, 48000, 2);
@@ -36,6 +38,7 @@ public sealed class PipeWireAudioCapture : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(context);
         ArgumentException.ThrowIfNullOrEmpty(name);
         _ctx = context; _name = name;
+        _logger = context.LoggerFactory.CreateLogger($"PipeWire.NET.{name}");
     }
 
     /// <summary>Connects to an audio source.</summary>
@@ -90,6 +93,12 @@ public sealed class PipeWireAudioCapture : IAsyncDisposable
     private void OnState(PipeWireStreamState oldState, PipeWireStreamState newState) =>
         StateChanged?.Invoke(this, oldState, newState);
 
-    private unsafe void OnFormat(spa_pod* param) =>
+    private unsafe void OnFormat(spa_pod* param)
+    {
         _fmt = SpaFormat.ParseAudioFormat(param, _fmt);
+        LogNegotiatedFormat(_fmt.Format, _fmt.SampleRate, _fmt.Channels);
+    }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "negotiated audio format {Format} {SampleRate}Hz {Channels}ch")]
+    private partial void LogNegotiatedFormat(AudioSampleFormat format, int sampleRate, int channels);
 }
