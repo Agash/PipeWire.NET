@@ -612,7 +612,7 @@ public sealed class NativeLibraryResolutionTests
     [System.Runtime.Versioning.SupportedOSPlatform("linux")]
     public async Task VideoRoundTrip_PreservesAlphaChannel()
     {
-        // ADR-108 cares about alpha. Write a per-channel BGRA pattern with a NON-opaque alpha
+        // Write a per-channel BGRA pattern with a NON-opaque alpha
         // and assert all four channels - alpha included - arrive byte-exact. Proves the alpha
         // channel is carried through the graph, not silently dropped to opaque.
         // BGRA byte order in memory is B,G,R,A.

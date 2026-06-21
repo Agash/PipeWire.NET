@@ -92,7 +92,7 @@ public readonly ref struct VideoFrame
     /// <summary>
     /// Backing file descriptor for <see cref="PipeWireBufferType.DmaBuf"/> /
     /// <see cref="PipeWireBufferType.MemFd"/>, or -1 when host-memory only.
-    /// Import this into the GPU for a zero-copy pipeline (ADR-108).
+    /// Import this into the GPU for a zero-copy pipeline.
     /// </summary>
     public long Fd { get; }
 

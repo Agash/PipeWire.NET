@@ -119,7 +119,7 @@ only for the duration of the handler.
 `VideoFrame` carries the pixels (`Data`, `Stride`, `Width`, `Height`, `Format`), the negotiated
 `Color` info, the backing memory (`BufferType`, `Fd`, `MapOffset`), and timing (see below). For a
 DMA-BUF frame it also exposes the DRM format `Modifier` and the per-plane layout (`Planes`: fd,
-offset, stride, size per plane — e.g. two planes for `Nv12`), so a multi-plane tiled surface can be
+offset, stride, size per plane, e.g. two planes for `Nv12`), so a multi-plane tiled surface can be
 imported correctly. `AudioFrame` carries `Samples`, `SampleRate`, `Channels`, `Format`,
 `FrameCount`, and timing.
 
@@ -196,7 +196,7 @@ samples in and out. Encoding and network transport live above it.
 
 DMA-BUF is supported on **both** directions: capture imports DMA-BUF frames, and publish can hand out
 GPU-resident DMA-BUF buffers (`PipeWireVideoOutput.ConnectDmaBuf`, with DRM format-modifier
-negotiation — see "Zero copy"). A zero-copy GPU producer (e.g. a VAAPI/Vulkan pipeline) thus feeds a
+negotiation, see "Zero copy"). A zero-copy GPU producer (e.g. a VAAPI/Vulkan pipeline) thus feeds a
 GPU consumer like OBS with no CPU round-trip; host-memory output (`Connect` + `FillFrame`) remains for
 sources already in CPU memory.
 
