@@ -7,6 +7,9 @@
 .NET bindings for [PipeWire](https://pipewire.org) on Linux. Capture and publish video and audio
 through the local media graph, with an API that stays close to PipeWire while feeling natural in C#.
 
+> **Alpha.** Early and working, but largely untested in the wild and rough in places. Try it and file
+> issues; expect breaking changes before 1.0.
+
 ```csharp
 await using var ctx = new PipeWireContext();
 await ctx.StartAsync();
