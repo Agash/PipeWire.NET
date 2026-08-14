@@ -2,6 +2,9 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+    <!-- The runtime pack is what a self-contained/AOT publish resolves, and the graph flags any
+         10.0.10 or older. Pin the serviced patch so the sample does not carry a known advisory. -->
+    <RuntimeFrameworkVersion Condition="'$(TargetFramework)' == 'net10.0'">10.0.11</RuntimeFrameworkVersion>
     <RuntimeIdentifiers>linux-x64;linux-arm64</RuntimeIdentifiers>
     <IsPackable>false</IsPackable>
     <Nullable>enable</Nullable>
