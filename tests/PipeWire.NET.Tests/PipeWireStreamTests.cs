@@ -439,6 +439,9 @@ public sealed class DmaBufOutputTests
 }
 
 [TestClass]
+// These P/Invoke into libpipewire, so they can only run on Linux. SupportedOSPlatform is a
+// compile-time hint and does not stop the runner, so state the runtime condition too.
+[OSCondition(OperatingSystems.Linux)]
 public sealed class NativeLibraryResolutionTests
 {
     [TestMethod]
