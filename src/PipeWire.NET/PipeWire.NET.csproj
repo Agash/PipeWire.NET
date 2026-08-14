@@ -4,6 +4,7 @@
          allowPrerelease) selects it when installed; CI installs it explicitly. Building with
          only the .NET 10 SDK errors with NETSDK1045 - install the 11 preview SDK to target it. -->
     <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+    <IsAotCompatible>true</IsAotCompatible>
     <AssemblyName>PipeWire.NET</AssemblyName>
     <RootNamespace>PipeWire.NET</RootNamespace>
     <PackageId>PipeWire.NET</PackageId>
