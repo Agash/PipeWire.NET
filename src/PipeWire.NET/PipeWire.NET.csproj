@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <!-- net11.0 requires the .NET 11 preview SDK. global.json (rollForward latestMajor,
          allowPrerelease) selects it when installed; CI installs it explicitly. Building with
@@ -16,7 +16,6 @@
     <EnablePackageValidation>true</EnablePackageValidation>
     <MinVerTagPrefix>v</MinVerTagPrefix>
     <IsPackable>true</IsPackable>
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <NoWarn>CA1515;CA1050</NoWarn>
   </PropertyGroup>

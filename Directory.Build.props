@@ -1,13 +1,17 @@
-<Project>
+﻿<Project>
   <PropertyGroup>
+    <!-- Reproducibility is delegated to DotNet.ReproducibleBuilds rather than restated here.
+         It sets DebugType to embedded (so the portable PDB with its Source Link map travels
+         inside the assembly and no symbol package is needed), turns on
+         ContinuousIntegrationBuild for every CI provider it recognises, and publishes the
+         repository URL, branch and commit into the nuspec. Source Link itself ships in the
+         SDK. Deterministic is already the SDK default. -->
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AnalysisLevel>latest</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    <Deterministic>true</Deterministic>
-    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <Authors>Agash</Authors>
     <Company>Agash</Company>
     <Copyright>Copyright (c) Agash 2026</Copyright>
