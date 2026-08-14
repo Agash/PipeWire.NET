@@ -169,6 +169,11 @@ jobs:
     # the other Agash packages. Requires a NuGet.org trusted-publishing policy for this package.
     if: (github.event_name == 'release' && github.event.action == 'published') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # Declaring an environment is what makes GitHub record a deployment, which is what
+    # surfaces the Deployments tab and the package link on the repo home page.
+    environment:
+      name: nuget.org
+      url: https://www.nuget.org/packages/PipeWire.NET
     permissions:
       contents: read
       id-token: write   # OIDC for NuGet.org trusted publishing
