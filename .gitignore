@@ -15,3 +15,6 @@ nuget/
 
 # VS/Rider per-user launch profiles
 **/Properties/launchSettings.json
+
+# Test run output (coverage reports)
+TestResults/
