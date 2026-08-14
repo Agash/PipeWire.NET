@@ -18,6 +18,12 @@ jobs:
     name: Build, Test, and Pack
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      # Signing the provenance statement for the packages this job produces. Stated explicitly
+      # because attestation needs more than the read-only default.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v6
         with:
@@ -153,6 +159,14 @@ jobs:
         if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         run: dotnet pack src/PipeWire.NET/PipeWire.NET.csproj --no-build -c Release -o ${{ env.NuGetDirectory }}
 
+      - name: Attest build provenance
+        # Records, in a signed statement GitHub hosts, which workflow and which commit produced these
+        # exact package files. Anyone who downloads the package can verify it came from this repository
+        # rather than from someone who republished it under the same name.
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ env.NuGetDirectory }}/*.nupkg
       - name: Upload package artifact
         if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v7
