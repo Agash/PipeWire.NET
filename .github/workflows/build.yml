@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # MinVer needs full history
 
@@ -32,7 +32,7 @@ jobs:
             libclang-dev \
             pkg-config
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           # net11.0 target requires the .NET 11 preview SDK alongside the .NET 10 SDK.
           # global.json (rollForward latestMajor, allowPrerelease) then selects the 11 SDK,
@@ -180,7 +180,7 @@ jobs:
           name: nuget-package
           path: ${{ env.NuGetDirectory }}
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
 
       - name: NuGet login (OIDC)
         id: login
