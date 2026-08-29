@@ -28,7 +28,8 @@ namespace PipeWire.NET;
 public sealed class PipeWireRegistry : IAsyncDisposable
 {
     private readonly PipeWireContext _ctx;
-    private readonly ConcurrentDictionary<uint, PipeWireSource> _sources = new();
+    internal readonly ConcurrentDictionary<uint, PipeWireSource> _sources = new();
+    internal readonly ConcurrentDictionary<uint, PipeWirePort> _ports = new();
 
     private unsafe pw_registry*        _registry;
     private unsafe pw_registry_events* _events;
@@ -42,6 +43,9 @@ public sealed class PipeWireRegistry : IAsyncDisposable
 
     /// <summary>Raised when a node is removed (carries the global id of the removed node).</summary>
     public event Action<uint>? SourceRemoved;
+
+    /// <summary>Raised when a new port appears in the graph</summary>
+    public event Action<PipeWirePort>? PortAdded;
 
     /// <param name="context">A <see cref="PipeWireContext"/> with <see cref="PipeWireContext.StartAsync"/> already called.</param>
     public PipeWireRegistry(PipeWireContext context)
@@ -133,14 +137,55 @@ public sealed class PipeWireRegistry : IAsyncDisposable
         {
             case "PipeWire:Interface:Node":
                 string? nodeName    = TryReadKey(props, Native.PW_KEY_NODE_NAME);
-                string? description = TryReadKey(props, Native.PW_KEY_NODE_DESCRIPTION);
+                string? nodeDescription = TryReadKey(props, Native.PW_KEY_NODE_DESCRIPTION);
                 string? nodeNick    = TryReadKey(props, Native.PW_KEY_NODE_NICK);
                 string? mediaClass  = TryReadKey(props, Native.PW_KEY_MEDIA_CLASS);
 
-                var source = new PipeWireSource(id, nodeName, description, mediaClass, nodeNick);
+                var source = new PipeWireSource(id, nodeName, nodeDescription, mediaClass, nodeNick);
                 self._sources[id] = source;
 
                 try { self.SourceAdded?.Invoke(source); }
+                catch { /* event handler should not break the main loop */ }
+
+                break;
+            case "PipeWire:Interface:Port":
+                string? portNodeId = TryReadKey(props, Native.PW_KEY_NODE_ID);
+                string? portName = TryReadKey(props, Native.PW_KEY_PORT_NAME);
+                string? portDirection = TryReadKey(props, Native.PW_KEY_PORT_DIRECTION);
+                string? portMonitor = TryReadKey(props, Native.PW_KEY_PORT_MONITOR);
+                string? portExclusive = TryReadKey(props, Native.PW_KEY_PORT_EXCLUSIVE);
+
+                if (portNodeId == null)
+                {
+                    Debug.WriteLine($"Port {id} was loaded without a node id!");
+                    return;
+                }
+
+                if (!uint.TryParse(portNodeId, out uint parsedPortNodeId))
+                {
+                    Debug.WriteLine($"Port {id} was loaded with an invalid node id '{portNodeId}'");
+                    return;
+                }
+
+                if (!Enum.TryParse(typeof(PipeWirePortDirection), portDirection, true, out object? parsedPortDirection))
+                {
+                    Debug.WriteLine($"Port {id} was loaded with an invalid direction attribute '{portDirection}'");
+                    return;
+                }
+
+                var port = new PipeWirePort(id, parsedPortNodeId, portName,
+                    (PipeWirePortDirection) parsedPortDirection,
+                    portMonitor != null, portExclusive != null);
+                if (!self._sources.TryGetValue(parsedPortNodeId, out PipeWireSource? value))
+                {
+                    Debug.WriteLine($"Port {id} was loaded for node {parsedPortNodeId} which is not loaded");
+                    return;
+                }
+
+                value._ports.Add(port);
+                self._ports[id] = port;
+
+                try { self.PortAdded?.Invoke(port); }
                 catch { /* event handler should not break the main loop */ }
 
                 break;

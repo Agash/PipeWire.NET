@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace PipeWire.NET;
 
 /// <summary>
@@ -20,6 +22,8 @@ public sealed record PipeWireSource(
     string? MediaClass,
     string? NodeNick = null)
 {
+    internal readonly List<PipeWirePort> _ports = [];
+
     /// <summary>The strongly-typed view of <see cref="MediaClass"/>.</summary>
     public PipeWireMediaClass Class => PipeWireMediaClassExtensions.ParseMediaClass(MediaClass);
 
@@ -28,4 +32,9 @@ public sealed record PipeWireSource(
 
     /// <summary>True if this node produces audio a consumer can capture.</summary>
     public bool IsAudioSource => Class.IsAudio();
+
+    /// <summary>
+    /// todo: write docs
+    /// </summary>
+    public IList<PipeWirePort> Ports => _ports.ToImmutableList();
 }

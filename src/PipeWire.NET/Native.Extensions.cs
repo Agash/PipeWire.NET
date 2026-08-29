@@ -36,12 +36,22 @@ public static unsafe partial class Native
     public const string PW_KEY_MEDIA_CATEGORY = "media.category";
     /// <summary><c>media.role</c> - "Camera" / "Music" / "Screen" / ...</summary>
     public const string PW_KEY_MEDIA_ROLE     = "media.role";
+    /// <summary><c>node.id</c> - node identifier.</summary>
+    public const string PW_KEY_NODE_ID        = "node.id";
     /// <summary><c>node.name</c> - stable node name.</summary>
     public const string PW_KEY_NODE_NAME      = "node.name";
     /// <summary><c>node.description</c> - human-readable node name.</summary>
     public const string PW_KEY_NODE_DESCRIPTION = "node.description";
     /// <summary><c>node.nick</c> - short display name.</summary>
     public const string PW_KEY_NODE_NICK      = "node.nick";
+    /// <summary><c>port.name</c> - stable port name.</summary>
+    public const string PW_KEY_PORT_NAME      = "port.name";
+    /// <summary><c>port.direction</c> - port direction.</summary>
+    public const string PW_KEY_PORT_DIRECTION = "port.direction";
+    /// <summary><c>port.exclusive</c> - if this is a monitor port.</summary>
+    public const string PW_KEY_PORT_MONITOR   = "port.monitor";
+    /// <summary><c>port.exclusive</c> - whether port should be linked only once.</summary>
+    public const string PW_KEY_PORT_EXCLUSIVE = "port.exclusive";
     /// <summary><c>target.object</c> - bind a stream to a specific node by serial/name.</summary>
     public const string PW_KEY_TARGET_OBJECT  = "target.object";
 
