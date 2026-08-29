@@ -48,8 +48,14 @@ public sealed class PipeWireRegistry : IAsyncDisposable
     /// <summary>Raised when a new port appears in the graph</summary>
     public event Action<PipeWirePort>? PortAdded;
 
+    /// <summary>Raised when a new port appears in the graph</summary>
+    public event Action<uint>? PortRemoved;
+
     /// <summary>Raised when a new link appears in the graph</summary>
     public event Action<PipeWireLink>? LinkAdded;
+
+    /// <summary>Raised when a new link appears in the graph</summary>
+    public event Action<uint>? LinkRemoved;
 
     /// <param name="context">A <see cref="PipeWireContext"/> with <see cref="PipeWireContext.StartAsync"/> already called.</param>
     public PipeWireRegistry(PipeWireContext context)
@@ -242,6 +248,14 @@ public sealed class PipeWireRegistry : IAsyncDisposable
         if (self._sources.TryRemove(id, out _))
         {
             try { self.SourceRemoved?.Invoke(id); }
+            catch { /* swallow */ }
+        } else if (self._ports.TryRemove(id, out _))
+        {
+            try { self.PortRemoved?.Invoke(id); }
+            catch { /* swallow */ }
+        } else if (self._links.TryRemove(id, out _))
+        {
+            try { self.LinkRemoved?.Invoke(id); }
             catch { /* swallow */ }
         }
     }

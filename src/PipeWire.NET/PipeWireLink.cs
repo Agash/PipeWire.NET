@@ -4,40 +4,68 @@ namespace PipeWire.NET;
 /// <summary>
 /// todo: write docs
 /// </summary>
-/// <param name="_registry"></param>
-/// <param name="LinkId"></param>
-/// <param name="LinkInputNode"></param>
-/// <param name="LinkInputPort"></param>
-/// <param name="LinkOutputNode"></param>
-/// <param name="LinkOutputPort"></param>
 [SupportedOSPlatform("linux")]
-public sealed record PipeWireLink(
-    PipeWireRegistry _registry,
-    uint LinkId,
-    uint LinkInputNode,
-    uint LinkInputPort,
-    uint LinkOutputNode,
-    uint LinkOutputPort)
+public sealed record PipeWireLink
 {
-    internal readonly PipeWireRegistry _registry = _registry;
+    internal readonly PipeWireRegistry _registry;
 
     /// <summary>
     /// todo: write docs
     /// </summary>
-    public PipeWireSource InputNode => _registry._sources[LinkInputNode];
+    /// <param name="_registry"></param>
+    /// <param name="LinkId"></param>
+    /// <param name="LinkInputNode"></param>
+    /// <param name="LinkInputPort"></param>
+    /// <param name="LinkOutputNode"></param>
+    /// <param name="LinkOutputPort"></param>
+    internal PipeWireLink(
+        PipeWireRegistry _registry,
+        uint LinkId,
+        uint LinkInputNode,
+        uint LinkInputPort,
+        uint LinkOutputNode,
+        uint LinkOutputPort)
+    {
+        this.LinkId = LinkId;
+        this.LinkInputNode = LinkInputNode;
+        this.LinkInputPort = LinkInputPort;
+        this.LinkOutputNode = LinkOutputNode;
+        this.LinkOutputPort = LinkOutputPort;
+        this._registry = _registry;
+    }
 
     /// <summary>
     /// todo: write docs
     /// </summary>
-    public PipeWirePort InputPort => _registry._ports[LinkInputPort];
+    public PipeWireSource? InputNode => _registry._sources.GetValueOrDefault(LinkInputNode);
 
     /// <summary>
     /// todo: write docs
     /// </summary>
-    public PipeWireSource OutputNode => _registry._sources[LinkOutputNode];
+    public PipeWirePort? InputPort => _registry._ports.GetValueOrDefault(LinkInputPort);
 
     /// <summary>
     /// todo: write docs
     /// </summary>
-    public PipeWirePort OutputPort => _registry._ports[LinkOutputPort];
+    public PipeWireSource? OutputNode => _registry._sources.GetValueOrDefault(LinkOutputNode);
+
+    /// <summary>
+    /// todo: write docs
+    /// </summary>
+    public PipeWirePort? OutputPort => _registry._ports.GetValueOrDefault(LinkOutputPort);
+
+    /// <summary></summary>
+    public uint LinkId { get; }
+
+    /// <summary></summary>
+    public uint LinkInputNode { get; }
+
+    /// <summary></summary>
+    public uint LinkInputPort { get; }
+
+    /// <summary></summary>
+    public uint LinkOutputNode { get; }
+
+    /// <summary></summary>
+    public uint LinkOutputPort { get; }
 }
