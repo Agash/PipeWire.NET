@@ -1,4 +1,7 @@
 using System.Runtime.Versioning;
+using System.Text;
+using PipeWire.NET.Generated;
+
 namespace PipeWire.NET;
 
 /// <summary>
@@ -84,6 +87,7 @@ public enum PipeWirePortDirection
     /// todo: write docs
     /// </summary>
     In,
+
     /// <summary>
     /// todo: write docs
     /// </summary>

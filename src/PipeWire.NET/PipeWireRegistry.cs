@@ -27,7 +27,7 @@ namespace PipeWire.NET;
 [SupportedOSPlatform("linux")]
 public sealed class PipeWireRegistry : IAsyncDisposable
 {
-    private readonly PipeWireContext _ctx;
+    internal readonly PipeWireContext _ctx;
     internal readonly ConcurrentDictionary<uint, PipeWireSource> _sources = new();
     internal readonly ConcurrentDictionary<uint, PipeWirePort> _ports = new();
     internal readonly ConcurrentDictionary<uint, PipeWireLink> _links = new();

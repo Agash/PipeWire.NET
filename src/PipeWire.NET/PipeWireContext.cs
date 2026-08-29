@@ -27,7 +27,7 @@ public sealed class PipeWireContext : IAsyncDisposable
 {
     private unsafe pw_thread_loop* _loop;
     private unsafe pw_context*     _context;
-    private unsafe pw_core*        _core;
+    internal unsafe pw_core*        _core;
     private volatile bool          _started;
     private volatile bool          _disposed;
 

@@ -71,6 +71,10 @@ public static unsafe partial class Native
     /// <summary><c>target.object</c> - bind a stream to a specific node by serial/name.</summary>
     public const string PW_KEY_TARGET_OBJECT  = "target.object";
 
+    // - Type ids -
+    public const string PW_TYPE_INFO_INTERFACE_BASE = "PipeWire:Interface:";
+    public const string PW_TYPE_INTERFACE_Link = PW_TYPE_INFO_INTERFACE_BASE + "Link";
+
     // - Sentinel ids -
 
     /// <summary>Wildcard node id - passed to pw_stream_connect to let the daemon auto-select.</summary>
