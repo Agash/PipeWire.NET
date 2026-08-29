@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -128,18 +129,25 @@ public sealed class PipeWireRegistry : IAsyncDisposable
         if (self is null || self._disposed) return;
 
         string? typeStr = PtrToUtf8(type);
-        if (typeStr != "PipeWire:Interface:Node") return;       // we only surface nodes
+        switch (typeStr)
+        {
+            case "PipeWire:Interface:Node":
+                string? nodeName    = TryReadKey(props, Native.PW_KEY_NODE_NAME);
+                string? description = TryReadKey(props, Native.PW_KEY_NODE_DESCRIPTION);
+                string? nodeNick    = TryReadKey(props, Native.PW_KEY_NODE_NICK);
+                string? mediaClass  = TryReadKey(props, Native.PW_KEY_MEDIA_CLASS);
 
-        string? nodeName    = TryReadKey(props, Native.PW_KEY_NODE_NAME);
-        string? description = TryReadKey(props, Native.PW_KEY_NODE_DESCRIPTION);
-        string? nodeNick    = TryReadKey(props, Native.PW_KEY_NODE_NICK);
-        string? mediaClass  = TryReadKey(props, Native.PW_KEY_MEDIA_CLASS);
+                var source = new PipeWireSource(id, nodeName, description, mediaClass, nodeNick);
+                self._sources[id] = source;
 
-        var source = new PipeWireSource(id, nodeName, description, mediaClass, nodeNick);
-        self._sources[id] = source;
+                try { self.SourceAdded?.Invoke(source); }
+                catch { /* event handler should not break the main loop */ }
 
-        try { self.SourceAdded?.Invoke(source); }
-        catch { /* event handler should not break the main loop */ }
+                break;
+            default:
+                Debug.WriteLine($"Not enumerating result of type {typeStr}");
+                break;
+        }
 
         self._initialEnumeration.TrySetResult();
     }
