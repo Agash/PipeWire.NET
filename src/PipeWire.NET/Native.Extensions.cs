@@ -52,6 +52,22 @@ public static unsafe partial class Native
     public const string PW_KEY_PORT_MONITOR   = "port.monitor";
     /// <summary><c>port.exclusive</c> - whether port should be linked only once.</summary>
     public const string PW_KEY_PORT_EXCLUSIVE = "port.exclusive";
+    /// <summary>
+    /// todo: write docs
+    /// </summary>
+    public const string PW_KEY_LINK_INPUT_NODE ="link.input.node";
+    /// <summary>
+    /// todo: write docs
+    /// </summary>
+    public const string PW_KEY_LINK_INPUT_PORT ="link.input.port";
+    /// <summary>
+    /// todo: write docs
+    /// </summary>
+    public const string PW_KEY_LINK_OUTPUT_NODE ="link.output.node";
+    /// <summary>
+    /// todo: write docs
+    /// </summary>
+    public const string PW_KEY_LINK_OUTPUT_PORT ="link.output.port";
     /// <summary><c>target.object</c> - bind a stream to a specific node by serial/name.</summary>
     public const string PW_KEY_TARGET_OBJECT  = "target.object";
 

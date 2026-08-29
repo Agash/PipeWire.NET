@@ -30,6 +30,7 @@ public sealed class PipeWireRegistry : IAsyncDisposable
     private readonly PipeWireContext _ctx;
     internal readonly ConcurrentDictionary<uint, PipeWireSource> _sources = new();
     internal readonly ConcurrentDictionary<uint, PipeWirePort> _ports = new();
+    internal readonly ConcurrentDictionary<uint, PipeWireLink> _links = new();
 
     private unsafe pw_registry*        _registry;
     private unsafe pw_registry_events* _events;
@@ -46,6 +47,9 @@ public sealed class PipeWireRegistry : IAsyncDisposable
 
     /// <summary>Raised when a new port appears in the graph</summary>
     public event Action<PipeWirePort>? PortAdded;
+
+    /// <summary>Raised when a new link appears in the graph</summary>
+    public event Action<PipeWireLink>? LinkAdded;
 
     /// <param name="context">A <see cref="PipeWireContext"/> with <see cref="PipeWireContext.StartAsync"/> already called.</param>
     public PipeWireRegistry(PipeWireContext context)
@@ -141,7 +145,7 @@ public sealed class PipeWireRegistry : IAsyncDisposable
                 string? nodeNick    = TryReadKey(props, Native.PW_KEY_NODE_NICK);
                 string? mediaClass  = TryReadKey(props, Native.PW_KEY_MEDIA_CLASS);
 
-                var source = new PipeWireSource(id, nodeName, nodeDescription, mediaClass, nodeNick);
+                var source = new PipeWireSource(self, id, nodeName, nodeDescription, mediaClass, nodeNick);
                 self._sources[id] = source;
 
                 try { self.SourceAdded?.Invoke(source); }
@@ -173,19 +177,51 @@ public sealed class PipeWireRegistry : IAsyncDisposable
                     return;
                 }
 
-                var port = new PipeWirePort(id, parsedPortNodeId, portName,
+                var port = new PipeWirePort(self, id, parsedPortNodeId, portName,
                     (PipeWirePortDirection) parsedPortDirection,
                     portMonitor != null, portExclusive != null);
-                if (!self._sources.TryGetValue(parsedPortNodeId, out PipeWireSource? value))
-                {
-                    Debug.WriteLine($"Port {id} was loaded for node {parsedPortNodeId} which is not loaded");
-                    return;
-                }
-
-                value._ports.Add(port);
                 self._ports[id] = port;
 
                 try { self.PortAdded?.Invoke(port); }
+                catch { /* event handler should not break the main loop */ }
+
+                break;
+            case "PipeWire:Interface:Link":
+                string? linkInputNodeId = TryReadKey(props, Native.PW_KEY_LINK_INPUT_NODE);
+                string? linkInputPortId = TryReadKey(props, Native.PW_KEY_LINK_INPUT_PORT);
+                string? linkOutputNodeId = TryReadKey(props, Native.PW_KEY_LINK_OUTPUT_NODE);
+                string? linkOutputPortId = TryReadKey(props, Native.PW_KEY_LINK_OUTPUT_PORT);
+
+                if (!uint.TryParse(linkInputNodeId, out uint parsedLinkInputNodeId))
+                {
+                    Debug.WriteLine($"Link {id} was loaded with an invalid input node id '{linkInputNodeId}'");
+                    return;
+                }
+
+                if (!uint.TryParse(linkInputPortId, out uint parsedLinkInputPortId))
+                {
+                    Debug.WriteLine($"Link {id} was loaded with an invalid input port id '{linkInputPortId}'");
+                    return;
+                }
+
+                if (!uint.TryParse(linkOutputNodeId, out uint parsedLinkOutputNodeId))
+                {
+                    Debug.WriteLine($"Link {id} was loaded with an invalid output node id '{linkOutputNodeId}'");
+                    return;
+                }
+
+                if (!uint.TryParse(linkOutputPortId, out uint parsedLinkOutputPortId))
+                {
+                    Debug.WriteLine($"Link {id} was loaded with an invalid output port id '{linkOutputPortId}'");
+                    return;
+                }
+
+                var link = new PipeWireLink(self, id,
+                    parsedLinkInputNodeId, parsedLinkInputPortId,
+                    parsedLinkOutputNodeId, parsedLinkOutputPortId);
+                self._links[id] = link;
+
+                try { self.LinkAdded?.Invoke(link); }
                 catch { /* event handler should not break the main loop */ }
 
                 break;
