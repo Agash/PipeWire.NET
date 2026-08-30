@@ -158,7 +158,7 @@ public sealed class PipeWireRegistry : IAsyncDisposable
             throw new Exception($"Creating new link from port {feed.PortId} to port {sink.PortId} failed!");
         }
 
-        return WaitForLink(feed.PortId, sink.PortId);
+        return WaitForLink((pw_proxy*)result);
     }
 
     /// <inheritdoc/>
@@ -204,7 +204,8 @@ public sealed class PipeWireRegistry : IAsyncDisposable
                 string? mediaClass  = TryReadKey(props, Native.PW_KEY_MEDIA_CLASS);
 
                 var source = new PipeWireSource(self, id, nodeName, nodeDescription, mediaClass, nodeNick);
-                self._sources[id] = source;
+                lock (self._sources)
+                    self._sources[id] = source;
                 Debug.WriteLine($"Loaded Node {id} '{source.NodeName}' ({mediaClass}): {nodeDescription}");
 
                 try { self.SourceAdded?.Invoke(source); }
@@ -239,7 +240,8 @@ public sealed class PipeWireRegistry : IAsyncDisposable
                 var port = new PipeWirePort(self, id, parsedPortNodeId, portName,
                     (PipeWirePortDirection) parsedPortDirection,
                     portMonitor != null, portExclusive != null);
-                self._ports[id] = port;
+                lock (self._ports)
+                    self._ports[id] = port;
                 Debug.WriteLine($"Loaded Port {id} '{port.PortName}' ({port.PortDirection}) of Node {port.NodeId}");
 
                 try { self.PortAdded?.Invoke(port); }
@@ -279,7 +281,8 @@ public sealed class PipeWireRegistry : IAsyncDisposable
                 var link = new PipeWireLink(self, id,
                     parsedLinkInputNodeId, parsedLinkInputPortId,
                     parsedLinkOutputNodeId, parsedLinkOutputPortId);
-                self._links[id] = link;
+                lock (self._links)
+                    self._links[id] = link;
                 Debug.WriteLine($"Loaded Link {id} ({link.LinkOutputNode}.{link.LinkOutputPort} -> {link.LinkInputNode}.{link.LinkInputPort})");
 
                 try { self.LinkAdded?.Invoke(link); }
@@ -357,8 +360,7 @@ public sealed class PipeWireRegistry : IAsyncDisposable
     /// <summary>
     /// todo: write docs
     /// </summary>
-    /// <param name="feedPortId"></param>
-    /// <param name="sinkPortId"></param>
+    /// <param name="proxy"></param>
     /// <returns></returns>
     public Task<PipeWireLink> WaitForLink(uint feedPortId, uint sinkPortId)
     {
@@ -367,31 +369,32 @@ public sealed class PipeWireRegistry : IAsyncDisposable
         return waiter._completion.Task;
     }
 
-    private sealed class WaitForLinkRegistration
+    private unsafe Task<PipeWireLink> WaitForLink(pw_proxy* proxy)
     {
-        internal readonly TaskCompletionSource<PipeWireLink> _completion;
-        private readonly PipeWireRegistry _registry;
-        private readonly uint _feedPortId;
-        private readonly uint _sinkPortId;
+        uint id = GetIdFromProxy(proxy);
+        var waiter = new LinkWaiter(this, id);
+        return waiter.GetOrAwaitRegistration();
+    }
 
-        public WaitForLinkRegistration(PipeWireRegistry registry, uint feedPortId, uint sinkPortId)
+    private unsafe uint GetIdFromProxy(pw_proxy* proxy)
+    {
+        using (_ctx.Lock())
+            return Native.pw_proxy_get_bound_id(proxy);
+    }
+
+    private abstract class ObjectWaiter<T>
+    {
+        internal readonly TaskCompletionSource<T> _completion = new();
+        protected readonly uint _id;
+
+        protected ObjectWaiter(uint id)
         {
-            _completion = new TaskCompletionSource<PipeWireLink>();
-
-            _registry = registry;
-            _feedPortId = feedPortId;
-            _sinkPortId = sinkPortId;
-
-            registry.LinkAdded += OnLinkRegister;
+            _id = id;
+            _completion.Task.ContinueWith(_ => Unregister());
         }
 
-        internal void CheckAlreadyExists()
-        {
-            var existing = _registry._links.Values
-                .FirstOrDefault(link => link.LinkOutputPort == _feedPortId && link.LinkInputPort == _sinkPortId);
-            if (existing != null)
-                _completion.TrySetResult(existing);
-        }
+        protected abstract void Unregister();
+    }
 
         private void OnLinkRegister(PipeWireLink link)
         {
@@ -400,6 +403,37 @@ public sealed class PipeWireRegistry : IAsyncDisposable
 
             _completion.TrySetResult(link);
             _registry.LinkAdded -= OnLinkRegister;
+        }
+    }
+
+    private sealed class LinkWaiter(PipeWireRegistry registry, uint id) : ObjectWaiter<PipeWireLink>(id)
+    {
+        internal Task<PipeWireLink> GetOrAwaitRegistration()
+        {
+            lock (registry._links)
+            {
+                if (registry._links.TryGetValue(_id, out PipeWireLink? node))
+                    _completion.TrySetResult(node);
+
+                registry.LinkAdded += OnSourceAdd;
+                return _completion.Task;
+            }
+        }
+
+        protected override void Unregister()
+        {
+            registry.LinkAdded -= OnSourceAdd;
+        }
+
+        private void OnSourceAdd(PipeWireLink obj)
+        {
+            lock(registry._links)
+            {
+                if (obj.LinkId != _id || _completion.Task.IsCompleted)
+                    return;
+
+                _completion.TrySetResult(obj);
+            }
         }
     }
 }
