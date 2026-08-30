@@ -128,7 +128,7 @@ public sealed record PipeWireLink
     /// todo: write docs
     /// </summary>
     /// <exception cref="Exception"></exception>
-    public unsafe void Deconstruct()
+    public unsafe void Deconstruct(out uint id)
     {
         int result;
         using (_registry._ctx.Lock())
@@ -141,5 +141,7 @@ public sealed record PipeWireLink
         {
             throw new Exception($"Removing link {LinkId} failed");
         }
+
+        id = LinkId;
     }
 }
