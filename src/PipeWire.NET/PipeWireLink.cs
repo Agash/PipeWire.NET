@@ -130,8 +130,13 @@ public sealed record PipeWireLink
     /// <exception cref="Exception"></exception>
     public unsafe void Deconstruct()
     {
-        Native.GetInterface(_registry._registry, out pw_registry_methods* methods, out void* data);
-        var result = methods->destroy(data, LinkId);
+        int result;
+        using (_registry._ctx.Lock())
+        {
+            Native.GetInterface(_registry._registry, out pw_registry_methods* methods, out void* data);
+            result = methods->destroy(data, LinkId);
+        }
+
         if (result == 0)
         {
             throw new Exception($"Removing link {LinkId} failed");
