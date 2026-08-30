@@ -16,7 +16,7 @@ public sealed record PipeWireLink
     /// <param name="feed"></param>
     /// <param name="sink"></param>
     /// <exception cref="Exception"></exception>
-    public static unsafe void Create(PipeWirePort feed, PipeWirePort sink)
+    public static unsafe Task<PipeWireLink> Create(PipeWirePort feed, PipeWirePort sink)
     {
         if (feed._registry != sink._registry)
             throw new ArgumentException($"Linking ports {feed.PortId} and {sink.PortId} not possible; must be in same registry");
@@ -58,6 +58,8 @@ public sealed record PipeWireLink
         {
             throw new Exception($"Creating new link from port {feed.PortId} to port {sink.PortId} failed!");
         }
+
+        return feed._registry.WaitForLink(feed.PortId, sink.PortId);
     }
 
     internal readonly PipeWireRegistry _registry;

@@ -295,4 +295,53 @@ public sealed class PipeWireRegistry : IAsyncDisposable
             if ((byte)nullTerminated[i] != needle[i]) return false;
         return nullTerminated[i] == 0;
     }
+
+    /// <summary>
+    /// todo: write docs
+    /// </summary>
+    /// <param name="feedPortId"></param>
+    /// <param name="sinkPortId"></param>
+    /// <returns></returns>
+    public Task<PipeWireLink> WaitForLink(uint feedPortId, uint sinkPortId)
+    {
+        var waiter = new WaitForLinkRegistration(this, feedPortId, sinkPortId);
+        waiter.CheckAlreadyExists();
+        return waiter._completion.Task;
+    }
+
+    private sealed class WaitForLinkRegistration
+    {
+        internal readonly TaskCompletionSource<PipeWireLink> _completion;
+        private readonly PipeWireRegistry _registry;
+        private readonly uint _feedPortId;
+        private readonly uint _sinkPortId;
+
+        public WaitForLinkRegistration(PipeWireRegistry registry, uint feedPortId, uint sinkPortId)
+        {
+            _completion = new TaskCompletionSource<PipeWireLink>();
+
+            _registry = registry;
+            _feedPortId = feedPortId;
+            _sinkPortId = sinkPortId;
+
+            registry.LinkAdded += OnLinkRegister;
+        }
+
+        internal void CheckAlreadyExists()
+        {
+            var existing = _registry._links.Values
+                .FirstOrDefault(link => link.LinkOutputPort == _feedPortId && link.LinkInputPort == _sinkPortId);
+            if (existing != null)
+                _completion.TrySetResult(existing);
+        }
+
+        private void OnLinkRegister(PipeWireLink link)
+        {
+            if (_completion.Task.IsCompleted) return;
+            if (link.LinkOutputPort != _feedPortId || link.LinkInputPort != _sinkPortId) return;
+
+            _completion.TrySetResult(link);
+            _registry.LinkAdded -= OnLinkRegister;
+        }
+    }
 }
