@@ -28,6 +28,10 @@ public static unsafe partial class Native
     // generate-macro-bindings (fatal on this header set - see pipewire.rsp).
     // Hand-declared here; values are stable across PipeWire 0.3.x.
 
+    /// <summary>
+    /// todo: write docs
+    /// </summary>
+    public const string PW_KEY_FACTORY_NAME   = "factory.name";
     /// <summary><c>media.class</c> - node media class (e.g. "Video/Source").</summary>
     public const string PW_KEY_MEDIA_CLASS    = "media.class";
     /// <summary><c>media.type</c> - "Video" / "Audio".</summary>
@@ -36,6 +40,10 @@ public static unsafe partial class Native
     public const string PW_KEY_MEDIA_CATEGORY = "media.category";
     /// <summary><c>media.role</c> - "Camera" / "Music" / "Screen" / ...</summary>
     public const string PW_KEY_MEDIA_ROLE     = "media.role";
+    /// <summary>
+    /// todo: write docs
+    /// </summary>
+    public const string PW_KEY_AUDIO_POSITION = "audio.position";
     /// <summary><c>node.id</c> - node identifier.</summary>
     public const string PW_KEY_NODE_ID        = "node.id";
     /// <summary><c>node.name</c> - stable node name.</summary>
@@ -73,6 +81,7 @@ public static unsafe partial class Native
 
     // - Type ids -
     public const string PW_TYPE_INFO_INTERFACE_BASE = "PipeWire:Interface:";
+    public const string PW_TYPE_INTERFACE_Node = PW_TYPE_INFO_INTERFACE_BASE + "Node";
     public const string PW_TYPE_INTERFACE_Link = PW_TYPE_INFO_INTERFACE_BASE + "Link";
 
     // - Sentinel ids -

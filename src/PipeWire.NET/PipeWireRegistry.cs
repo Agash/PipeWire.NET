@@ -112,6 +112,54 @@ public sealed class PipeWireRegistry : IAsyncDisposable
     /// <summary>
     /// todo: write docs
     /// </summary>
+    /// <param name="name"></param>
+    /// <param name="description"></param>
+    /// <returns></returns>
+    public unsafe Task<PipeWireSource> CreateVirtualStereoNode(string name, string description)
+    {
+        spa_interface* result;
+
+        fixed (byte* ptrFactoryNameKey = Encoding.UTF8.GetBytes(Native.PW_KEY_FACTORY_NAME))
+        fixed (byte* ptrFactoryName = "support.null-audio-sink"u8.ToArray())
+        fixed (byte* ptrNodeNameKey = Encoding.UTF8.GetBytes(Native.PW_KEY_NODE_NAME))
+        fixed (byte* ptrNodeName = Encoding.UTF8.GetBytes(name))
+        fixed (byte* ptrNodeDescriptionKey = Encoding.UTF8.GetBytes(Native.PW_KEY_NODE_DESCRIPTION))
+        fixed (byte* ptrNodeDescription = Encoding.UTF8.GetBytes(description))
+        fixed (byte* ptrMediaClassKey = Encoding.UTF8.GetBytes(Native.PW_KEY_MEDIA_CLASS))
+        fixed (byte* ptrMediaClass = "Audio/Sink"u8.ToArray())
+        fixed (byte* ptrAudioPositionKey = Encoding.UTF8.GetBytes(Native.PW_KEY_AUDIO_POSITION))
+        fixed (byte* ptrAudioPosition = "[ FL FR ]"u8.ToArray())
+        {
+            var factoryName = new spa_dict_item { key = (sbyte*)ptrFactoryNameKey, value = (sbyte*)ptrFactoryName };
+            var nodeName = new spa_dict_item { key = (sbyte*)ptrNodeNameKey, value = (sbyte*)ptrNodeName };
+            var nodeDescription = new spa_dict_item { key = (sbyte*)ptrNodeDescriptionKey, value = (sbyte*)ptrNodeDescription };
+            var mediaClass = new spa_dict_item { key = (sbyte*)ptrMediaClassKey, value = (sbyte*)ptrMediaClass };
+            var audioPosition = new spa_dict_item { key = (sbyte*)ptrAudioPositionKey, value = (sbyte*)ptrAudioPosition };
+
+            fixed (spa_dict_item* ptrItems = new[] { factoryName, nodeName, nodeDescription, mediaClass, audioPosition })
+            {
+                var dict = new spa_dict { flags = 0, items = ptrItems, n_items = 5 };
+
+                Native.GetInterface(_ctx._core, out pw_core_methods* methods, out void* data);
+                fixed (byte* ptrFactory = "adapter"u8.ToArray())
+                fixed (byte* iface = Encoding.UTF8.GetBytes(Native.PW_TYPE_INTERFACE_Node))
+                fixed (spa_dict* props = new[] { dict })
+                    using (_ctx.Lock())
+                        result = (spa_interface*)methods->create_object(data, (sbyte*)ptrFactory, (sbyte*)iface, Native.PW_VERSION_NODE, props, 0);
+            }
+        }
+
+        if ((byte)result == 0)
+        {
+            throw new Exception($"Creating new node '{name}' ({description}) failed!");
+        }
+
+        return WaitForNode((pw_proxy*)result);
+    }
+
+    /// <summary>
+    /// todo: write docs
+    /// </summary>
     /// <param name="feed"></param>
     /// <param name="sink"></param>
     /// <exception cref="Exception"></exception>
@@ -362,13 +410,18 @@ public sealed class PipeWireRegistry : IAsyncDisposable
     /// </summary>
     /// <param name="proxy"></param>
     /// <returns></returns>
-    public Task<PipeWireLink> WaitForLink(uint feedPortId, uint sinkPortId)
+    private unsafe Task<PipeWireSource> WaitForNode(pw_proxy* proxy)
     {
-        var waiter = new WaitForLinkRegistration(this, feedPortId, sinkPortId);
-        waiter.CheckAlreadyExists();
-        return waiter._completion.Task;
+        uint id = GetIdFromProxy(proxy);
+        var waiter = new NodeWaiter(this, id);
+        return waiter.GetOrAwaitRegistration();
     }
 
+    /// <summary>
+    /// todo: write docs
+    /// </summary>
+    /// <param name="proxy"></param>
+    /// <returns></returns>
     private unsafe Task<PipeWireLink> WaitForLink(pw_proxy* proxy)
     {
         uint id = GetIdFromProxy(proxy);
@@ -396,13 +449,34 @@ public sealed class PipeWireRegistry : IAsyncDisposable
         protected abstract void Unregister();
     }
 
-        private void OnLinkRegister(PipeWireLink link)
+    private sealed class NodeWaiter(PipeWireRegistry registry, uint id) : ObjectWaiter<PipeWireSource>(id)
+    {
+        internal Task<PipeWireSource> GetOrAwaitRegistration()
         {
-            if (_completion.Task.IsCompleted) return;
-            if (link.LinkOutputPort != _feedPortId || link.LinkInputPort != _sinkPortId) return;
+            lock (registry._sources)
+            {
+                if (registry._sources.TryGetValue(_id, out PipeWireSource? node))
+                    _completion.TrySetResult(node);
 
-            _completion.TrySetResult(link);
-            _registry.LinkAdded -= OnLinkRegister;
+                registry.SourceAdded += OnSourceAdd;
+                return _completion.Task;
+            }
+        }
+
+        protected override void Unregister()
+        {
+            registry.SourceAdded -= OnSourceAdd;
+        }
+
+        private void OnSourceAdd(PipeWireSource obj)
+        {
+            lock(registry._sources)
+            {
+                if (obj.NodeId != _id || _completion.Task.IsCompleted)
+                    return;
+
+                _completion.TrySetResult(obj);
+            }
         }
     }
 
