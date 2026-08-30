@@ -18,6 +18,13 @@ public sealed record PipeWireLink
     /// <exception cref="Exception"></exception>
     public static unsafe void Create(PipeWirePort feed, PipeWirePort sink)
     {
+        if (feed._registry != sink._registry)
+            throw new ArgumentException($"Linking ports {feed.PortId} and {sink.PortId} not possible; must be in same registry");
+        if (feed.PortDirection != PipeWirePortDirection.Out)
+            throw new ArgumentException($"Linking ports {feed.PortId} and {sink.PortId} not possible; {nameof(feed)} is not an output port");
+        if (feed.PortDirection != PipeWirePortDirection.In)
+            throw new ArgumentException($"Linking ports {feed.PortId} and {sink.PortId} not possible; {nameof(sink)} is not an input port");
+
         spa_interface* result;
 
         fixed (byte* pkin = Encoding.UTF8.GetBytes(Native.PW_KEY_LINK_OUTPUT_NODE))
