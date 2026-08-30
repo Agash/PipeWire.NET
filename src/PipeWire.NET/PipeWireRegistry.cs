@@ -412,8 +412,7 @@ public sealed class PipeWireRegistry : IAsyncDisposable
     /// <returns></returns>
     private unsafe Task<PipeWireSource> WaitForNode(pw_proxy* proxy)
     {
-        uint id = GetIdFromProxy(proxy);
-        var waiter = new NodeWaiter(this, id);
+        var waiter = new NodeWaiter(this, proxy);
         return waiter.GetOrAwaitRegistration();
     }
 
@@ -424,8 +423,7 @@ public sealed class PipeWireRegistry : IAsyncDisposable
     /// <returns></returns>
     private unsafe Task<PipeWireLink> WaitForLink(pw_proxy* proxy)
     {
-        uint id = GetIdFromProxy(proxy);
-        var waiter = new LinkWaiter(this, id);
+        var waiter = new LinkWaiter(this, proxy);
         return waiter.GetOrAwaitRegistration();
     }
 
@@ -435,27 +433,28 @@ public sealed class PipeWireRegistry : IAsyncDisposable
             return Native.pw_proxy_get_bound_id(proxy);
     }
 
-    private abstract class ObjectWaiter<T>
+    private abstract unsafe class ObjectWaiter<T>
     {
         internal readonly TaskCompletionSource<T> _completion = new();
-        protected readonly uint _id;
+        protected readonly pw_proxy* _proxy;
 
-        protected ObjectWaiter(uint id)
+        protected ObjectWaiter(pw_proxy* proxy)
         {
-            _id = id;
+            _proxy = proxy;
             _completion.Task.ContinueWith(_ => Unregister());
         }
 
         protected abstract void Unregister();
     }
 
-    private sealed class NodeWaiter(PipeWireRegistry registry, uint id) : ObjectWaiter<PipeWireSource>(id)
+    private sealed unsafe class NodeWaiter(PipeWireRegistry registry, pw_proxy* proxy) : ObjectWaiter<PipeWireSource>(proxy)
     {
         internal Task<PipeWireSource> GetOrAwaitRegistration()
         {
             lock (registry._sources)
             {
-                if (registry._sources.TryGetValue(_id, out PipeWireSource? node))
+                uint id = registry.GetIdFromProxy(_proxy);
+                if (id != Native.SPA_ID_INVALID && registry._sources.TryGetValue(id, out PipeWireSource? node))
                     _completion.TrySetResult(node);
 
                 registry.SourceAdded += OnSourceAdd;
@@ -470,9 +469,10 @@ public sealed class PipeWireRegistry : IAsyncDisposable
 
         private void OnSourceAdd(PipeWireSource obj)
         {
-            lock(registry._sources)
+            lock (registry._sources)
             {
-                if (obj.NodeId != _id || _completion.Task.IsCompleted)
+                uint id = registry.GetIdFromProxy(_proxy);
+                if (obj.NodeId != id || _completion.Task.IsCompleted)
                     return;
 
                 _completion.TrySetResult(obj);
@@ -480,13 +480,14 @@ public sealed class PipeWireRegistry : IAsyncDisposable
         }
     }
 
-    private sealed class LinkWaiter(PipeWireRegistry registry, uint id) : ObjectWaiter<PipeWireLink>(id)
+    private sealed unsafe class LinkWaiter(PipeWireRegistry registry, pw_proxy* proxy) : ObjectWaiter<PipeWireLink>(proxy)
     {
         internal Task<PipeWireLink> GetOrAwaitRegistration()
         {
             lock (registry._links)
             {
-                if (registry._links.TryGetValue(_id, out PipeWireLink? node))
+                uint id = registry.GetIdFromProxy(_proxy);
+                if (id != Native.SPA_ID_INVALID && registry._links.TryGetValue(id, out PipeWireLink? node))
                     _completion.TrySetResult(node);
 
                 registry.LinkAdded += OnSourceAdd;
@@ -501,9 +502,10 @@ public sealed class PipeWireRegistry : IAsyncDisposable
 
         private void OnSourceAdd(PipeWireLink obj)
         {
-            lock(registry._links)
+            lock (registry._links)
             {
-                if (obj.LinkId != _id || _completion.Task.IsCompleted)
+                uint id = registry.GetIdFromProxy(_proxy);
+                if (obj.LinkId != id || _completion.Task.IsCompleted)
                     return;
 
                 _completion.TrySetResult(obj);

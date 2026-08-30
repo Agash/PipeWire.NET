@@ -92,6 +92,11 @@ public static unsafe partial class Native
     /// <summary>The well-known id of the PipeWire core object.</summary>
     public const uint PW_ID_CORE = 0u;
 
+    /// <summary>
+    /// todo: write docs
+    /// </summary>
+    public const uint SPA_ID_INVALID = 0xffffffffu;
+
     // - Interface versions (struct pw_*_methods.version / pw_*_events.version) -
 
     public const uint PW_VERSION_CLIENT          = 3;
