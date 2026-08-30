@@ -153,6 +153,7 @@ public sealed class PipeWireRegistry : IAsyncDisposable
 
                 var source = new PipeWireSource(self, id, nodeName, nodeDescription, mediaClass, nodeNick);
                 self._sources[id] = source;
+                Debug.WriteLine($"Loaded Node {id} '{source.NodeName}' ({mediaClass}): {nodeDescription}");
 
                 try { self.SourceAdded?.Invoke(source); }
                 catch { /* event handler should not break the main loop */ }
@@ -187,6 +188,7 @@ public sealed class PipeWireRegistry : IAsyncDisposable
                     (PipeWirePortDirection) parsedPortDirection,
                     portMonitor != null, portExclusive != null);
                 self._ports[id] = port;
+                Debug.WriteLine($"Loaded Port {id} '{port.PortName}' ({port.PortDirection}) of Node {port.NodeId}");
 
                 try { self.PortAdded?.Invoke(port); }
                 catch { /* event handler should not break the main loop */ }
@@ -226,6 +228,7 @@ public sealed class PipeWireRegistry : IAsyncDisposable
                     parsedLinkInputNodeId, parsedLinkInputPortId,
                     parsedLinkOutputNodeId, parsedLinkOutputPortId);
                 self._links[id] = link;
+                Debug.WriteLine($"Loaded Link {id} ({link.LinkOutputNode}.{link.LinkOutputPort} -> {link.LinkInputNode}.{link.LinkInputPort})");
 
                 try { self.LinkAdded?.Invoke(link); }
                 catch { /* event handler should not break the main loop */ }
