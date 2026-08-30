@@ -22,7 +22,7 @@ public sealed record PipeWireLink
             throw new ArgumentException($"Linking ports {feed.PortId} and {sink.PortId} not possible; must be in same registry");
         if (feed.PortDirection != PipeWirePortDirection.Out)
             throw new ArgumentException($"Linking ports {feed.PortId} and {sink.PortId} not possible; {nameof(feed)} is not an output port");
-        if (feed.PortDirection != PipeWirePortDirection.In)
+        if (sink.PortDirection != PipeWirePortDirection.In)
             throw new ArgumentException($"Linking ports {feed.PortId} and {sink.PortId} not possible; {nameof(sink)} is not an input port");
 
         spa_interface* result;
