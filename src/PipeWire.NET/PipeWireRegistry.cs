@@ -250,14 +250,20 @@ public sealed class PipeWireRegistry : IAsyncDisposable
 
         if (self._sources.TryRemove(id, out _))
         {
+            Debug.WriteLine($"Unloaded Node {id}");
+
             try { self.SourceRemoved?.Invoke(id); }
             catch { /* swallow */ }
         } else if (self._ports.TryRemove(id, out _))
         {
+            Debug.WriteLine($"Unloaded Port {id}");
+
             try { self.PortRemoved?.Invoke(id); }
             catch { /* swallow */ }
         } else if (self._links.TryRemove(id, out _))
         {
+            Debug.WriteLine($"Unloaded Link {id}");
+
             try { self.LinkRemoved?.Invoke(id); }
             catch { /* swallow */ }
         }
