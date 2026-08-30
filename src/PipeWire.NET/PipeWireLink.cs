@@ -50,7 +50,7 @@ public sealed record PipeWireLink
                 fixed (byte* iface = Encoding.UTF8.GetBytes(Native.PW_TYPE_INTERFACE_Link))
                 fixed (spa_dict* props = new[] { dict })
                     using (feed._registry._ctx.Lock())
-                        result = (spa_interface*) methods->create_object(data, (sbyte*)key, (sbyte*)iface, Native.PW_VERSION_LINK, props, 0);
+                        result = (spa_interface*)methods->create_object(data, (sbyte*)key, (sbyte*)iface, Native.PW_VERSION_LINK, props, 0);
             }
         }
 
@@ -123,4 +123,18 @@ public sealed record PipeWireLink
 
     /// <summary></summary>
     public uint LinkOutputPort { get; }
+
+    /// <summary>
+    /// todo: write docs
+    /// </summary>
+    /// <exception cref="Exception"></exception>
+    public unsafe void Deconstruct()
+    {
+        Native.GetInterface(_registry._registry, out pw_registry_methods* methods, out void* data);
+        var result = methods->destroy(data, LinkId);
+        if (result == 0)
+        {
+            throw new Exception($"Removing link {LinkId} failed");
+        }
+    }
 }

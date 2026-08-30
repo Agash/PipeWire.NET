@@ -32,7 +32,7 @@ public sealed class PipeWireRegistry : IAsyncDisposable
     internal readonly ConcurrentDictionary<uint, PipeWirePort> _ports = new();
     internal readonly ConcurrentDictionary<uint, PipeWireLink> _links = new();
 
-    private unsafe pw_registry*        _registry;
+    internal unsafe pw_registry*        _registry;
     private unsafe pw_registry_events* _events;
     private spa_hook            _hook;
     private GCHandle            _selfHandle;
