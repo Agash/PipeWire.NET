@@ -28,9 +28,7 @@ public static unsafe partial class Native
     // generate-macro-bindings (fatal on this header set - see pipewire.rsp).
     // Hand-declared here; values are stable across PipeWire 0.3.x.
 
-    /// <summary>
-    /// todo: write docs
-    /// </summary>
+    /// <summary><c>factory.name</c> - name of a factory to use for node creation.</summary>
     public const string PW_KEY_FACTORY_NAME   = "factory.name";
     /// <summary><c>media.class</c> - node media class (e.g. "Video/Source").</summary>
     public const string PW_KEY_MEDIA_CLASS    = "media.class";
@@ -40,9 +38,7 @@ public static unsafe partial class Native
     public const string PW_KEY_MEDIA_CATEGORY = "media.category";
     /// <summary><c>media.role</c> - "Camera" / "Music" / "Screen" / ...</summary>
     public const string PW_KEY_MEDIA_ROLE     = "media.role";
-    /// <summary>
-    /// todo: write docs
-    /// </summary>
+    /// <summary><c>audio.position</c> - audio layout for a node; e.g. "[ FL FR ]".</summary>
     public const string PW_KEY_AUDIO_POSITION = "audio.position";
     /// <summary><c>node.id</c> - node identifier.</summary>
     public const string PW_KEY_NODE_ID        = "node.id";
@@ -60,21 +56,13 @@ public static unsafe partial class Native
     public const string PW_KEY_PORT_MONITOR   = "port.monitor";
     /// <summary><c>port.exclusive</c> - whether port should be linked only once.</summary>
     public const string PW_KEY_PORT_EXCLUSIVE = "port.exclusive";
-    /// <summary>
-    /// todo: write docs
-    /// </summary>
+    /// <summary><c>link.input.node</c> - the node that a link feeds into.</summary>
     public const string PW_KEY_LINK_INPUT_NODE ="link.input.node";
-    /// <summary>
-    /// todo: write docs
-    /// </summary>
+    /// <summary><c>link.input.port</c> - the port that a link feeds into.</summary>
     public const string PW_KEY_LINK_INPUT_PORT ="link.input.port";
-    /// <summary>
-    /// todo: write docs
-    /// </summary>
+    /// <summary><c>link.output.node</c> - the node that a link start from.</summary>
     public const string PW_KEY_LINK_OUTPUT_NODE ="link.output.node";
-    /// <summary>
-    /// todo: write docs
-    /// </summary>
+    /// <summary><c>link.output.port</c> - the port that a link start from.</summary>
     public const string PW_KEY_LINK_OUTPUT_PORT ="link.output.port";
     /// <summary><c>target.object</c> - bind a stream to a specific node by serial/name.</summary>
     public const string PW_KEY_TARGET_OBJECT  = "target.object";
@@ -92,9 +80,7 @@ public static unsafe partial class Native
     /// <summary>The well-known id of the PipeWire core object.</summary>
     public const uint PW_ID_CORE = 0u;
 
-    /// <summary>
-    /// todo: write docs
-    /// </summary>
+    /// <summary>Placeholder ID for when a proxy id could not be fetched.</summary>
     public const uint SPA_ID_INVALID = 0xffffffffu;
 
     // - Interface versions (struct pw_*_methods.version / pw_*_events.version) -

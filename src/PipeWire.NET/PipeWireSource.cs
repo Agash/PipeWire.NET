@@ -49,23 +49,17 @@ public sealed record PipeWireSource
     /// <summary>True if this node produces audio a consumer can capture.</summary>
     public bool IsAudioSource => Class.IsAudio();
 
-    /// <summary>
-    /// todo: write docs
-    /// </summary>
+    /// <summary>All ports of this Node.</summary>
     public IEnumerable<PipeWirePort> Ports => _registry._ports
         .Where(port => port.Value.NodeId == NodeId)
         .Select(port => port.Value);
 
-    /// <summary>
-    /// todo: write docs
-    /// </summary>
+    /// <summary>All links that feed into this node.</summary>
     public IEnumerable<PipeWireLink> InputLinks => Ports
         .Where(port => port.PortDirection == PipeWirePortDirection.In)
         .SelectMany(port => port.InputLinks);
 
-    /// <summary>
-    /// todo: write docs
-    /// </summary>
+    /// <summary>All links that start from this node.</summary>
     public IEnumerable<PipeWireLink> OutputLinks => Ports
         .Where(port => port.PortDirection == PipeWirePortDirection.Out)
         .SelectMany(port => port.OutputLinks);

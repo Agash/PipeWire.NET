@@ -110,13 +110,17 @@ public sealed class PipeWireRegistry : IAsyncDisposable
     }
 
     /// <summary>
-    /// todo: write docs
+    /// Creates and registers a new virtual audio node, using stereo sound.
+    /// The node will have default ports "playback_FL", "playback_FR" as well as "monitor_FL", "monitor_FR".
     /// </summary>
-    /// <param name="name"></param>
-    /// <param name="description"></param>
-    /// <returns></returns>
-    public unsafe Task<PipeWireSource> CreateVirtualStereoNode(string name, string description)
+    /// <param name="description">The description of the node to create.</param>
+    /// <param name="name">The name of the node to create; mainly used internally. Falls back to a random Guid string</param>
+    /// <returns>A task that obtains the newly created Node.</returns>
+    /// <exception cref="InvalidOperationException">If the node could not be created due to internal errors inside pipewire.</exception>
+    public unsafe Task<PipeWireSource> CreateVirtualStereoNode(string description, string? name = null)
     {
+        name ??= Guid.NewGuid().ToString();
+
         spa_interface* result;
 
         fixed (byte* ptrFactoryNameKey = Encoding.UTF8.GetBytes(Native.PW_KEY_FACTORY_NAME))
@@ -151,18 +155,20 @@ public sealed class PipeWireRegistry : IAsyncDisposable
 
         if ((byte)result == 0)
         {
-            throw new Exception($"Creating new node '{name}' ({description}) failed!");
+            throw new InvalidOperationException($"Creating new node '{name}' ({description}) failed!");
         }
 
         return WaitForNode((pw_proxy*)result);
     }
 
     /// <summary>
-    /// todo: write docs
+    /// Creates and registers a new Link between two ports.
     /// </summary>
-    /// <param name="feed"></param>
-    /// <param name="sink"></param>
-    /// <exception cref="Exception"></exception>
+    /// <param name="feed">The port to start the link from; must be of <see langword="input direction" cref="PipeWirePortDirection.In" />.</param>
+    /// <param name="sink">The port to feed the link into; must be of <see langword="output direction" cref="PipeWirePortDirection.Out" />.</param>
+    /// <exception cref="ArgumentException">If ports marked from a different <see cref="PipeWireRegistry"/> were provided.</exception>
+    /// <exception cref="ArgumentException">If ports with invalid <see cref="PipeWirePortDirection"/> were provided.</exception>
+    /// <exception cref="InvalidOperationException">If the link could not be created due to internal errors inside pipewire.</exception>
     public unsafe Task<PipeWireLink> CreateLink(PipeWirePort feed, PipeWirePort sink)
     {
         if (feed._registry != this || sink._registry != this)
@@ -203,7 +209,7 @@ public sealed class PipeWireRegistry : IAsyncDisposable
 
         if ((byte)result == 0)
         {
-            throw new Exception($"Creating new link from port {feed.PortId} to port {sink.PortId} failed!");
+            throw new InvalidOperationException($"Creating new link from port {feed.PortId} to port {sink.PortId} failed!");
         }
 
         return WaitForLink((pw_proxy*)result);
@@ -405,22 +411,12 @@ public sealed class PipeWireRegistry : IAsyncDisposable
         return nullTerminated[i] == 0;
     }
 
-    /// <summary>
-    /// todo: write docs
-    /// </summary>
-    /// <param name="proxy"></param>
-    /// <returns></returns>
     private unsafe Task<PipeWireSource> WaitForNode(pw_proxy* proxy)
     {
         var waiter = new NodeWaiter(this, proxy);
         return waiter.GetOrAwaitRegistration();
     }
 
-    /// <summary>
-    /// todo: write docs
-    /// </summary>
-    /// <param name="proxy"></param>
-    /// <returns></returns>
     private unsafe Task<PipeWireLink> WaitForLink(pw_proxy* proxy)
     {
         var waiter = new LinkWaiter(this, proxy);
