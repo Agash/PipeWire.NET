@@ -1,4 +1,5 @@
 using System.Runtime.Versioning;
+
 namespace PipeWire.NET;
 
 /// <summary>
@@ -54,14 +55,20 @@ public sealed record PipeWireSource
         .Where(port => port.Value.NodeId == NodeId)
         .Select(port => port.Value);
 
+    /// <summary>All input ports of this Node.</summary>
+    public IEnumerable<PipeWirePort> InputPorts => Ports
+        .Where(port => port.PortDirection == PipeWirePortDirection.In);
+
+    /// <summary>All output ports of this Node.</summary>
+    public IEnumerable<PipeWirePort> OutputPorts => Ports
+        .Where(port => port.PortDirection == PipeWirePortDirection.Out);
+
     /// <summary>All links that feed into this node.</summary>
-    public IEnumerable<PipeWireLink> InputLinks => Ports
-        .Where(port => port.PortDirection == PipeWirePortDirection.In)
+    public IEnumerable<PipeWireLink> InputLinks => InputPorts
         .SelectMany(port => port.InputLinks);
 
     /// <summary>All links that start from this node.</summary>
-    public IEnumerable<PipeWireLink> OutputLinks => Ports
-        .Where(port => port.PortDirection == PipeWirePortDirection.Out)
+    public IEnumerable<PipeWireLink> OutputLinks => OutputPorts
         .SelectMany(port => port.OutputLinks);
 
     /// <summary>PipeWire global id. Pass to <see cref="PipeWireVideoCapture.Connect(PipeWireSource, ReadOnlySpan{PixelFormat})"/>.</summary>
