@@ -71,6 +71,9 @@ public sealed record PipeWireSource
     public IEnumerable<PipeWireLink> OutputLinks => OutputPorts
         .SelectMany(port => port.OutputLinks);
 
+    /// <summary>All links related to this Node.</summary>
+    public IEnumerable<PipeWireLink> Links => InputLinks.Concat(OutputLinks);
+
     /// <summary>PipeWire global id. Pass to <see cref="PipeWireVideoCapture.Connect(PipeWireSource, ReadOnlySpan{PixelFormat})"/>.</summary>
     public uint NodeId { get; }
 
