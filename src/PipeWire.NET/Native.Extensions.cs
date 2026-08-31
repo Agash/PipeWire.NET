@@ -28,6 +28,8 @@ public static unsafe partial class Native
     // generate-macro-bindings (fatal on this header set - see pipewire.rsp).
     // Hand-declared here; values are stable across PipeWire 0.3.x.
 
+    /// <summary><c>factory.name</c> - name of a factory to use for node creation.</summary>
+    public const string PW_KEY_FACTORY_NAME   = "factory.name";
     /// <summary><c>media.class</c> - node media class (e.g. "Video/Source").</summary>
     public const string PW_KEY_MEDIA_CLASS    = "media.class";
     /// <summary><c>media.type</c> - "Video" / "Audio".</summary>
@@ -36,14 +38,39 @@ public static unsafe partial class Native
     public const string PW_KEY_MEDIA_CATEGORY = "media.category";
     /// <summary><c>media.role</c> - "Camera" / "Music" / "Screen" / ...</summary>
     public const string PW_KEY_MEDIA_ROLE     = "media.role";
+    /// <summary><c>audio.position</c> - audio layout for a node; e.g. "[ FL FR ]".</summary>
+    public const string PW_KEY_AUDIO_POSITION = "audio.position";
+    /// <summary><c>node.id</c> - node identifier.</summary>
+    public const string PW_KEY_NODE_ID        = "node.id";
     /// <summary><c>node.name</c> - stable node name.</summary>
     public const string PW_KEY_NODE_NAME      = "node.name";
     /// <summary><c>node.description</c> - human-readable node name.</summary>
     public const string PW_KEY_NODE_DESCRIPTION = "node.description";
     /// <summary><c>node.nick</c> - short display name.</summary>
     public const string PW_KEY_NODE_NICK      = "node.nick";
+    /// <summary><c>port.name</c> - stable port name.</summary>
+    public const string PW_KEY_PORT_NAME      = "port.name";
+    /// <summary><c>port.direction</c> - port direction.</summary>
+    public const string PW_KEY_PORT_DIRECTION = "port.direction";
+    /// <summary><c>port.exclusive</c> - if this is a monitor port.</summary>
+    public const string PW_KEY_PORT_MONITOR   = "port.monitor";
+    /// <summary><c>port.exclusive</c> - whether port should be linked only once.</summary>
+    public const string PW_KEY_PORT_EXCLUSIVE = "port.exclusive";
+    /// <summary><c>link.input.node</c> - the node that a link feeds into.</summary>
+    public const string PW_KEY_LINK_INPUT_NODE ="link.input.node";
+    /// <summary><c>link.input.port</c> - the port that a link feeds into.</summary>
+    public const string PW_KEY_LINK_INPUT_PORT ="link.input.port";
+    /// <summary><c>link.output.node</c> - the node that a link start from.</summary>
+    public const string PW_KEY_LINK_OUTPUT_NODE ="link.output.node";
+    /// <summary><c>link.output.port</c> - the port that a link start from.</summary>
+    public const string PW_KEY_LINK_OUTPUT_PORT ="link.output.port";
     /// <summary><c>target.object</c> - bind a stream to a specific node by serial/name.</summary>
     public const string PW_KEY_TARGET_OBJECT  = "target.object";
+
+    // - Type ids -
+    public const string PW_TYPE_INFO_INTERFACE_BASE = "PipeWire:Interface:";
+    public const string PW_TYPE_INTERFACE_Node = PW_TYPE_INFO_INTERFACE_BASE + "Node";
+    public const string PW_TYPE_INTERFACE_Link = PW_TYPE_INFO_INTERFACE_BASE + "Link";
 
     // - Sentinel ids -
 
@@ -52,6 +79,9 @@ public static unsafe partial class Native
 
     /// <summary>The well-known id of the PipeWire core object.</summary>
     public const uint PW_ID_CORE = 0u;
+
+    /// <summary>Placeholder ID for when a proxy id could not be fetched.</summary>
+    public const uint SPA_ID_INVALID = 0xffffffffu;
 
     // - Interface versions (struct pw_*_methods.version / pw_*_events.version) -
 
