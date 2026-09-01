@@ -6,5 +6,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PipeWire.NET\PipeWire.NET.csproj" />
+    <ProjectReference Include="..\..\src\PipeWire.NET.Media\PipeWire.NET.Media.csproj" />
   </ItemGroup>
 </Project>

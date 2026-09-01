@@ -1,8 +1,10 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using PipeWire.NET.Generated;
-using PipeWire.NET.Spa;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PipeWire.NET.Generated;
+using PipeWire.NET.Media;
+using PipeWire.NET.Spa;
+using PipeWire.NET.Media.Streams;
 
 namespace PipeWire.NET.Tests;
 

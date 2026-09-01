@@ -2,6 +2,8 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PipeWire.NET.Media;
+using PipeWire.NET.Media.Streams;
 
 namespace PipeWire.NET.Tests;
 
@@ -16,6 +18,7 @@ namespace PipeWire.NET.Tests;
 /// Skips where there is no render node or libgbm (e.g. GPU-less CI runners).
 /// </summary>
 [TestClass]
+[TestCategory("RequiresGStreamer")]
 [SupportedOSPlatform("linux")]
 public sealed class DmaBufRoundTripTests
 {
@@ -64,14 +67,14 @@ public sealed class DmaBufRoundTripTests
             output.StateChanged += (_, _, s) => streaming = s == PipeWireStreamState.Streaming;
             output.ConnectDmaBuf([modifier]);
 
-            uint nodeId = PipeWireVideoCapture.AnyNode;
-            for (int i = 0; i < 50 && nodeId == PipeWireVideoCapture.AnyNode; i++)
+            uint? nodeId = null;
+            for (int i = 0; i < 50 && nodeId is null; i++)
             {
                 nodeId = output.NodeId;
-                if (nodeId == PipeWireVideoCapture.AnyNode) await Task.Delay(50);
+                if (nodeId is null) await Task.Delay(50);
             }
 
-            Assert.AreNotEqual(PipeWireVideoCapture.AnyNode, nodeId, "producer node should be assigned an id");
+            Assert.IsNotNull(nodeId, "producer node should be assigned an id");
 
             await using var capture = new PipeWireVideoCapture(ctx, "stx-dmabuf-roundtrip-sink");
             capture.FrameReady += (_, frame) =>
@@ -83,7 +86,7 @@ public sealed class DmaBufRoundTripTests
                     Interlocked.CompareExchange(ref firstFd, frame.Fd, -1);
                 }
             };
-            capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
+            capture.Connect(nodeId.Value, [PixelFormat.Bgra], modifiers: [modifier]);
 
             // DRIVER producer: pace it at ~30fps once streaming so the consumer sees a steady frame flow.
             using var driver = new Timer(_ => { if (streaming) output.TriggerFrame(); }, null, 100, 33);

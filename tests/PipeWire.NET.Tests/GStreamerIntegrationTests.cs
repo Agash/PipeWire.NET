@@ -1,6 +1,9 @@
 using System.Runtime.Versioning;
 using System.Threading;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PipeWire.NET.Graph;
+using PipeWire.NET.Media;
+using PipeWire.NET.Media.Streams;
 
 namespace PipeWire.NET.Tests;
 
@@ -11,6 +14,7 @@ namespace PipeWire.NET.Tests;
 /// across multiple pixel formats, registry discovery, and A/V together.
 /// </summary>
 [TestClass]
+[TestCategory("RequiresGStreamer")]
 [SupportedOSPlatform("linux")]
 public sealed class GStreamerIntegrationTests
 {
@@ -99,7 +103,7 @@ public sealed class GStreamerIntegrationTests
         await reg.WaitForInitialEnumerationAsync();
 
         // The node may have arrived before the registry; poll briefly to be robust.
-        PipeWireSource? found = null;
+        PipeWireNode? found = null;
         for (int i = 0; i < 20 && found is null; i++)
         {
             found = reg.Sources.FirstOrDefault(s => s.NodeName == node);
@@ -107,7 +111,10 @@ public sealed class GStreamerIntegrationTests
         }
 
         Assert.IsNotNull(found, "gst source should be discoverable via the registry");
-        Assert.IsTrue(found!.IsVideoSource, $"expected a video source, got class '{found.MediaClass}'");
+        Assert.AreEqual(PipeWireMediaKind.Video, found!.Media,
+            $"expected a video node, got class '{found.MediaClass}'");
+        Assert.AreEqual(PipeWireMediaFlow.Source, found.Flow,
+            $"expected a source, got class '{found.MediaClass}'");
     }
 
     [TestMethod]

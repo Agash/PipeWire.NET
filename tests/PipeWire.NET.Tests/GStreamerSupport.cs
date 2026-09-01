@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PipeWire.NET.Graph;
 
 namespace PipeWire.NET.Tests;
 
@@ -16,6 +17,12 @@ internal sealed class GstTestSource : IAsyncDisposable
 
     private readonly Process _proc;
     private GstTestSource(Process proc) => _proc = proc;
+
+    /// <summary>
+    /// The registry id of the node this producer published, so a consumer can target it directly
+    /// instead of looking it up by name again.
+    /// </summary>
+    public uint NodeId { get; private set; }
 
     /// <summary>True when gst-launch-1.0 and the pipewiresink element are usable.</summary>
     public static bool IsAvailable { get; } = ComputeAvailable();
@@ -73,7 +80,7 @@ internal sealed class GstTestSource : IAsyncDisposable
         var source = new GstTestSource(proc);
         try
         {
-            PipeWireSource? node = await WaitForNodeAsync(ctx, nodeName, timeout ?? TimeSpan.FromSeconds(8));
+            PipeWireNode? node = await WaitForNodeAsync(ctx, nodeName, timeout ?? TimeSpan.FromSeconds(8));
             if (node is null)
             {
                 string err = await proc.StandardError.ReadToEndAsync();
@@ -138,10 +145,10 @@ internal sealed class GstTestSource : IAsyncDisposable
         psi.ArgumentList.Add($"stream-properties=props,node.name={node},media.class={mediaClass}");
     }
 
-    private static async Task<PipeWireSource?> WaitForNodeAsync(PipeWireContext ctx, string nodeName, TimeSpan timeout)
+    private static async Task<PipeWireNode?> WaitForNodeAsync(PipeWireContext ctx, string nodeName, TimeSpan timeout)
     {
         await using var reg = new PipeWireRegistry(ctx);
-        var found = new TaskCompletionSource<PipeWireSource>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var found = new TaskCompletionSource<PipeWireNode>(TaskCreationOptions.RunContinuationsAsynchronously);
         reg.SourceAdded += s => { if (s.NodeName == nodeName) found.TrySetResult(s); };
 
         foreach (var s in reg.Sources)
