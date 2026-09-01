@@ -1,4 +1,6 @@
 using System.Runtime.Versioning;
+using PipeWire.NET.Graph;
+using PipeWire.NET.Media.Streams;
 using PipeWire.NET;
 
 // Console demo:
@@ -46,7 +48,22 @@ static async Task<int> RunAsync()
     foreach (var s in sources)
         Console.WriteLine($"    id={s.NodeId,4}  class={s.MediaClass ?? "?",-24}  {s.Description ?? s.NodeName ?? "<no name>"}");
 
-    var pick = sources.FirstOrDefault(s => s.IsVideoSource && (s.NodeName?.Contains("gst") ?? true));
+    // Video identity plus an actual output port: a node that says Video but exposes nothing to read
+    // is not something we can capture from.
+    // Not a LINQ predicate: CA1416 does not carry this method's platform guard into a lambda body,
+    // and every member touched here is linux-only.
+    var graph = registry.Current;
+    PipeWireNode? pick = null;
+    foreach (var s in sources)
+    {
+        if (s.Media is PipeWireMediaKind.Video && graph.CanCaptureFrom(s)
+            && (s.NodeName?.Contains("gst", StringComparison.Ordinal) ?? true))
+        {
+            pick = s;
+            break;
+        }
+    }
+
     if (pick is null)
     {
         Console.Error.WriteLine();
