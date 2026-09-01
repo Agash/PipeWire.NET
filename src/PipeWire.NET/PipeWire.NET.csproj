@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <!-- net11.0 requires the .NET 11 preview SDK. global.json (rollForward latestMajor,
          allowPrerelease) selects it when installed; CI installs it explicitly. Building with
@@ -14,6 +14,9 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <EnablePackageValidation>true</EnablePackageValidation>
+    <!-- Baseline the public surface against the last release so a break has to be declared in
+         CompatibilitySuppressions.xml rather than shipping unnoticed. -->
+    <PackageValidationBaselineVersion>0.2.3-alpha</PackageValidationBaselineVersion>
     <MinVerTagPrefix>v</MinVerTagPrefix>
     <IsPackable>true</IsPackable>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
@@ -30,4 +33,14 @@
     <None Include="..\..\LICENSE" Pack="true" PackagePath="" />
     <None Include="..\..\README.md" Pack="true" PackagePath="" />
   </ItemGroup>
+  <!-- The library's own layers. Namespaces follow folders, and a project referring to its own
+       layers through global usings keeps every file's using block about external dependencies. -->
+  <ItemGroup>
+    <Using Include="PipeWire.NET" />
+    <Using Include="PipeWire.NET.Generated" />
+    <Using Include="PipeWire.NET.Graph" />
+    <Using Include="PipeWire.NET.Interop" />
+    <Using Include="PipeWire.NET.Spa" />
+  </ItemGroup>
+
 </Project>

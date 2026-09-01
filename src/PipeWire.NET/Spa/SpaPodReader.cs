@@ -49,6 +49,11 @@ internal ref struct SpaPodReader
         objectType = 0; objectId = 0; bodySize = 0;
         if (!TryReadHeader(out uint size, out uint type)) return false;
         if (type != SpaType.Object) return false;
+
+        // An object body always carries at least its type and id. Without this check `size - 8`
+        // underflows for a malformed pod and reports a body of nearly 4GB.
+        if (size < 8) return false;
+
         if (!TryReadU32(out objectType)) return false;
         if (!TryReadU32(out objectId))   return false;
         bodySize = size - 8; // size includes the object-type + object-id 8 bytes already consumed
@@ -248,8 +253,16 @@ internal ref struct SpaPodReader
     {
         size = 0; type = 0;
         if (_pos + 8 > _buf.Length) return false;
-        size = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
-        type = MemoryMarshal.Read<uint>(_buf.Slice(_pos + 4, 4));
+
+        uint declared = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
+        uint declaredType = MemoryMarshal.Read<uint>(_buf.Slice(_pos + 4, 4));
+
+        // The size field is attacker- or bug-controlled, so a pod claiming more body than the
+        // buffer holds is rejected here rather than handed on as a length someone slices with.
+        if (declared > (uint)(_buf.Length - _pos - 8)) return false;
+
+        size = declared;
+        type = declaredType;
         _pos += 8;
         return true;
     }
