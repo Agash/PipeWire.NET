@@ -133,23 +133,42 @@ jobs:
         run: dotnet test PipeWire.NET.slnx --no-build -c Release
              --filter "TestCategory=Integration&TestCategory!=RequiresDaemon"
 
-      - name: Daemon end-to-end tests (headless PipeWire + GStreamer real sources)
-        # Non-gating: these exercise a real GStreamer -> PipeWire graph and pass in a proper
-        # PipeWire session (e.g. a desktop or WSL), but GitHub's headless runners cannot
-        # reliably host pipewiresink producers, so frames never arrive and the tests time out.
-        # Kept for signal; run locally for authoritative end-to-end validation.
-        continue-on-error: true
+      - name: Install a headless PipeWire session
         run: |
           sudo apt-get install -y --no-install-recommends \
             pipewire wireplumber pipewire-bin \
             gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pipewire
+
+      - name: Graph tests against a real daemon
+        # Gating. Registry enumeration, object creation and linking need only the daemon and the
+        # SPA support plugins, both of which a headless runner hosts reliably.
+        run: |
           export XDG_RUNTIME_DIR="$(mktemp -d)"
           pipewire &           PW_PID=$!
           wireplumber &        WP_PID=$!
           for i in $(seq 1 40); do pw-cli info 0 >/dev/null 2>&1 && break; sleep 0.25; done
           set +e
           dotnet test PipeWire.NET.slnx --no-build -c Release \
-            --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu"
+            --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer"
+          RC=$?
+          set -e
+          kill $WP_PID $PW_PID 2>/dev/null || true
+          exit $RC
+
+      - name: Daemon end-to-end tests (GStreamer real sources)
+        # Non-gating: these exercise a real GStreamer -> PipeWire graph and pass in a proper
+        # PipeWire session (e.g. a desktop or WSL), but GitHub's headless runners cannot
+        # reliably host pipewiresink producers, so frames never arrive and the tests time out.
+        # Kept for signal; run locally for authoritative end-to-end validation.
+        continue-on-error: true
+        run: |
+          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          pipewire &           PW_PID=$!
+          wireplumber &        WP_PID=$!
+          for i in $(seq 1 40); do pw-cli info 0 >/dev/null 2>&1 && break; sleep 0.25; done
+          set +e
+          dotnet test PipeWire.NET.slnx --no-build -c Release \
+            --filter "TestCategory=RequiresGStreamer&TestCategory!=RequiresGpu"
           RC=$?
           set -e
           kill $WP_PID $PW_PID 2>/dev/null || true
