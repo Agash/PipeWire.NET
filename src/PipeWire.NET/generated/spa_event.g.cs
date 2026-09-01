@@ -11,15 +11,11 @@
 
 namespace PipeWire.NET.Generated;
 
-[NativeTypeName("unsigned int")]
-public enum spa_param_buffers : uint
+public partial struct spa_event
 {
-    SPA_PARAM_BUFFERS_START,
-    SPA_PARAM_BUFFERS_buffers,
-    SPA_PARAM_BUFFERS_blocks,
-    SPA_PARAM_BUFFERS_size,
-    SPA_PARAM_BUFFERS_stride,
-    SPA_PARAM_BUFFERS_align,
-    SPA_PARAM_BUFFERS_dataType,
-    SPA_PARAM_BUFFERS_metaType,
+    [NativeTypeName("struct spa_pod")]
+    public spa_pod pod;
+
+    [NativeTypeName("struct spa_event_body")]
+    public spa_event_body body;
 }

@@ -66,6 +66,8 @@
 /usr/include/spa-0.2/spa/pod/pod.h
 --traverse
 /usr/include/spa-0.2/spa/pod/command.h
+--traverse
+/usr/include/spa-0.2/spa/pod/event.h
 
 # - SPA params (format negotiation + buffer negotiation) -
 --traverse

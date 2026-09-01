@@ -14,22 +14,22 @@ namespace PipeWire.NET.Generated;
 public partial struct pw_time
 {
     [NativeTypeName("int64_t")]
-    public nint now;
+    public long now;
 
     [NativeTypeName("struct spa_fraction")]
     public spa_fraction rate;
 
     [NativeTypeName("uint64_t")]
-    public nuint ticks;
+    public ulong ticks;
 
     [NativeTypeName("int64_t")]
-    public nint delay;
+    public long delay;
 
     [NativeTypeName("uint64_t")]
-    public nuint queued;
+    public ulong queued;
 
     [NativeTypeName("uint64_t")]
-    public nuint buffered;
+    public ulong buffered;
 
     [NativeTypeName("uint32_t")]
     public uint queued_buffers;
@@ -38,5 +38,5 @@ public partial struct pw_time
     public uint avail_buffers;
 
     [NativeTypeName("uint64_t")]
-    public nuint size;
+    public ulong size;
 }

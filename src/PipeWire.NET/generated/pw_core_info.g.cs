@@ -32,7 +32,7 @@ public unsafe partial struct pw_core_info
     public sbyte* name;
 
     [NativeTypeName("uint64_t")]
-    public nuint change_mask;
+    public ulong change_mask;
 
     [NativeTypeName("struct spa_dict *")]
     public spa_dict* props;

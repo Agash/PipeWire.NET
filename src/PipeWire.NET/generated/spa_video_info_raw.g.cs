@@ -20,7 +20,7 @@ public partial struct spa_video_info_raw
     public uint flags;
 
     [NativeTypeName("uint64_t")]
-    public nuint modifier;
+    public ulong modifier;
 
     [NativeTypeName("struct spa_rectangle")]
     public spa_rectangle size;

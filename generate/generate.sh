@@ -46,7 +46,7 @@ fi
 export LD_LIBRARY_PATH="$LIBCLANG_NATIVE:$CLANGSHARP_NATIVE:${LD_LIBRARY_PATH:-}"
 
 # Auto-detect clang's bundled C standard headers (stdbool.h, stddef.h, ...)
-CLANG_INC="$(ls -d /usr/lib/llvm-*/lib/clang/*/include 2>/dev/null | head -1)"
+CLANG_INC="$(ls -d /usr/lib/llvm-*/lib/clang/*/include /usr/lib/clang/*/include 2>/dev/null | head -1)"
 if [ -z "$CLANG_INC" ]; then
   echo "ERROR: clang builtin include dir not found. Install: sudo apt-get install libclang-dev"
   exit 1

@@ -17,5 +17,5 @@ public partial struct spa_pod_fd
     public spa_pod pod;
 
     [NativeTypeName("int64_t")]
-    public nint value;
+    public long value;
 }

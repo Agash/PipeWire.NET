@@ -9,17 +9,6 @@
 #pragma warning disable CA1720 // Identifiers should not contain type names
 #pragma warning disable CA1815 // Override Equals and operator equals on value types
 
-namespace PipeWire.NET.Generated;
+using System.CodeDom.Compiler;
 
-[NativeTypeName("unsigned int")]
-public enum spa_param_buffers : uint
-{
-    SPA_PARAM_BUFFERS_START,
-    SPA_PARAM_BUFFERS_buffers,
-    SPA_PARAM_BUFFERS_blocks,
-    SPA_PARAM_BUFFERS_size,
-    SPA_PARAM_BUFFERS_stride,
-    SPA_PARAM_BUFFERS_align,
-    SPA_PARAM_BUFFERS_dataType,
-    SPA_PARAM_BUFFERS_metaType,
-}
+[assembly: GeneratedCode("ClangSharp", "21.1.8.4")]

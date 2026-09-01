@@ -23,5 +23,8 @@ public enum spa_meta_type : uint
     SPA_META_Control,
     SPA_META_Busy,
     SPA_META_VideoTransform,
+    SPA_META_SyncTimeline,
     _SPA_META_LAST,
+    SPA_META_START_custom = 0x200,
+    SPA_META_START_features = 0x10000,
 }

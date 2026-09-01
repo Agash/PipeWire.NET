@@ -32,4 +32,7 @@ public enum spa_param_type : uint
     SPA_PARAM_Latency,
     SPA_PARAM_ProcessLatency,
     SPA_PARAM_Tag,
+    SPA_PARAM_PeerEnumFormat,
+    SPA_PARAM_Capability,
+    SPA_PARAM_PeerCapability,
 }

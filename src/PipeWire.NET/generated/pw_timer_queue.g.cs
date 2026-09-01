@@ -11,15 +11,6 @@
 
 namespace PipeWire.NET.Generated;
 
-[NativeTypeName("unsigned int")]
-public enum spa_param_buffers : uint
+public partial struct pw_timer_queue
 {
-    SPA_PARAM_BUFFERS_START,
-    SPA_PARAM_BUFFERS_buffers,
-    SPA_PARAM_BUFFERS_blocks,
-    SPA_PARAM_BUFFERS_size,
-    SPA_PARAM_BUFFERS_stride,
-    SPA_PARAM_BUFFERS_align,
-    SPA_PARAM_BUFFERS_dataType,
-    SPA_PARAM_BUFFERS_metaType,
 }

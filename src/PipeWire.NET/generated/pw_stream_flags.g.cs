@@ -27,4 +27,5 @@ public enum pw_stream_flags : uint
     PW_STREAM_FLAG_TRIGGER = (1 << 9),
     PW_STREAM_FLAG_ASYNC = (1 << 10),
     PW_STREAM_FLAG_EARLY_PROCESS = (1 << 11),
+    PW_STREAM_FLAG_RT_TRIGGER_DONE = (1 << 12),
 }

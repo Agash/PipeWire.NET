@@ -11,15 +11,18 @@
 
 namespace PipeWire.NET.Generated;
 
-[NativeTypeName("unsigned int")]
-public enum spa_param_buffers : uint
+public unsafe partial struct spa_error_location
 {
-    SPA_PARAM_BUFFERS_START,
-    SPA_PARAM_BUFFERS_buffers,
-    SPA_PARAM_BUFFERS_blocks,
-    SPA_PARAM_BUFFERS_size,
-    SPA_PARAM_BUFFERS_stride,
-    SPA_PARAM_BUFFERS_align,
-    SPA_PARAM_BUFFERS_dataType,
-    SPA_PARAM_BUFFERS_metaType,
+    public int line;
+
+    public int col;
+
+    [NativeTypeName("size_t")]
+    public nuint len;
+
+    [NativeTypeName("const char *")]
+    public sbyte* location;
+
+    [NativeTypeName("const char *")]
+    public sbyte* reason;
 }

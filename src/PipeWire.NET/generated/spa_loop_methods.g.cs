@@ -27,4 +27,7 @@ public unsafe partial struct spa_loop_methods
 
     [NativeTypeName("int (*)(void *, spa_invoke_func_t, uint32_t, const void *, size_t, _Bool, void *)")]
     public delegate* unmanaged[Cdecl]<void*, delegate* unmanaged[Cdecl]<spa_loop*, bool, uint, void*, nuint, void*, int>, uint, void*, nuint, bool, void*, int> invoke;
+
+    [NativeTypeName("int (*)(void *, spa_invoke_func_t, uint32_t, const void *, size_t, void *)")]
+    public delegate* unmanaged[Cdecl]<void*, delegate* unmanaged[Cdecl]<spa_loop*, bool, uint, void*, nuint, void*, int>, uint, void*, nuint, void*, int> locked;
 }

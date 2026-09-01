@@ -24,4 +24,7 @@ public unsafe partial struct pw_loop
 
     [NativeTypeName("struct spa_loop_utils *")]
     public spa_loop_utils* utils;
+
+    [NativeTypeName("const char *")]
+    public sbyte* name;
 }

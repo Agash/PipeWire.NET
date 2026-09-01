@@ -20,7 +20,7 @@ public unsafe partial struct spa_data
     public uint flags;
 
     [NativeTypeName("int64_t")]
-    public nint fd;
+    public long fd;
 
     [NativeTypeName("uint32_t")]
     public uint mapoffset;

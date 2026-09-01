@@ -11,15 +11,17 @@
 
 namespace PipeWire.NET.Generated;
 
-[NativeTypeName("unsigned int")]
-public enum spa_param_buffers : uint
+public partial struct spa_meta_sync_timeline
 {
-    SPA_PARAM_BUFFERS_START,
-    SPA_PARAM_BUFFERS_buffers,
-    SPA_PARAM_BUFFERS_blocks,
-    SPA_PARAM_BUFFERS_size,
-    SPA_PARAM_BUFFERS_stride,
-    SPA_PARAM_BUFFERS_align,
-    SPA_PARAM_BUFFERS_dataType,
-    SPA_PARAM_BUFFERS_metaType,
+    [NativeTypeName("uint32_t")]
+    public uint flags;
+
+    [NativeTypeName("uint32_t")]
+    public uint padding;
+
+    [NativeTypeName("uint64_t")]
+    public ulong acquire_point;
+
+    [NativeTypeName("uint64_t")]
+    public ulong release_point;
 }

@@ -19,11 +19,11 @@ public unsafe partial struct pw_buffer
     public void* user_data;
 
     [NativeTypeName("uint64_t")]
-    public nuint size;
+    public ulong size;
 
     [NativeTypeName("uint64_t")]
-    public nuint requested;
+    public ulong requested;
 
     [NativeTypeName("uint64_t")]
-    public nuint time;
+    public ulong time;
 }
