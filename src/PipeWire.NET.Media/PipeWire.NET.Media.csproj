@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <AssemblyName>PipeWire.NET.Media</AssemblyName>
+    <RootNamespace>PipeWire.NET.Media</RootNamespace>
+    <PackageId>PipeWire.NET.Media</PackageId>
+    <Description>Audio and video streaming for PipeWire.NET. Capture and publish raw frames over the PipeWire stream API, with SPA format negotiation, DMA-BUF zero-copy buffers and DRM format-modifier support. Built on the PipeWire.NET graph library.</Description>
+    <PackageTags>pipewire;linux;video;audio;capture;stream;dmabuf;v4l2;wayland;screencast;native;interop;dotnet;spa</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- No baseline: this package has never shipped, so there is nothing to compare against.
+         Set PackageValidationBaselineVersion once the first version is published. -->
+    <EnablePackageValidation>true</EnablePackageValidation>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <IsPackable>true</IsPackable>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <NoWarn>CA1515;CA1050</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DotNet.ReproducibleBuilds" PrivateAssets="all" />
+    <PackageReference Include="MinVer" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PipeWire.NET\PipeWire.NET.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+  <!-- Its own layers, same reasoning as the core library. -->
+  <ItemGroup>
+    <Using Include="PipeWire.NET" />
+    <Using Include="PipeWire.NET.Generated" />
+    <Using Include="PipeWire.NET.Graph" />
+    <Using Include="PipeWire.NET.Media" />
+    <Using Include="PipeWire.NET.Media.Streams" />
+    <Using Include="PipeWire.NET.Spa" />
+  </ItemGroup>
+</Project>
