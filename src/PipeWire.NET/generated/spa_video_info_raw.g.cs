@@ -9,12 +9,14 @@
 #pragma warning disable CA1720 // Identifiers should not contain type names
 #pragma warning disable CA1815 // Override Equals and operator equals on value types
 
-namespace PipeWire.NET.Generated;
+using PipeWire.NET.Spa;
+
+namespace PipeWire.NET.Interop;
 
 public partial struct spa_video_info_raw
 {
     [NativeTypeName("enum spa_video_format")]
-    public spa_video_format format;
+    public SpaVideoFormat format;
 
     [NativeTypeName("uint32_t")]
     public uint flags;
@@ -35,29 +37,29 @@ public partial struct spa_video_info_raw
     public uint views;
 
     [NativeTypeName("enum spa_video_interlace_mode")]
-    public spa_video_interlace_mode interlace_mode;
+    public SpaVideoInterlaceMode interlace_mode;
 
     [NativeTypeName("struct spa_fraction")]
     public spa_fraction pixel_aspect_ratio;
 
     [NativeTypeName("enum spa_video_multiview_mode")]
-    public spa_video_multiview_mode multiview_mode;
+    public SpaVideoMultiviewMode multiview_mode;
 
     [NativeTypeName("enum spa_video_multiview_flags")]
-    public spa_video_multiview_flags multiview_flags;
+    public SpaVideoMultiviewFlags multiview_flags;
 
     [NativeTypeName("enum spa_video_chroma_site")]
-    public spa_video_chroma_site chroma_site;
+    public SpaVideoChromaSite chroma_site;
 
     [NativeTypeName("enum spa_video_color_range")]
-    public spa_video_color_range color_range;
+    public SpaVideoColorRange color_range;
 
     [NativeTypeName("enum spa_video_color_matrix")]
-    public spa_video_color_matrix color_matrix;
+    public SpaVideoColorMatrix color_matrix;
 
     [NativeTypeName("enum spa_video_transfer_function")]
-    public spa_video_transfer_function transfer_function;
+    public SpaVideoTransferFunction transfer_function;
 
     [NativeTypeName("enum spa_video_color_primaries")]
-    public spa_video_color_primaries color_primaries;
+    public SpaVideoColorPrimaries color_primaries;
 }

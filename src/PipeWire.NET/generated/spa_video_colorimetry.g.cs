@@ -9,19 +9,21 @@
 #pragma warning disable CA1720 // Identifiers should not contain type names
 #pragma warning disable CA1815 // Override Equals and operator equals on value types
 
-namespace PipeWire.NET.Generated;
+using PipeWire.NET.Spa;
+
+namespace PipeWire.NET.Interop;
 
 public partial struct spa_video_colorimetry
 {
     [NativeTypeName("enum spa_video_color_range")]
-    public spa_video_color_range range;
+    public SpaVideoColorRange range;
 
     [NativeTypeName("enum spa_video_color_matrix")]
-    public spa_video_color_matrix matrix;
+    public SpaVideoColorMatrix matrix;
 
     [NativeTypeName("enum spa_video_transfer_function")]
-    public spa_video_transfer_function transfer;
+    public SpaVideoTransferFunction transfer;
 
     [NativeTypeName("enum spa_video_color_primaries")]
-    public spa_video_color_primaries primaries;
+    public SpaVideoColorPrimaries primaries;
 }

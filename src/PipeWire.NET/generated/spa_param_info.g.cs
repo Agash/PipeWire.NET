@@ -11,7 +11,7 @@
 
 using System.Runtime.CompilerServices;
 
-namespace PipeWire.NET.Generated;
+namespace PipeWire.NET.Interop;
 
 public partial struct spa_param_info
 {

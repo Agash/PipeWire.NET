@@ -9,14 +9,15 @@
 #pragma warning disable CA1720 // Identifiers should not contain type names
 #pragma warning disable CA1815 // Override Equals and operator equals on value types
 
+using PipeWire.NET.Spa;
 using System.Runtime.CompilerServices;
 
-namespace PipeWire.NET.Generated;
+namespace PipeWire.NET.Interop;
 
 public partial struct spa_audio_info_raw
 {
     [NativeTypeName("enum spa_audio_format")]
-    public spa_audio_format format;
+    public SpaAudioFormat format;
 
     [NativeTypeName("uint32_t")]
     public uint flags;
