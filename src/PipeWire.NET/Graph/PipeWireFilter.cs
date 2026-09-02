@@ -62,10 +62,21 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
     /// Runs once per graph cycle on the realtime thread, with the cycle's sample count.
     /// </summary>
     /// <remarks>
-    /// Read each input port's samples, write each output port's, and return. Anything that
-    /// allocates, blocks or throws here damages the whole graph, not just this filter - an
-    /// exception is caught and logged rather than allowed to escape into native code, but by then
-    /// the cycle has already been missed.
+    /// <para>
+    /// Read each input port's samples, write each output port's, and return. This runs on the
+    /// realtime thread, so the whole graph misses its deadline if the callback is late, not just
+    /// this filter.
+    /// </para>
+    /// <para>
+    /// What that rules out, none of which the type system can stop: allocation, locking, blocking
+    /// or file IO, starting tasks, logging, anything that can trigger a collection, and any call
+    /// back into this library's control plane. The spans handed out are valid only for the duration
+    /// of the call and must not be stored.
+    /// </para>
+    /// <para>
+    /// An exception is caught rather than allowed to escape into native code, because escaping
+    /// would abort the process, but by then the cycle has already been missed.
+    /// </para>
     /// </remarks>
     public Action<PipeWireFilter, uint>? ProcessCallback { get; set; }
 
@@ -377,22 +388,8 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
     {
         LogStateChanged(Name, old, state, error);
 
-        Action<PipeWireFilter, PipeWireFilterState, PipeWireFilterState, string?>? handlers = StateChanged;
-        if (handlers is null) return;
-
         // Not the realtime path, so one throwing subscriber must not starve the rest.
-        foreach (Delegate handler in handlers.GetInvocationList())
-        {
-            try
-            {
-                ((Action<PipeWireFilter, PipeWireFilterState, PipeWireFilterState, string?>)handler)(
-                    this, old, state, error);
-            }
-            catch (Exception ex)
-            {
-                LogHandlerFaulted(Name, ex);
-            }
-        }
+        SafeCallback.Raise(StateChanged, h => h(this, old, state, error), ex => LogHandlerFaulted(Name, ex));
     }
 
     /// <inheritdoc/>

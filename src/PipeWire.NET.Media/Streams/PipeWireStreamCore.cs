@@ -222,7 +222,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// would itself cause an xrun. A host should surface this from its own non-realtime loop.
     /// </remarks>
     internal (long Count, Exception? Last) ProcessFaults =>
-        (Interlocked.Read(ref _processFaults), _lastProcessFault);
+        (Interlocked.Read(ref _processFaults), Volatile.Read(ref _lastProcessFault));
 
     /// <summary>Tears the stream down. Disposal here is synchronous; the async form defers to it.</summary>
     public void Dispose() => DisposeCore();
@@ -303,7 +303,10 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             // Recorded, not logged: this is the realtime path, and logging from it is itself a
             // realtime violation. A silent swallow would hide a handler that throws every cycle,
             // so the fault is kept for a non-realtime reader to surface.
-            self._lastProcessFault = ex;
+            // The exception is published before the count that advertises it, and both ends use
+            // volatile access. A plain write ordered after the increment lets a reader that sees
+            // the new count read the previous exception, or none at all, on a weak memory model.
+            Volatile.Write(ref self._lastProcessFault, ex);
             Interlocked.Increment(ref self._processFaults);
         }
         finally
@@ -326,7 +329,10 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         }
         catch (Exception ex)
         {
-            self._lastProcessFault = ex;
+            // The exception is published before the count that advertises it, and both ends use
+            // volatile access. A plain write ordered after the increment lets a reader that sees
+            // the new count read the previous exception, or none at all, on a weak memory model.
+            Volatile.Write(ref self._lastProcessFault, ex);
             Interlocked.Increment(ref self._processFaults);
         }
     }
@@ -342,7 +348,10 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         }
         catch (Exception ex)
         {
-            self._lastProcessFault = ex;
+            // The exception is published before the count that advertises it, and both ends use
+            // volatile access. A plain write ordered after the increment lets a reader that sees
+            // the new count read the previous exception, or none at all, on a weak memory model.
+            Volatile.Write(ref self._lastProcessFault, ex);
             Interlocked.Increment(ref self._processFaults);
         }
     }

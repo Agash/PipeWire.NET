@@ -243,14 +243,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
 
     private void Raise(PipeWireMetadataEntry entry)
     {
-        Action<PipeWireMetadataProvider, PipeWireMetadataEntry>? handlers = EntryChanged;
-        if (handlers is null) return;
-
-        foreach (Delegate handler in handlers.GetInvocationList())
-        {
-            try { ((Action<PipeWireMetadataProvider, PipeWireMetadataEntry>)handler)(this, entry); }
-            catch (Exception ex) { LogHandlerFaulted(Name, ex); }
-        }
+        SafeCallback.Raise(EntryChanged, h => h(this, entry), ex => LogHandlerFaulted(Name, ex));
     }
 
     /// <inheritdoc/>

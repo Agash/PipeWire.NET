@@ -250,6 +250,31 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     /// <summary>The connection, for objects that must keep it alive for their own lifetime.</summary>
     internal PipeWireCoreHandle? CoreOwner => _coreHandle;
 
+    /// <summary>True when the caller is the loop thread, i.e. inside a callback.</summary>
+    internal unsafe bool IsOnLoopThread
+    {
+        get
+        {
+            PipeWireLoopHandle? loop = _loopHandle;
+            if (loop is null || loop.IsInvalid) return false;
+
+            bool referenced = false;
+            try
+            {
+                loop.DangerousAddRef(ref referenced);
+                return referenced && Native.pw_thread_loop_in_thread(loop.Loop);
+            }
+            catch (ObjectDisposedException)
+            {
+                return false;
+            }
+            finally
+            {
+                if (referenced) loop.DangerousRelease();
+            }
+        }
+    }
+
     /// <summary>The context, for objects this client implements rather than binds.</summary>
     internal unsafe pw_context* ContextHandle
     {

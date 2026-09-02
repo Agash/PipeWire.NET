@@ -86,6 +86,7 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
             if (proxy is not null && _loopReferenced && !_loop.IsInvalid)
             {
                 pw_thread_loop* loop = _loop.Loop;
+
                 Native.pw_thread_loop_lock(loop);
                 try
                 {

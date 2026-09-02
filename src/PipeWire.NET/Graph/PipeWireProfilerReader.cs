@@ -96,14 +96,7 @@ public sealed partial class PipeWireProfilerReader : IDisposable, IAsyncDisposab
 
     private void Raise(SpaObject report)
     {
-        Action<PipeWireProfilerReader, SpaObject>? handlers = ProfileReceived;
-        if (handlers is null) return;
-
-        foreach (Delegate handler in handlers.GetInvocationList())
-        {
-            try { ((Action<PipeWireProfilerReader, SpaObject>)handler)(this, report); }
-            catch (Exception ex) { LogHandlerFaulted(Id, ex); }
-        }
+        SafeCallback.Raise(ProfileReceived, h => h(this, report), ex => LogHandlerFaulted(Id, ex));
     }
 
     /// <inheritdoc/>

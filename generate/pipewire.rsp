@@ -64,6 +64,8 @@
 /usr/include/pipewire-0.3/pipewire/extensions/security-context.h
 --traverse
 /usr/include/pipewire-0.3/pipewire/impl-metadata.h
+--traverse
+/usr/include/pipewire-0.3/pipewire/impl-module.h
 # NB: pipewire/keys.h is intentionally NOT traversed. PW_KEY_* are #define string
 # macros; emitting them needs generate-macro-bindings, which fails fatally on this
 # header set (PW_MAP_RANGE_INIT / SPA_POD_INIT_* use CompoundLiteralExpr). The

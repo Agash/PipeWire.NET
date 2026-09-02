@@ -29,7 +29,7 @@ namespace PipeWire.NET.Graph;
 /// </para>
 /// </remarks>
 [SupportedOSPlatform("linux")]
-public abstract class PipeWireParameterObject : IAsyncDisposable
+public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
 {
     private readonly PipeWireContext _ctx;
     // Concurrent rather than a dictionary behind a lock, and deliberately so. A param event is
@@ -368,15 +368,7 @@ public abstract class PipeWireParameterObject : IAsyncDisposable
 
     private void RaiseParameterChanged(SpaObject value)
     {
-        Action<PipeWireParameterObject, SpaObject>? handlers = ParameterChanged;
-        if (handlers is null) return;
-
-        // One throwing subscriber must not starve the rest, which a single Invoke would allow.
-        foreach (Delegate handler in handlers.GetInvocationList())
-        {
-            try { ((Action<PipeWireParameterObject, SpaObject>)handler)(this, value); }
-            catch (Exception ex) { OnHandlerFaulted(ex); }
-        }
+        SafeCallback.Raise(ParameterChanged, h => h(this, value), OnHandlerFaulted);
     }
 
     /// <summary>
@@ -397,14 +389,7 @@ public abstract class PipeWireParameterObject : IAsyncDisposable
 
         Volatile.Write(ref _parameters, described);
 
-        Action<PipeWireParameterObject>? handlers = InfoChanged;
-        if (handlers is null) return;
-
-        foreach (Delegate handler in handlers.GetInvocationList())
-        {
-            try { ((Action<PipeWireParameterObject>)handler)(this); }
-            catch (Exception ex) { OnHandlerFaulted(ex); }
-        }
+        SafeCallback.Raise(InfoChanged, h => h(this), OnHandlerFaulted);
     }
 
     /// <summary>Reports a subscriber that threw, where the logger is in scope.</summary>
@@ -417,10 +402,23 @@ public abstract class PipeWireParameterObject : IAsyncDisposable
         return self is null || self._disposed ? null : self;
     }
 
+    /// <summary>Tears the binding down. Disposal here does no I/O.</summary>
+    /// <remarks>
+    /// Offered alongside the async form because nothing about this disposal is asynchronous,
+    /// so a caller should not be forced to write "await using" for it.
+    /// </remarks>
+    public void Dispose() => DisposeCore();
+
     /// <inheritdoc/>
     public ValueTask DisposeAsync()
     {
-        if (_disposed) return ValueTask.CompletedTask;
+        DisposeCore();
+        return ValueTask.CompletedTask;
+    }
+
+    private void DisposeCore()
+    {
+        if (_disposed) return;
         _disposed = true;
 
         // Anything still waiting for answers gets none; the round-trip it is awaiting completes or
@@ -429,6 +427,6 @@ public abstract class PipeWireParameterObject : IAsyncDisposable
         _bound = null;
 
         GC.SuppressFinalize(this);
-        return ValueTask.CompletedTask;
     }
+
 }

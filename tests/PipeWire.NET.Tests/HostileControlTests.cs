@@ -618,7 +618,21 @@ public sealed class HostileControlTests
                 // its own outstanding write would never see this, and would report "from-a" forever.
                 await theirs.SetAsync(key, "from-b", cancellationToken: cts.Token);
 
-                string? reported = await sawTheirs.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
+                string? reported = null;
+                try
+                {
+                    reported = await sawTheirs.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
+                }
+                catch (TimeoutException)
+                {
+                    // Which half failed matters. If the cache holds the new value the echo arrived
+                    // and the event was suppressed, which is a reconciler bug; if it does not, the
+                    // daemon never delivered it, which is not.
+                    Assert.Fail(
+                        $"no event within 10s. cache holds '{mine.Get(key) ?? "(null)"}', "
+                        + $"peer holds '{theirs.Get(key) ?? "(null)"}'");
+                }
+
                 Assert.AreEqual("from-b", reported, "the other client's change must be reported");
                 Assert.AreEqual("from-b", mine.Get(key), "and must be reflected in the store");
 

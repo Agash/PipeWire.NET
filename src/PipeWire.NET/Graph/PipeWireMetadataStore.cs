@@ -344,14 +344,7 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
     /// <summary>Reports one change to subscribers, isolating a handler that throws.</summary>
     private void Raise(PipeWireMetadataEntry entry)
     {
-        Action<PipeWireMetadataStore, PipeWireMetadataEntry>? handlers = EntryChanged;
-        if (handlers is null) return;
-
-        foreach (Delegate handler in handlers.GetInvocationList())
-        {
-            try { ((Action<PipeWireMetadataStore, PipeWireMetadataEntry>)handler)(this, entry); }
-            catch (Exception ex) { LogHandlerFaulted(Id, entry.Key, ex); }
-        }
+        SafeCallback.Raise(EntryChanged, h => h(this, entry), ex => LogHandlerFaulted(Id, entry.Key, ex));
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

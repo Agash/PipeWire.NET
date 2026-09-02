@@ -168,4 +168,69 @@ public sealed class GraphCreationOptionsTests
                 Assert.IsTrue(port.InterfaceVersion > 0, $"port {port.PortId} has no version");
         }
     }
+
+    [TestMethod]
+    public async Task ALingeringLink_OutlivesTheClientThatMadeIt()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        // Nodes have this test; links did not. A link is the object most likely to be created for
+        // somebody else to keep using, so its linger behaviour matters at least as much.
+        uint linkId;
+        uint sourceId;
+        uint sinkId;
+
+        (PipeWireContext maker, PipeWireRegistry makerRegistry) = await ConnectAsync("pwnet-linger-link", cts.Token);
+        await using (maker)
+        await using (makerRegistry)
+        {
+            PipeWireNode source = await makerRegistry.CreateVirtualStereoNode("LingerSrc")
+                .WithName($"pwnet_linger_src_{Environment.ProcessId}_{Random.Shared.Next():x}")
+                .WithLinger().ExecuteAsync(cts.Token);
+            PipeWireNode sink = await makerRegistry.CreateVirtualStereoNode("LingerSink")
+                .WithName($"pwnet_linger_sink_{Environment.ProcessId}_{Random.Shared.Next():x}")
+                .WithLinger().ExecuteAsync(cts.Token);
+
+            sourceId = source.NodeId;
+            sinkId = sink.NodeId;
+
+            PipeWirePort output = await PortAsync(makerRegistry, sourceId, PipeWirePortDirection.Out, cts.Token);
+            PipeWirePort input = await PortAsync(makerRegistry, sinkId, PipeWirePortDirection.In, cts.Token);
+
+            PipeWireLink link = await makerRegistry.CreateLink(output, input).WithLinger()
+                .ExecuteAsync(cts.Token);
+            linkId = link.LinkId;
+        }
+
+        // The maker is gone. A second client must still see the link, and be able to remove it.
+        (PipeWireContext other, PipeWireRegistry otherRegistry) = await ConnectAsync("pwnet-linger-peer", cts.Token);
+        await using (other)
+        await using (otherRegistry)
+        {
+            await otherRegistry.WaitForInitialEnumerationAsync(cts.Token);
+
+            Assert.IsNotNull(otherRegistry.Current.GetLink(linkId),
+                "a lingering link did not outlive the client that created it");
+
+            await otherRegistry.RemoveObjectAsync(linkId, cts.Token);
+            await otherRegistry.RemoveObjectAsync(sourceId, cts.Token);
+            await otherRegistry.RemoveObjectAsync(sinkId, cts.Token);
+        }
+    }
+
+    private static async Task<PipeWirePort> PortAsync(
+        PipeWireRegistry registry, uint nodeId, PipeWirePortDirection direction, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await registry.WaitForInitialEnumerationAsync(cancellationToken);
+
+            foreach (PipeWirePort port in registry.Current.GetPortsForNode(nodeId))
+            {
+                if (port.PortDirection == direction) return port;
+            }
+        }
+    }
 }

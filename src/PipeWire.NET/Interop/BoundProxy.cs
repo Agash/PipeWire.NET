@@ -168,8 +168,27 @@ internal sealed unsafe class BoundProxy : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
+
+        // Marked here, not in the core, so a second call cannot queue a second teardown.
         _disposed = true;
 
+        // Deferred when called from the loop thread. Destroying a proxy there can be happening
+        // while the daemon dispatches through that same proxy's listener, and pw_proxy_destroy
+        // frees the hook the dispatch is still walking - a use-after-free that takes the process
+        // down. Handing it to another thread lets the dispatch finish first. The object is already
+        // marked disposed, so nothing else touches it in the meantime.
+        if (_ctx.IsOnLoopThread)
+        {
+            BoundProxy self = this;
+            _ = Task.Run(self.DisposeCore);
+            return;
+        }
+
+        DisposeCore();
+    }
+
+    private void DisposeCore()
+    {
         // The listener's memory goes with the handle, not with this: disposal only destroys the
         // proxy once the last in-flight call has released it, and freeing the events table any
         // earlier would leave the daemon dispatching into it. The handle holds the core and the

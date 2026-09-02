@@ -72,6 +72,11 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
     /// <summary>Connects to a source by node id (default: auto-select).</summary>
     /// <param name="targetNodeId">Source node id, or <see cref="AnyNode"/> to auto-select.</param>
     /// <param name="preferredFormats">Preferred pixel formats in priority order.</param>
+    /// <remarks>
+    /// The offer names 1920x1080 at 30fps as its preferred geometry and accepts a range around it,
+    /// so a producer of another size still negotiates. There is no way to state a different
+    /// preference; a consumer that needs one has to renegotiate after the fact.
+    /// </remarks>
     /// <param name="targetObjectName">
     /// Optional <c>target.object</c> - bind to a specific node by name/serial regardless of
     /// the session manager's default-device routing.

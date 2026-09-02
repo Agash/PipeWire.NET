@@ -25,7 +25,7 @@ namespace PipeWire.NET.Graph;
 /// </para>
 /// </remarks>
 [SupportedOSPlatform("linux")]
-public sealed partial class PipeWireClientControl : IAsyncDisposable
+public sealed partial class PipeWireClientControl : IDisposable, IAsyncDisposable
 {
     /// <summary>The object id that means "everything not named individually".</summary>
     /// <remarks>
@@ -188,16 +188,29 @@ public sealed partial class PipeWireClientControl : IAsyncDisposable
         }
     }
 
+    /// <summary>Tears the binding down. Disposal here does no I/O.</summary>
+    /// <remarks>
+    /// Offered alongside the async form because nothing about this disposal is asynchronous,
+    /// so a caller should not be forced to write "await using" for it.
+    /// </remarks>
+    public void Dispose() => DisposeCore();
+
     /// <inheritdoc/>
     public ValueTask DisposeAsync()
     {
-        if (_disposed) return ValueTask.CompletedTask;
+        DisposeCore();
+        return ValueTask.CompletedTask;
+    }
+
+    private void DisposeCore()
+    {
+        if (_disposed) return;
         _disposed = true;
 
         _bound?.Dispose();
         _bound = null;
 
         GC.SuppressFinalize(this);
-        return ValueTask.CompletedTask;
     }
+
 }

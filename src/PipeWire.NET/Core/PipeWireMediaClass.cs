@@ -62,6 +62,9 @@ public static class PipeWireMediaClass
         if (role.Equals("Source", StringComparison.Ordinal)) return PipeWireMediaFlow.Source;
         if (role.Equals("Sink", StringComparison.Ordinal)) return PipeWireMediaFlow.Sink;
         if (role.Equals("Duplex", StringComparison.Ordinal)) return PipeWireMediaFlow.Duplex;
+        // Bridge is treated as duplex. PipeWire does not say so directly, but a bridge exists to
+        // carry data both ways (Midi/Bridge is the common one), and it publishes input and output
+        // ports. Anything relying on this should check the ports rather than the class.
         if (role.Equals("Bridge", StringComparison.Ordinal)) return PipeWireMediaFlow.Duplex;
         return PipeWireMediaFlow.Unknown;
     }

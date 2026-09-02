@@ -280,9 +280,17 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// Yields the graph as it changes, starting with the current snapshot.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A state stream, not an event log: the newest snapshot always wins, so a slow consumer skips
     /// intermediate ones rather than falling behind. Use the granular events when every transition
     /// matters, and <see cref="PipeWireGraphSnapshot.Version"/> to detect that a skip happened.
+    /// </para>
+    /// <para>
+    /// The first snapshot yielded is the current one at enumeration time, not the one that was
+    /// current when the enumerator was created. Changes between those two points are folded into it
+    /// rather than reported, so a consumer cannot assume it has observed every transition since it
+    /// subscribed. Disposing the registry ends the stream.
+    /// </para>
     /// </remarks>
     public async IAsyncEnumerable<PipeWireGraphSnapshot> WatchAsync(
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -331,13 +339,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// </remarks>
     private void RaiseIsolated<T>(Action<T>? handlers, T argument, string eventName)
     {
-        if (handlers is null) return;
-
-        foreach (Delegate handler in handlers.GetInvocationList())
-        {
-            try { ((Action<T>)handler)(argument); }
-            catch (Exception ex) { LogHandlerFaulted(eventName, ex); }
-        }
+        SafeCallback.Raise(handlers, h => h(argument), ex => LogHandlerFaulted(eventName, ex));
     }
 
     /// <remarks>
@@ -354,14 +356,8 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     private void RaiseGraphChanged()
     {
         GraphChangedHandler? handlers = GraphChanged;
-        if (handlers is null) return;
-
         PipeWireGraphSnapshot snapshot = Current;
-        foreach (Delegate handler in handlers.GetInvocationList())
-        {
-            try { ((GraphChangedHandler)handler)(this, snapshot); }
-            catch (Exception ex) { LogHandlerFaulted(nameof(GraphChanged), ex); }
-        }
+        SafeCallback.Raise(handlers, h => h(this, snapshot), ex => LogHandlerFaulted(nameof(GraphChanged), ex));
     }
 
     /// <summary>
@@ -648,14 +644,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // not still waiting while the objects it would report on are being destroyed.
         Action? finishing = Disposing;
         Disposing = null;
-        if (finishing is not null)
-        {
-            foreach (Delegate handler in finishing.GetInvocationList())
-            {
-                try { ((Action)handler)(); }
-                catch (Exception ex) { LogWatchCompletionThrew(ex); }
-            }
-        }
+        SafeCallback.Raise(finishing, h => h(), LogWatchCompletionThrew);
 
         UnwindNative();
     }

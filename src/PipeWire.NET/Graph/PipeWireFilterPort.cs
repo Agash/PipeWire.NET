@@ -55,6 +55,17 @@ public sealed unsafe class PipeWireFilterPort
     /// </para>
     /// </remarks>
     /// <exception cref="ObjectDisposedException">The filter that owns this port has been disposed.</exception>
+    /// <remarks>
+    /// <para>
+    /// Valid only inside the owning filter's process callback, and only while that filter is alive.
+    /// Outside the callback there is no buffer for the cycle and this returns empty; after the
+    /// filter is disposed it throws.
+    /// </para>
+    /// <para>
+    /// The span belongs to the cycle, not to the caller. Storing it and reading after the callback
+    /// returns reads a buffer the graph has taken back.
+    /// </para>
+    /// </remarks>
     public Span<float> GetSamples(uint sampleCount)
     {
         // The port data belongs to the filter and dies with it. Without this the pointer is simply

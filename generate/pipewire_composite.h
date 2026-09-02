@@ -22,3 +22,4 @@
 #include <pipewire/extensions/profiler.h>         /* pw_profiler */
 #include <pipewire/extensions/security-context.h> /* pw_security_context */
 #include <pipewire/impl-metadata.h>              /* pw_impl_metadata: serving a store of our own */
+#include <pipewire/impl-module.h>                /* pw_context_load_module: export types */

@@ -60,7 +60,7 @@ dotnet add package PipeWire.NET
 await using var registry = new PipeWireRegistry(ctx);
 await registry.WaitForInitialEnumerationAsync();
 
-foreach (var source in registry.Sources.Where(s => s.IsVideoSource))
+foreach (var source in registry.Nodes.Where(s => s.IsVideoSource))
     Console.WriteLine($"[{source.NodeId}] {source.Description} ({source.Class})");
 ```
 
