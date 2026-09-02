@@ -5,7 +5,7 @@ namespace PipeWire.NET.Graph;
 /// </summary>
 /// <remarks>
 /// These are the values of the <c>port.direction</c> property, which is a richer classification than
-/// the native <c>spa_direction</c> enum: that has only input and output, while control ports report
+/// the native <c>SpaDirection</c> enum: that has only input and output, while control ports report
 /// <see cref="Control"/> or <see cref="Notify"/>. Do not map either onto a plain data direction -
 /// nothing upstream establishes that equivalence.
 /// </remarks>

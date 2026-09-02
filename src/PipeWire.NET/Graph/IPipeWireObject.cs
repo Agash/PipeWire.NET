@@ -27,5 +27,5 @@ public interface IPipeWireObject
     /// Determines which methods and events the object supports. A version-gated feature must check
     /// this rather than assume the compile-time constant, because the daemon may be older.
     /// </remarks>
-    uint Version { get; }
+    uint InterfaceVersion { get; }
 }

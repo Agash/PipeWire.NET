@@ -1,5 +1,6 @@
 using System.Runtime.Versioning;
-using PipeWire.NET.Generated;
+using PipeWire.NET.Interop;
+using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Graph;
 
@@ -18,10 +19,10 @@ public sealed record PipeWirePort : IPipeWireObject
         bool Monitor,
         bool Exclusive,
         PipeWirePermissions Permissions = PipeWirePermissions.None,
-        uint Version = 0)
+        uint InterfaceVersion = 0)
     {
         this.Permissions = Permissions;
-        this.Version = Version;
+        this.InterfaceVersion = InterfaceVersion;
         this.PortId = PortId;
         this.NodeId = NodeId;
         this.PortName = PortName;
@@ -40,7 +41,7 @@ public sealed record PipeWirePort : IPipeWireObject
     public PipeWirePermissions Permissions { get; }
 
     /// <inheritdoc/>
-    public uint Version { get; }
+    public uint InterfaceVersion { get; }
 
     /// <summary>The PipeWire global id of this port.</summary>
     public uint PortId { get; }

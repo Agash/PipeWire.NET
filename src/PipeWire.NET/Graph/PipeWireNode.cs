@@ -17,7 +17,7 @@ public sealed record PipeWireNode : IPipeWireObject
     /// </param>
     /// <param name="NodeNick">Optional short display name from <c>node.nick</c>.</param>
     /// <param name="Permissions">What this client may do with the node.</param>
-    /// <param name="Version">The interface version the daemon announced.</param>
+    /// <param name="InterfaceVersion">The interface version the daemon announced.</param>
     internal PipeWireNode(
         uint NodeId,
         string? NodeName,
@@ -25,10 +25,10 @@ public sealed record PipeWireNode : IPipeWireObject
         string? MediaClass,
         string? NodeNick = null,
         PipeWirePermissions Permissions = PipeWirePermissions.None,
-        uint Version = 0)
+        uint InterfaceVersion = 0)
     {
         this.Permissions = Permissions;
-        this.Version = Version;
+        this.InterfaceVersion = InterfaceVersion;
         this.NodeId = NodeId;
         this.NodeName = NodeName;
         this.Description = Description;
@@ -46,7 +46,7 @@ public sealed record PipeWireNode : IPipeWireObject
     public PipeWirePermissions Permissions { get; }
 
     /// <inheritdoc/>
-    public uint Version { get; }
+    public uint InterfaceVersion { get; }
 
     /// <summary>
     /// What kind of media this node carries, parsed from <see cref="MediaClass"/>.

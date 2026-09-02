@@ -99,6 +99,85 @@ internal static unsafe class PipeWireGlobalParser
         return true;
     }
 
+    /// <summary>
+    /// Builds a device. Always succeeds: like a node it carries nothing mandatory, and dropping one
+    /// for having no name would hide a whole sound card from the graph.
+    /// </summary>
+    internal static PipeWireDevice ParseDevice(
+        uint id, PipeWirePermissions permissions, uint version, spa_dict* props) =>
+        new(id, permissions, version,
+            ReadString(props, PipeWireKeys.DeviceName),
+            ReadString(props, PipeWireKeys.DeviceDescription),
+            ReadString(props, PipeWireKeys.DeviceNick),
+            ReadString(props, PipeWireKeys.DeviceApi),
+            ReadString(props, PipeWireKeys.MediaClass),
+            ReadString(props, PipeWireKeys.ObjectPath),
+            ReadOptionalId(props, PipeWireKeys.FactoryId),
+            ReadOptionalId(props, PipeWireKeys.ClientId));
+
+    /// <summary>Builds a client. Always succeeds; every field is optional.</summary>
+    internal static PipeWireClient ParseClient(
+        uint id, PipeWirePermissions permissions, uint version, spa_dict* props) =>
+        new(id, permissions, version,
+            ReadString(props, PipeWireKeys.ApplicationName),
+            ReadOptionalInt(props, PipeWireKeys.SecurityPid),
+            ReadOptionalId(props, PipeWireKeys.SecurityUid),
+            ReadOptionalId(props, PipeWireKeys.SecurityGid),
+            ReadString(props, PipeWireKeys.Access),
+            ReadString(props, PipeWireKeys.Protocol),
+            ReadOptionalId(props, PipeWireKeys.ModuleId));
+
+    /// <summary>Builds a factory. Always succeeds; every field is optional.</summary>
+    internal static PipeWireFactory ParseFactory(
+        uint id, PipeWirePermissions permissions, uint version, spa_dict* props) =>
+        new(id, permissions, version,
+            ReadString(props, PipeWireKeys.FactoryName),
+            ReadString(props, PipeWireKeys.FactoryTypeName),
+            ReadOptionalId(props, PipeWireKeys.FactoryTypeVersion),
+            ReadOptionalId(props, PipeWireKeys.ModuleId));
+
+    /// <summary>Builds a module. Always succeeds; every field is optional.</summary>
+    internal static PipeWireModule ParseModule(
+        uint id, PipeWirePermissions permissions, uint version, spa_dict* props) =>
+        new(id, permissions, version,
+            ReadString(props, PipeWireKeys.ModuleName),
+            ReadString(props, PipeWireKeys.ModuleDescription),
+            ReadString(props, PipeWireKeys.ModuleAuthor),
+            ReadString(props, PipeWireKeys.ModuleVersion));
+
+    /// <summary>Builds a metadata store. Always succeeds; the name is optional.</summary>
+    internal static PipeWireMetadataObject ParseMetadata(
+        uint id, PipeWirePermissions permissions, uint version, spa_dict* props) =>
+        new(id, permissions, version, ReadString(props, PipeWireKeys.MetadataName));
+
+    /// <summary>Builds the core object. Always succeeds; every field is optional.</summary>
+    internal static PipeWireCoreObject ParseCore(
+        uint id, PipeWirePermissions permissions, uint version, spa_dict* props) =>
+        new(id, permissions, version,
+            ReadString(props, PipeWireKeys.CoreName),
+            ReadString(props, PipeWireKeys.CoreVersion),
+            ReadString(props, PipeWireKeys.HostName),
+            ReadString(props, PipeWireKeys.UserName));
+
+    /// <summary>
+    /// Reads a numeric property that the object can legitimately be without.
+    /// </summary>
+    /// <remarks>
+    /// Absent and unparseable both give <see langword="null"/>, deliberately. These are decorations
+    /// - which factory made a device, which module serves a client - so a daemon that omits one, or
+    /// sends something that is not a number, should cost the caller that field and nothing more.
+    /// </remarks>
+    private static uint? ReadOptionalId(spa_dict* dict, ReadOnlySpan<byte> keyUtf8) =>
+        TryReadValue(dict, keyUtf8, out ReadOnlySpan<byte> raw) && uint.TryParse(raw, out uint value)
+            ? value
+            : null;
+
+    /// <inheritdoc cref="ReadOptionalId"/>
+    private static int? ReadOptionalInt(spa_dict* dict, ReadOnlySpan<byte> keyUtf8) =>
+        TryReadValue(dict, keyUtf8, out ReadOnlySpan<byte> raw) && int.TryParse(raw, out int value)
+            ? value
+            : null;
+
     private static bool TryReadId(
         spa_dict* props, ReadOnlySpan<byte> key, out uint value, out string reason, out string? offendingValue)
     {
