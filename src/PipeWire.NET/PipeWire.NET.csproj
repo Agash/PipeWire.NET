@@ -5,10 +5,13 @@
          only the .NET 10 SDK errors with NETSDK1045 - install the 11 preview SDK to target it. -->
     <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- IsAotCompatible only runs the analyzers on this project; this also checks that everything
+         it references is annotated compatible. -->
+    <VerifyReferenceAotCompatibility>true</VerifyReferenceAotCompatibility>
     <AssemblyName>PipeWire.NET</AssemblyName>
     <RootNamespace>PipeWire.NET</RootNamespace>
     <PackageId>PipeWire.NET</PackageId>
-    <Description>.NET P/Invoke bindings for libpipewire-0.3 on Linux. Open video capture streams from V4L2 devices, PipeWire virtual cameras, and screen capture sources. Receive raw RGBA/BGRA frames with low-overhead zero-copy buffer management using the PipeWire stream API and SPA buffer protocol.</Description>
+    <Description>.NET bindings for libpipewire-0.3 on Linux: connect to the daemon, mirror the object graph as immutable snapshots, and read and write node, device, client and metadata state. Includes a full SPA POD reader/writer and the native interop layer. Audio and video streaming live in the PipeWire.NET.Media package.</Description>
     <PackageTags>pipewire;linux;video;capture;v4l2;wayland;camera;native;interop;dotnet;spa;libpipewire</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -37,10 +40,9 @@
        layers through global usings keeps every file's using block about external dependencies. -->
   <ItemGroup>
     <Using Include="PipeWire.NET" />
-    <Using Include="PipeWire.NET.Generated" />
-    <Using Include="PipeWire.NET.Graph" />
     <Using Include="PipeWire.NET.Interop" />
     <Using Include="PipeWire.NET.Spa" />
+    <Using Include="PipeWire.NET.Graph" />
   </ItemGroup>
 
 </Project>

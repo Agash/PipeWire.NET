@@ -25,7 +25,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0   # MinVer needs full history
 
@@ -38,7 +38,7 @@ jobs:
             libclang-dev \
             pkg-config
 
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@v5
         with:
           # net11.0 target requires the .NET 11 preview SDK alongside the .NET 10 SDK.
           # global.json (rollForward latestMajor, allowPrerelease) then selects the 11 SDK,
@@ -54,7 +54,7 @@ jobs:
         run: dotnet build PipeWire.NET.slnx --no-restore -c Release
 
       - name: Test (non-integration on host runner)
-        run: dotnet test PipeWire.NET.slnx --no-build -c Release -- --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+        run: dotnet test PipeWire.NET.slnx --no-build -c Release --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
              --filter "TestCategory!=Integration"
 
       - name: Summarize coverage
@@ -131,7 +131,7 @@ jobs:
 
       - name: Run Linux integration tests (against installed runtime, no daemon required)
         run: dotnet test PipeWire.NET.slnx --no-build -c Release
-             --filter "TestCategory=Integration&TestCategory!=RequiresDaemon"
+             --filter "TestCategory=Integration&TestCategory!=RequiresDaemon" --max-parallel-test-modules 1
 
       - name: Install a headless PipeWire session
         run: |
@@ -143,32 +143,85 @@ jobs:
         # Gating. Registry enumeration, object creation and linking need only the daemon and the
         # SPA support plugins, both of which a headless runner hosts reliably.
         run: |
+          # A private session, not just a private socket. WirePlumber persists default nodes,
+          # saved routes and profiles under XDG_STATE_HOME, so sharing it lets one run's writes
+          # decide the next run's starting state.
           export XDG_RUNTIME_DIR="$(mktemp -d)"
+          export XDG_CONFIG_HOME="$(mktemp -d)"
+          export XDG_STATE_HOME="$(mktemp -d)"
+          export XDG_DATA_HOME="$(mktemp -d)"
           pipewire &           PW_PID=$!
           wireplumber &        WP_PID=$!
           for i in $(seq 1 40); do pw-cli info 0 >/dev/null 2>&1 && break; sleep 0.25; done
           set +e
           dotnet test PipeWire.NET.slnx --no-build -c Release \
-            --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer"
+            --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer" --max-parallel-test-modules 1
           RC=$?
           set -e
           kill $WP_PID $PW_PID 2>/dev/null || true
           exit $RC
+
+      - name: Session diagnostics
+        if: failure()
+        # "test timed out" is not diagnosable from a log. This is the state the daemon was in.
+        run: |
+          echo "::group::pw-dump"; pw-dump 2>&1 | head -400 || true; echo "::endgroup::"
+          echo "::group::wpctl status"; wpctl status 2>&1 || true; echo "::endgroup::"
+          echo "::group::links"; pw-link -l -I 2>&1 || true; echo "::endgroup::"
+          echo "::group::clients"; pw-cli ls Client 2>&1 || true; echo "::endgroup::"
+          echo "::group::metadata"; pw-metadata -n default 2>&1 || true; echo "::endgroup::"
+
+      - name: Native AOT publish and run
+        # IsAotCompatible is an analyzer switch. This is the only thing that proves the graph
+        # actually links and that the published binary can talk to a daemon.
+        run: |
+          dotnet publish samples/PipeWire.NET.SampleConsole/PipeWire.NET.SampleConsole.csproj             -f net11.0 -r linux-x64 -c Release -p:PublishAot=true -o "$RUNNER_TEMP/aot"
+
+          BIN="$RUNNER_TEMP/aot/PipeWire.NET.SampleConsole"
+          test -x "$BIN"
+          ldd "$BIN" | grep -q libcoreclr && { echo "not a native AOT binary"; exit 1; }
+
+          # A private session, not just a private socket. WirePlumber persists default nodes,
+          # saved routes and profiles under XDG_STATE_HOME, so sharing it lets one run's writes
+          # decide the next run's starting state.
+          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          export XDG_CONFIG_HOME="$(mktemp -d)"
+          export XDG_STATE_HOME="$(mktemp -d)"
+          export XDG_DATA_HOME="$(mktemp -d)"
+          pipewire &           PW_PID=$!
+          wireplumber &        WP_PID=$!
+          for i in $(seq 1 40); do pw-cli info 0 >/dev/null 2>&1 && break; sleep 0.25; done
+
+          # Exit 1 is the sample's "no video source", which a headless runner has. Connecting and
+          # enumerating is what is being checked.
+          set +e
+          OUT=$("$BIN" 2>&1); RC=$?
+          set -e
+          echo "$OUT"
+          kill $WP_PID $PW_PID 2>/dev/null || true
+
+          echo "$OUT" | grep -q "connected to daemon" || { echo "AOT binary did not reach the daemon"; exit 1; }
+          test $RC -le 1
 
       - name: Daemon end-to-end tests (GStreamer real sources)
         # Non-gating: these exercise a real GStreamer -> PipeWire graph and pass in a proper
         # PipeWire session (e.g. a desktop or WSL), but GitHub's headless runners cannot
         # reliably host pipewiresink producers, so frames never arrive and the tests time out.
         # Kept for signal; run locally for authoritative end-to-end validation.
-        continue-on-error: true
         run: |
+          # A private session, not just a private socket. WirePlumber persists default nodes,
+          # saved routes and profiles under XDG_STATE_HOME, so sharing it lets one run's writes
+          # decide the next run's starting state.
           export XDG_RUNTIME_DIR="$(mktemp -d)"
+          export XDG_CONFIG_HOME="$(mktemp -d)"
+          export XDG_STATE_HOME="$(mktemp -d)"
+          export XDG_DATA_HOME="$(mktemp -d)"
           pipewire &           PW_PID=$!
           wireplumber &        WP_PID=$!
           for i in $(seq 1 40); do pw-cli info 0 >/dev/null 2>&1 && break; sleep 0.25; done
           set +e
           dotnet test PipeWire.NET.slnx --no-build -c Release \
-            --filter "TestCategory=RequiresGStreamer&TestCategory!=RequiresGpu"
+            --filter "TestCategory=RequiresGStreamer&TestCategory!=RequiresGpu" --max-parallel-test-modules 1
           RC=$?
           set -e
           kill $WP_PID $PW_PID 2>/dev/null || true
@@ -176,7 +229,9 @@ jobs:
 
       - name: Pack
         if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
-        run: dotnet pack src/PipeWire.NET/PipeWire.NET.csproj --no-build -c Release -o ${{ env.NuGetDirectory }}
+        run: |
+          dotnet pack src/PipeWire.NET/PipeWire.NET.csproj --no-build -c Release -o ${{ env.NuGetDirectory }}
+          dotnet pack src/PipeWire.NET.Media/PipeWire.NET.Media.csproj --no-build -c Release -o ${{ env.NuGetDirectory }}
 
       - name: Attest build provenance
         # Records, in a signed statement GitHub hosts, which workflow and which commit produced these
@@ -194,6 +249,63 @@ jobs:
           if-no-files-found: error
           retention-days: 1
           path: ${{ env.NuGetDirectory }}/*.nupkg
+
+  daemon_version_skew:
+    name: Daemon skew (PipeWire ${{ matrix.os }})
+    # Explicitly non-gating, and separate from the required job for that reason: the bindings are
+    # generated against whatever headers were installed, so an older daemon is expected to lack
+    # interfaces this library binds. What this job is for is knowing which ones, deliberately,
+    # instead of finding out from a user on an older distribution.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - name: Install a headless PipeWire session
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pipewire wireplumber pipewire-bin
+
+      - name: Report the versions under test
+        run: |
+          pipewire --version || true
+          wireplumber --version || true
+
+      - name: Graph tests against this daemon
+        run: |
+          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          export XDG_CONFIG_HOME="$(mktemp -d)"
+          export XDG_STATE_HOME="$(mktemp -d)"
+          export XDG_DATA_HOME="$(mktemp -d)"
+          pipewire &           PW_PID=$!
+          wireplumber &        WP_PID=$!
+          for i in $(seq 1 40); do pw-cli info 0 >/dev/null 2>&1 && break; sleep 0.25; done
+          set +e
+          dotnet test PipeWire.NET.slnx -c Release             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer"             --max-parallel-test-modules 1
+          RC=$?
+          set -e
+          kill $WP_PID $PW_PID 2>/dev/null || true
+          exit $RC
+
+      - name: Session diagnostics
+        if: failure()
+        run: |
+          echo "::group::pw-dump"; pw-dump 2>&1 | head -400 || true; echo "::endgroup::"
+          echo "::group::wpctl status"; wpctl status 2>&1 || true; echo "::endgroup::"
 
   publish_nuget:
     name: Publish NuGet Packages
@@ -218,7 +330,7 @@ jobs:
           name: nuget-package
           path: ${{ env.NuGetDirectory }}
 
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@v5
 
       - name: NuGet login (OIDC)
         id: login

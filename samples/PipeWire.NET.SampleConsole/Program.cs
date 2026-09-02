@@ -43,7 +43,7 @@ static async Task<int> RunAsync()
         Console.WriteLine("  (no globals reported in 2s - graph may be empty)");
     }
 
-    var sources = registry.Sources;
+    var sources = registry.Nodes;
     Console.WriteLine($"  found {sources.Count} node(s):");
     foreach (var s in sources)
         Console.WriteLine($"    id={s.NodeId,4}  class={s.MediaClass ?? "?",-24}  {s.Description ?? s.NodeName ?? "<no name>"}");
