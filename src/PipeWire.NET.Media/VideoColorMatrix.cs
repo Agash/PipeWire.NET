@@ -1,6 +1,6 @@
 namespace PipeWire.NET.Media;
 
-/// <summary>YUV-to-RGB color matrix coefficients (mirrors <c>spa_video_color_matrix</c>).</summary>
+/// <summary>YUV-to-RGB color matrix coefficients (mirrors <c>SpaVideoColorMatrix</c>).</summary>
 public enum VideoColorMatrix
 {
     /// <summary>Unspecified.</summary>

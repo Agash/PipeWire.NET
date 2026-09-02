@@ -1,5 +1,5 @@
 using System.Runtime.Versioning;
-using PipeWire.NET.Generated;
+using PipeWire.NET.Interop;
 using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Media.Streams;
@@ -69,15 +69,28 @@ public sealed class PipeWireAudioOutput : IAsyncDisposable
             .WithRole("Music")
             .WithNodeName(_name);
         if (targetObjectName is not null) props.WithTargetObject(targetObjectName);
+        // Built locally and only published once the connect succeeded. Assigning the field first
+        // leaves a failed connect behind a stream that reports itself already connected and can
+        // never be retried.
 
-        _core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState);
+        var core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState);
 
-        pw_stream_flags flags = pw_stream_flags.PW_STREAM_FLAG_MAP_BUFFERS;
-        if (autoConnect) flags |= pw_stream_flags.PW_STREAM_FLAG_AUTOCONNECT;
+        PipeWireStreamFlags flags = PipeWireStreamFlags.MapBuffers;
+        if (autoConnect) flags |= PipeWireStreamFlags.Autoconnect;
 
         Span<byte> pod = stackalloc byte[256];
-        int len = SpaFormat.WriteAudioFormat(pod, _format, _sampleRate, _channels);
-        _core.Connect(spa_direction.SPA_DIRECTION_OUTPUT, targetNodeId, flags, pod[..len]);
+        int len = SpaFormatPod.WriteAudioFormat(pod, _format, _sampleRate, _channels);
+        try
+        {
+            core.Connect(SpaDirection.Output, targetNodeId, flags, pod[..len]);
+            _core = core;
+        }
+        catch
+        {
+            core.Dispose();
+            throw;
+        }
+
     }
 
     /// <summary>

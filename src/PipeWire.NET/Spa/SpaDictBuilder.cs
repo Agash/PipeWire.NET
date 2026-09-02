@@ -1,7 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using PipeWire.NET.Generated;
+using PipeWire.NET.Interop;
+using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Spa;
 

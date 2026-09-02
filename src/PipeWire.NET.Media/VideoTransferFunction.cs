@@ -1,6 +1,6 @@
 namespace PipeWire.NET.Media;
 
-/// <summary>Opto-electronic transfer characteristic (mirrors <c>spa_video_transfer_function</c>).</summary>
+/// <summary>Opto-electronic transfer characteristic (mirrors <c>SpaVideoTransferFunction</c>).</summary>
 public enum VideoTransferFunction
 {
     /// <summary>Unspecified.</summary>

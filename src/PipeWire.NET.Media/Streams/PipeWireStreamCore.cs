@@ -2,7 +2,8 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
-using PipeWire.NET.Generated;
+using PipeWire.NET.Interop;
+using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Media.Streams;
 
@@ -19,7 +20,7 @@ namespace PipeWire.NET.Media.Streams;
 /// <c>process</c> callback is invoked by the loop thread with that lock already held.
 /// </remarks>
 [SupportedOSPlatform("linux")]
-internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
+internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDisposable
 {
     /// <summary>
     /// Timing snapshot for a processing cycle, from <c>pw_stream_get_time</c>. All on the one
@@ -81,7 +82,10 @@ internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
     private readonly BufferPoolHandler? _onRemoveBuffer;
     private readonly PeerConnectedHandler? _onPeerConnected;
 
-    private pw_stream*        _stream;
+    private PipeWireStreamHandle? _streamOwner;
+
+    /// <summary>The stream, read from the handle that owns it.</summary>
+    private unsafe pw_stream* _stream => _streamOwner is null ? null : _streamOwner.Stream;
     private pw_stream_events* _events;
     // The spa_hook MUST live in unmanaged memory, not as a managed field: pw_stream_add_listener stores this
     // pointer in the stream's listener list, and the GC compacting the heap would move a managed field, leaving
@@ -124,7 +128,9 @@ internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
         _onRemoveBuffer = onRemoveBuffer;
         _onPeerConnected = onPeerConnected;
 
-        _selfHandle = GCHandle.Alloc(this, GCHandleType.Normal);
+        // Weak: a strong self-handle roots the stream for the life of the process, so one dropped
+        // without disposal leaks the native stream too.
+        _selfHandle = GCHandle.Alloc(this, GCHandleType.Weak);
 
         _hook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
         _events = (pw_stream_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_stream_events));
@@ -140,10 +146,11 @@ internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
         ReadOnlySpan<byte> nameUtf8 = System.Text.Encoding.UTF8.GetBytes(streamName + '\0');
         using (_ctx.Lock())
         {
+            pw_stream* stream;
             fixed (byte* n = nameUtf8)
-                _stream = Native.pw_stream_new(_ctx.CoreHandle, (sbyte*)n, nativeProps);
+                stream = Native.pw_stream_new(_ctx.CoreHandle, (sbyte*)n, nativeProps);
 
-            if (_stream is null)
+            if (stream is null)
             {
                 _selfHandle.Free();
                 NativeMemory.Free(_events);
@@ -153,7 +160,15 @@ internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
                 throw new InvalidOperationException("pw_stream_new failed.");
             }
 
-            Native.pw_stream_add_listener(_stream, _hook, _events,
+            // Owned like every other native object: the handle keeps the core and loop alive for as
+            // long as the stream needs them to tear itself down.
+            _streamOwner = new PipeWireStreamHandle(stream, _ctx.LoopOwner, _ctx.CoreOwner);
+
+            // Handed over before the listener is attached, so the free happens after the stream has
+            // been destroyed rather than racing its last callbacks.
+            _streamOwner.OwnListener(_events, _hook, _selfHandle);
+
+            Native.pw_stream_add_listener(stream, _hook, _events,
                 (void*)GCHandle.ToIntPtr(_selfHandle));
         }
     }
@@ -164,7 +179,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
     /// PipeWire's contract is to declare buffer/meta wants from the <c>param_changed</c> callback
     /// once the format is set, via <c>pw_stream_update_params</c>. The core does that automatically.
     /// </remarks>
-    internal void Connect(spa_direction direction, uint targetNodeId, pw_stream_flags flags, ReadOnlySpan<byte> formatPod)
+    internal void Connect(SpaDirection direction, uint targetNodeId, PipeWireStreamFlags flags, ReadOnlySpan<byte> formatPod)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -177,7 +192,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
                 rc = Native.pw_stream_connect(_stream, direction, targetNodeId, flags, &param, 1);
             }
             if (rc < 0)
-                throw new InvalidOperationException($"pw_stream_connect failed with code {rc}.");
+                throw new PipeWireException("pw_stream_connect", rc);
         }
     }
 
@@ -189,7 +204,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
     private void RequestHeaderMeta()
     {
         Span<byte> metaPod = stackalloc byte[64];
-        SpaFormat.WriteHeaderMetaParam(metaPod);
+        SpaFormatPod.WriteHeaderMetaParam(metaPod);
         fixed (byte* mp = metaPod)
         {
             spa_pod* p = (spa_pod*)mp;
@@ -198,35 +213,40 @@ internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
     }
 
     /// <inheritdoc/>
+    private Exception? _lastProcessFault;
+    private long _processFaults;
+
+    /// <summary>How many times a process callback threw, and the most recent one.</summary>
+    /// <remarks>
+    /// Reported rather than logged, because the throw happens on the realtime thread where logging
+    /// would itself cause an xrun. A host should surface this from its own non-realtime loop.
+    /// </remarks>
+    internal (long Count, Exception? Last) ProcessFaults =>
+        (Interlocked.Read(ref _processFaults), _lastProcessFault);
+
+    /// <summary>Tears the stream down. Disposal here is synchronous; the async form defers to it.</summary>
+    public void Dispose() => DisposeCore();
+
+    /// <inheritdoc/>
     public ValueTask DisposeAsync()
     {
-        if (_disposed) return ValueTask.CompletedTask;
+        DisposeCore();
+        return ValueTask.CompletedTask;
+    }
+
+    private void DisposeCore()
+    {
+        if (_disposed) return;
         _disposed = true;
 
-        // Disconnect/destroy must run under the loop lock to avoid racing a callback.
-        if (_stream is not null)
-        {
-            using (_ctx.Lock())
-            {
-                Native.pw_stream_disconnect(_stream);
-                Native.pw_stream_destroy(_stream);
-                _stream = null;
-            }
-        }
-        if (_events is not null)
-        {
-            NativeMemory.Free(_events);
-            _events = null;
-        }
-        // Free the hook only after the stream is destroyed (destroy removes the listener that points at it).
-        if (_hook is not null)
-        {
-            NativeMemory.Free(_hook);
-            _hook = null;
-        }
-        if (_selfHandle.IsAllocated) _selfHandle.Free();
-
-        return ValueTask.CompletedTask;
+        // The handle disconnects and destroys under the loop lock, holding the core and loop open
+        // for exactly as long as that takes - so this works whichever order the caller disposed in.
+        // The listener's memory belongs to the handle, which frees it after pw_stream_destroy has
+        // actually run - disposal only destroys once nothing else holds a reference.
+        _streamOwner?.Dispose();
+        _streamOwner = null;
+        _events = null;
+        _hook = null;
     }
 
     // - Native callbacks (invoked by the loop thread with the lock held) -
@@ -272,9 +292,13 @@ internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
             spa_data* d = &spaBuf->datas[0];
             self._onBuffer(d, buf, in clock);
         }
-        catch
+        catch (Exception ex)
         {
-            // A throwing user handler must not abort the realtime loop thread (unmanaged callback).
+            // Recorded, not logged: this is the realtime path, and logging from it is itself a
+            // realtime violation. A silent swallow would hide a handler that throws every cycle,
+            // so the fault is kept for a non-realtime reader to surface.
+            self._lastProcessFault = ex;
+            Interlocked.Increment(ref self._processFaults);
         }
         finally
         {
@@ -301,7 +325,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void OnStateChanged(void* data, pw_stream_state old, pw_stream_state state, sbyte* error)
+    private static void OnStateChanged(void* data, PipeWireStreamState old, PipeWireStreamState state, sbyte* error)
     {
         var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
         if (self is null) return;
@@ -310,7 +334,17 @@ internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
             self.LogStreamError(Marshal.PtrToStringUTF8((nint)error) ?? "(null)");
 
         self.LogStateChanged((PipeWireStreamState)(int)old, (PipeWireStreamState)(int)state);
-        self._onState?.Invoke((PipeWireStreamState)(int)old, (PipeWireStreamState)(int)state);
+
+        // The handler is user code and this is a native callback frame: an exception escaping here
+        // does not unwind into a catch, it aborts the process.
+        try
+        {
+            self._onState?.Invoke((PipeWireStreamState)(int)old, (PipeWireStreamState)(int)state);
+        }
+        catch (Exception ex)
+        {
+            self.LogStateHandlerThrew(ex);
+        }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -333,7 +367,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
             return;
         }
 
-        if (id != Spa.SpaParam.Format) return;
+        if ((SpaParamType)id != SpaParamType.Format) return;
 
         // This runs in an unmanaged callback - an escaping exception would abort the process,
         // so contain it. (A managed bug here must not take down the host application.)
@@ -347,9 +381,11 @@ internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
             else
                 self.RequestHeaderMeta();
         }
-        catch
+        catch (Exception ex)
         {
-            // Swallow: negotiation continues with defaults rather than crashing the loop thread.
+            // Negotiation continues with defaults rather than crashing the loop thread, but the
+            // reason it fell back is worth knowing - this is not the realtime path.
+            self.LogFormatHandlerThrew(ex);
         }
     }
 
@@ -459,4 +495,10 @@ internal sealed unsafe partial class PipeWireStreamCore : IAsyncDisposable
 
     [LoggerMessage(Level = LogLevel.Trace, Message = "process: no buffer dequeued (producer underrun or not yet started)")]
     private partial void LogDequeueEmpty();
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "a stream state handler threw")]
+    private partial void LogStateHandlerThrew(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "a format handler threw; negotiation continued with defaults")]
+    private partial void LogFormatHandlerThrew(Exception ex);
 }

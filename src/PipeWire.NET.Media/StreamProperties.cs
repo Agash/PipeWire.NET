@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using System.Text;
-using PipeWire.NET.Generated;
+using PipeWire.NET.Interop;
+using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Media;
 
@@ -76,23 +77,22 @@ public sealed class StreamProperties
     [SupportedOSPlatform("linux")]
     internal unsafe pw_properties* ToNativeProperties()
     {
-        // pw_properties_new_string parses a single "key=value key2=value2" string.
-        // We build that string and hand it over UTF-8 encoded.
-        var sb = new StringBuilder();
-        bool first = true;
+        // Built as a real dictionary rather than a "key=value key2=value2" string. That string is
+        // reparsed by PipeWire on whitespace, so any value containing a quote, tab or newline is
+        // split or mis-terminated - quoting only values with spaces is not enough, and nothing
+        // escapes an embedded quote at all.
+        int bytes = 0;
         foreach ((string key, string value) in _props)
-        {
-            if (!first) sb.Append(' ');
-            first = false;
-            // PipeWire's parser treats whitespace as a separator; quote values with spaces.
-            if (value.Contains(' ', StringComparison.Ordinal))
-                sb.Append(key).Append("=\"").Append(value).Append('"');
-            else
-                sb.Append(key).Append('=').Append(value);
-        }
+            bytes += Encoding.UTF8.GetByteCount(key) + Encoding.UTF8.GetByteCount(value) + 2;
 
-        ReadOnlySpan<byte> utf8 = Encoding.UTF8.GetBytes(sb.Append('\0').ToString());
-        fixed (byte* p = utf8)
-            return Native.pw_properties_new_string((sbyte*)p);
+        byte[] scratch = new byte[bytes];
+        var items = new spa_dict_item[_props.Count];
+
+        var builder = new SpaDictBuilder(scratch, items);
+        foreach ((string key, string value) in _props)
+            builder.Add(Encoding.UTF8.GetBytes(key), value);
+
+        spa_dict dict = builder.Build();
+        return Native.pw_properties_new_dict(&dict);
     }
 }

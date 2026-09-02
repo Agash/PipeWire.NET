@@ -1,6 +1,6 @@
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
-using PipeWire.NET.Generated;
+using PipeWire.NET.Interop;
 using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Media.Streams;
@@ -68,9 +68,14 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     private bool _dmaBufMode;
     private bool _modifierFixated;
     private long[] _modifiers = [];
-    private SpaFormat.VideoFormatInfo _fmt;
+    private SpaFormatPod.VideoFormatInfo _fmt;
     private int _planeCount;
     private int _nextBufferIndex;
+
+    // Indices freed by remove_buffer, for reuse. PipeWire tears buffers down and builds them again
+    // on every renegotiation, so handing out a fresh index each time walks past the end of a
+    // consumer's pool - which is sized for the buffer count, not the renegotiation count.
+    private readonly Stack<int> _freeBufferIndices = new();
 
     /// <param name="context">A started <see cref="PipeWireContext"/>.</param>
     /// <param name="nodeName">Name visible to consumers.</param>
@@ -88,7 +93,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(frameRate);
         _ctx = context; _name = nodeName;
         _width = width; _height = height; _format = format; _frameRate = frameRate;
-        _fmt = new SpaFormat.VideoFormatInfo(format, width, height, VideoColorInfo.Unknown);
+        _fmt = new SpaFormatPod.VideoFormatInfo(format, width, height, VideoColorInfo.Unknown);
         _logger = context.LoggerFactory.CreateLogger($"PipeWire.NET.{nodeName}");
     }
 
@@ -106,28 +111,41 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
         // must advertise the exact image size/stride, or the daemon cannot size the shared-memory buffers -
         // negotiation then drives pw_impl_port_set_param into a bad dereference (a hard crash) and the consumer
         // only ever dequeues empty (size-0) buffers. PipeWire's own video-src.c declares Buffers the same way.
-        _core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState, onPostFormat: OnPostFormatHostMem);
+        // Built locally and only published once the connect succeeded. Assigning the field first
+        // leaves a failed connect behind a stream that reports itself already connected and can
+        // never be retried.
+        var core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState, onPostFormat: OnPostFormatHostMem);
 
         Span<byte> pod = stackalloc byte[512];
-        int len = SpaFormat.WriteVideoFormat(pod,
+        int len = SpaFormatPod.WriteVideoFormat(pod,
             stackalloc[] { _format }, (uint)_width, (uint)_height, (uint)_frameRate, fixedSize: true);
-        _core.Connect(spa_direction.SPA_DIRECTION_OUTPUT, Native.PW_ID_ANY,
-            pw_stream_flags.PW_STREAM_FLAG_AUTOCONNECT | pw_stream_flags.PW_STREAM_FLAG_MAP_BUFFERS,
+        try
+        {
+            core.Connect(SpaDirection.Output, Native.PW_ID_ANY,
+            PipeWireStreamFlags.Autoconnect | PipeWireStreamFlags.MapBuffers,
             pod[..len]);
+            _core = core;
+        }
+        catch
+        {
+            core.Dispose();
+            throw;
+        }
+
     }
 
     // Host-memory buffer requirements: one contiguous MemPtr block holding the whole image (the OnBuffer path
     // fills datas[0] with stride*height bytes), plus the SPA_META_Header so frames carry a PTS.
     private void OnPostFormatHostMem(PipeWireStreamCore core)
     {
-        int stride = SpaFormat.VideoStride(_format, _width);
-        int size = SpaFormat.VideoImageSize(_format, _width, _height);
+        int stride = SpaFormatPod.VideoStride(_format, _width);
+        int size = SpaFormatPod.VideoImageSize(_format, _width, _height);
         Span<byte> buffers = stackalloc byte[256];
-        int bl = SpaFormat.WriteVideoBuffersParam(buffers, size, stride,
-            dataTypes: 1 << (int)SpaType.DataMemPtr, blocks: 1);
+        int bl = SpaFormatPod.WriteVideoBuffersParam(buffers, size, stride,
+            dataTypes: 1 << (int)SpaDataType.MemPtr, blocks: 1);
 
         Span<byte> meta = stackalloc byte[64];
-        int ml = SpaFormat.WriteHeaderMetaParam(meta);
+        int ml = SpaFormatPod.WriteHeaderMetaParam(meta);
         core.RequestParams(buffers[..bl], meta[..ml]);
     }
 
@@ -143,7 +161,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
 
         _dmaBufMode = true;
         _modifierFixated = false;
-        _planeCount = SpaFormat.PlaneCount(_format);
+        _planeCount = SpaFormatPod.PlaneCount(_format);
 
         var props = new StreamProperties(StreamMediaType.Video, StreamCategory.Playback)
             .WithRole("Camera")
@@ -152,7 +170,10 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
         // add_buffer/remove_buffer let us back each pool buffer with an app-owned dmabuf; the producer
         // supplies the memory, so we use ALLOC_BUFFERS (and NOT MAP_BUFFERS - there is nothing to mmap).
         _modifiers = modifiers.ToArray();
-        _core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState, OnFormat, OnPostFormat,
+        // Built locally and only published once the connect succeeded. Assigning the field first
+        // leaves a failed connect behind a stream that reports itself already connected and can
+        // never be retried.
+        var core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState, OnFormat, OnPostFormat,
             OnAddBuffer, OnRemoveBuffer, OnPeerConnected);
 
         // Offer modifiers with DONT_FIXATE so a GL consumer's EGL selects an importable modifier (radeonsi only
@@ -162,12 +183,22 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
         // SPA_PARAM_PeerCapability, where OnPeerConnected re-announces the EnumFormat and activates the stream,
         // kicking the (now-correct) modifier fixation; the consumer then drives FillDmaBuf.
         Span<byte> pod = stackalloc byte[512];
-        int len = SpaFormat.WriteVideoFormat(pod,
+        int len = SpaFormatPod.WriteVideoFormat(pod,
             stackalloc[] { _format }, (uint)_width, (uint)_height, (uint)_frameRate, fixedSize: true,
             modifiers: modifiers);
-        _core.Connect(spa_direction.SPA_DIRECTION_OUTPUT, Native.PW_ID_ANY,
-            pw_stream_flags.PW_STREAM_FLAG_INACTIVE | pw_stream_flags.PW_STREAM_FLAG_ALLOC_BUFFERS,
+        try
+        {
+            core.Connect(SpaDirection.Output, Native.PW_ID_ANY,
+            PipeWireStreamFlags.Inactive | PipeWireStreamFlags.AllocBuffers,
             pod[..len]);
+            _core = core;
+        }
+        catch
+        {
+            core.Dispose();
+            throw;
+        }
+
     }
 
     // A consumer linked (SPA_PARAM_PeerCapability): re-announce the EnumFormat so the daemon negotiates a
@@ -178,7 +209,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     {
         Span<byte> pod = stackalloc byte[512];
         ReadOnlySpan<PixelFormat> fmt = [_format];
-        int len = SpaFormat.WriteVideoFormat(pod, fmt,
+        int len = SpaFormatPod.WriteVideoFormat(pod, fmt,
             (uint)_width, (uint)_height, (uint)_frameRate, fixedSize: true, modifiers: _modifiers);
         core.RequestParams(pod[..len]);
         core.SetActive(true, lockHeld: true);
@@ -215,8 +246,10 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
 
         if (d->data is null || d->chunk is null) return;
 
-        int stride  = _width * SpaFormat.BytesPerPixel(_format);
-        int byteLen = stride * _height;
+        // Not stride * height: for planar formats (NV12, YUV420) that is the luma plane alone, and
+        // publishing it truncates every frame by a third with the chroma planes missing.
+        int stride  = SpaFormatPod.VideoStride(_format, _width);
+        int byteLen = SpaFormatPod.VideoImageSize(_format, _width, _height);
         if ((uint)byteLen > d->maxsize) byteLen = (int)d->maxsize;
 
         var pixels = new Span<byte>(d->data, byteLen);
@@ -250,7 +283,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
 
     private unsafe void OnFormat(spa_pod* param)
     {
-        _fmt = SpaFormat.ParseVideoFormat(param, _fmt);
+        _fmt = SpaFormatPod.ParseVideoFormat(param, _fmt);
         LogOnFormat(_fmt.Modifier, _fmt.ModifierNeedsFixation);
     }
 
@@ -266,7 +299,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
             Span<byte> fixate = stackalloc byte[512];
             ReadOnlySpan<PixelFormat> fmt = [_format];
             ReadOnlySpan<long> chosen = [(long)_fmt.Modifier];
-            int fl = SpaFormat.WriteVideoFormat(fixate, fmt,
+            int fl = SpaFormatPod.WriteVideoFormat(fixate, fmt,
                 (uint)_width, (uint)_height, (uint)_frameRate, fixedSize: true,
                 modifiers: chosen, fixateModifier: true);
             core.RequestParams(fixate[..fl]);
@@ -275,15 +308,15 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
 
         // Declare dmabuf buffers: one block per plane, sized for the negotiated geometry. dataType is
         // DMA-BUF only - we are committing to hand over GPU buffers, not host memory.
-        int stride = SpaFormat.VideoStride(_format, _width);
+        int stride = SpaFormatPod.VideoStride(_format, _width);
         // Per block, not per image: with one block per plane this is the largest plane.
-        int size = SpaFormat.VideoBlockSize(_format, _width, _height);
+        int size = SpaFormatPod.VideoBlockSize(_format, _width, _height);
         Span<byte> buffers = stackalloc byte[256];
-        int bl = SpaFormat.WriteVideoBuffersParam(buffers, size, stride,
-            dataTypes: 1 << (int)SpaType.DataDmaBuf, blocks: _planeCount);
+        int bl = SpaFormatPod.WriteVideoBuffersParam(buffers, size, stride,
+            dataTypes: 1 << (int)SpaDataType.DmaBuf, blocks: _planeCount);
 
         Span<byte> meta = stackalloc byte[64];
-        int ml = SpaFormat.WriteHeaderMetaParam(meta);
+        int ml = SpaFormatPod.WriteHeaderMetaParam(meta);
         core.RequestParams(buffers[..bl], meta[..ml]);
     }
 
@@ -295,7 +328,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
         spa_buffer* sb = buf->buffer;
         if (sb is null) return;
 
-        int index = _nextBufferIndex++;
+        int index = _freeBufferIndices.Count > 0 ? _freeBufferIndices.Pop() : _nextBufferIndex++;
         buf->user_data = (void*)(nint)(index + 1); // +1 so 0 distinguishes "unassigned"
 
         Span<VideoPlane> planes = stackalloc VideoPlane[8];
@@ -307,7 +340,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
         {
             VideoPlane p = planes[(int)i];
             spa_data* dd = &sb->datas[i];
-            dd->type      = SpaType.DataDmaBuf;
+            dd->type      = (uint)SpaDataType.DmaBuf;
             dd->flags     = SpaDataFlag.Readable;
             dd->fd        = (nint)p.Fd;
             dd->mapoffset = 0;
@@ -325,7 +358,14 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     private unsafe void OnRemoveBuffer(pw_buffer* buf)
     {
         int index = (int)(nint)buf->user_data - 1;
-        if (index >= 0) ReleaseDmaBuf?.Invoke(this, index);
+        if (index < 0) return;
+
+        ReleaseDmaBuf?.Invoke(this, index);
+
+        // Returned to the pool so the next add_buffer reuses it rather than growing past the
+        // consumer's allocation on every renegotiation.
+        _freeBufferIndices.Push(index);
+        buf->user_data = null;
     }
 
     private void OnState(PipeWireStreamState oldState, PipeWireStreamState newState) =>

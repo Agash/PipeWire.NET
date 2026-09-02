@@ -1,6 +1,6 @@
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
-using PipeWire.NET.Generated;
+using PipeWire.NET.Interop;
 using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Media.Streams;
@@ -36,7 +36,7 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
     private readonly ILogger _logger;
     private PipeWireStreamCore? _core;
     private ulong _sequence;
-    private SpaFormat.VideoFormatInfo _fmt = new(PixelFormat.Bgra, 0, 0, VideoColorInfo.Unknown);
+    private SpaFormatPod.VideoFormatInfo _fmt = new(PixelFormat.Bgra, 0, 0, VideoColorInfo.Unknown);
 
     // Whether the caller opted into modifier negotiation, and the single pixel format the modifiers
     // apply to. We do NOT retain the offered modifier list: fixation re-offers the producer's preferred
@@ -100,15 +100,28 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
             .WithRole("Camera")
             .WithNodeName(_name);
         if (targetObjectName is not null) props.WithTargetObject(targetObjectName);
+        // Built locally and only published once the connect succeeded. Assigning the field first
+        // leaves a failed connect behind a stream that reports itself already connected and can
+        // never be retried.
 
-        _core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState, OnFormat, OnPostFormat);
+        var core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState, OnFormat, OnPostFormat);
 
         Span<byte> pod = stackalloc byte[1024];
-        int len = SpaFormat.WriteVideoFormat(pod, preferredFormats, 1920, 1080, 30, fixedSize: false,
+        int len = SpaFormatPod.WriteVideoFormat(pod, preferredFormats, 1920, 1080, 30, fixedSize: false,
             modifiers: modifiers);
-        _core.Connect(spa_direction.SPA_DIRECTION_INPUT, targetNodeId,
-            pw_stream_flags.PW_STREAM_FLAG_AUTOCONNECT | pw_stream_flags.PW_STREAM_FLAG_MAP_BUFFERS,
+        try
+        {
+            core.Connect(SpaDirection.Input, targetNodeId,
+            PipeWireStreamFlags.Autoconnect | PipeWireStreamFlags.MapBuffers,
             pod[..len]);
+            _core = core;
+        }
+        catch
+        {
+            core.Dispose();
+            throw;
+        }
+
     }
 
     /// <summary>
@@ -138,12 +151,16 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
         uint size   = d->chunk->size;
         if (size == 0) return;
 
+        // The chunk header lives in memory the producer owns, so its offset and size are inputs,
+        // not facts. A span built from an out-of-range pair reads straight past the mapping.
+        if ((ulong)offset + size > d->maxsize) return;
+
         // data may be null for a pure DMA-BUF buffer that wasn't host-mapped.
         var pixels = d->data is null
             ? ReadOnlySpan<byte>.Empty
             : new ReadOnlySpan<byte>((byte*)d->data + offset, (int)size);
 
-        PipeWireBufferType bufferType = SpaFormat.ToBufferType(d->type);
+        PipeWireBufferType bufferType = SpaFormatPod.ToBufferType((SpaDataType)d->type);
         bool fdBacked = bufferType is PipeWireBufferType.DmaBuf or PipeWireBufferType.MemFd;
         long fd = fdBacked && (long)d->fd >= 0 ? (long)d->fd : -1;
 
@@ -172,7 +189,7 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
             bufferType: bufferType,
             fd: fd,
             mapOffset: d->mapoffset,
-            presentationTimeNs: SpaFormat.FindPresentationTimeNs(buf->buffer),
+            presentationTimeNs: SpaFormatPod.FindPresentationTimeNs(buf->buffer),
             color: _fmt.Color,
             captureClockNs: clock.CaptureClockNs,
             mediaClockNs: clock.MediaClockNs,
@@ -188,7 +205,7 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
 
     private unsafe void OnFormat(spa_pod* param)
     {
-        _fmt = SpaFormat.ParseVideoFormat(param, _fmt);
+        _fmt = SpaFormatPod.ParseVideoFormat(param, _fmt);
         LogNegotiatedFormat(_fmt.Format, _fmt.Width, _fmt.Height, _fmt.Modifier, _fmt.ModifierNeedsFixation);
     }
 
@@ -207,7 +224,7 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
             Span<byte> fixate = stackalloc byte[512];
             ReadOnlySpan<PixelFormat> fmt = [_modifierFormat];
             ReadOnlySpan<long> chosen = [(long)_fmt.Modifier];
-            int fl = SpaFormat.WriteVideoFormat(fixate, fmt,
+            int fl = SpaFormatPod.WriteVideoFormat(fixate, fmt,
                 (uint)_fmt.Width, (uint)_fmt.Height, 30, fixedSize: false,
                 modifiers: chosen, fixateModifier: true);
             core.RequestParams(fixate[..fl]);
@@ -215,10 +232,10 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
         }
 
         Span<byte> meta = stackalloc byte[64];
-        int ml = SpaFormat.WriteHeaderMetaParam(meta);
+        int ml = SpaFormatPod.WriteHeaderMetaParam(meta);
 
-        int stride = SpaFormat.VideoStride(_fmt.Format, _fmt.Width);
-        int size = SpaFormat.VideoImageSize(_fmt.Format, _fmt.Width, _fmt.Height);
+        int stride = SpaFormatPod.VideoStride(_fmt.Format, _fmt.Width);
+        int size = SpaFormatPod.VideoImageSize(_fmt.Format, _fmt.Width, _fmt.Height);
         if (size <= 0) { core.RequestParams(meta[..ml]); return; }   // geometry not known yet
 
         // Block count = number of planes. A planar format (I420=3, NV12=2) is carried as one spa_data
@@ -226,17 +243,17 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
         // gst's pipewiresink splits the planes either way. Declaring a single block for a multi-plane
         // format makes the daemon reject buffer allocation ("alloc buffers: Invalid argument"); packed
         // formats are a single block. Offer host memory and DMA-BUF so a GPU producer can go zero-copy.
-        int blocks = SpaFormat.VideoPlaneCount(_fmt.Format);
+        int blocks = SpaFormatPod.VideoPlaneCount(_fmt.Format);
 
         // As a consumer we do not dictate the block size: SPA_PARAM_BUFFERS_size is per block, and
         // the producer owns how it lays its planes out. Pinning our own figure made the daemon
         // refuse allocation for every planar format whose layout differed from our arithmetic.
-        int blockSize = SpaFormat.VideoBlockSize(_fmt.Format, _fmt.Width, _fmt.Height);
+        int blockSize = SpaFormatPod.VideoBlockSize(_fmt.Format, _fmt.Width, _fmt.Height);
         Span<byte> buffers = stackalloc byte[256];
-        int bl = SpaFormat.WriteVideoBuffersParam(
-            buffers, blockSize, stride, SpaFormat.VideoCaptureDataTypeMask, blocks, sizeIsAnyOf: true);
+        int bl = SpaFormatPod.WriteVideoBuffersParam(
+            buffers, blockSize, stride, SpaFormatPod.VideoCaptureDataTypeMask, blocks, sizeIsAnyOf: true);
 
-        LogRequestedBuffers(blocks, blockSize, stride, SpaFormat.VideoCaptureDataTypeMask);
+        LogRequestedBuffers(blocks, blockSize, stride, SpaFormatPod.VideoCaptureDataTypeMask);
         core.RequestParams(buffers[..bl], meta[..ml]);
     }
 

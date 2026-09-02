@@ -2,6 +2,9 @@
   <PropertyGroup>
     <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- IsAotCompatible only runs the analyzers on this project; this also checks that everything
+         it references is annotated compatible. -->
+    <VerifyReferenceAotCompatibility>true</VerifyReferenceAotCompatibility>
     <AssemblyName>PipeWire.NET.Media</AssemblyName>
     <RootNamespace>PipeWire.NET.Media</RootNamespace>
     <PackageId>PipeWire.NET.Media</PackageId>
@@ -37,10 +40,10 @@
   <!-- Its own layers, same reasoning as the core library. -->
   <ItemGroup>
     <Using Include="PipeWire.NET" />
-    <Using Include="PipeWire.NET.Generated" />
+    <Using Include="PipeWire.NET.Interop" />
+    <Using Include="PipeWire.NET.Spa" />
     <Using Include="PipeWire.NET.Graph" />
     <Using Include="PipeWire.NET.Media" />
     <Using Include="PipeWire.NET.Media.Streams" />
-    <Using Include="PipeWire.NET.Spa" />
   </ItemGroup>
 </Project>

@@ -1,6 +1,6 @@
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
-using PipeWire.NET.Generated;
+using PipeWire.NET.Interop;
 using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Media.Streams;
@@ -29,7 +29,7 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
     private readonly ILogger _logger;
     private PipeWireStreamCore? _core;
     private ulong _sequence;
-    private SpaFormat.AudioFormatInfo _fmt = new(AudioSampleFormat.F32Le, 48000, 2);
+    private SpaFormatPod.AudioFormatInfo _fmt = new(AudioSampleFormat.F32Le, 48000, 2);
 
     /// <param name="context">A started <see cref="PipeWireContext"/>.</param>
     /// <param name="name">node.name advertised in the graph.</param>
@@ -55,20 +55,36 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
         string? targetObjectName = null)
     {
         if (_core is not null) throw new InvalidOperationException("Already connected.");
-        _fmt = new SpaFormat.AudioFormatInfo(format, sampleRate, channels);
+        _fmt = new SpaFormatPod.AudioFormatInfo(format, sampleRate, channels);
 
         var props = new StreamProperties(StreamMediaType.Audio, StreamCategory.Capture)
             .WithRole("Music")
             .WithNodeName(_name);
         if (targetObjectName is not null) props.WithTargetObject(targetObjectName);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleRate);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(channels);
 
-        _core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState, OnFormat);
+        // Built locally and only published once the connect succeeded. Assigning the field first
+        // leaves a failed connect behind a stream that reports itself already connected and can
+        // never be retried.
+
+        var core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState, OnFormat);
 
         Span<byte> pod = stackalloc byte[256];
-        int len = SpaFormat.WriteAudioFormat(pod, format, sampleRate, channels);
-        _core.Connect(spa_direction.SPA_DIRECTION_INPUT, targetNodeId,
-            pw_stream_flags.PW_STREAM_FLAG_AUTOCONNECT | pw_stream_flags.PW_STREAM_FLAG_MAP_BUFFERS,
+        int len = SpaFormatPod.WriteAudioFormat(pod, format, sampleRate, channels);
+        try
+        {
+            core.Connect(SpaDirection.Input, targetNodeId,
+            PipeWireStreamFlags.Autoconnect | PipeWireStreamFlags.MapBuffers,
             pod[..len]);
+            _core = core;
+        }
+        catch
+        {
+            core.Dispose();
+            throw;
+        }
+
     }
 
     /// <summary>
@@ -97,9 +113,13 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
         uint size   = d->chunk->size;
         if (size == 0) return;
 
+        // The chunk header lives in memory the producer owns, so its offset and size are inputs,
+        // not facts. A span built from an out-of-range pair reads straight past the mapping.
+        if ((ulong)offset + size > d->maxsize) return;
+
         var samples = new ReadOnlySpan<byte>((byte*)d->data + offset, (int)size);
         var frame = new AudioFrame(samples, _fmt.SampleRate, _fmt.Channels, _fmt.Format, ++_sequence,
-            presentationTimeNs: SpaFormat.FindPresentationTimeNs(buf->buffer),
+            presentationTimeNs: SpaFormatPod.FindPresentationTimeNs(buf->buffer),
             captureClockNs: clock.CaptureClockNs,
             mediaClockNs: clock.MediaClockNs,
             delayNs: clock.DelayNs);
@@ -111,7 +131,7 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
 
     private unsafe void OnFormat(spa_pod* param)
     {
-        _fmt = SpaFormat.ParseAudioFormat(param, _fmt);
+        _fmt = SpaFormatPod.ParseAudioFormat(param, _fmt);
         LogNegotiatedFormat(_fmt.Format, _fmt.SampleRate, _fmt.Channels);
     }
 

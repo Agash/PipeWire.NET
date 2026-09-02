@@ -1,4 +1,5 @@
-using PipeWire.NET.Generated;
+using PipeWire.NET.Interop;
+using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Media;
 
@@ -6,7 +7,7 @@ namespace PipeWire.NET.Media;
 /// Centralizes SPA format-pod construction and the managed-to-SPA format-enum mappings
 /// shared by the video/audio capture and output stream wrappers.
 /// </summary>
-internal static class SpaFormat
+internal static class SpaFormatPod
 {
     // - Param: request the SPA_META_Header so buffers carry PTS -
 
@@ -18,7 +19,7 @@ internal static class SpaFormat
     internal static unsafe int WriteHeaderMetaParam(Span<byte> buf)
     {
         var b = new SpaPodBuilder(buf);
-        b.PushObject(SpaType.ObjectParamMeta, SpaParam.Meta);
+        b.PushObject(SpaType.ObjectParamMeta, SpaParamType.Meta);
         b.AddId(SpaParamMeta.Type, SpaMetaType.Header);
         b.AddInt(SpaParamMeta.Size, sizeof(spa_meta_header));
         return b.GetPod().Length;
@@ -40,7 +41,7 @@ internal static class SpaFormat
     /// <see cref="VideoBlockSize"/>.
     /// </param>
     /// <param name="stride">Stride of a data block.</param>
-    /// <param name="dataTypes">Mask of acceptable <c>spa_data_type</c> values.</param>
+    /// <param name="dataTypes">Mask of acceptable <c>SpaDataType</c> values.</param>
     /// <param name="blocks">Data blocks per buffer: one per plane.</param>
     /// <param name="sizeIsAnyOf">
     /// When true the size is offered as an open range rather than a fixed value, which is what a
@@ -52,7 +53,7 @@ internal static class SpaFormat
         Span<byte> buf, int size, int stride, int dataTypes, int blocks = 1, bool sizeIsAnyOf = false)
     {
         var b = new SpaPodBuilder(buf);
-        b.PushObject(SpaType.ObjectParamBuffers, SpaParam.Buffers);
+        b.PushObject(SpaType.ObjectParamBuffers, SpaParamType.Buffers);
         b.AddChoiceRangeInt(SpaParamBuffers.Buffers, 8, 2, 16);
         // Blocks = number of planes (one spa_data block per plane). A packed format / host buffer is
         // a single block; planar needs one block per plane so each plane gets its own fd.
@@ -139,7 +140,7 @@ internal static class SpaFormat
 
     /// <summary>Accepted capture data types: host memory + DMA-BUF (zero-copy GPU).</summary>
     internal static int VideoCaptureDataTypeMask =>
-        (1 << (int)SpaType.DataMemPtr) | (1 << (int)SpaType.DataMemFd) | (1 << (int)SpaType.DataDmaBuf);
+        (1 << (int)SpaDataType.MemPtr) | (1 << (int)SpaDataType.MemFd) | (1 << (int)SpaDataType.DmaBuf);
 
     /// <summary>
     /// Number of memory blocks a buffer carries for the format: one block per plane. gst's pipewiresink
@@ -157,12 +158,12 @@ internal static class SpaFormat
     // - Buffer metadata -
 
     /// <summary>Maps a raw <c>spa_data.type</c> to <see cref="PipeWireBufferType"/>.</summary>
-    internal static PipeWireBufferType ToBufferType(uint spaDataType) => spaDataType switch
+    internal static PipeWireBufferType ToBufferType(SpaDataType spaDataType) => spaDataType switch
     {
-        _ when spaDataType == SpaType.DataMemPtr => PipeWireBufferType.MemPtr,
-        _ when spaDataType == SpaType.DataMemFd  => PipeWireBufferType.MemFd,
-        _ when spaDataType == SpaType.DataDmaBuf => PipeWireBufferType.DmaBuf,
-        _                                        => PipeWireBufferType.Unknown,
+        SpaDataType.MemPtr => PipeWireBufferType.MemPtr,
+        SpaDataType.MemFd  => PipeWireBufferType.MemFd,
+        SpaDataType.DmaBuf => PipeWireBufferType.DmaBuf,
+        _                  => PipeWireBufferType.Unknown,
     };
 
     /// <summary>
@@ -176,7 +177,7 @@ internal static class SpaFormat
     internal static unsafe long FindPresentationTimeNs(spa_buffer* buf)
     {
         if (buf is null || buf->metas is null) return -1;
-        uint headerType = (uint)spa_meta_type.SPA_META_Header;
+        uint headerType = (uint)SpaMetaType.Header;
         for (uint i = 0; i < buf->n_metas; i++)
         {
             spa_meta* m = &buf->metas[i];
@@ -227,15 +228,15 @@ internal static class SpaFormat
         uint size = ((uint*)param)[0];
         var pod = new ReadOnlySpan<byte>(param, 8 + (int)size);
         var reader = new SpaPodReader(pod);
-        if (reader.EnterObject(out uint objType, out _, out _) && objType == SpaType.ObjectFormat)
+        if (reader.EnterObject(out uint objType, out _, out _) && (SpaType)objType == SpaType.ObjectFormat)
         {
-            while (reader.TryReadProperty(out uint key, out var value))
+            while (reader.TryReadProperty(out SpaKey key, out var value))
             {
                 try
                 {
-                    if (key == SpaFormatVideo.Format)
-                        fmt = FromSpaVideoFormat(ReadId(ref value));
-                    else if (key == SpaFormatVideo.Modifier)
+                    if (key == SpaFormat.VideoFormat)
+                        fmt = FromSpaVideoFormat((SpaVideoFormat)ReadId(ref value));
+                    else if (key == SpaFormat.VideoModifier)
                     {
                         // The producer returns either a single fixated modifier or, when it honoured
                         // DONT_FIXATE, a choice of several it supports. We only need the preferred one
@@ -248,19 +249,19 @@ internal static class SpaFormat
                             modifierNeedsFixation = n > 1;
                         }
                     }
-                    else if (key == SpaFormatVideo.Size)
+                    else if (key == SpaFormat.VideoSize)
                     {
                         var (rw, rh) = value.TryUnwrapChoice(out var i) ? i.ReadRectangle() : value.ReadRectangle();
                         w = (int)rw; h = (int)rh;
                     }
-                    else if (key == SpaFormatVideo.ColorRange)
-                        range = MapColorRange(ReadId(ref value));
-                    else if (key == SpaFormatVideo.ColorMatrix)
-                        matrix = MapColorMatrix(ReadId(ref value));
-                    else if (key == SpaFormatVideo.TransferFunction)
-                        transfer = MapTransfer(ReadId(ref value));
-                    else if (key == SpaFormatVideo.ColorPrimaries)
-                        primaries = MapPrimaries(ReadId(ref value));
+                    else if (key == SpaFormat.VideoColorRange)
+                        range = MapColorRange((SpaVideoColorRange)ReadId(ref value));
+                    else if (key == SpaFormat.VideoColorMatrix)
+                        matrix = MapColorMatrix((SpaVideoColorMatrix)ReadId(ref value));
+                    else if (key == SpaFormat.VideoTransferFunction)
+                        transfer = MapTransfer((SpaVideoTransferFunction)ReadId(ref value));
+                    else if (key == SpaFormat.VideoColorPrimaries)
+                        primaries = MapPrimaries((SpaVideoColorPrimaries)ReadId(ref value));
                 }
                 catch (InvalidOperationException) { /* malformed property - skip */ }
             }
@@ -279,17 +280,17 @@ internal static class SpaFormat
         uint size = ((uint*)param)[0];
         var pod = new ReadOnlySpan<byte>(param, 8 + (int)size);
         var reader = new SpaPodReader(pod);
-        if (reader.EnterObject(out uint objType, out _, out _) && objType == SpaType.ObjectFormat)
+        if (reader.EnterObject(out uint objType, out _, out _) && (SpaType)objType == SpaType.ObjectFormat)
         {
-            while (reader.TryReadProperty(out uint key, out var value))
+            while (reader.TryReadProperty(out SpaKey key, out var value))
             {
                 try
                 {
-                    if (key == SpaFormatAudio.Format)
-                        fmt = FromSpaAudioFormat(value.TryUnwrapChoice(out var i) ? i.ReadId() : value.ReadId());
-                    else if (key == SpaFormatAudio.Rate)
+                    if (key == SpaFormat.AudioFormat)
+                        fmt = FromSpaAudioFormat((value.TryUnwrapChoice(out var i) ? i.ReadId() : value.ReadId()).As<SpaAudioFormat>());
+                    else if (key == SpaFormat.AudioRate)
                         rate = value.TryUnwrapChoice(out var i) ? i.ReadInt() : value.ReadInt();
-                    else if (key == SpaFormatAudio.Channels)
+                    else if (key == SpaFormat.AudioChannels)
                         ch = value.TryUnwrapChoice(out var i) ? i.ReadInt() : value.ReadInt();
                 }
                 catch (InvalidOperationException) { /* malformed property - skip */ }
@@ -330,27 +331,30 @@ internal static class SpaFormat
         bool fixateModifier = false)
     {
         var b = new SpaPodBuilder(buf);
-        b.PushObject(SpaType.ObjectFormat, SpaParam.EnumFormat);
-        b.AddId(SpaFormatVideo.MediaType,    SpaMediaType.Video);
-        b.AddId(SpaFormatVideo.MediaSubtype, SpaMediaSubtype.Raw);
+        b.PushObject(SpaType.ObjectFormat, SpaParamType.EnumFormat);
+        b.AddId(SpaFormat.MediaType,    SpaMediaType.Video);
+        b.AddId(SpaFormat.MediaSubtype, SpaMediaSubtype.Raw);
 
         if (formats.IsEmpty)
         {
-            b.AddChoiceEnum(SpaFormatVideo.Format,
-                SpaVideoFormat.BGRA, SpaVideoFormat.RGBA,
-                SpaVideoFormat.BGRx, SpaVideoFormat.RGBx,
-                SpaVideoFormat.YUY2, SpaVideoFormat.I420);
+            // Every format this library can decode. A supported format left out here works only
+            // when the caller names it explicitly, which reads as the producer not offering it.
+            b.AddChoiceEnum(SpaFormat.VideoFormat,
+                SpaVideoFormat.Bgra, SpaVideoFormat.Rgba,
+                SpaVideoFormat.Bgrx, SpaVideoFormat.Rgbx,
+                SpaVideoFormat.Yuy2, SpaVideoFormat.I420,
+                SpaVideoFormat.Nv12);
         }
         else if (formats.Length == 1)
         {
-            b.AddId(SpaFormatVideo.Format, ToSpaVideoFormat(formats[0]));
+            b.AddId(SpaFormat.VideoFormat, ToSpaVideoFormat(formats[0]));
         }
         else
         {
-            Span<uint> ids = stackalloc uint[formats.Length];
+            Span<SpaIdValue> ids = stackalloc SpaIdValue[formats.Length];
             for (int i = 0; i < formats.Length; i++)
                 ids[i] = ToSpaVideoFormat(formats[i]);
-            b.AddChoiceEnum(SpaFormatVideo.Format, ids);
+            b.AddChoiceEnum(SpaFormat.VideoFormat, ids);
         }
 
         // The modifier property must follow the format and precede size (PipeWire convention).
@@ -362,53 +366,55 @@ internal static class SpaFormat
         {
             if (fixateModifier)
             {
-                b.AddLong(SpaFormatVideo.Modifier, modifiers[0], SpaPodPropFlag.Mandatory);
+                b.AddLong(SpaFormat.VideoModifier, modifiers[0], SpaPodPropFlag.Mandatory);
             }
             else
             {
-                b.AddChoiceEnumLong(SpaFormatVideo.Modifier, modifiers,
+                b.AddChoiceEnumLong(SpaFormat.VideoModifier, modifiers,
                     SpaPodPropFlag.Mandatory | SpaPodPropFlag.DontFixate);
             }
         }
 
         if (fixedSize)
         {
-            b.AddRectangle(SpaFormatVideo.Size, defaultWidth, defaultHeight);
-            b.AddFraction(SpaFormatVideo.Framerate, defaultFrameRate, 1);
+            b.AddRectangle(SpaFormat.VideoSize, defaultWidth, defaultHeight);
+            b.AddFraction(SpaFormat.VideoFramerate, defaultFrameRate, 1);
         }
         else
         {
-            b.AddChoiceRangeRectangle(SpaFormatVideo.Size,
+            b.AddChoiceRangeRectangle(SpaFormat.VideoSize,
                 defaultWidth, defaultHeight, 1, 1, 8192, 8192);
-            b.AddChoiceRangeFraction(SpaFormatVideo.Framerate,
+            b.AddChoiceRangeFraction(SpaFormat.VideoFramerate,
                 defaultFrameRate, 1, 0, 1, 1000, 1);
         }
 
         return b.GetPod().Length;
     }
 
-    internal static uint ToSpaVideoFormat(PixelFormat fmt) => fmt switch
+    internal static SpaVideoFormat ToSpaVideoFormat(PixelFormat fmt) => fmt switch
     {
-        PixelFormat.Rgba   => SpaVideoFormat.RGBA,
-        PixelFormat.Bgra   => SpaVideoFormat.BGRA,
-        PixelFormat.Rgbx   => SpaVideoFormat.RGBx,
-        PixelFormat.Bgrx   => SpaVideoFormat.BGRx,
-        PixelFormat.Yuyv   => SpaVideoFormat.YUY2,
+        PixelFormat.Rgba   => SpaVideoFormat.Rgba,
+        PixelFormat.Bgra   => SpaVideoFormat.Bgra,
+        PixelFormat.Rgbx   => SpaVideoFormat.Rgbx,
+        PixelFormat.Bgrx   => SpaVideoFormat.Bgrx,
+        PixelFormat.Yuyv   => SpaVideoFormat.Yuy2,
         PixelFormat.Yuv420 => SpaVideoFormat.I420,
-        PixelFormat.Nv12   => SpaVideoFormat.NV12,
-        _                  => SpaVideoFormat.BGRA,
+        PixelFormat.Nv12   => SpaVideoFormat.Nv12,
+        _                  => SpaVideoFormat.Bgra,
     };
 
-    internal static PixelFormat FromSpaVideoFormat(uint spa) => spa switch
+    internal static PixelFormat FromSpaVideoFormat(SpaVideoFormat spa) => spa switch
     {
-        _ when spa == SpaVideoFormat.RGBA => PixelFormat.Rgba,
-        _ when spa == SpaVideoFormat.BGRA => PixelFormat.Bgra,
-        _ when spa == SpaVideoFormat.RGBx => PixelFormat.Rgbx,
-        _ when spa == SpaVideoFormat.BGRx => PixelFormat.Bgrx,
-        _ when spa == SpaVideoFormat.YUY2 => PixelFormat.Yuyv,
-        _ when spa == SpaVideoFormat.I420 => PixelFormat.Yuv420,
-        _ when spa == SpaVideoFormat.NV12 => PixelFormat.Nv12,
-        _                                  => PixelFormat.Bgra,
+        SpaVideoFormat.Rgba => PixelFormat.Rgba,
+        SpaVideoFormat.Bgra => PixelFormat.Bgra,
+        SpaVideoFormat.Rgbx => PixelFormat.Rgbx,
+        SpaVideoFormat.Bgrx => PixelFormat.Bgrx,
+        SpaVideoFormat.Yuy2 => PixelFormat.Yuyv,
+        SpaVideoFormat.I420 => PixelFormat.Yuv420,
+        SpaVideoFormat.Nv12 => PixelFormat.Nv12,
+        // Not BGRA. Reinterpreting an unrecognised layout as BGRA produces a plausible-looking but
+        // wrong image, which is far harder to notice than a format that is simply unsupported.
+        _                                  => PixelFormat.Unknown,
     };
 
     /// <summary>
@@ -438,16 +444,16 @@ internal static class SpaFormat
         Span<byte> buf, AudioSampleFormat format, int sampleRate, int channels)
     {
         var b = new SpaPodBuilder(buf);
-        b.PushObject(SpaType.ObjectFormat, SpaParam.EnumFormat);
-        b.AddId(SpaFormatVideo.MediaType,    SpaMediaType.Audio);
-        b.AddId(SpaFormatVideo.MediaSubtype, SpaMediaSubtype.Raw);
-        b.AddId(SpaFormatAudio.Format,       ToSpaAudioFormat(format));
-        b.AddInt(SpaFormatAudio.Rate,        sampleRate);
-        b.AddInt(SpaFormatAudio.Channels,    channels);
+        b.PushObject(SpaType.ObjectFormat, SpaParamType.EnumFormat);
+        b.AddId(SpaFormat.MediaType,    SpaMediaType.Audio);
+        b.AddId(SpaFormat.MediaSubtype, SpaMediaSubtype.Raw);
+        b.AddId(SpaFormat.AudioFormat,       ToSpaAudioFormat(format));
+        b.AddInt(SpaFormat.AudioRate,        sampleRate);
+        b.AddInt(SpaFormat.AudioChannels,    channels);
         return b.GetPod().Length;
     }
 
-    internal static uint ToSpaAudioFormat(AudioSampleFormat fmt) => fmt switch
+    internal static SpaAudioFormat ToSpaAudioFormat(AudioSampleFormat fmt) => fmt switch
     {
         AudioSampleFormat.U8    => SpaAudioFormat.U8,
         AudioSampleFormat.S16Le => SpaAudioFormat.S16Le,
@@ -461,45 +467,45 @@ internal static class SpaFormat
     // SPA's enum numbering is not contiguous with our public enums, so map by the
     // generated enum values explicitly (a plain cast would be wrong).
 
-    internal static VideoColorRange MapColorRange(uint spa) => spa switch
+    internal static VideoColorRange MapColorRange(SpaVideoColorRange spa) => spa switch
     {
-        _ when spa == (uint)spa_video_color_range.SPA_VIDEO_COLOR_RANGE_0_255  => VideoColorRange.Full_0_255,
-        _ when spa == (uint)spa_video_color_range.SPA_VIDEO_COLOR_RANGE_16_235 => VideoColorRange.Limited_16_235,
+        SpaVideoColorRange.Full  => VideoColorRange.Full_0_255,
+        SpaVideoColorRange.Limited => VideoColorRange.Limited_16_235,
         _                                                                      => VideoColorRange.Unknown,
     };
 
-    internal static VideoColorMatrix MapColorMatrix(uint spa) => spa switch
+    internal static VideoColorMatrix MapColorMatrix(SpaVideoColorMatrix spa) => spa switch
     {
-        _ when spa == (uint)spa_video_color_matrix.SPA_VIDEO_COLOR_MATRIX_RGB    => VideoColorMatrix.Rgb,
-        _ when spa == (uint)spa_video_color_matrix.SPA_VIDEO_COLOR_MATRIX_BT709  => VideoColorMatrix.Bt709,
-        _ when spa == (uint)spa_video_color_matrix.SPA_VIDEO_COLOR_MATRIX_BT601  => VideoColorMatrix.Bt601,
-        _ when spa == (uint)spa_video_color_matrix.SPA_VIDEO_COLOR_MATRIX_BT2020 => VideoColorMatrix.Bt2020,
+        SpaVideoColorMatrix.Rgb    => VideoColorMatrix.Rgb,
+        SpaVideoColorMatrix.Bt709  => VideoColorMatrix.Bt709,
+        SpaVideoColorMatrix.Bt601  => VideoColorMatrix.Bt601,
+        SpaVideoColorMatrix.Bt2020 => VideoColorMatrix.Bt2020,
         _                                                                        => VideoColorMatrix.Unknown,
     };
 
-    internal static VideoTransferFunction MapTransfer(uint spa) => spa switch
+    internal static VideoTransferFunction MapTransfer(SpaVideoTransferFunction spa) => spa switch
     {
-        _ when spa == (uint)spa_video_transfer_function.SPA_VIDEO_TRANSFER_GAMMA22   => VideoTransferFunction.Gamma22,
-        _ when spa == (uint)spa_video_transfer_function.SPA_VIDEO_TRANSFER_BT709     => VideoTransferFunction.Bt709,
-        _ when spa == (uint)spa_video_transfer_function.SPA_VIDEO_TRANSFER_SRGB      => VideoTransferFunction.Srgb,
-        _ when spa == (uint)spa_video_transfer_function.SPA_VIDEO_TRANSFER_BT2020_12 => VideoTransferFunction.Bt2020_12,
+        SpaVideoTransferFunction.Gamma22   => VideoTransferFunction.Gamma22,
+        SpaVideoTransferFunction.Bt709     => VideoTransferFunction.Bt709,
+        SpaVideoTransferFunction.Srgb      => VideoTransferFunction.Srgb,
+        SpaVideoTransferFunction.Bt2020_12 => VideoTransferFunction.Bt2020_12,
         _                                                                            => VideoTransferFunction.Unknown,
     };
 
-    internal static VideoColorPrimaries MapPrimaries(uint spa) => spa switch
+    internal static VideoColorPrimaries MapPrimaries(SpaVideoColorPrimaries spa) => spa switch
     {
-        _ when spa == (uint)spa_video_color_primaries.SPA_VIDEO_COLOR_PRIMARIES_BT709  => VideoColorPrimaries.Bt709,
-        _ when spa == (uint)spa_video_color_primaries.SPA_VIDEO_COLOR_PRIMARIES_BT2020 => VideoColorPrimaries.Bt2020,
+        SpaVideoColorPrimaries.Bt709  => VideoColorPrimaries.Bt709,
+        SpaVideoColorPrimaries.Bt2020 => VideoColorPrimaries.Bt2020,
         _                                                                              => VideoColorPrimaries.Unknown,
     };
 
-    internal static AudioSampleFormat FromSpaAudioFormat(uint spa) => spa switch
+    internal static AudioSampleFormat FromSpaAudioFormat(SpaAudioFormat spa) => spa switch
     {
-        _ when spa == SpaAudioFormat.U8    => AudioSampleFormat.U8,
-        _ when spa == SpaAudioFormat.S16Le => AudioSampleFormat.S16Le,
-        _ when spa == SpaAudioFormat.S24Le => AudioSampleFormat.S24Le,
-        _ when spa == SpaAudioFormat.S32Le => AudioSampleFormat.S32Le,
-        _ when spa == SpaAudioFormat.F32Le => AudioSampleFormat.F32Le,
+        SpaAudioFormat.U8    => AudioSampleFormat.U8,
+        SpaAudioFormat.S16Le => AudioSampleFormat.S16Le,
+        SpaAudioFormat.S24Le => AudioSampleFormat.S24Le,
+        SpaAudioFormat.S32Le => AudioSampleFormat.S32Le,
+        SpaAudioFormat.F32Le => AudioSampleFormat.F32Le,
         _                                   => AudioSampleFormat.F32Le,
     };
 }

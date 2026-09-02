@@ -24,4 +24,13 @@ public enum PixelFormat
 
     /// <summary>32-bit BGRX (alpha channel ignored / always 0xFF).</summary>
     Bgrx,
+
+    /// <summary>
+    /// A layout this library does not recognise.
+    /// </summary>
+    /// <remarks>
+    /// Returned instead of guessing. Mapping an unknown native format onto a known one produces a
+    /// plausible-looking but wrong image, which is much harder to notice than an unsupported one.
+    /// </remarks>
+    Unknown = 1000,
 }

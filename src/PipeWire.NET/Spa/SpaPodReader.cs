@@ -15,7 +15,7 @@ namespace PipeWire.NET.Spa;
 /// </summary>
 /// <remarks>
 /// Use one of the static <c>Read*</c> helpers to extract a single value, or call
-/// <see cref="EnterObject"/> + <see cref="TryReadProperty(out uint, out SpaPodReader)"/> in a loop
+/// <see cref="EnterObject"/> + <see cref="TryReadProperty(out SpaKey, out SpaPodReader)"/> in a loop
 /// to walk an object.
 /// </remarks>
 internal ref struct SpaPodReader
@@ -47,7 +47,7 @@ internal ref struct SpaPodReader
     public bool EnterObject(out uint objectType, out uint objectId, out uint bodySize)
     {
         objectType = 0; objectId = 0; bodySize = 0;
-        if (!TryReadHeader(out uint size, out uint type)) return false;
+        if (!TryReadHeader(out uint size, out SpaType type)) return false;
         if (type != SpaType.Object) return false;
 
         // An object body always carries at least its type and id. Without this check `size - 8`
@@ -63,34 +63,39 @@ internal ref struct SpaPodReader
     /// <summary>
     /// Reads the next property in the current object.
     /// </summary>
-    /// <param name="key">SPA property key (e.g. <see cref="SpaFormatVideo.Format"/>).</param>
+    /// <param name="key">The property key, comparable against any of the SPA key enums.</param>
     /// <param name="value">Reader positioned at the property's value pod.</param>
     /// <returns><see langword="false"/> when no more properties remain in the current object body.</returns>
-    public bool TryReadProperty(out uint key, out SpaPodReader value) =>
+    public bool TryReadProperty(out SpaKey key, out SpaPodReader value) =>
         TryReadProperty(out key, out _, out value);
 
     /// <summary>
     /// Reads the next property and also reports its <c>spa_pod_prop</c> flags (e.g.
     /// <see cref="SpaPodPropFlag.DontFixate"/> on an unfixated modifier choice).
     /// </summary>
-    public bool TryReadProperty(out uint key, out uint flags, out SpaPodReader value)
+    public bool TryReadProperty(out SpaKey key, out uint flags, out SpaPodReader value)
     {
-        key = 0;
+        key = default;
         flags = 0;
         value = default;
 
         // spa_pod_prop header = [uint32 key][uint32 flags][value pod...]
         if (_pos + 8 > _buf.Length) return false;
-        if (!TryReadU32(out key))    return false;
+        if (!TryReadU32(out uint rawKey)) return false;
+        key = SpaKey.FromRaw(rawKey);
         if (!TryReadU32(out flags))  return false; // flags
 
         // The value pod sits at the current offset. Peek its size.
         if (_pos + 8 > _buf.Length) return false;
+        // Checked against what is left before any arithmetic. Casting first and checking after is
+        // not enough: a size of uint.MaxValue casts to -1 and passes the bounds test, and one near
+        // int.MaxValue overflows the addition to a negative length that then throws out of Slice -
+        // from a parser whose whole contract is that malformed input returns false.
         uint vSize = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
+        if (vSize > (uint)(_buf.Length - _pos - 8)) return false;
+
         int valueLen = 8 + (int)vSize;          // pod header + body
         int valueLenAligned = (valueLen + 7) & ~7;
-
-        if (_pos + valueLen > _buf.Length) return false;
 
         value = new SpaPodReader(_buf.Slice(_pos, valueLen));
         _pos += valueLenAligned;
@@ -139,12 +144,12 @@ internal ref struct SpaPodReader
         return v != 0;
     }
 
-    public uint ReadId()
+    public SpaIdValue ReadId()
     {
         ReadHeaderOrThrow(SpaType.Id, expectedSize: 4);
         uint v = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
         _pos += 4; AlignTo8();
-        return v;
+        return SpaIdValue.FromRaw(v);
     }
 
     public (uint Width, uint Height) ReadRectangle()
@@ -176,7 +181,7 @@ internal ref struct SpaPodReader
         first = 0;
         count = 0;
         int savedPos = _pos;
-        if (!TryReadHeader(out uint size, out uint type)) { _pos = savedPos; return false; }
+        if (!TryReadHeader(out uint size, out SpaType type)) { _pos = savedPos; return false; }
 
         if (type == SpaType.Long)
         {
@@ -195,7 +200,7 @@ internal ref struct SpaPodReader
         if (!TryReadU32(out _))               { _pos = savedPos; return false; } // flags
         if (!TryReadU32(out uint childSize))  { _pos = savedPos; return false; }
         if (!TryReadU32(out uint childType))  { _pos = savedPos; return false; }
-        if (childType != SpaType.Long || childSize != 8) { _pos = savedPos; return false; }
+        if ((SpaType)childType != SpaType.Long || childSize != 8) { _pos = savedPos; return false; }
 
         // The choice body length (size) covers the 16-byte header + N child values. We only need the
         // first value and the count, so read the first in place and skip the rest - nothing allocated.
@@ -218,7 +223,7 @@ internal ref struct SpaPodReader
         // Peek the header non-destructively: a plain (non-choice) value must be left
         // untouched so the caller can fall back to ReadId()/ReadRectangle()/etc.
         int savedPos = _pos;
-        if (!TryReadHeader(out uint size, out uint type) || type != SpaType.Choice)
+        if (!TryReadHeader(out uint size, out SpaType type) || type != SpaType.Choice)
         {
             _pos = savedPos;
             return false;
@@ -241,15 +246,17 @@ internal ref struct SpaPodReader
         // For now expose the body via a child-only reader and let the caller call typed ReadXxx
         // - but ReadXxx expects a full pod header. The simpler contract: return a reader whose
         // ReadXxx assumes a "headerless" body and pass childType so the caller knows.
-        first = new SpaPodReader(body) { _synthesizedType = childType };
+        first = new SpaPodReader(body) { _synthesizedType = (SpaType)childType };
         return true;
     }
 
-    private uint _synthesizedType;
+    // Nullable rather than a zero sentinel: zero is SpaType.Start, a real member, so "unset"
+    // has no spare value to borrow.
+    private SpaType? _synthesizedType;
 
     // - Header parsing -
 
-    private bool TryReadHeader(out uint size, out uint type)
+    private bool TryReadHeader(out uint size, out SpaType type)
     {
         size = 0; type = 0;
         if (_pos + 8 > _buf.Length) return false;
@@ -262,24 +269,24 @@ internal ref struct SpaPodReader
         if (declared > (uint)(_buf.Length - _pos - 8)) return false;
 
         size = declared;
-        type = declaredType;
+        type = (SpaType)declaredType;
         _pos += 8;
         return true;
     }
 
-    private void ReadHeaderOrThrow(uint expectedType, uint expectedSize)
+    private void ReadHeaderOrThrow(SpaType expectedType, uint expectedSize)
     {
         // When TryUnwrapChoice synthesized this reader, there is no embedded header
         // - the type is carried out-of-band via _synthesizedType.
-        if (_synthesizedType != 0)
+        if (_synthesizedType is { } synthesized)
         {
-            if (_synthesizedType != expectedType)
+            if (synthesized != expectedType)
                 throw new InvalidOperationException(
-                    $"SPA pod type mismatch: expected {expectedType}, got synthesized {_synthesizedType}");
+                    $"SPA pod type mismatch: expected {expectedType}, got synthesized {synthesized}");
             return;
         }
 
-        if (!TryReadHeader(out uint size, out uint type))
+        if (!TryReadHeader(out uint size, out SpaType type))
             throw new InvalidOperationException("Truncated SPA pod.");
         if (type != expectedType)
             throw new InvalidOperationException(

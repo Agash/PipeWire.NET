@@ -1,6 +1,6 @@
 namespace PipeWire.NET.Media;
 
-/// <summary>Color quantization range (mirrors <c>spa_video_color_range</c>).</summary>
+/// <summary>Color quantization range (mirrors <c>SpaVideoColorRange</c>).</summary>
 public enum VideoColorRange
 {
     /// <summary>Unspecified.</summary>

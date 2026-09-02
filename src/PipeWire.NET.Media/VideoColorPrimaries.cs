@@ -1,6 +1,6 @@
 namespace PipeWire.NET.Media;
 
-/// <summary>Color primaries / gamut (mirrors <c>spa_video_color_primaries</c>).</summary>
+/// <summary>Color primaries / gamut (mirrors <c>SpaVideoColorPrimaries</c>).</summary>
 public enum VideoColorPrimaries
 {
     /// <summary>Unspecified.</summary>
