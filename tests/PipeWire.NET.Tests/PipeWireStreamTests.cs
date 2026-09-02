@@ -1,9 +1,9 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using PipeWire.NET.Generated;
-using PipeWire.NET.Media;
+using PipeWire.NET.Interop;
 using PipeWire.NET.Spa;
+using PipeWire.NET.Media;
 using PipeWire.NET.Media.Streams;
 
 namespace PipeWire.NET.Tests;
@@ -20,12 +20,12 @@ public sealed class SpaPodBuilderTests
         // No fluent chaining - each call mutates `builder` directly. Chaining on a
         // ref struct invokes subsequent calls on a returned copy (see TryReadProperty
         // failures committed in the previous revision).
-        builder.PushObject(SpaType.ObjectFormat, SpaParam.EnumFormat);
-        builder.AddId(SpaFormatVideo.MediaType,    SpaMediaType.Video);
-        builder.AddId(SpaFormatVideo.MediaSubtype, SpaMediaSubtype.Raw);
-        builder.AddId(SpaFormatVideo.Format,       SpaVideoFormat.BGRA);
-        builder.AddRectangle(SpaFormatVideo.Size,  1920, 1080);
-        builder.AddFraction(SpaFormatVideo.Framerate, 30, 1);
+        builder.PushObject(SpaType.ObjectFormat, SpaParamType.EnumFormat);
+        builder.AddId(SpaFormat.MediaType,    SpaMediaType.Video);
+        builder.AddId(SpaFormat.MediaSubtype, SpaMediaSubtype.Raw);
+        builder.AddId(SpaFormat.VideoFormat,       SpaVideoFormat.Bgra);
+        builder.AddRectangle(SpaFormat.VideoSize,  1920, 1080);
+        builder.AddFraction(SpaFormat.VideoFramerate, 30, 1);
 
         ReadOnlySpan<byte> pod = builder.GetPod();
         Assert.IsTrue(pod.Length >= 8 + 8);
@@ -33,28 +33,28 @@ public sealed class SpaPodBuilderTests
 
         var reader = new SpaPodReader(pod);
         Assert.IsTrue(reader.EnterObject(out uint objType, out _, out _));
-        Assert.AreEqual(SpaType.ObjectFormat, objType);
+        Assert.AreEqual(SpaType.ObjectFormat, (SpaType)objType);
 
         bool sawMediaType = false, sawSize = false, sawFramerate = false;
 
-        while (reader.TryReadProperty(out uint key, out var value))
+        while (reader.TryReadProperty(out SpaKey key, out var value))
         {
-            switch (key)
+            switch (key.As<SpaFormat>())
             {
-                case SpaFormatVideo.MediaType:
-                    Assert.AreEqual(SpaMediaType.Video, value.ReadId());
+                case SpaFormat.MediaType:
+                    Assert.AreEqual(SpaMediaType.Video, value.ReadId().As<SpaMediaType>());
                     sawMediaType = true;
                     break;
-                case SpaFormatVideo.Format:
-                    Assert.AreEqual(SpaVideoFormat.BGRA, value.ReadId());
+                case SpaFormat.VideoFormat:
+                    Assert.AreEqual(SpaVideoFormat.Bgra, value.ReadId().As<SpaVideoFormat>());
                     break;
-                case SpaFormatVideo.Size:
+                case SpaFormat.VideoSize:
                     var (w, h) = value.ReadRectangle();
                     Assert.AreEqual(1920u, w);
                     Assert.AreEqual(1080u, h);
                     sawSize = true;
                     break;
-                case SpaFormatVideo.Framerate:
+                case SpaFormat.VideoFramerate:
                     var (n, d) = value.ReadFraction();
                     Assert.AreEqual(30u, n);
                     Assert.AreEqual(1u, d);
@@ -73,17 +73,17 @@ public sealed class SpaPodBuilderTests
     {
         Span<byte> buf = stackalloc byte[256];
         var builder = new SpaPodBuilder(buf);
-        builder.PushObject(SpaType.ObjectFormat, SpaParam.EnumFormat);
-        builder.AddChoiceEnum(SpaFormatVideo.Format,
-            SpaVideoFormat.BGRA, SpaVideoFormat.RGBA);
+        builder.PushObject(SpaType.ObjectFormat, SpaParamType.EnumFormat);
+        builder.AddChoiceEnum(SpaFormat.VideoFormat,
+            SpaVideoFormat.Bgra, SpaVideoFormat.Rgba);
 
         var reader = new SpaPodReader(builder.GetPod());
         Assert.IsTrue(reader.EnterObject(out _, out _, out _));
-        Assert.IsTrue(reader.TryReadProperty(out uint key, out var value));
-        Assert.AreEqual(SpaFormatVideo.Format, key);
+        Assert.IsTrue(reader.TryReadProperty(out SpaKey key, out var value));
+        Assert.AreEqual(SpaFormat.VideoFormat, key);
 
         Assert.IsTrue(value.TryUnwrapChoice(out var firstChoice));
-        Assert.AreEqual(SpaVideoFormat.BGRA, firstChoice.ReadId());
+        Assert.AreEqual(SpaVideoFormat.Bgra, firstChoice.ReadId());
     }
 
     [TestMethod]
@@ -91,8 +91,8 @@ public sealed class SpaPodBuilderTests
     {
         Span<byte> buf = stackalloc byte[256];
         var b = new SpaPodBuilder(buf);
-        b.PushObject(SpaType.ObjectFormat, SpaParam.Format);
-        b.AddId(SpaFormatVideo.MediaType, SpaMediaType.Video);
+        b.PushObject(SpaType.ObjectFormat, SpaParamType.Format);
+        b.AddId(SpaFormat.MediaType, SpaMediaType.Video);
         Assert.AreEqual(0, b.GetPod().Length & 7);
     }
 }
@@ -151,12 +151,12 @@ public sealed class GeneratedAbiTests
     {
         // Convert.To* reads the underlying value at runtime, so these verify the generated
         // enum constants rather than comparing two compile-time constants.
-        Assert.AreEqual(0u, Convert.ToUInt32(spa_direction.SPA_DIRECTION_INPUT));
-        Assert.AreEqual(1u, Convert.ToUInt32(spa_direction.SPA_DIRECTION_OUTPUT));
+        Assert.AreEqual(0u, Convert.ToUInt32(SpaDirection.Input));
+        Assert.AreEqual(1u, Convert.ToUInt32(SpaDirection.Output));
 
-        Assert.AreEqual(-1, Convert.ToInt32(pw_stream_state.PW_STREAM_STATE_ERROR));
-        Assert.AreEqual(0, Convert.ToInt32(pw_stream_state.PW_STREAM_STATE_UNCONNECTED));
-        Assert.AreEqual(3, Convert.ToInt32(pw_stream_state.PW_STREAM_STATE_STREAMING));
+        Assert.AreEqual(-1, Convert.ToInt32(PipeWireStreamState.Error));
+        Assert.AreEqual(0, Convert.ToInt32(PipeWireStreamState.Unconnected));
+        Assert.AreEqual(3, Convert.ToInt32(PipeWireStreamState.Streaming));
     }
 
     [TestMethod]
@@ -175,25 +175,25 @@ public sealed class MetadataMappingTests
     {
         // SPA numbering is non-contiguous with our public enums; mapping is explicit.
         Assert.AreEqual(VideoColorRange.Limited_16_235,
-            SpaFormat.MapColorRange((uint)spa_video_color_range.SPA_VIDEO_COLOR_RANGE_16_235));
+            SpaFormatPod.MapColorRange(SpaVideoColorRange.Limited));
         Assert.AreEqual(VideoColorMatrix.Bt709,
-            SpaFormat.MapColorMatrix((uint)spa_video_color_matrix.SPA_VIDEO_COLOR_MATRIX_BT709));
+            SpaFormatPod.MapColorMatrix(SpaVideoColorMatrix.Bt709));
         Assert.AreEqual(VideoColorMatrix.Bt2020,
-            SpaFormat.MapColorMatrix((uint)spa_video_color_matrix.SPA_VIDEO_COLOR_MATRIX_BT2020));
+            SpaFormatPod.MapColorMatrix(SpaVideoColorMatrix.Bt2020));
         Assert.AreEqual(VideoTransferFunction.Srgb,
-            SpaFormat.MapTransfer((uint)spa_video_transfer_function.SPA_VIDEO_TRANSFER_SRGB));
+            SpaFormatPod.MapTransfer(SpaVideoTransferFunction.Srgb));
         Assert.AreEqual(VideoColorPrimaries.Bt2020,
-            SpaFormat.MapPrimaries((uint)spa_video_color_primaries.SPA_VIDEO_COLOR_PRIMARIES_BT2020));
-        Assert.AreEqual(VideoColorMatrix.Unknown, SpaFormat.MapColorMatrix(9999));
+            SpaFormatPod.MapPrimaries(SpaVideoColorPrimaries.Bt2020));
+        Assert.AreEqual(VideoColorMatrix.Unknown, SpaFormatPod.MapColorMatrix((SpaVideoColorMatrix)9999));
     }
 
     [TestMethod]
     public void ToBufferType_MapsDataTypes()
     {
-        Assert.AreEqual(PipeWireBufferType.MemPtr, SpaFormat.ToBufferType((uint)spa_data_type.SPA_DATA_MemPtr));
-        Assert.AreEqual(PipeWireBufferType.MemFd,  SpaFormat.ToBufferType((uint)spa_data_type.SPA_DATA_MemFd));
-        Assert.AreEqual(PipeWireBufferType.DmaBuf, SpaFormat.ToBufferType((uint)spa_data_type.SPA_DATA_DmaBuf));
-        Assert.AreEqual(PipeWireBufferType.Unknown, SpaFormat.ToBufferType(9999));
+        Assert.AreEqual(PipeWireBufferType.MemPtr, SpaFormatPod.ToBufferType(SpaDataType.MemPtr));
+        Assert.AreEqual(PipeWireBufferType.MemFd,  SpaFormatPod.ToBufferType(SpaDataType.MemFd));
+        Assert.AreEqual(PipeWireBufferType.DmaBuf, SpaFormatPod.ToBufferType(SpaDataType.DmaBuf));
+        Assert.AreEqual(PipeWireBufferType.Unknown, SpaFormatPod.ToBufferType((SpaDataType)9999));
     }
 
     [TestMethod]
@@ -202,21 +202,21 @@ public sealed class MetadataMappingTests
         // Build a Format object carrying color props, then parse it back.
         Span<byte> buf = stackalloc byte[512];
         var b = new SpaPodBuilder(buf);
-        b.PushObject(SpaType.ObjectFormat, SpaParam.Format);
-        b.AddId(SpaFormatVideo.MediaType,    SpaMediaType.Video);
-        b.AddId(SpaFormatVideo.MediaSubtype, SpaMediaSubtype.Raw);
-        b.AddId(SpaFormatVideo.Format,       SpaVideoFormat.BGRA);
-        b.AddRectangle(SpaFormatVideo.Size,  1920, 1080);
-        b.AddId(SpaFormatVideo.ColorRange,       (uint)spa_video_color_range.SPA_VIDEO_COLOR_RANGE_16_235);
-        b.AddId(SpaFormatVideo.ColorMatrix,      (uint)spa_video_color_matrix.SPA_VIDEO_COLOR_MATRIX_BT709);
-        b.AddId(SpaFormatVideo.TransferFunction, (uint)spa_video_transfer_function.SPA_VIDEO_TRANSFER_SRGB);
-        b.AddId(SpaFormatVideo.ColorPrimaries,   (uint)spa_video_color_primaries.SPA_VIDEO_COLOR_PRIMARIES_BT709);
+        b.PushObject(SpaType.ObjectFormat, SpaParamType.Format);
+        b.AddId(SpaFormat.MediaType,    SpaMediaType.Video);
+        b.AddId(SpaFormat.MediaSubtype, SpaMediaSubtype.Raw);
+        b.AddId(SpaFormat.VideoFormat,       SpaVideoFormat.Bgra);
+        b.AddRectangle(SpaFormat.VideoSize,  1920, 1080);
+        b.AddId(SpaFormat.VideoColorRange,       SpaVideoColorRange.Limited);
+        b.AddId(SpaFormat.VideoColorMatrix,      SpaVideoColorMatrix.Bt709);
+        b.AddId(SpaFormat.VideoTransferFunction, SpaVideoTransferFunction.Srgb);
+        b.AddId(SpaFormat.VideoColorPrimaries,   SpaVideoColorPrimaries.Bt709);
         ReadOnlySpan<byte> pod = b.GetPod();
 
-        SpaFormat.VideoFormatInfo info;
+        SpaFormatPod.VideoFormatInfo info;
         fixed (byte* p = pod)
-            info = SpaFormat.ParseVideoFormat((spa_pod*)p,
-                new SpaFormat.VideoFormatInfo(PixelFormat.Bgra, 0, 0, VideoColorInfo.Unknown));
+            info = SpaFormatPod.ParseVideoFormat((spa_pod*)p,
+                new SpaFormatPod.VideoFormatInfo(PixelFormat.Bgra, 0, 0, VideoColorInfo.Unknown));
 
         Assert.AreEqual(PixelFormat.Bgra, info.Format);
         Assert.AreEqual(1920, info.Width);
@@ -233,23 +233,23 @@ public sealed class MetadataMappingTests
         // The capture must offer SPA_DATA_DmaBuf (plus host memory) so a GPU producer can hand
         // us zero-copy buffers. Verify the pod we send actually carries that flag - headless.
         Span<byte> buf = stackalloc byte[256];
-        int len = SpaFormat.WriteVideoBuffersParam(buf, size: 1920 * 1080 * 4, stride: 1920 * 4,
-            dataTypes: SpaFormat.VideoCaptureDataTypeMask);
+        int len = SpaFormatPod.WriteVideoBuffersParam(buf, size: 1920 * 1080 * 4, stride: 1920 * 4,
+            dataTypes: SpaFormatPod.VideoCaptureDataTypeMask);
 
         var reader = new SpaPodReader(buf[..len]);
         Assert.IsTrue(reader.EnterObject(out uint objType, out _, out _));
-        Assert.AreEqual(SpaType.ObjectParamBuffers, objType);
+        Assert.AreEqual(SpaType.ObjectParamBuffers, (SpaType)objType);
 
         int? dataTypeMask = null;
-        while (reader.TryReadProperty(out uint key, out var value))
+        while (reader.TryReadProperty(out SpaKey key, out var value))
         {
             if (key == SpaParamBuffers.DataType)
                 dataTypeMask = value.TryUnwrapChoice(out var inner) ? inner.ReadInt() : value.ReadInt();
         }
 
         Assert.IsNotNull(dataTypeMask, "buffers param must contain a dataType property");
-        int dmaBufBit = 1 << (int)spa_data_type.SPA_DATA_DmaBuf;
-        int memPtrBit = 1 << (int)spa_data_type.SPA_DATA_MemPtr;
+        int dmaBufBit = 1 << (int)SpaDataType.DmaBuf;
+        int memPtrBit = 1 << (int)SpaDataType.MemPtr;
         Assert.AreEqual(dmaBufBit, dataTypeMask!.Value & dmaBufBit, "must advertise DMA-BUF");
         Assert.AreEqual(memPtrBit, dataTypeMask!.Value & memPtrBit, "must also advertise host memory fallback");
     }
@@ -285,15 +285,15 @@ public sealed class ModifierNegotiationTests
         Span<byte> buf = stackalloc byte[512];
         ReadOnlySpan<PixelFormat> fmts = stackalloc[] { PixelFormat.Yuv420 };
         ReadOnlySpan<long> mods = stackalloc[] { ModTiled, ModLinear };
-        int len = SpaFormat.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false, modifiers: mods);
+        int len = SpaFormatPod.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false, modifiers: mods);
 
         var reader = new SpaPodReader(buf[..len]);
         Assert.IsTrue(reader.EnterObject(out _, out _, out _));
 
         bool sawModifier = false;
-        while (reader.TryReadProperty(out uint key, out uint flags, out var value))
+        while (reader.TryReadProperty(out SpaKey key, out uint flags, out var value))
         {
-            if (key != SpaFormatVideo.Modifier) continue;
+            if (key != SpaFormat.VideoModifier) continue;
             sawModifier = true;
 
             // First pass MUST advertise MANDATORY|DONT_FIXATE so the producer narrows the modifier
@@ -318,14 +318,14 @@ public sealed class ModifierNegotiationTests
         Span<byte> buf = stackalloc byte[512];
         ReadOnlySpan<PixelFormat> fmts = stackalloc[] { PixelFormat.Yuv420 };
         ReadOnlySpan<long> mods = stackalloc[] { ModTiled };
-        int len = SpaFormat.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false,
+        int len = SpaFormatPod.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false,
             modifiers: mods, fixateModifier: true);
 
         var reader = new SpaPodReader(buf[..len]);
         Assert.IsTrue(reader.EnterObject(out _, out _, out _));
-        while (reader.TryReadProperty(out uint key, out uint flags, out _))
+        while (reader.TryReadProperty(out SpaKey key, out uint flags, out _))
         {
-            if (key != SpaFormatVideo.Modifier) continue;
+            if (key != SpaFormat.VideoModifier) continue;
             // The fixate pass keeps MANDATORY but drops DONT_FIXATE, telling the producer to settle
             // on the single modifier we now offer.
             Assert.AreEqual(SpaPodPropFlag.Mandatory, flags & SpaPodPropFlag.Mandatory);
@@ -339,12 +339,12 @@ public sealed class ModifierNegotiationTests
         Span<byte> buf = stackalloc byte[512];
         ReadOnlySpan<PixelFormat> fmts = stackalloc[] { PixelFormat.Yuv420 };
         ReadOnlySpan<long> mods = stackalloc[] { ModTiled, ModLinear };
-        int len = SpaFormat.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false, modifiers: mods);
+        int len = SpaFormatPod.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false, modifiers: mods);
 
-        SpaFormat.VideoFormatInfo info;
+        SpaFormatPod.VideoFormatInfo info;
         fixed (byte* p = buf)
-            info = SpaFormat.ParseVideoFormat((spa_pod*)p,
-                new SpaFormat.VideoFormatInfo(PixelFormat.Yuv420, 0, 0, VideoColorInfo.Unknown));
+            info = SpaFormatPod.ParseVideoFormat((spa_pod*)p,
+                new SpaFormatPod.VideoFormatInfo(PixelFormat.Yuv420, 0, 0, VideoColorInfo.Unknown));
 
         Assert.AreEqual((ulong)ModTiled, info.Modifier, "preferred modifier is the first offered");
         Assert.IsTrue(info.ModifierNeedsFixation, "more than one modifier => still needs fixation");
@@ -356,13 +356,13 @@ public sealed class ModifierNegotiationTests
         Span<byte> buf = stackalloc byte[512];
         ReadOnlySpan<PixelFormat> fmts = stackalloc[] { PixelFormat.Yuv420 };
         ReadOnlySpan<long> mods = stackalloc[] { ModTiled };
-        int len = SpaFormat.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false,
+        int len = SpaFormatPod.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false,
             modifiers: mods, fixateModifier: true);
 
-        SpaFormat.VideoFormatInfo info;
+        SpaFormatPod.VideoFormatInfo info;
         fixed (byte* p = buf)
-            info = SpaFormat.ParseVideoFormat((spa_pod*)p,
-                new SpaFormat.VideoFormatInfo(PixelFormat.Yuv420, 0, 0, VideoColorInfo.Unknown));
+            info = SpaFormatPod.ParseVideoFormat((spa_pod*)p,
+                new SpaFormatPod.VideoFormatInfo(PixelFormat.Yuv420, 0, 0, VideoColorInfo.Unknown));
 
         Assert.AreEqual((ulong)ModTiled, info.Modifier);
         Assert.IsFalse(info.ModifierNeedsFixation, "a single modifier is already fixated");
@@ -394,18 +394,18 @@ public sealed class DmaBufOutputTests
     [TestMethod]
     public void PlaneCount_MatchesFormatLayout()
     {
-        Assert.AreEqual(1, SpaFormat.PlaneCount(PixelFormat.Bgra));
-        Assert.AreEqual(1, SpaFormat.PlaneCount(PixelFormat.Yuyv));
-        Assert.AreEqual(2, SpaFormat.PlaneCount(PixelFormat.Nv12), "NV12 = Y + interleaved UV");
-        Assert.AreEqual(3, SpaFormat.PlaneCount(PixelFormat.Yuv420), "I420 = Y + U + V");
+        Assert.AreEqual(1, SpaFormatPod.PlaneCount(PixelFormat.Bgra));
+        Assert.AreEqual(1, SpaFormatPod.PlaneCount(PixelFormat.Yuyv));
+        Assert.AreEqual(2, SpaFormatPod.PlaneCount(PixelFormat.Nv12), "NV12 = Y + interleaved UV");
+        Assert.AreEqual(3, SpaFormatPod.PlaneCount(PixelFormat.Yuv420), "I420 = Y + U + V");
     }
 
     [TestMethod]
     public void Nv12_RoundtripsThroughSpaFormat()
     {
-        uint spa = SpaFormat.ToSpaVideoFormat(PixelFormat.Nv12);
-        Assert.AreEqual(SpaVideoFormat.NV12, spa);
-        Assert.AreEqual(PixelFormat.Nv12, SpaFormat.FromSpaVideoFormat(spa));
+        SpaVideoFormat spa = SpaFormatPod.ToSpaVideoFormat(PixelFormat.Nv12);
+        Assert.AreEqual(SpaVideoFormat.Nv12, spa);
+        Assert.AreEqual(PixelFormat.Nv12, SpaFormatPod.FromSpaVideoFormat(spa));
     }
 
     [TestMethod]
@@ -413,19 +413,19 @@ public sealed class DmaBufOutputTests
     {
         // A dmabuf producer for NV12 must request one block per plane (2) so each plane gets its own
         // spa_data (fd/offset/stride), and advertise the DMA-BUF data type only.
-        int blocks = SpaFormat.PlaneCount(PixelFormat.Nv12);
+        int blocks = SpaFormatPod.PlaneCount(PixelFormat.Nv12);
         Span<byte> buf = stackalloc byte[256];
-        int len = SpaFormat.WriteVideoBuffersParam(buf,
-            size: SpaFormat.VideoImageSize(PixelFormat.Nv12, 1920, 1080),
-            stride: SpaFormat.VideoStride(PixelFormat.Nv12, 1920),
-            dataTypes: 1 << (int)SpaType.DataDmaBuf, blocks: blocks);
+        int len = SpaFormatPod.WriteVideoBuffersParam(buf,
+            size: SpaFormatPod.VideoImageSize(PixelFormat.Nv12, 1920, 1080),
+            stride: SpaFormatPod.VideoStride(PixelFormat.Nv12, 1920),
+            dataTypes: 1 << (int)SpaDataType.DmaBuf, blocks: blocks);
 
         var reader = new SpaPodReader(buf[..len]);
         Assert.IsTrue(reader.EnterObject(out uint objType, out _, out _));
-        Assert.AreEqual(SpaType.ObjectParamBuffers, objType);
+        Assert.AreEqual(SpaType.ObjectParamBuffers, (SpaType)objType);
 
         int? sawBlocks = null, sawDataType = null;
-        while (reader.TryReadProperty(out uint key, out var value))
+        while (reader.TryReadProperty(out SpaKey key, out var value))
         {
             if (key == SpaParamBuffers.Blocks)
                 sawBlocks = value.TryUnwrapChoice(out var i) ? i.ReadInt() : value.ReadInt();
@@ -434,7 +434,7 @@ public sealed class DmaBufOutputTests
         }
 
         Assert.AreEqual(2, sawBlocks, "NV12 dmabuf must request 2 blocks");
-        int dmaBufBit = 1 << (int)spa_data_type.SPA_DATA_DmaBuf;
+        int dmaBufBit = 1 << (int)SpaDataType.DmaBuf;
         Assert.IsNotNull(sawDataType);
         Assert.AreEqual(dmaBufBit, sawDataType!.Value & dmaBufBit, "must advertise DMA-BUF");
     }

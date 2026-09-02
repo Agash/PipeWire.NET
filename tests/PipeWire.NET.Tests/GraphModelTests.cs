@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
@@ -172,4 +175,67 @@ public sealed class GraphModelTests
         Assert.IsTrue(control.IsControl);
         Assert.IsTrue(notify.IsNotify);
     }
+
+    [TestMethod]
+    public void ManyThreadsTouchingALazyIndexAtOnce_BuildItExactlyOnce()
+    {
+        // A racing first touch must not tear, and must not rebuild the index per reader.
+        const int Nodes = 4000;
+        const int Threads = 32;
+
+        var nodes = new PipeWireNode[Nodes];
+        var ports = new PipeWirePort[Nodes];
+        for (uint i = 0; i < Nodes; i++)
+        {
+            nodes[i] = new(i + 1, $"n{i}", "Audio/Source", null);
+            ports[i] = Port(i + 100_000, i + 1, PipeWirePortDirection.Out);
+        }
+
+        PipeWireGraphSnapshot graph = Build(nodes, ports);
+        var start = new Barrier(Threads);
+        var builds = new object?[Threads];
+        var failures = new ConcurrentQueue<string>();
+
+        // Dedicated threads: a barrier across pool items waits on thread injection instead of racing.
+        var workers = new Thread[Threads];
+        for (int i = 0; i < Threads; i++)
+        {
+            int t = i;
+            workers[t] = new Thread(() =>
+            {
+                start.SignalAndWait();
+
+                for (uint n = 0; n < Nodes; n++)
+                {
+                    PipeWireNode? node = graph.GetNode(n + 1);
+                    if (node is null || node.NodeId != n + 1)
+                    {
+                        failures.Enqueue($"thread {t} read {node?.NodeId.ToString() ?? "null"} for node {n + 1}");
+                        return;
+                    }
+                }
+
+                // Each build allocates its own buckets, so array identity exposes a duplicate build.
+                ImmutableArray<PipeWirePort> bucket = graph.GetPortsForNode(1);
+                if (bucket.Length != 1 || bucket[0].PortId != 100_000)
+                {
+                    failures.Enqueue($"thread {t} read a bucket of {bucket.Length}");
+                    return;
+                }
+
+                builds[t] = ImmutableCollectionsMarshal.AsArray(bucket)!;
+            })
+            { IsBackground = true, Name = $"lazy-index-{t}" };
+
+            workers[t].Start();
+        }
+
+        foreach (Thread worker in workers)
+            worker.Join();
+
+        Assert.IsTrue(failures.IsEmpty, string.Join("; ", failures));
+        Assert.AreEqual(1, builds.Distinct(ReferenceEqualityComparer.Instance).Count(),
+            "every racing reader must share one index, not build its own");
+    }
+
 }

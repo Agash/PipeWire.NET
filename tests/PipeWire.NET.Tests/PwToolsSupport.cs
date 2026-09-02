@@ -17,13 +17,40 @@ namespace PipeWire.NET.Tests;
 [SupportedOSPlatform("linux")]
 internal static class PwTools
 {
-    private const string PwLink = "/usr/bin/pw-link";
-    private const string PwCli = "/usr/bin/pw-cli";
-    private const string PwLoopback = "/usr/bin/pw-loopback";
+    // Resolved rather than hardcoded: /usr/bin is one distribution's layout, and CI images and
+    // Nix-style prefixes put these elsewhere. An env override lets a runner point at a specific
+    // build without patching the tests.
+    private static readonly string? PwLink = Resolve("pw-link");
+    private static readonly string? PwCli = Resolve("pw-cli");
+    private static readonly string? PwLoopback = Resolve("pw-loopback");
+    private static readonly string? PwMetadata = Resolve("pw-metadata");
+
+    /// <summary>The tool's path, or an assertion that skips the test when it is not installed.</summary>
+    private static string Need(string? path, string tool)
+    {
+        if (path is null) Assert.Inconclusive($"{tool} not present.");
+        return path;
+    }
+
+    private static string? Resolve(string tool)
+    {
+        string envKey = "PWNET_TEST_" + tool.Replace('-', '_').ToUpperInvariant();
+        if (Environment.GetEnvironmentVariable(envKey) is { Length: > 0 } overridden)
+            return File.Exists(overridden) ? overridden : null;
+
+        foreach (string dir in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+                     .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            string candidate = Path.Combine(dir, tool);
+            if (File.Exists(candidate)) return candidate;
+        }
+
+        return null;
+    }
 
     /// <summary>True when the pw-* tools are present.</summary>
     public static bool IsAvailable { get; } =
-        OperatingSystem.IsLinux() && File.Exists(PwLink) && File.Exists(PwCli);
+        OperatingSystem.IsLinux() && PwLink is not null && PwCli is not null;
 
     public static void Require()
     {
@@ -56,20 +83,45 @@ internal static class PwTools
         {
             await proc.WaitForExitAsync(limit.Token);
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            // Killed on any cancellation, not only the timeout. Leaving the child alive when the
+            // caller's token fires is how ghost gst-launch and pw-loopback processes survive a run
+            // and poison every test after it.
             try { proc.Kill(entireProcessTree: true); } catch (InvalidOperationException) { /* already gone */ }
+
+            if (ct.IsCancellationRequested) throw;
             throw new TimeoutException($"{exe} did not exit");
         }
 
         return (proc.ExitCode, await stdout, await stderr);
     }
 
+    /// <summary>Sets a node's volume through pw-cli, as a client that is not this library.</summary>
+    /// <remarks>
+    /// The POD is written in pw-cli's own textual syntax rather than built here, so what reaches the
+    /// daemon has been through a different encoder than the library's.
+    /// </remarks>
+    public static async Task SetNodeVolumeAsync(uint nodeId, float volume, CancellationToken ct)
+    {
+        string pod = $"Props: {{ volume: {volume.ToString(System.Globalization.CultureInfo.InvariantCulture)} }}";
+        await RunAsync(Need(PwCli, "pw-cli"), ["set-param", nodeId.ToString(System.Globalization.CultureInfo.InvariantCulture), "Props", pod], ct);
+    }
+
+    /// <summary>Writes a metadata entry through pw-metadata.</summary>
+    public static async Task SetMetadataAsync(string key, string value, CancellationToken ct)
+    {
+        if (PwMetadata is null)
+            Assert.Inconclusive("pw-metadata not present.");
+
+        await RunAsync(Need(PwMetadata, "pw-metadata"), ["-n", "default", "0", key, value, "Spa:String"], ct);
+    }
+
     /// <summary>Links two ports by name, the way a user would from a terminal.</summary>
     /// <remarks><c>-w</c> waits for the attempt so the call is not merely fire-and-forget.</remarks>
     public static async Task LinkAsync(string outputPort, string inputPort, CancellationToken ct)
     {
-        (int code, _, string err) = await RunAsync(PwLink, ["-w", outputPort, inputPort], ct);
+        (int code, _, string err) = await RunAsync(Need(PwLink, "pw-link"), ["-w", outputPort, inputPort], ct);
         if (code != 0)
             throw new InvalidOperationException($"pw-link {outputPort} {inputPort} failed ({code}): {err}");
     }
@@ -77,7 +129,7 @@ internal static class PwTools
     /// <summary>Disconnects a link by its id.</summary>
     public static async Task DisconnectAsync(uint linkId, CancellationToken ct)
     {
-        (int code, _, string err) = await RunAsync(PwLink, ["-d", linkId.ToString()], ct);
+        (int code, _, string err) = await RunAsync(Need(PwLink, "pw-link"), ["-d", linkId.ToString()], ct);
         if (code != 0)
             throw new InvalidOperationException($"pw-link -d {linkId} failed ({code}): {err}");
     }
@@ -89,7 +141,7 @@ internal static class PwTools
     /// </remarks>
     public static async Task<List<(uint Link, uint Output, uint Input)>> ListLinksAsync(CancellationToken ct)
     {
-        (_, string output, _) = await RunAsync(PwLink, ["-l", "-I"], ct);
+        (_, string output, _) = await RunAsync(Need(PwLink, "pw-link"), ["-l", "-I"], ct);
 
         var links = new List<(uint, uint, uint)>();
         uint currentOutput = 0;
@@ -100,12 +152,17 @@ internal static class PwTools
             if (line.Length == 0) continue;
 
             string trimmed = line.TrimStart();
-            bool indented = line.Length != trimmed.Length && (trimmed.Contains("|->") || trimmed.Contains("|<-"));
+
+            // By the arrow, not by the indent. pw-link right-aligns ids to four columns, so a link
+            // line only has leading whitespace while ids are under 1000 - after which every link
+            // line was being read as a port line and the listing came back empty.
+            bool isLink = trimmed.Contains("|->", StringComparison.Ordinal)
+                          || trimmed.Contains("|<-", StringComparison.Ordinal);
 
             string[] parts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 0) continue;
 
-            if (!indented)
+            if (!isLink)
             {
                 // "  103 probe_a:monitor_FL" - the port whose links follow.
                 if (uint.TryParse(parts[0], out uint portId)) currentOutput = portId;
@@ -128,7 +185,7 @@ internal static class PwTools
     /// <summary>Port ids by full <c>node:port</c> name, from the <c>-o</c>/<c>-i</c> listings.</summary>
     public static async Task<Dictionary<string, uint>> ListPortsAsync(bool outputs, CancellationToken ct)
     {
-        (_, string text, _) = await RunAsync(PwLink, [outputs ? "-o" : "-i", "-I"], ct);
+        (_, string text, _) = await RunAsync(Need(PwLink, "pw-link"), [outputs ? "-o" : "-i", "-I"], ct);
 
         var ports = new Dictionary<string, uint>(StringComparer.Ordinal);
         foreach (string raw in text.Split('\n'))
@@ -143,7 +200,7 @@ internal static class PwTools
     /// <summary>Destroys any global by id, as an outside process would.</summary>
     public static async Task DestroyAsync(uint id, CancellationToken ct)
     {
-        (int code, _, string err) = await RunAsync(PwCli, ["destroy", id.ToString()], ct);
+        (int code, _, string err) = await RunAsync(Need(PwCli, "pw-cli"), ["destroy", id.ToString()], ct);
         if (code != 0)
             throw new InvalidOperationException($"pw-cli destroy {id} failed ({code}): {err}");
     }
@@ -153,10 +210,10 @@ internal static class PwTools
     /// </summary>
     public static async Task<Loopback> StartLoopbackAsync(string name, CancellationToken ct)
     {
-        if (!File.Exists(PwLoopback))
+        if (PwLoopback is null)
             Assert.Inconclusive("pw-loopback not present.");
 
-        var psi = new ProcessStartInfo(PwLoopback)
+        var psi = new ProcessStartInfo(Need(PwLoopback, "pw-loopback"))
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -168,8 +225,23 @@ internal static class PwTools
         Process proc = Process.Start(psi)
             ?? throw new InvalidOperationException("failed to start pw-loopback");
 
-        await Task.Delay(600, ct);   // give it time to publish its nodes
-        return new Loopback(proc, name);
+        // Waits for the nodes rather than guessing at how long publishing takes. A fixed delay is
+        // both too long here and too short on a loaded CI runner.
+        var loopback = new Loopback(proc, name);
+        Dictionary<string, uint> ports = [];
+        for (int attempt = 0; attempt < 100; attempt++)
+        {
+            if (proc.HasExited)
+                throw new InvalidOperationException($"pw-loopback '{name}' exited before publishing.");
+
+            ports = await ListPortsAsync(outputs: true, ct);
+            if (ports.Keys.Any(k => k.Contains(name, StringComparison.Ordinal))) return loopback;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(25), ct);
+        }
+
+        await loopback.DisposeAsync();
+        throw new InvalidOperationException($"pw-loopback '{name}' never published a port.");
     }
 
     internal sealed class Loopback(Process proc, string name) : IAsyncDisposable

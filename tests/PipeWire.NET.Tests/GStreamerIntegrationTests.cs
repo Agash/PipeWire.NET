@@ -106,7 +106,7 @@ public sealed class GStreamerIntegrationTests
         PipeWireNode? found = null;
         for (int i = 0; i < 20 && found is null; i++)
         {
-            found = reg.Sources.FirstOrDefault(s => s.NodeName == node);
+            found = reg.Nodes.FirstOrDefault(s => s.NodeName == node);
             if (found is null) await Task.Delay(100);
         }
 

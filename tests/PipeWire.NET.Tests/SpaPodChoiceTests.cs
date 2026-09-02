@@ -17,24 +17,24 @@ namespace PipeWire.NET.Tests;
 [SupportedOSPlatform("linux")]
 public sealed class SpaPodChoiceTests
 {
-    private static byte[] Pod(uint type, ReadOnlySpan<byte> body)
+    private static byte[] Pod(SpaType type, ReadOnlySpan<byte> body)
     {
         int padded = (body.Length + 7) & ~7;
         var pod = new byte[8 + padded];
         BitConverter.TryWriteBytes(pod.AsSpan(0, 4), (uint)body.Length);
-        BitConverter.TryWriteBytes(pod.AsSpan(4, 4), type);
+        BitConverter.TryWriteBytes(pod.AsSpan(4, 4), (uint)type);
         body.CopyTo(pod.AsSpan(8));
         return pod;
     }
 
     /// <summary>A <c>spa_pod_choice</c>: header, then [choiceType][flags][childSize][childType], then values.</summary>
-    private static byte[] ChoicePod(uint childType, uint childSize, params byte[][] values)
+    private static byte[] ChoicePod(SpaType childType, uint childSize, params byte[][] values)
     {
         var body = new List<byte>();
         body.AddRange(BitConverter.GetBytes(0u));          // choiceType (Enum)
         body.AddRange(BitConverter.GetBytes(0u));          // flags
         body.AddRange(BitConverter.GetBytes(childSize));
-        body.AddRange(BitConverter.GetBytes(childType));
+        body.AddRange(BitConverter.GetBytes((uint)childType));
         foreach (byte[] v in values) body.AddRange(v);
         return Pod(SpaType.Choice, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(body));
     }
@@ -103,7 +103,7 @@ public sealed class SpaPodChoiceTests
     [TestMethod]
     public void ANonChoiceNonLongPod_IsDeclinedWithoutConsuming()
     {
-        foreach (uint type in (uint[])[SpaType.Int, SpaType.Id, SpaType.Rectangle, SpaType.Float])
+        foreach (SpaType type in (SpaType[])[SpaType.Int, SpaType.Id, SpaType.Rectangle, SpaType.Float])
         {
             var reader = new SpaPodReader(Pod(type, new byte[8]));
             Assert.IsFalse(reader.TryReadModifier(out _, out _), $"type {type} is not a modifier");
@@ -218,5 +218,39 @@ public sealed class SpaPodChoiceTests
         var reader = new SpaPodReader(pod);
         Assert.IsTrue(reader.TryUnwrapChoice(out SpaPodReader inner));
         Assert.AreEqual(7u, inner.ReadId(), "the first entry is the preferred one");
+    }
+
+    [TestMethod]
+    public void AnEnumChoice_RepeatsItsDefaultAmongTheAlternatives()
+    {
+        // SPA reads the first child as the preferred value and the rest as the selectable ones, so
+        // a default written once is not selectable and leaves the offer.
+        Span<byte> buf = stackalloc byte[256];
+        var builder = new SpaPodBuilder(buf);
+        builder.PushObject(SpaType.ObjectFormat, SpaParamType.EnumFormat);
+        builder.AddChoiceEnum(SpaFormat.VideoFormat, SpaVideoFormat.Bgra, SpaVideoFormat.Rgba);
+
+        Assert.IsTrue(SpaPod.TryParse(builder.GetPod(), out SpaValue? value));
+        var choice = (SpaChoice)((SpaObject)value!).Properties[0].Value;
+
+        Assert.AreEqual(SpaChoiceType.Enum, choice.Kind);
+        Assert.AreEqual(3, choice.Alternatives.Length);
+        Assert.AreEqual(choice.Alternatives[0], choice.Alternatives[1]);
+    }
+
+    [TestMethod]
+    public void AnOddNumberOfChildren_DoesNotReadItsPaddingAsOneMore()
+    {
+        // A range writes three ints, so its body pads to sixteen bytes. Counting children from the
+        // padded length yields a fourth alternative made of the padding.
+        Span<byte> buf = stackalloc byte[256];
+        var builder = new SpaPodBuilder(buf);
+        builder.PushObject(SpaType.ObjectProps, SpaParamType.Props);
+        builder.AddChoiceRangeInt(SpaProp.Volume, 1, 0, 2);
+
+        Assert.IsTrue(SpaPod.TryParse(builder.GetPod(), out SpaValue? value));
+        var choice = (SpaChoice)((SpaObject)value!).Properties[0].Value;
+
+        Assert.AreEqual(3, choice.Alternatives.Length);
     }
 }

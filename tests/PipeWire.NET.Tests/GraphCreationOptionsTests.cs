@@ -161,11 +161,11 @@ public sealed class GraphCreationOptionsTests
             PipeWireGraphSnapshot graph = await WaitForAsync(
                 registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
 
-            Assert.IsTrue(graph.GetNode(node.NodeId)!.Version > 0,
+            Assert.IsTrue(graph.GetNode(node.NodeId)!.InterfaceVersion > 0,
                 "the registry must record the version from the global event");
 
             foreach (PipeWirePort port in graph.GetPortsForNode(node.NodeId))
-                Assert.IsTrue(port.Version > 0, $"port {port.PortId} has no version");
+                Assert.IsTrue(port.InterfaceVersion > 0, $"port {port.PortId} has no version");
         }
     }
 }

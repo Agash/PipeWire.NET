@@ -158,7 +158,7 @@ public sealed class GraphIntegrationTests
                 if (registry.Current.GetPort(p.PortId) is null)
                     violations.Add($"port {p.PortId}");
             };
-            registry.SourceAdded += n =>
+            registry.NodeAdded += n =>
             {
                 if (registry.Current.GetNode(n.NodeId) is null)
                     violations.Add($"node {n.NodeId}");

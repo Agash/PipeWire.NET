@@ -17,12 +17,12 @@ public sealed class SpaPodReaderTests
     // --- pod construction helpers -------------------------------------------------------
 
     /// <summary>A pod is [uint32 size][uint32 type][body, padded to 8].</summary>
-    private static byte[] Pod(uint type, ReadOnlySpan<byte> body)
+    private static byte[] Pod(SpaType type, ReadOnlySpan<byte> body)
     {
         int padded = (body.Length + 7) & ~7;
         var pod = new byte[8 + padded];
         BitConverter.TryWriteBytes(pod.AsSpan(0, 4), (uint)body.Length);
-        BitConverter.TryWriteBytes(pod.AsSpan(4, 4), type);
+        BitConverter.TryWriteBytes(pod.AsSpan(4, 4), (uint)type);
         body.CopyTo(pod.AsSpan(8));
         return pod;
     }
@@ -151,7 +151,7 @@ public sealed class SpaPodReaderTests
         // Header says 64 bytes of body, buffer holds 8.
         var pod = new byte[16];
         BitConverter.TryWriteBytes(pod.AsSpan(0, 4), 64u);
-        BitConverter.TryWriteBytes(pod.AsSpan(4, 4), SpaType.Object);
+        BitConverter.TryWriteBytes(pod.AsSpan(4, 4), (uint)SpaType.Object);
 
         var reader = new SpaPodReader(pod);
         Assert.IsFalse(reader.EnterObject(out _, out _, out _),
@@ -167,7 +167,7 @@ public sealed class SpaPodReaderTests
         // bodySize is computed as size - 8, so anything under 8 underflows to nearly 4GB.
         var pod = new byte[24];
         BitConverter.TryWriteBytes(pod.AsSpan(0, 4), declaredSize);
-        BitConverter.TryWriteBytes(pod.AsSpan(4, 4), SpaType.Object);
+        BitConverter.TryWriteBytes(pod.AsSpan(4, 4), (uint)SpaType.Object);
 
         var reader = new SpaPodReader(pod);
         Assert.IsFalse(reader.EnterObject(out _, out _, out uint bodySize),
@@ -195,16 +195,16 @@ public sealed class SpaPodReaderTests
         var reader = new SpaPodReader(body);
         Assert.IsTrue(reader.EnterObject(out _, out _, out _));
 
-        Assert.IsTrue(reader.TryReadProperty(out uint k1, out SpaPodReader v1));
-        Assert.AreEqual(1u, k1);
+        Assert.IsTrue(reader.TryReadProperty(out SpaKey k1, out SpaPodReader v1));
+        Assert.AreEqual(1u, k1.Value);
         Assert.AreEqual(42, v1.ReadInt());
 
-        Assert.IsTrue(reader.TryReadProperty(out uint k2, out SpaPodReader v2));
-        Assert.AreEqual(2u, k2);
+        Assert.IsTrue(reader.TryReadProperty(out SpaKey k2, out SpaPodReader v2));
+        Assert.AreEqual(2u, k2.Value);
         Assert.AreEqual(7L, v2.ReadLong());
 
-        Assert.IsTrue(reader.TryReadProperty(out uint k3, out SpaPodReader v3));
-        Assert.AreEqual(3u, k3);
+        Assert.IsTrue(reader.TryReadProperty(out SpaKey k3, out SpaPodReader v3));
+        Assert.AreEqual(3u, k3.Value);
         Assert.AreEqual((640u, 480u), v3.ReadRectangle());
 
         Assert.IsFalse(reader.TryReadProperty(out _, out _), "the object had exactly three properties");
@@ -217,8 +217,8 @@ public sealed class SpaPodReaderTests
 
         var reader = new SpaPodReader(body);
         Assert.IsTrue(reader.EnterObject(out _, out _, out _));
-        Assert.IsTrue(reader.TryReadProperty(out uint key, out uint flags, out _));
-        Assert.AreEqual(9u, key);
+        Assert.IsTrue(reader.TryReadProperty(out SpaKey key, out uint flags, out _));
+        Assert.AreEqual(9u, key.Value);
         Assert.AreEqual(SpaPodPropFlag.DontFixate, flags & SpaPodPropFlag.DontFixate,
             "DontFixate must survive; it is what says a modifier list is still a choice");
     }

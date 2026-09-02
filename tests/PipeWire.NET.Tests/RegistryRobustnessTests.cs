@@ -60,8 +60,8 @@ public sealed class RegistryRobustnessTests
             // Every event, all throwing. If any of them escapes, this process is gone.
             var raised = new Dictionary<string, int>
             {
-                ["SourceAdded"] = 0, ["PortAdded"] = 0, ["LinkAdded"] = 0,
-                ["SourceRemoved"] = 0, ["PortRemoved"] = 0, ["LinkRemoved"] = 0,
+                ["NodeAdded"] = 0, ["PortAdded"] = 0, ["LinkAdded"] = 0,
+                ["NodeRemoved"] = 0, ["PortRemoved"] = 0, ["LinkRemoved"] = 0,
                 ["GraphChanged"] = 0,
             };
 
@@ -71,10 +71,10 @@ public sealed class RegistryRobustnessTests
                 throw new InvalidOperationException($"{which} handler is hostile");
             }
 
-            registry.SourceAdded += _ => Bang("SourceAdded");
+            registry.NodeAdded += _ => Bang("NodeAdded");
             registry.PortAdded += _ => Bang("PortAdded");
             registry.LinkAdded += _ => Bang("LinkAdded");
-            registry.SourceRemoved += _ => Bang("SourceRemoved");
+            registry.NodeRemoved += _ => Bang("NodeRemoved");
             registry.PortRemoved += _ => Bang("PortRemoved");
             registry.LinkRemoved += _ => Bang("LinkRemoved");
             registry.GraphChanged += (_, _) => Bang("GraphChanged");
@@ -207,7 +207,7 @@ public sealed class RegistryRobustnessTests
             var disposedFromHandler = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var once = 0;
 
-            registry.SourceAdded += node =>
+            registry.NodeAdded += node =>
             {
                 if (node.NodeName != "pwnet_suicidal") return;
                 if (Interlocked.Exchange(ref once, 1) != 0) return;

@@ -208,7 +208,7 @@ public sealed class GraphThreadingTests
             var issued = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var once = 0;
 
-            registry.SourceAdded += node =>
+            registry.NodeAdded += node =>
             {
                 if (node.NodeName != "pwnet_nested_trigger") return;
                 if (Interlocked.Exchange(ref once, 1) != 0) return;

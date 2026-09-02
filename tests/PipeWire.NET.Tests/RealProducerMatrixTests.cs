@@ -300,8 +300,8 @@ public sealed class RealProducerMatrixTests
 internal static class SpaFormatProbe
 {
     internal static int ImageSize(PixelFormat fmt, int width, int height) =>
-        SpaFormat.VideoImageSize(fmt, width, height);
+        SpaFormatPod.VideoImageSize(fmt, width, height);
 
     internal static int BlockSize(PixelFormat fmt, int width, int height) =>
-        SpaFormat.VideoBlockSize(fmt, width, height);
+        SpaFormatPod.VideoBlockSize(fmt, width, height);
 }

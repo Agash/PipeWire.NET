@@ -88,6 +88,10 @@ internal sealed class GstTestSource : IAsyncDisposable
                 throw new InvalidOperationException(
                     $"gst node '{nodeName}' did not appear. gst stderr:\n{err}");
             }
+
+            // Assigned here or not at all: the property is how a consumer targets this producer by
+            // id, and leaving it zero silently points every such lookup at nothing.
+            source.NodeId = node.NodeId;
             return source;
         }
         catch
@@ -149,9 +153,9 @@ internal sealed class GstTestSource : IAsyncDisposable
     {
         await using var reg = new PipeWireRegistry(ctx);
         var found = new TaskCompletionSource<PipeWireNode>(TaskCreationOptions.RunContinuationsAsynchronously);
-        reg.SourceAdded += s => { if (s.NodeName == nodeName) found.TrySetResult(s); };
+        reg.NodeAdded += s => { if (s.NodeName == nodeName) found.TrySetResult(s); };
 
-        foreach (var s in reg.Sources)
+        foreach (var s in reg.Nodes)
             if (s.NodeName == nodeName) return s;
 
         try { return await found.Task.WaitAsync(timeout); }

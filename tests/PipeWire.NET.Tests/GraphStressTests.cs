@@ -1,7 +1,8 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using PipeWire.NET.Generated;
+using PipeWire.NET.Interop;
+using PipeWire.NET.Spa;
 using PipeWire.NET.Graph;
 
 namespace PipeWire.NET.Tests;
