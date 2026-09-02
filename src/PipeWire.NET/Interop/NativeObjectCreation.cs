@@ -1,7 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using PipeWire.NET.Generated;
+using PipeWire.NET.Interop;
+using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Interop;
 
@@ -26,6 +27,8 @@ internal sealed class NativeObjectCreation : IDisposable
     private unsafe pw_core_events*  _coreEvents;
     private unsafe spa_hook*        _proxyHook;
     private unsafe spa_hook*        _coreHook;
+    private PipeWireLoopHandle? _loop;
+    private bool _loopReferenced;
     private GCHandle         _self;
     private IntPtr           _proxy;
     private int              _syncSeq;
@@ -97,6 +100,13 @@ internal sealed class NativeObjectCreation : IDisposable
     private unsafe void Start(ReadOnlySpan<byte> factoryName, ReadOnlySpan<byte> interfaceType,
                        uint interfaceVersion, spa_dict props)
     {
+        // A reference of its own on the loop, held for as long as the listeners are attached. The
+        // context is not enough: it clears its handle fields while the created proxy is still
+        // keeping the native loop and core alive, and the detach in Dispose has to work in exactly
+        // that window.
+        _loop = _ctx.LoopOwner;
+        _loop.DangerousAddRef(ref _loopReferenced);
+
         _self = GCHandle.Alloc(this, GCHandleType.Normal);
         void* data = (void*)GCHandle.ToIntPtr(_self);
 
@@ -146,7 +156,9 @@ internal sealed class NativeObjectCreation : IDisposable
     /// <summary>Hands the proxy to an owning handle; this instance no longer destroys it.</summary>
     private unsafe PipeWireProxyHandle TakeProxy()
     {
-        var owned = new PipeWireProxyHandle((pw_proxy*)_proxy, _ctx.LoopOwner);
+        // Holds both: the loop it needs to take a lock during destruction, and the core that must
+        // still be connected for the daemon to learn the object is gone.
+        var owned = new PipeWireProxyHandle((pw_proxy*)_proxy, _ctx.LoopOwner, _ctx.CoreOwner);
         _proxy = IntPtr.Zero;
         return owned;
     }
@@ -198,23 +210,43 @@ internal sealed class NativeObjectCreation : IDisposable
         _disposed = true;
 
         // Both hooks must be detached before their memory is freed. On success the caller keeps the
-        // proxy, so its listener would otherwise be left pointing at freed memory. spa_hook_remove is
-        // a no-op on a hook that was never attached.
-        // Skipped when the context is gone: the loop took the hooks with it, so detaching would be
-        // a use-after-free and taking the lock would throw out of Dispose.
-        if (!_ctx.IsDisposed)
+        // proxy, so its listener would otherwise be left pointing at freed memory. spa_hook_remove
+        // is a no-op on a hook that was never attached.
+        //
+        // Detached through this object's own loop reference, not the context's lock. A disposed
+        // context refuses its lock while the created proxy is still keeping the core alive - and
+        // freeing an attached listener then hands pw_core_disconnect a proxy whose events table is
+        // gone, which faults inside pw_proxy_destroy rather than merely leaking.
+        try
         {
-            using (_ctx.Lock())
+            if (_loopReferenced && !_loop!.IsInvalid)
             {
-                Native.spa_hook_remove(_coreHook);
-                Native.spa_hook_remove(_proxyHook);
+                pw_thread_loop* loop = _loop.Loop;
+                Native.pw_thread_loop_lock(loop);
+                try
+                {
+                    Native.spa_hook_remove(_coreHook);
+                    Native.spa_hook_remove(_proxyHook);
+                }
+                finally
+                {
+                    Native.pw_thread_loop_unlock(loop);
+                }
             }
         }
+        finally
+        {
+            if (_proxyHook is not null)   { NativeMemory.Free(_proxyHook);   _proxyHook = null; }
+            if (_coreHook is not null)    { NativeMemory.Free(_coreHook);    _coreHook = null; }
+            if (_proxyEvents is not null) { NativeMemory.Free(_proxyEvents); _proxyEvents = null; }
+            if (_coreEvents is not null)  { NativeMemory.Free(_coreEvents);  _coreEvents = null; }
+            if (_self.IsAllocated) _self.Free();
 
-        if (_proxyHook is not null)   { NativeMemory.Free(_proxyHook);   _proxyHook = null; }
-        if (_coreHook is not null)    { NativeMemory.Free(_coreHook);    _coreHook = null; }
-        if (_proxyEvents is not null) { NativeMemory.Free(_proxyEvents); _proxyEvents = null; }
-        if (_coreEvents is not null)  { NativeMemory.Free(_coreEvents);  _coreEvents = null; }
-        if (_self.IsAllocated) _self.Free();
+            if (_loopReferenced)
+            {
+                _loop!.DangerousRelease();
+                _loopReferenced = false;
+            }
+        }
     }
 }

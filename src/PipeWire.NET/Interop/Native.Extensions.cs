@@ -19,7 +19,7 @@
 #pragma warning disable CA1707 // Identifiers should not contain underscores (matches generated style)
 #pragma warning disable CA1711 // Identifiers should not have incorrect suffix
 
-namespace PipeWire.NET.Generated;
+namespace PipeWire.NET.Interop;
 
 public static unsafe partial class Native
 {
@@ -82,6 +82,13 @@ public static unsafe partial class Native
     public const string PW_TYPE_INTERFACE_NODE = PW_TYPE_INFO_INTERFACE_BASE + "Node";
     public const string PW_TYPE_INTERFACE_PORT = PW_TYPE_INFO_INTERFACE_BASE + "Port";
     public const string PW_TYPE_INTERFACE_LINK = PW_TYPE_INFO_INTERFACE_BASE + "Link";
+    public const string PW_TYPE_INTERFACE_DEVICE = PW_TYPE_INFO_INTERFACE_BASE + "Device";
+    public const string PW_TYPE_INTERFACE_CLIENT = PW_TYPE_INFO_INTERFACE_BASE + "Client";
+    public const string PW_TYPE_INTERFACE_FACTORY = PW_TYPE_INFO_INTERFACE_BASE + "Factory";
+    public const string PW_TYPE_INTERFACE_MODULE = PW_TYPE_INFO_INTERFACE_BASE + "Module";
+    public const string PW_TYPE_INTERFACE_METADATA = PW_TYPE_INFO_INTERFACE_BASE + "Metadata";
+    public const string PW_TYPE_INTERFACE_PROFILER = PW_TYPE_INFO_INTERFACE_BASE + "Profiler";
+    public const string PW_TYPE_INTERFACE_SECURITY_CONTEXT = PW_TYPE_INFO_INTERFACE_BASE + "SecurityContext";
 
     // - Sentinel ids -
 
@@ -119,6 +126,16 @@ public static unsafe partial class Native
     public const uint PW_VERSION_PROXY_EVENTS     = 1;
     public const uint PW_VERSION_STREAM_EVENTS    = 2;
     public const uint PW_VERSION_FILTER_EVENTS    = 1;
+    public const uint PW_VERSION_NODE_EVENTS      = 0;
+    public const uint PW_VERSION_NODE_METHODS     = 0;
+    public const uint PW_VERSION_DEVICE_METHODS   = 0;
+    public const uint PW_VERSION_CLIENT_METHODS2  = 0;
+    public const uint PW_VERSION_METADATA         = 3;
+    public const uint PW_VERSION_PROFILER         = 3;
+    public const uint PW_VERSION_PROFILER_EVENTS  = 0;
+    public const uint PW_VERSION_SECURITY_CONTEXT = 3;
+    public const uint PW_VERSION_METADATA_EVENTS  = 0;
+    public const uint PW_VERSION_METADATA_METHODS = 0;
     public const uint PW_VERSION_DATA_LOOP_EVENTS = 0;
     public const uint PW_VERSION_MAIN_LOOP_EVENTS = 0;
 
@@ -263,6 +280,224 @@ public static unsafe partial class Native
     }
 
     /// <summary>
+    /// Calls <c>pw_registry_methods.bind</c> via SPA interface dispatch, asking the daemon for a
+    /// proxy to an existing global so its own interface can be used.
+    /// </summary>
+    /// <remarks>
+    /// The registry reports that an object exists and what its properties are; binding is what makes
+    /// it addressable - enumerating a node's parameters, or writing a metadata entry, needs a proxy
+    /// to that object rather than to the registry. The proxy is owned by the caller and must be
+    /// destroyed exactly once.
+    /// </remarks>
+    /// <returns>The proxy, or <see langword="null"/> if the daemon refused.</returns>
+    public static pw_proxy* pw_registry_bind(
+        pw_registry* registry, uint id, sbyte* type, uint version, nuint userDataSize)
+    {
+        GetInterface(registry, out pw_registry_methods* methods, out void* data);
+        if (methods is null || methods->bind is null)
+            return null;
+        return (pw_proxy*)methods->bind(data, id, type, version, userDataSize);
+    }
+
+    // - Node -
+
+    public static int pw_node_add_listener(
+        pw_node* node, spa_hook* listener, pw_node_events* events, void* data)
+    {
+        GetInterface(node, out pw_node_methods* methods, out void* userData);
+        if (methods is null || methods->add_listener is null)
+            return -1;
+        return methods->add_listener(userData, listener, events, data);
+    }
+
+    /// <summary>
+    /// Asks for a range of one parameter's values. The answers arrive on the <c>param</c> event,
+    /// each carrying the sequence number given here.
+    /// </summary>
+    /// <remarks>
+    /// There is no "that was the last one" event. The end of the answers is found by round-tripping
+    /// the core afterwards: events are ordered, so the sync's <c>done</c> cannot arrive before every
+    /// <c>param</c> the request produced.
+    /// </remarks>
+    public static int pw_node_enum_params(
+        pw_node* node, int seq, uint id, uint start, uint num, spa_pod* filter)
+    {
+        GetInterface(node, out pw_node_methods* methods, out void* data);
+        if (methods is null || methods->enum_params is null)
+            return -1;
+        return methods->enum_params(data, seq, id, start, num, filter);
+    }
+
+    public static int pw_node_set_param(pw_node* node, uint id, uint flags, spa_pod* param)
+    {
+        GetInterface(node, out pw_node_methods* methods, out void* data);
+        if (methods is null || methods->set_param is null)
+            return -1;
+        return methods->set_param(data, id, flags, param);
+    }
+
+    /// <summary>
+    /// Asks the daemon to push a <c>param</c> event whenever one of these parameters changes,
+    /// instead of only when asked.
+    /// </summary>
+    public static int pw_node_subscribe_params(pw_node* node, uint* ids, uint nIds)
+    {
+        GetInterface(node, out pw_node_methods* methods, out void* data);
+        if (methods is null || methods->subscribe_params is null)
+            return -1;
+        return methods->subscribe_params(data, ids, nIds);
+    }
+
+    // - Device -
+
+    public static int pw_device_add_listener(
+        pw_device* device, spa_hook* listener, pw_device_events* events, void* data)
+    {
+        GetInterface(device, out pw_device_methods* methods, out void* userData);
+        if (methods is null || methods->add_listener is null)
+            return -1;
+        return methods->add_listener(userData, listener, events, data);
+    }
+
+    /// <inheritdoc cref="pw_node_enum_params"/>
+    public static int pw_device_enum_params(
+        pw_device* device, int seq, uint id, uint start, uint num, spa_pod* filter)
+    {
+        GetInterface(device, out pw_device_methods* methods, out void* data);
+        if (methods is null || methods->enum_params is null)
+            return -1;
+        return methods->enum_params(data, seq, id, start, num, filter);
+    }
+
+    public static int pw_device_set_param(pw_device* device, uint id, uint flags, spa_pod* param)
+    {
+        GetInterface(device, out pw_device_methods* methods, out void* data);
+        if (methods is null || methods->set_param is null)
+            return -1;
+        return methods->set_param(data, id, flags, param);
+    }
+
+    /// <inheritdoc cref="pw_node_subscribe_params"/>
+    public static int pw_device_subscribe_params(pw_device* device, uint* ids, uint nIds)
+    {
+        GetInterface(device, out pw_device_methods* methods, out void* data);
+        if (methods is null || methods->subscribe_params is null)
+            return -1;
+        return methods->subscribe_params(data, ids, nIds);
+    }
+
+    // - Client -
+
+    public static int pw_client_add_listener(
+        pw_client* client, spa_hook* listener, pw_client_events* events, void* data)
+    {
+        GetInterface(client, out pw_client_methods* methods, out void* userData);
+        if (methods is null || methods->add_listener is null)
+            return -1;
+        return methods->add_listener(userData, listener, events, data);
+    }
+
+    /// <summary>
+    /// Replaces what a client is permitted to do with the objects named in
+    /// <paramref name="permissions"/>.
+    /// </summary>
+    /// <remarks>
+    /// Only a client with the manager permission may do this - normally a session manager, not an
+    /// ordinary application. Permissions are absolute, not a delta: an object listed with fewer
+    /// bits than it had loses the difference.
+    /// </remarks>
+    public static int pw_client_update_permissions(
+        pw_client* client, uint nPermissions, pw_permission* permissions)
+    {
+        GetInterface(client, out pw_client_methods* methods, out void* data);
+        if (methods is null || methods->update_permissions is null)
+            return -1;
+        return methods->update_permissions(data, nPermissions, permissions);
+    }
+
+    /// <summary>Asks for a range of a client's permissions, answered on the <c>permissions</c> event.</summary>
+    public static int pw_client_get_permissions(pw_client* client, uint index, uint num)
+    {
+        GetInterface(client, out pw_client_methods* methods, out void* data);
+        if (methods is null || methods->get_permissions is null)
+            return -1;
+        return methods->get_permissions(data, index, num);
+    }
+
+    public static int pw_client_update_properties(pw_client* client, spa_dict* props)
+    {
+        GetInterface(client, out pw_client_methods* methods, out void* data);
+        if (methods is null || methods->update_properties is null)
+            return -1;
+        return methods->update_properties(data, props);
+    }
+
+    // - Metadata -
+
+    /// <summary>Attaches a listener to a profiler, whose only event is the profiling pod.</summary>
+    public static int pw_profiler_add_listener(
+        void* profiler, spa_hook* listener, pw_profiler_events* events, void* data)
+    {
+        GetInterface(profiler, out pw_profiler_methods* methods, out void* userData);
+        if (methods is null || methods->add_listener is null)
+            return -1;
+        return methods->add_listener(userData, listener, events, data);
+    }
+
+    /// <summary>
+    /// Creates a sandboxed connection point on a security context.
+    /// </summary>
+    /// <remarks>
+    /// The two descriptors are the point of the interface: <paramref name="listenFd"/> is a listening
+    /// socket the daemon accepts sandboxed clients on, and <paramref name="closeFd"/> is what the
+    /// daemon watches to know the sandbox is gone. Anything connecting through that socket gets the
+    /// permissions described by the properties, not the creator's.
+    /// </remarks>
+    public static int pw_security_context_create(
+        void* context, int listenFd, int closeFd, spa_dict* props)
+    {
+        GetInterface(context, out pw_security_context_methods* methods, out void* userData);
+        if (methods is null || methods->create is null)
+            return -1;
+        return methods->create(userData, listenFd, closeFd, props);
+    }
+
+    public static int pw_metadata_add_listener(
+        pw_metadata* metadata, spa_hook* listener, pw_metadata_events* events, void* data)
+    {
+        GetInterface(metadata, out pw_metadata_methods* methods, out void* userData);
+        if (methods is null || methods->add_listener is null)
+            return -1;
+        return methods->add_listener(userData, listener, events, data);
+    }
+
+    /// <summary>
+    /// Sets, or with a null value removes, one entry in a metadata store.
+    /// </summary>
+    /// <remarks>
+    /// Entries are strings, not pods - which is why the metadata interface needs none of the POD
+    /// machinery the parameter interfaces do. The subject is the id the entry is about, and
+    /// <see cref="PW_ID_CORE"/> is the subject for daemon-wide settings such as the default sink.
+    /// </remarks>
+    public static int pw_metadata_set_property(
+        pw_metadata* metadata, uint subject, sbyte* key, sbyte* type, sbyte* value)
+    {
+        GetInterface(metadata, out pw_metadata_methods* methods, out void* data);
+        if (methods is null || methods->set_property is null)
+            return -1;
+        return methods->set_property(data, subject, key, type, value);
+    }
+
+    /// <summary>Removes every entry in a metadata store.</summary>
+    public static int pw_metadata_clear(pw_metadata* metadata)
+    {
+        GetInterface(metadata, out pw_metadata_methods* methods, out void* data);
+        if (methods is null || methods->clear is null)
+            return -1;
+        return methods->clear(data);
+    }
+
+    /// <summary>
     /// Detaches a listener, reimplementing <c>spa_hook_remove</c>. That is a static inline in
     /// spa/utils/hook.h and exports no symbol, so it cannot be called through P/Invoke.
     /// </summary>
@@ -274,8 +509,9 @@ public static unsafe partial class Native
     {
         if (hook is null) return;
 
-        // spa_list_is_initialized: a hook that was never attached has a null prev.
-        if (hook->link.prev is not null)
+        // spa_list_is_initialized: a hook that was never attached has a null prev. Both ends are
+        // checked because a half-unlinked hook would otherwise be dereferenced through a null next.
+        if (hook->link.prev is not null && hook->link.next is not null)
         {
             hook->link.prev->next = hook->link.next;
             hook->link.next->prev = hook->link.prev;

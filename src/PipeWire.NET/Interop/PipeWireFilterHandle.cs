@@ -1,34 +1,18 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using PipeWire.NET.Interop;
-using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Interop;
 
 /// <summary>
-/// Owns a <c>pw_proxy</c> returned by <c>pw_core_create_object</c>.
+/// Owns a <c>pw_filter</c>.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <c>pw_proxy_destroy</c> is the single destruction operation: it asks the server to destroy the
-/// resource when one is still live, and finishes local teardown when the server already removed it.
-/// Calling it twice trips an assertion in PipeWire and aborts the process, so the handle owns that
-/// call exclusively - a <c>removed</c> event handler must record the removal and leave the destroy
-/// to disposal.
-/// </para>
-/// <para>
-/// Destruction runs under the thread-loop lock, which is why the handle holds a reference on
-/// <see cref="PipeWireLoopHandle"/> for its whole lifetime.
-/// </para>
-/// <para>
-/// The listener's memory belongs to the handle too, for the same reason the proxy does: the daemon
-/// dispatches through the events table until the proxy is destroyed, and destruction is deferred
-/// for as long as anyone holds a reference. Freeing that memory when the owner is disposed rather
-/// than when the proxy actually goes would leave a live listener pointing into freed memory.
-/// </para>
+/// Sits where a stream does in the ownership chain: it needs the loop to take a lock while it is
+/// torn down, and its core to still be connected for the disconnect to reach the daemon. Holding
+/// both means disposal works whichever order the caller unwinds in.
 /// </remarks>
 [SupportedOSPlatform("linux")]
-internal sealed unsafe class PipeWireProxyHandle : SafeHandle
+internal sealed unsafe class PipeWireFilterHandle : SafeHandle
 {
     private readonly PipeWireLoopHandle _loop;
     private readonly PipeWireCoreHandle? _core;
@@ -38,13 +22,14 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
     private spa_hook* _hook;
     private GCHandle _self;
 
-    internal PipeWireProxyHandle(pw_proxy* proxy, PipeWireLoopHandle loop, PipeWireCoreHandle? core = null)
-        : base((IntPtr)proxy, ownsHandle: true)
+    internal PipeWireFilterHandle(pw_filter* filter, PipeWireLoopHandle loop, PipeWireCoreHandle? core)
+        : base((IntPtr)filter, ownsHandle: true)
     {
         ArgumentNullException.ThrowIfNull(loop);
 
-        // Both, and in this order. Destroying a proxy needs the loop to take its lock, and needs
-        // its core to still be connected or the daemon never learns the object is gone.
+        // Each reference is recorded in its own flag, so a failure to take the second one still
+        // releases the first: ReleaseHandle runs on a partially built handle too, and releasing a
+        // reference that was never taken would corrupt the parent's count.
         // Rolled back explicitly. If the second reference throws, the first is already taken and
         // the constructor never completes, so nothing would ever release it.
         _loop = loop;
@@ -62,9 +47,14 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
         }
     }
 
+
     /// <summary>
-    /// Hands the handle the listener memory to free once the proxy has actually been destroyed.
+    /// Hands the handle the listener memory, freed once the native object has been destroyed.
     /// </summary>
+    /// <remarks>
+    /// Destruction is deferred while anyone holds a reference, so freeing this from the wrapper
+    /// leaves a live listener pointing into freed memory.
+    /// </remarks>
     internal void OwnListener(void* events, spa_hook* hook, GCHandle self)
     {
         _events = events;
@@ -72,24 +62,30 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
         _self = self;
     }
 
+    /// <inheritdoc/>
     public override bool IsInvalid => handle == IntPtr.Zero;
 
-    internal pw_proxy* Proxy => (pw_proxy*)handle;
+    /// <summary>The underlying filter.</summary>
+    internal pw_filter* Filter => (pw_filter*)handle;
 
+    /// <inheritdoc/>
     protected override bool ReleaseHandle()
     {
-        var proxy = (pw_proxy*)handle;
+        var filter = (pw_filter*)handle;
         handle = IntPtr.Zero;
 
         try
         {
-            if (proxy is not null && _loopReferenced && !_loop.IsInvalid)
+            // Under the loop lock, so no process or event callback can be in flight against the
+            // filter being destroyed.
+            if (filter is not null && _loopReferenced && !_loop.IsInvalid)
             {
                 pw_thread_loop* loop = _loop.Loop;
                 Native.pw_thread_loop_lock(loop);
                 try
                 {
-                    Native.pw_proxy_destroy(proxy);
+                    Native.pw_filter_disconnect(filter);
+                    Native.pw_filter_destroy(filter);
                 }
                 finally
                 {
@@ -99,8 +95,6 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
         }
         finally
         {
-            // Released in the reverse order they were taken: the core first, so it can disconnect
-            // once the last proxy is gone, then the loop the core itself needs.
             if (_coreReferenced)
             {
                 _core!.DangerousRelease();
@@ -111,9 +105,7 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
                 _loop.DangerousRelease();
                 _loopReferenced = false;
             }
-
-            // After the destroy, never before: destroying the proxy is what detaches the listener,
-            // so until that has run the daemon can still dispatch through this table.
+            // After the destroy, never before: destroying the object is what detaches the listener.
             if (_hook is not null)
             {
                 NativeMemory.Free(_hook);
@@ -126,7 +118,9 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
             }
             if (_self.IsAllocated)
                 _self.Free();
+
         }
+
         return true;
     }
 }
