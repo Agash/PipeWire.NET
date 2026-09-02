@@ -131,6 +131,7 @@ public static unsafe partial class Native
     public const uint PW_VERSION_DEVICE_METHODS   = 0;
     public const uint PW_VERSION_CLIENT_METHODS2  = 0;
     public const uint PW_VERSION_METADATA         = 3;
+    public const uint PW_VERSION_IMPL_METADATA_EVENTS = 0;
     public const uint PW_VERSION_PROFILER         = 3;
     public const uint PW_VERSION_PROFILER_EVENTS  = 0;
     public const uint PW_VERSION_SECURITY_CONTEXT = 3;

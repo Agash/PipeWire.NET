@@ -33,15 +33,31 @@ public sealed class MetadataReconcilerTests
 
     private static void Write(MetadataReconciler r, string? value) => r.NoteWrite(Subject, Key, Type, value);
 
-    private static bool Echo(MetadataReconciler r, string? value) => r.ShouldApply(Subject, Key, Type, value);
+    /// <summary>True when the echo reaches the cache at all, raised or not.</summary>
+    private static bool Echo(MetadataReconciler r, string? value) =>
+        r.Classify(Subject, Key, Type, value) != MetadataReconciler.EchoAction.Drop;
+
+    private static MetadataReconciler.EchoAction Classify(MetadataReconciler r, string? value) =>
+        r.Classify(Subject, Key, Type, value);
 
     [TestMethod]
-    public void AnEchoOfTheOnlyWrite_IsApplied()
+    public void AnEchoOfTheOnlyWrite_IsAppliedButNotRaisedTwice()
+    {
+        // The store raised it when it applied the write, so raising again would report one change
+        // twice to every subscriber.
+        MetadataReconciler r = NewReconciler();
+        Write(r, "A");
+
+        Assert.AreEqual(MetadataReconciler.EchoAction.AlreadyKnown, Classify(r, "A"));
+    }
+
+    [TestMethod]
+    public void AnEchoOfAValueNobodyHereWrote_IsRaised()
     {
         MetadataReconciler r = NewReconciler();
         Write(r, "A");
 
-        Assert.IsTrue(Echo(r, "A"));
+        Assert.AreEqual(MetadataReconciler.EchoAction.ApplyAndRaise, Classify(r, "external"));
     }
 
     [TestMethod]
@@ -86,7 +102,7 @@ public sealed class MetadataReconcilerTests
         MetadataReconciler r = NewReconciler();
         r.NoteWrite(Subject, Key, "Spa:String", "42");
 
-        Assert.IsTrue(r.ShouldApply(Subject, Key, "Spa:Int", "42"),
+        Assert.AreEqual(MetadataReconciler.EchoAction.ApplyAndRaise, r.Classify(Subject, Key, "Spa:Int", "42"),
             "state is (subject, key, type, value); the same text under another type is a different change");
     }
 
@@ -202,5 +218,36 @@ public sealed class MetadataReconcilerTests
 
             if (random.Next(20) == 0) Advance(TimeSpan.FromSeconds(1));
         }
+    }
+
+    [TestMethod]
+    public void WritesRacingTheBucketBeingRemoved_AreNeverLost()
+    {
+        // NoteWrite takes the bucket from the dictionary and locks it in two steps. A Forget in
+        // between empties the key and removes the bucket, so without a re-check the write lands in
+        // an orphan and the echo it was meant to suppress reads as somebody else's change.
+        var reconciler = new MetadataReconciler(TimeSpan.FromSeconds(30));
+        var faults = new System.Collections.Concurrent.ConcurrentQueue<string>();
+
+        Task[] workers =
+        [
+            .. Enumerable.Range(0, 8).Select(w => Task.Run(() =>
+            {
+                for (int i = 0; i < 4000; i++)
+                {
+                    string k = $"key-{i % 4}";
+                    MetadataReconciler.PendingWrite pending = reconciler.NoteWrite(Subject, k, Type, $"v{w}");
+
+                    // The write must be visible to the classifier the instant it is recorded.
+                    if (reconciler.Classify(Subject, k, Type, $"v{w}") == MetadataReconciler.EchoAction.ApplyAndRaise)
+                        faults.Enqueue($"worker {w} step {i}: its own write was not recorded");
+
+                    reconciler.Forget(Subject, k, pending);
+                }
+            })),
+        ];
+
+        Task.WaitAll(workers);
+        Assert.IsTrue(faults.IsEmpty, faults.TryDequeue(out string? first) ? first : string.Empty);
     }
 }

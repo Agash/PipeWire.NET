@@ -82,6 +82,18 @@ public readonly ref struct AudioFrame
     /// </summary>
     public long DelayNs { get; }
 
-    /// <summary>Number of frames (samples per channel) in this chunk.</summary>
-    public int FrameCount => Samples.Length / (Channels * Format.BytesPerSample());
+    /// <summary>Number of frames (samples per channel) in this chunk, or 0 if the format is unusable.</summary>
+    /// <remarks>
+    /// A frame arrives from a producer, so its channel count is an input rather than a fact. Zero
+    /// channels is a divide by zero on a property, which throws from somewhere a caller has no
+    /// reason to guard.
+    /// </remarks>
+    public int FrameCount
+    {
+        get
+        {
+            int stride = Channels * Format.BytesPerSample();
+            return stride <= 0 ? 0 : Samples.Length / stride;
+        }
+    }
 }

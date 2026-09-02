@@ -53,7 +53,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
     /// <summary>
     /// Invoked after <see cref="FormatHandler"/> so the stream can declare its buffer/meta
-    /// requirements (it now knows the negotiated geometry). Call <see cref="RequestParams"/>
+    /// requirements (it now knows the negotiated geometry). Call <see cref="RequestParamsFromCallback"/>
     /// from here. If not supplied, the core requests just the SPA_META_Header.
     /// </summary>
     internal delegate void PostFormatHandler(PipeWireStreamCore core);
@@ -257,7 +257,13 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
         if (self is null || self._disposed) return;
 
-        pw_buffer* buf = Native.pw_stream_dequeue_buffer(self._stream);
+        // Snapshotted once. Every call in this callback, including the queue in the finally, must
+        // use the same pointer: re-reading the field would let a disposal between the dequeue and
+        // the requeue hand the second call a different one.
+        pw_stream* stream = self._stream;
+        if (stream is null) return;
+
+        pw_buffer* buf = Native.pw_stream_dequeue_buffer(stream);
         if (buf is null)
         {
             // No buffer queued for this cycle: the producer hasn't filled one yet (start-up) or is
@@ -281,7 +287,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             // plus media position (ticks*rate) and latency (delay*rate) per PipeWire's timing model.
             StreamClock clock = new(-1, -1, 0);
             pw_time t;
-            if (Native.pw_stream_get_time_n(self._stream, &t, (nuint)sizeof(pw_time)) == 0)
+            if (Native.pw_stream_get_time_n(stream, &t, (nuint)sizeof(pw_time)) == 0)
             {
                 long num = t.rate.num, denom = t.rate.denom;     // seconds per tick = num/denom
                 long mediaNs = denom != 0 ? (long)((double)(ulong)t.ticks * num / denom * 1e9) : -1;
@@ -302,7 +308,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         }
         finally
         {
-            Native.pw_stream_queue_buffer(self._stream, buf);
+            Native.pw_stream_queue_buffer(stream, buf);
         }
     }
 
@@ -311,9 +317,18 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     {
         var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
         if (self is null || self._disposed) return;
-        // Producer backs this buffer with its own dmabuf here. Contain exceptions: an escaping throw
-        // from this unmanaged callback would abort the process.
-        try { self._onAddBuffer?.Invoke(buffer); } catch { /* leave buffer unbacked; negotiation continues */ }
+        // The producer backs this buffer with its own dmabuf here. An escaping throw would abort the
+        // process, and a silent swallow hides a handler that fails on every buffer, so the fault is
+        // recorded for a non-realtime reader.
+        try
+        {
+            self._onAddBuffer?.Invoke(buffer);
+        }
+        catch (Exception ex)
+        {
+            self._lastProcessFault = ex;
+            Interlocked.Increment(ref self._processFaults);
+        }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -321,7 +336,15 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     {
         var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
         if (self is null) return;
-        try { self._onRemoveBuffer?.Invoke(buffer); } catch { /* best-effort release */ }
+        try
+        {
+            self._onRemoveBuffer?.Invoke(buffer);
+        }
+        catch (Exception ex)
+        {
+            self._lastProcessFault = ex;
+            Interlocked.Increment(ref self._processFaults);
+        }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -457,7 +480,16 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// Sends up to two param pods via pw_stream_update_params. Call only from the param_changed
     /// callback (where the loop lock is held), e.g. from a <see cref="PostFormatHandler"/>.
     /// </summary>
-    internal void RequestParams(ReadOnlySpan<byte> pod0, ReadOnlySpan<byte> pod1 = default)
+    /// <summary>
+    /// Announces new params. Valid only from a stream callback, where the loop lock is already held.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately does not take the lock. Every caller is a format or peer callback dispatched by
+    /// the loop thread, which holds it already; taking it here again is harmless today because the
+    /// mutex is recursive, but the name records the contract so it does not get "fixed" into a call
+    /// that also runs from a caller thread.
+    /// </remarks>
+    internal void RequestParamsFromCallback(ReadOnlySpan<byte> pod0, ReadOnlySpan<byte> pod1 = default)
     {
         fixed (byte* p0 = pod0)
         fixed (byte* p1 = pod1)

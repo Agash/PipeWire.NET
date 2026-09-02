@@ -153,6 +153,12 @@ internal ref struct SpaPodBuilder
     }
 
     /// <summary>Choice(Flags) over Int - a single bitmask value (e.g. allowed buffer data types).</summary>
+    /// <summary>Choice(Flags) over Int.</summary>
+    /// <remarks>
+    /// One value, not two. spa/pod/pod.h documents SPA_CHOICE_Flags as "first value is flags",
+    /// unlike Range and Enum which take a default plus alternatives. Writing a second value as a
+    /// mask is not what a reader expects.
+    /// </remarks>
     public void AddChoiceFlagsInt(SpaKey key, int flags)
     {
         WritePropHeader(key);

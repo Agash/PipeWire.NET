@@ -75,7 +75,6 @@ internal static class PipeWireKeys
     public static ReadOnlySpan<byte> NullAudioSink => "support.null-audio-sink"u8;
     public static ReadOnlySpan<byte> Adapter => "adapter"u8;
     public static ReadOnlySpan<byte> LinkFactory => "link-factory"u8;
-    public static ReadOnlySpan<byte> MetadataFactory => "metadata"u8;
     public static ReadOnlySpan<byte> AudioSink => "Audio/Sink"u8;
     public static ReadOnlySpan<byte> StereoPosition => "[ FL FR ]"u8;
 

@@ -11,7 +11,6 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct pw_client
+public partial struct pw_impl_metadata
 {
 }
-

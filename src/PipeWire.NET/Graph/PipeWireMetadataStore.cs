@@ -41,6 +41,10 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
 
     private readonly MetadataReconciler _reconciler = new(TimeSpan.FromSeconds(5));
 
+    // Bumped by every clear. A write issued before a clear must not apply after it: the local
+    // apply is optimistic and can land out of order with one, which puts a cleared entry back.
+    private long _epoch;
+
     private BoundProxy? _bound;
     private volatile bool _disposed;
 
@@ -151,6 +155,7 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
         // The marker goes in BEFORE the write. Set afterwards it is set too late to be matched by
         // its own echo, and then sits there permanently - silently discarding every later change
         // another client makes to the same key.
+        long epoch = Volatile.Read(ref _epoch);
         MetadataReconciler.PendingWrite pending = _reconciler.NoteWrite(subject, key, type, value);
 
         try
@@ -161,7 +166,16 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
             Task roundTrip = CoreSync.RoundTripAsync(
                 _ctx, () => Write(subject, key, type, value), cancellationToken);
 
-            Apply(new PipeWireMetadataEntry(subject, key, type, value));
+            // Raised here, not when the echo lands. A write superseded before its echo arrives
+            // never gets one, and a caller should still be told about a change it made. Skipped
+            // when a clear happened while this was in flight, since the clear is the later intent.
+            if (Volatile.Read(ref _epoch) == epoch)
+            {
+                var applied = new PipeWireMetadataEntry(subject, key, type, value);
+                Apply(applied);
+                Raise(applied);
+            }
+
             await roundTrip.ConfigureAwait(false);
             _reconciler.Settle(subject, key);
         }
@@ -234,9 +248,11 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
 
         await CoreSync.RoundTripAsync(_ctx, ClearNative, cancellationToken).ConfigureAwait(false);
 
-        // The cache and the in-flight record are dropped with it. Left alone, a read straight after
-        // a clear still reports the old entries, and echoes of writes issued before the clear are
-        // still recognised as ours and put their values back into an emptied store.
+        // Bumped first, so a write already in flight sees a different epoch and declines to apply
+        // itself after this. The cache and the in-flight records go with it: left alone, a read
+        // straight after a clear still reports the old entries, and echoes of writes issued before
+        // it are still recognised as ours and put their values back into an emptied store.
+        Interlocked.Increment(ref _epoch);
         _entries.Clear();
         _reconciler.Clear();
     }
@@ -309,10 +325,20 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
 
         var entry = new PipeWireMetadataEntry(subject, key, type, value);
 
-        if (!_reconciler.ShouldApply(subject, key, type, value)) return;
+        switch (_reconciler.Classify(subject, key, type, value))
+        {
+            case MetadataReconciler.EchoAction.Drop:
+                return;
 
-        Apply(entry);
-        Raise(entry);
+            case MetadataReconciler.EchoAction.AlreadyKnown:
+                Apply(entry);
+                return;
+
+            default:
+                Apply(entry);
+                Raise(entry);
+                return;
+        }
     }
 
     /// <summary>Reports one change to subscribers, isolating a handler that throws.</summary>

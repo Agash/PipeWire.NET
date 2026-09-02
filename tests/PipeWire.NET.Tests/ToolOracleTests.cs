@@ -62,14 +62,28 @@ public sealed class ToolOracleTests
             PwDump dump = await PwDump.CaptureAsync(cts.Token);
             PipeWireGraphSnapshot ours = registry.Current;
 
-            AssertSameIds("Node", dump.IdsOfKind("Node"), ours.Nodes.Select(n => n.NodeId));
-            AssertSameIds("Port", dump.IdsOfKind("Port"), ours.Ports.Select(p => p.PortId));
-            AssertSameIds("Link", dump.IdsOfKind("Link"), ours.Links.Select(l => l.LinkId));
-            AssertSameIds("Device", dump.IdsOfKind("Device"), ours.Devices.Select(d => d.Id));
-            AssertSameIds("Client", dump.IdsOfKind("Client"), ours.Clients.Select(c => c.Id));
-            AssertSameIds("Factory", dump.IdsOfKind("Factory"), ours.Factories.Select(f => f.Id));
-            AssertSameIds("Module", dump.IdsOfKind("Module"), ours.Modules.Select(m => m.Id));
-            AssertSameIds("Metadata", dump.IdsOfKind("Metadata"), ours.MetadataStores.Select(m => m.Id));
+            AssertWeSeeAll("Node", dump.IdsOfKind("Node"), ours.Nodes.Select(n => n.NodeId));
+            AssertWeSeeAll("Port", dump.IdsOfKind("Port"), ours.Ports.Select(p => p.PortId));
+            AssertWeSeeAll("Link", dump.IdsOfKind("Link"), ours.Links.Select(l => l.LinkId));
+            AssertWeSeeAll("Device", dump.IdsOfKind("Device"), ours.Devices.Select(d => d.Id));
+            // Clients are compared as a superset: pw-dump connects to produce the dump, so its own
+            // client is in its output and cannot be in a snapshot taken before it ran.
+            var theirClients = dump.IdsOfKind("Client").ToHashSet();
+            var ourClients = ours.Clients.Select(c => c.Id).ToHashSet();
+            var weLack = ourClients.Except(theirClients).ToList();
+            Assert.IsTrue(weLack.Count == 0,
+                $"Client: we report ids pw-dump does not have [{string.Join(",", weLack)}]");
+            // pw-dump connects in order to produce the dump, so its own client is in its output and
+            // cannot be in a snapshot taken before it ran.
+            AssertWeSeeAll(
+                "Client",
+                dump.OfKind("Client")
+                    .Where(e => !string.Equals(e.Prop("application.name"), "pw-dump", StringComparison.Ordinal))
+                    .Select(e => e.Id),
+                ours.Clients.Select(c => c.Id));
+            AssertWeSeeAll("Factory", dump.IdsOfKind("Factory"), ours.Factories.Select(f => f.Id));
+            AssertWeSeeAll("Module", dump.IdsOfKind("Module"), ours.Modules.Select(m => m.Id));
+            AssertWeSeeAll("Metadata", dump.IdsOfKind("Metadata"), ours.MetadataStores.Select(m => m.Id));
 
             // And the properties we parsed for our own node match what pw-dump read independently.
             PwDump.Entry? theirs = dump.ById(node.NodeId);
@@ -81,22 +95,22 @@ public sealed class ToolOracleTests
         }
     }
 
-    private static void AssertSameIds(string kind, IEnumerable<uint> theirs, IEnumerable<uint> ours)
+    /// <summary>Everything pw-dump reports must be in our graph.</summary>
+    /// <remarks>
+    /// A containment check, not equality. pw-dump binds each object to describe it and omits the
+    /// ones it cannot, while the registry reports every global it is told about, so our side is
+    /// legitimately the larger of the two. Missing one is the defect worth catching.
+    /// </remarks>
+    private static void AssertWeSeeAll(string kind, IEnumerable<uint> theirs, IEnumerable<uint> ours)
     {
-        // Sorted sets, so the failure names exactly which ids each side has and the other does not.
-        var t = theirs.ToHashSet();
-        var o = ours.ToHashSet();
+        var missing = theirs.ToHashSet().Except(ours.ToHashSet()).Order().ToList();
 
-        var missing = t.Except(o).Order().ToList();
-        var extra = o.Except(t).Order().ToList();
-
-        Assert.IsTrue(missing.Count == 0 && extra.Count == 0,
-            $"{kind}: pw-dump has {missing.Count} we lack [{string.Join(",", missing)}], "
-            + $"we have {extra.Count} it lacks [{string.Join(",", extra)}]");
+        Assert.IsTrue(missing.Count == 0,
+            $"{kind}: pw-dump reports ids we never saw [{string.Join(",", missing)}]");
     }
 
     [TestMethod]
-    public async Task AVolumeWeSet_IsReportedByWpctl()
+    public async Task AVolumeWpctlSets_IsReportedByUs()
     {
         RequireLinux();
         CliTool wpctl = CliTool.Require("wpctl");
@@ -111,24 +125,30 @@ public sealed class ToolOracleTests
             await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
             await control.ReadyAsync(cts.Token);
 
-            const float Target = 0.42f;
-            await control.SetVolumeAsync(Target, cts.Token);
-
-            // wpctl is WirePlumber's view, not the daemon's raw one: it goes through the policy
-            // layer, so agreeing with it means the change is visible where a user would look.
+            // wpctl sets and we read, not the other way round. WirePlumber applies its own policy to
+            // nodes it manages and will overwrite a volume written straight to the node, so asserting
+            // that wpctl reports our value races the session manager. This direction has one
+            // authority: whatever wpctl did, we must see.
+            // wpctl's scale is cubic; PipeWire stores linear amplitude. Setting 0.42 through wpctl
+            // lands 0.42^3 in channelVolumes, and the two agreeing on that is the point.
+            const float Asked = 0.42f;
+            float expected = Asked * Asked * Asked;
             string id = node.NodeId.ToString(CultureInfo.InvariantCulture);
-            (int exit, string stdout, _) = await wpctl.RunAsync(["get-volume", id], cts.Token);
+            (int exit, _, string stderr) = await wpctl.RunAsync(
+                ["set-volume", id, Asked.ToString(CultureInfo.InvariantCulture)], cts.Token);
 
             if (exit != 0)
-                Assert.Inconclusive("wpctl cannot report this node's volume on this session.");
+                Assert.Inconclusive($"wpctl cannot set this node's volume on this session: {stderr}");
 
-            // "Volume: 0.42"
-            string[] parts = stdout.Split(':', StringSplitOptions.TrimEntries);
-            Assert.IsTrue(parts.Length >= 2, $"unexpected wpctl output: {stdout}");
-            Assert.IsTrue(float.TryParse(parts[1].Split(' ')[0], CultureInfo.InvariantCulture, out float reported),
-                $"could not read a volume out of: {stdout}");
+            bool sawIt = await EventuallyAsync(async () =>
+            {
+                ImmutableArray<float> volumes = await control.GetChannelVolumesAsync(cts.Token);
+                return !volumes.IsDefaultOrEmpty && volumes.All(v => Math.Abs(v - expected) < 0.005f);
+            }, TimeSpan.FromSeconds(15), cts.Token);
 
-            Assert.AreEqual(Target, reported, 0.01f, "wpctl disagrees with the volume we set");
+            Assert.IsTrue(sawIt,
+                $"wpctl set {Asked} (expecting {expected} linear) and we report "
+                + $"[{string.Join(",", await control.GetChannelVolumesAsync(cts.Token))}]");
 
             await registry.RemoveObjectAsync(node.NodeId, cts.Token);
         }
@@ -149,6 +169,7 @@ public sealed class ToolOracleTests
             string name = Unique("pwnet_pwcat");
             using Process player = pwcat.Start(
                 "--playback", "--target", "0", "--media-role", "Music",
+                "--rate", "48000", "--channels", "2", "--format", "s16", "--raw",
                 "--properties", $"node.name={name}", "/dev/zero");
 
             try

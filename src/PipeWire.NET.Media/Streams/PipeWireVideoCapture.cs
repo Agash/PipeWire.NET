@@ -227,7 +227,7 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
             int fl = SpaFormatPod.WriteVideoFormat(fixate, fmt,
                 (uint)_fmt.Width, (uint)_fmt.Height, 30, fixedSize: false,
                 modifiers: chosen, fixateModifier: true);
-            core.RequestParams(fixate[..fl]);
+            core.RequestParamsFromCallback(fixate[..fl]);
             return; // a fresh param_changed will arrive with the fixated format
         }
 
@@ -236,7 +236,7 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
 
         int stride = SpaFormatPod.VideoStride(_fmt.Format, _fmt.Width);
         int size = SpaFormatPod.VideoImageSize(_fmt.Format, _fmt.Width, _fmt.Height);
-        if (size <= 0) { core.RequestParams(meta[..ml]); return; }   // geometry not known yet
+        if (size <= 0) { core.RequestParamsFromCallback(meta[..ml]); return; }   // geometry not known yet
 
         // Block count = number of planes. A planar format (I420=3, NV12=2) is carried as one spa_data
         // block per plane for BOTH host memory (one MemFd per plane) and DMA-BUF (one fd per plane) -
@@ -254,7 +254,7 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
             buffers, blockSize, stride, SpaFormatPod.VideoCaptureDataTypeMask, blocks, sizeIsAnyOf: true);
 
         LogRequestedBuffers(blocks, blockSize, stride, SpaFormatPod.VideoCaptureDataTypeMask);
-        core.RequestParams(buffers[..bl], meta[..ml]);
+        core.RequestParamsFromCallback(buffers[..bl], meta[..ml]);
     }
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "negotiated format {Format} {Width}x{Height} modifier=0x{Modifier:x} needsFixation={NeedsFixation}")]

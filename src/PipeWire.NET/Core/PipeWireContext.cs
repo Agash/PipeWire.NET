@@ -250,6 +250,16 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     /// <summary>The connection, for objects that must keep it alive for their own lifetime.</summary>
     internal PipeWireCoreHandle? CoreOwner => _coreHandle;
 
+    /// <summary>The context, for objects this client implements rather than binds.</summary>
+    internal unsafe pw_context* ContextHandle
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _contextHandle is null ? null : _contextHandle.Context;
+        }
+    }
+
     internal unsafe pw_thread_loop* LoopHandle
     {
         get

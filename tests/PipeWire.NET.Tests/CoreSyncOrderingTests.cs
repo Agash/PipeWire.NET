@@ -117,7 +117,7 @@ public sealed class CoreSyncOrderingTests
     }
 
     [TestMethod]
-    public async Task AfterARoundTrip_AMetadataWriteIsReadableFromASecondClient()
+    public async Task AfterARoundTrip_AMetadataWriteIsVisibleToASecondClient()
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
@@ -128,18 +128,25 @@ public sealed class CoreSyncOrderingTests
         await using (b)
         await using (rb)
         {
-            PipeWireMetadataStore store = await ra.CreateMetadataStoreAsync(Unique("pwnet-order"), cancellationToken: cts.Token);
-            await using (store)
+            PipeWireMetadataStore? writer = ra.BindMetadataStore("default");
+            PipeWireMetadataStore? reader = rb.BindMetadataStore("default");
+            if (writer is null || reader is null)
+                Assert.Inconclusive("no session manager, so no default store.");
+
+            await using (writer)
+            await using (reader)
             {
-                await store.ReadyAsync(cts.Token);
-                await store.SetAsync("k", "v", cancellationToken: cts.Token);
+                await Task.WhenAll(writer.ReadyAsync(cts.Token), reader.ReadyAsync(cts.Token));
 
-                // The other client's barrier: it was issued after the write reached the daemon, so
-                // the write's echo must already have been dispatched to it.
-                await rb.WaitForInitialEnumerationAsync(cts.Token);
+                string key = Unique("pwnet.order");
+                await writer.SetAsync(key, "v", cancellationToken: cts.Token);
 
-                PipeWireMetadataObject? seen = rb.Current.MetadataStores.FirstOrDefault(m => m.Id == store.Id);
-                Assert.IsNotNull(seen, "a store created before the barrier is not visible to another client after it");
+                // The reader's barrier is issued after the write reached the daemon, so the echo
+                // must already have been dispatched to it.
+                await reader.ReadyAsync(cts.Token);
+                Assert.AreEqual("v", reader.Get(key), "a write before the barrier is not readable after it");
+
+                await writer.SetAsync(key, null, cancellationToken: cts.Token);
             }
         }
     }
@@ -152,9 +159,11 @@ public sealed class CoreSyncOrderingTests
             cancellationToken.ThrowIfCancellationRequested();
             await registry.WaitForInitialEnumerationAsync(cancellationToken);
 
+            // Monitors included. A null-audio-sink has playback inputs and monitor outputs only, so
+            // excluding monitors leaves the output side with nothing and waits for ever.
             ImmutableArray<PipeWirePort> ports =
             [
-                .. registry.Current.GetPortsForNode(nodeId).Where(p => p.PortDirection == direction && !p.Monitor),
+                .. registry.Current.GetPortsForNode(nodeId).Where(p => p.PortDirection == direction),
             ];
 
             if (ports.Length >= 1) return ports;

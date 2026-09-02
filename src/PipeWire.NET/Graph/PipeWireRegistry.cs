@@ -444,69 +444,6 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
-    /// Creates a metadata store of its own and binds it.
-    /// </summary>
-    /// <param name="name">The store's <c>metadata.name</c>, such as your application's id.</param>
-    /// <param name="linger">Keeps the store alive after this connection goes.</param>
-    /// <param name="cancellationToken">Abandons the wait and destroys the half-created store.</param>
-    /// <remarks>
-    /// The session's <c>default</c> store is shared by everything on the machine, so writing
-    /// application state into it means colliding with the session manager and with every other
-    /// client. A store of your own is a private namespace with the same interface, and it goes away
-    /// with the connection unless <see cref="PipeWireObjectOptions.Linger"/> is set.
-    /// </remarks>
-    /// <exception cref="ArgumentException"><paramref name="name"/> is null or empty.</exception>
-    /// <exception cref="PipeWireException">The daemon refused the request.</exception>
-    public async Task<PipeWireMetadataStore> CreateMetadataStoreAsync(
-        string name, bool linger = false, CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(name);
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        (uint id, PipeWireProxyHandle proxy) = await CreateMetadataStoreCoreAsync(
-            name, linger, cancellationToken).ConfigureAwait(false);
-
-        try
-        {
-            _ownedProxies[id] = proxy;
-
-            // Bound through a second proxy rather than reusing the creation one: creation hands back
-            // a proxy with no listener, and the store needs its own events table to mirror entries.
-            return BindMetadataStore(id);
-        }
-        catch
-        {
-            _ownedProxies.TryRemove(id, out _);
-            proxy.Dispose();
-            throw;
-        }
-    }
-
-    private unsafe Task<(uint Id, PipeWireProxyHandle Proxy)> CreateMetadataStoreCoreAsync(
-        string name, bool linger, CancellationToken cancellationToken)
-    {
-        int needed = FixedPropertyBytes + Encoding.UTF8.GetByteCount(name) + 1;
-        byte[]? rented = needed > StackScratchBytes ? ArrayPool<byte>.Shared.Rent(needed) : null;
-        try
-        {
-            Span<byte> scratch = rented ?? stackalloc byte[StackScratchBytes];
-            Span<spa_dict_item> items = stackalloc spa_dict_item[4];
-            var dict = new SpaDictBuilder(scratch, items);
-
-            if (linger) dict.Add(PipeWireKeys.ObjectLinger, PipeWireKeys.True);
-            dict.Add(PipeWireKeys.MetadataName, name);
-
-            return NativeObjectCreation.CreateAsync(
-                _ctx, PipeWireKeys.MetadataFactory, PipeWireKeys.InterfaceMetadata,
-                Native.PW_VERSION_METADATA, dict.Build(), cancellationToken, static _ => { });
-        }
-        finally
-        {
-            if (rented is not null) ArrayPool<byte>.Shared.Return(rented);
-        }
-    }
-
-    /// <summary>
     /// Links an output port to an input port and returns the link once the graph reports it.
     /// </summary>
     /// <param name="output">The port data leaves from; must be <see cref="PipeWirePortDirection.Out"/>.</param>

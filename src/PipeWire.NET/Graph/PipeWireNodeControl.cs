@@ -96,6 +96,11 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
     /// <param name="volume">Linear amplitude; negative values are refused.</param>
     /// <param name="cancellationToken">Abandons the wait.</param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="volume"/> is negative.</exception>
+    /// <remarks>
+    /// This is the node's master <c>volume</c> property. Session managers and desktop mixers read
+    /// <c>channelVolumes</c> instead, so a change made here is correct but will not show up in
+    /// wpctl or pavucontrol. Use <see cref="SetChannelVolumesAsync"/> for the volume a user sees.
+    /// </remarks>
     public Task SetVolumeAsync(float volume, CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(volume);

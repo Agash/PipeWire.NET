@@ -45,17 +45,28 @@ internal sealed class MetadataReconciler(TimeSpan window, Func<long>? clock = nu
     /// <summary>Records a write about to be issued. The token identifies it if it has to be undone.</summary>
     internal PendingWrite NoteWrite(uint subject, string key, string? type, string? value)
     {
-        List<PendingWrite> bucket = _outstanding.GetOrAdd((subject, key), static _ => []);
         long now = _clock();
         var pending = new PendingWrite(type, value, now);
 
-        lock (bucket)
+        // The bucket has to still be the one the dictionary holds when the write goes in. Between
+        // GetOrAdd and taking the lock, a concurrent Forget or Settle can empty this key and remove
+        // the bucket, and the write would then sit in an orphan nothing can find: the record is
+        // lost, and the echo it was meant to suppress reads as another client's change.
+        while (true)
         {
-            bucket.RemoveAll(e => now - e.Stamp > _window);
-            bucket.Add(pending);
-        }
+            List<PendingWrite> bucket = _outstanding.GetOrAdd((subject, key), static _ => []);
 
-        return pending;
+            lock (bucket)
+            {
+                if (_outstanding.TryGetValue((subject, key), out List<PendingWrite>? current)
+                    && ReferenceEquals(current, bucket))
+                {
+                    bucket.RemoveAll(e => now - e.Stamp > _window);
+                    bucket.Add(pending);
+                    return pending;
+                }
+            }
+        }
     }
 
     /// <summary>Drops a write that never landed, so it cannot suppress an echo that will not come.</summary>
@@ -67,25 +78,41 @@ internal sealed class MetadataReconciler(TimeSpan window, Func<long>? clock = nu
         DropIfEmpty(subject, key, bucket);
     }
 
-    /// <summary>Whether a reported change should be applied to the cache and raised.</summary>
-    internal bool ShouldApply(uint subject, string key, string? type, string? value)
+    /// <summary>What to do with a change the daemon reported.</summary>
+    internal enum EchoAction
     {
-        if (!_outstanding.TryGetValue((subject, key), out List<PendingWrite>? bucket)) return true;
+        /// <summary>Somebody else's change. Apply it and tell subscribers.</summary>
+        ApplyAndRaise,
+
+        /// <summary>Our own newest write coming home. Already applied and already raised locally.</summary>
+        AlreadyKnown,
+
+        /// <summary>An echo of a write we have since superseded. Applying it would go backwards.</summary>
+        Drop,
+    }
+
+    /// <summary>Classifies a change the daemon reported.</summary>
+    internal EchoAction Classify(uint subject, string key, string? type, string? value)
+    {
+        if (!_outstanding.TryGetValue((subject, key), out List<PendingWrite>? bucket))
+            return EchoAction.ApplyAndRaise;
 
         lock (bucket)
         {
             long now = _clock();
             bucket.RemoveAll(e => now - e.Stamp > _window);
-            if (bucket.Count == 0) return true;
+            if (bucket.Count == 0) return EchoAction.ApplyAndRaise;
 
-            // The newest write coming home, or a value nobody here wrote: both are current.
-            if (bucket[^1].Matches(type, value)) return true;
+            // Our newest write coming home. The store raised it when it applied the write, so
+            // raising again here would report one change twice.
+            if (bucket[^1].Matches(type, value)) return EchoAction.AlreadyKnown;
 
-            // An echo of something this client has already superseded. Records are deliberately not
-            // cleared when the newest one is acknowledged: doing so discards the older entries, and
-            // echoes still in flight for those then match nothing and read as an external change,
-            // putting a superseded value back - including after a removal.
-            return !bucket.Exists(e => e.Matches(type, value));
+            // Records are deliberately not cleared when the newest is acknowledged: clearing
+            // discards the older entries, and echoes still in flight for those then match nothing
+            // and read as an external change, putting a superseded value back.
+            return bucket.Exists(e => e.Matches(type, value))
+                ? EchoAction.Drop
+                : EchoAction.ApplyAndRaise;
         }
     }
 

@@ -70,6 +70,14 @@ public sealed partial class PipeWireProfilerReader : IDisposable, IAsyncDisposab
 
         try
         {
+            // Checked before the cast. A size near uint.MaxValue casts to a negative length, and
+            // the span constructor is the one place that would not tell us so.
+            if (pod->size > int.MaxValue - 8)
+            {
+                self.LogUnparsedReport(int.MaxValue);
+                return;
+            }
+
             int size = 8 + (int)pod->size;
             var bytes = new ReadOnlySpan<byte>(pod, size);
 

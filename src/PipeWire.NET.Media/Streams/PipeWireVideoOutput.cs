@@ -146,7 +146,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
 
         Span<byte> meta = stackalloc byte[64];
         int ml = SpaFormatPod.WriteHeaderMetaParam(meta);
-        core.RequestParams(buffers[..bl], meta[..ml]);
+        core.RequestParamsFromCallback(buffers[..bl], meta[..ml]);
     }
 
     /// <summary>
@@ -211,7 +211,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
         ReadOnlySpan<PixelFormat> fmt = [_format];
         int len = SpaFormatPod.WriteVideoFormat(pod, fmt,
             (uint)_width, (uint)_height, (uint)_frameRate, fixedSize: true, modifiers: _modifiers);
-        core.RequestParams(pod[..len]);
+        core.RequestParamsFromCallback(pod[..len]);
         core.SetActive(true, lockHeld: true);
     }
 
@@ -302,7 +302,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
             int fl = SpaFormatPod.WriteVideoFormat(fixate, fmt,
                 (uint)_width, (uint)_height, (uint)_frameRate, fixedSize: true,
                 modifiers: chosen, fixateModifier: true);
-            core.RequestParams(fixate[..fl]);
+            core.RequestParamsFromCallback(fixate[..fl]);
             return; // a fresh param_changed will arrive with the fixated modifier
         }
 
@@ -317,7 +317,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
 
         Span<byte> meta = stackalloc byte[64];
         int ml = SpaFormatPod.WriteHeaderMetaParam(meta);
-        core.RequestParams(buffers[..bl], meta[..ml]);
+        core.RequestParamsFromCallback(buffers[..bl], meta[..ml]);
     }
 
     // PipeWire allocated an (empty) buffer with _planeCount data blocks; back each block with one plane of

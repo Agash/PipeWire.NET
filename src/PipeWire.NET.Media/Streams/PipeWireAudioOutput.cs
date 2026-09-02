@@ -116,6 +116,11 @@ public sealed class PipeWireAudioOutput : IAsyncDisposable
     {
         if (d->data is null || d->chunk is null) return;
 
+        // maxsize is the producer's word, and it is unsigned. Casting first turns a value above
+        // int.MaxValue into a negative length, which the span constructor is the wrong place to
+        // find out about.
+        if (d->maxsize > int.MaxValue) return;
+
         int max = (int)d->maxsize;
         var samples = new Span<byte>(d->data, max);
         int written = FillSamples?.Invoke(this, samples, _sampleRate, _channels, _format) ?? 0;
