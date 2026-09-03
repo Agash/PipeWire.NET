@@ -19,6 +19,15 @@ namespace PipeWire.NET.Spa;
 /// knows exactly which fields it wants - stream format negotiation, for instance - uses the
 /// internal reader and builder directly and never allocates a tree.
 /// </para>
+/// <para>
+/// A note on byte order, because this file and the internal reader spell it differently. Pods are
+/// native-endian: the protocol is a unix socket between processes on one machine, and PipeWire
+/// swaps nothing anywhere - checked against its own connection.c and pod headers, which memcpy
+/// structs and read fields directly. The little-endian spelling here is therefore not a conversion
+/// but a statement of what the bytes are on every platform PipeWire runs on, and it agrees with the
+/// reader's native reads there. If this ever has to work on a big-endian host, this file is the
+/// half that is wrong and the reader is the half that is right.
+/// </para>
 /// </remarks>
 public static class SpaPod
 {
@@ -47,7 +56,7 @@ public static class SpaPod
     public static int GetByteCount(SpaValue value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return Pad(8 + BodySize(value));
+        return checked(Pad(8 + BodySize(value)));
     }
 
     /// <summary>Writes a value in wire format.</summary>
@@ -253,7 +262,15 @@ public static class SpaPod
             return items.IsEmpty;
         }
 
+        // childSize is the producer's word and it is unsigned. Casting it first turns anything above
+        // int.MaxValue negative, which makes the item count negative, and the builder is then asked
+        // for a negative capacity: an exception out of a parser whose whole contract is to return
+        // false. Nothing legitimate is anywhere near this large.
+        if (childSize > int.MaxValue || childSize > (uint)items.Length) return false;
+        if (!ChildrenTileExactly(childSize, childType, items.Length)) return false;
+
         int count = items.Length / (int)childSize;
+
         var builder = ImmutableArray.CreateBuilder<SpaValue>(count);
         for (int i = 0; i < count; i++)
         {
@@ -265,6 +282,22 @@ public static class SpaPod
 
         value = new SpaArray(childType, builder.MoveToImmutable());
         return true;
+    }
+
+    /// <summary>Whether a bare-child body of that many bytes is a whole number of well-sized children.</summary>
+    /// <remarks>
+    /// Two separate lies get caught here. A body that is not a whole number of children means bytes
+    /// the producer described as nothing, and dividing them away parses a prefix and reports
+    /// success. A child size that disagrees with the child type means every child fails to parse,
+    /// but only after a builder has been sized from the count the wrong size implied - one entry per
+    /// byte for a one-byte Int.
+    /// </remarks>
+    private static bool ChildrenTileExactly(uint childSize, SpaType childType, int itemsLength)
+    {
+        if ((uint)itemsLength % childSize != 0) return false;
+
+        int fixedSize = FixedBodySize(childType);
+        return fixedSize < 0 || childSize == (uint)fixedSize;
     }
 
     private static bool TryParseStruct(ReadOnlySpan<byte> body, int depth, out SpaValue? value)
@@ -281,6 +314,11 @@ public static class SpaPod
             fields.Add(field);
             offset += consumed;
         }
+
+        // Same rule as an object: the loop stops when fewer than a header remains, so a remainder is
+        // a body that ended mid-field. Accepting it dropped the tail and reported success, which
+        // reads downstream as a producer that simply sent fewer fields.
+        if (offset != body.Length) return false;
 
         value = new SpaStruct(fields.ToImmutable());
         return true;
@@ -311,6 +349,11 @@ public static class SpaPod
             offset += 8 + consumed;
         }
 
+        // The loop stops as soon as fewer than a property header remains, so anything left over is
+        // a body that ended mid-property. Accepting it returned an object missing its last property
+        // and reported success, which reads downstream as a producer that simply did not offer it.
+        if (offset != body.Length) return false;
+
         value = new SpaObject(objectType, objectId, properties.ToImmutable());
         return true;
     }
@@ -332,7 +375,20 @@ public static class SpaPod
             return true;
         }
 
+        // childSize is the producer's word and it is unsigned. Casting it first turns anything above
+        // int.MaxValue negative, which makes the item count negative, and the builder is then asked
+        // for a negative capacity: an exception out of a parser whose whole contract is to return
+        // false. Nothing legitimate is anywhere near this large.
+        if (childSize > int.MaxValue || childSize > (uint)items.Length) return false;
+        if (!ChildrenTileExactly(childSize, childType, items.Length)) return false;
+
         int count = items.Length / (int)childSize;
+        // The kind says how to read the positions - a Range is default, min, max - so a count that
+        // does not match it is a pod that cannot be interpreted, not one that is merely unusual.
+        // Refused here: the record's own check throws, which is right for a caller building one by
+        // hand and wrong on a parse path whose whole contract is to return false.
+        if (!SpaChoice.CountFitsKind(kind, count)) return false;
+
         var builder = ImmutableArray.CreateBuilder<SpaValue>(count);
         for (int i = 0; i < count; i++)
         {
@@ -370,13 +426,21 @@ public static class SpaPod
             offset += 8 + consumed;
         }
 
+        if (offset != body.Length) return false;
+
         value = new SpaSequence(unit, controls.ToImmutable());
         return true;
     }
 
     // - Writing -
 
-    private static int BodySize(SpaValue value) => value switch
+    /// <remarks>
+    /// Checked on purpose. A tree parsed from a large pod and measured for rewriting can multiply an
+    /// item count by a child size past int.MaxValue, and unchecked that wraps negative - which
+    /// reaches a new byte[] and a span slice as a negative length, throwing something nobody
+    /// documented from a method whose whole contract is a byte count.
+    /// </remarks>
+    private static int BodySize(SpaValue value) => checked(value switch
     {
         SpaNone => 0,
         SpaBool or SpaId or SpaInt or SpaFloat => 4,
@@ -393,7 +457,7 @@ public static class SpaPod
         SpaNestedPod p => Pad(8 + BodySize(p.Value)),
         SpaUnknown u => u.Body.Length,
         _ => 0,
-    };
+    });
 
     // Array and choice children are stored bare, so every child must agree on one size. The
     // declared child type decides it; a value that disagrees is written truncated or padded to fit,
@@ -423,7 +487,7 @@ public static class SpaPod
     {
         int total = 0;
         foreach (SpaValue value in values)
-            total += Pad(8 + BodySize(value));
+            total = checked(total + Pad(8 + BodySize(value)));
         return total;
     }
 
@@ -431,7 +495,7 @@ public static class SpaPod
     {
         int total = 0;
         foreach (SpaProperty property in properties)
-            total += 8 + Pad(8 + BodySize(property.Value));
+            total = checked(total + 8 + Pad(8 + BodySize(property.Value)));
         return total;
     }
 
@@ -439,7 +503,7 @@ public static class SpaPod
     {
         int total = 0;
         foreach (SpaControl control in controls)
-            total += 8 + Pad(8 + BodySize(control.Value));
+            total = checked(total + 8 + Pad(8 + BodySize(control.Value)));
         return total;
     }
 
@@ -592,7 +656,7 @@ public static class SpaPod
             default:
                 // Unreachable: the hierarchy is closed and every case above is covered. Kept so a
                 // future addition fails loudly here rather than writing a silently empty body.
-                throw new NotSupportedException($"No writer for {value.GetType().Name}.");
+                throw new NotSupportedException($"No writer for a {value.Type} value.");
         }
     }
 
@@ -607,5 +671,5 @@ public static class SpaPod
         }
     }
 
-    private static int Pad(int size) => (size + 7) & ~7;
+    private static int Pad(int size) => checked(size + 7) & ~7;
 }

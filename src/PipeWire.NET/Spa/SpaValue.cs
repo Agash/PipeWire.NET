@@ -74,26 +74,72 @@ public sealed record SpaLong(long Value) : SpaValue
 
 /// <summary>A 32-bit float. Volumes are these.</summary>
 /// <param name="Value">The value.</param>
+/// <remarks>
+/// Compared by its bits, not by IEEE rules. The wire carries the bits, so a value read back from
+/// the daemon has to compare equal to the one written exactly when the bytes match: IEEE equality
+/// says two NaNs differ and that positive and negative zero are the same, and both answers are
+/// wrong for the one thing this comparison is for.
+/// </remarks>
 public sealed record SpaFloat(float Value) : SpaValue
 {
     /// <inheritdoc/>
     public override SpaType Type => SpaType.Float;
+
+    /// <inheritdoc/>
+    public bool Equals(SpaFloat? other) =>
+        other is not null
+        && BitConverter.SingleToInt32Bits(Value) == BitConverter.SingleToInt32Bits(other.Value);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => BitConverter.SingleToInt32Bits(Value);
 }
 
 /// <summary>A 64-bit float.</summary>
 /// <param name="Value">The value.</param>
+/// <remarks>Compared by its bits, for the reason given on <see cref="SpaFloat"/>.</remarks>
 public sealed record SpaDouble(double Value) : SpaValue
 {
     /// <inheritdoc/>
     public override SpaType Type => SpaType.Double;
+
+    /// <inheritdoc/>
+    public bool Equals(SpaDouble? other) =>
+        other is not null
+        && BitConverter.DoubleToInt64Bits(Value) == BitConverter.DoubleToInt64Bits(other.Value);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => BitConverter.DoubleToInt64Bits(Value).GetHashCode();
 }
 
 /// <summary>A UTF-8 string.</summary>
 /// <param name="Value">The text, without its terminating NUL.</param>
+/// <remarks>
+/// An embedded NUL is refused rather than written. The wire form is NUL-terminated, so a string
+/// carrying one comes back truncated at it: the value would not survive its own round trip, and
+/// every reader downstream of the daemon sees a different string than the one that was sent.
+/// </remarks>
+/// <exception cref="ArgumentNullException"><paramref name="Value"/> is null.</exception>
+/// <exception cref="ArgumentException"><paramref name="Value"/> contains a NUL.</exception>
 public sealed record SpaString(string Value) : SpaValue
 {
+    /// <summary>The text, without its terminating NUL.</summary>
+    public string Value { get; init; } = Validated(Value);
+
     /// <inheritdoc/>
     public override SpaType Type => SpaType.String;
+
+    private static string Validated(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (value.Contains('\0', StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "a SPA string is NUL-terminated on the wire, so it cannot contain a NUL.",
+                nameof(value));
+        }
+
+        return value;
+    }
 }
 
 /// <summary>An opaque byte sequence.</summary>
@@ -145,10 +191,36 @@ public sealed record SpaBitmap(ImmutableArray<byte> Bits) : SpaValue
 /// <summary>Several values that all share one type and size.</summary>
 /// <param name="ChildType">The type every item has.</param>
 /// <param name="Items">The items.</param>
+/// <exception cref="ArgumentException">An item is not of <paramref name="ChildType"/>.</exception>
 public sealed record SpaArray(SpaType ChildType, ImmutableArray<SpaValue> Items) : SpaValue
 {
+    /// <summary>The items.</summary>
+    public ImmutableArray<SpaValue> Items { get; init; } = Coherent(ChildType, Items, nameof(Items));
+
     /// <inheritdoc/>
     public override SpaType Type => SpaType.Array;
+
+    /// <summary>Checks that every child really is the declared type.</summary>
+    /// <remarks>
+    /// The wire format stores these children bare, with one size and one type for all of them, so a
+    /// mismatch is not a value the format can express. Caught here rather than at write time, where
+    /// the item is truncated or padded to fit and the failure is a wrong value rather than an error.
+    /// </remarks>
+    internal static ImmutableArray<SpaValue> Coherent(
+        SpaType childType, ImmutableArray<SpaValue> items, string parameterName)
+    {
+        if (items.IsDefaultOrEmpty) return items;
+
+        foreach (SpaValue item in items)
+        {
+            if (item.Type == childType) continue;
+
+            throw new ArgumentException(
+                $"every child must be {childType}; found a {item.Type}.", parameterName);
+        }
+
+        return items;
+    }
 
     /// <inheritdoc/>
     public bool Equals(SpaArray? other) =>
@@ -231,8 +303,48 @@ public sealed record SpaObject(SpaType ObjectType, SpaParamType ObjectId, Immuta
 /// The alternatives. Whatever the kind, the first is the default or current value - for a
 /// <see cref="SpaChoiceType.Range"/> the two after it are the minimum and maximum.
 /// </param>
+/// <exception cref="ArgumentException">An alternative is not of <paramref name="ChildType"/>.</exception>
 public sealed record SpaChoice(SpaChoiceType Kind, SpaType ChildType, ImmutableArray<SpaValue> Alternatives) : SpaValue
 {
+    /// <summary>The alternatives.</summary>
+    public ImmutableArray<SpaValue> Alternatives { get; init; } =
+        Arity(Kind, SpaArray.Coherent(ChildType, Alternatives, nameof(Alternatives)));
+
+    /// <summary>Checks the count against what the kind means.</summary>
+    /// <remarks>
+    /// The kind is what tells a reader how to interpret the positions: Range is default, min, max
+    /// and Step adds a step, so a Range holding two entries has no min or no max and there is no way
+    /// to tell which. Nothing downstream can detect that - the daemon reads position 1 as the
+    /// minimum whatever is there - so the count is checked where the caller is still in scope.
+    /// </remarks>
+    /// <summary>How many values the kind means, or 0 for the kinds that are lists.</summary>
+    internal static int RequiredCount(SpaChoiceType kind) => kind switch
+    {
+        SpaChoiceType.None => 1,
+        SpaChoiceType.Range => 3,
+        SpaChoiceType.Step => 4,
+        _ => 0,
+    };
+
+    /// <summary>Whether a count is one the kind can mean. The parser's form of the check.</summary>
+    internal static bool CountFitsKind(SpaChoiceType kind, int count)
+    {
+        int required = RequiredCount(kind);
+        return required == 0 || count == 0 || count == required;
+    }
+
+    private static ImmutableArray<SpaValue> Arity(
+        SpaChoiceType kind, ImmutableArray<SpaValue> alternatives)
+    {
+        if (alternatives.IsDefaultOrEmpty) return alternatives;
+        if (CountFitsKind(kind, alternatives.Length)) return alternatives;
+
+        throw new ArgumentException(
+            $"a {kind} choice carries exactly {RequiredCount(kind)} values; this one has "
+            + $"{alternatives.Length}.",
+            nameof(alternatives));
+    }
+
     /// <inheritdoc/>
     public override SpaType Type => SpaType.Choice;
 
@@ -275,6 +387,11 @@ public sealed record SpaSequence(uint Unit, ImmutableArray<SpaControl> Controls)
 /// <summary>A pointer, meaningful only inside the process that wrote it.</summary>
 /// <param name="PointerType">What is pointed at.</param>
 /// <param name="Address">The address as written. This library never dereferences it.</param>
+/// <remarks>
+/// Not transportable. The address means something only in the address space that produced it, and
+/// its width follows the writer's word size, so a pod carrying one cannot be forwarded to another
+/// process or read correctly across a 32/64-bit boundary. Parsed for completeness; never send one.
+/// </remarks>
 public sealed record SpaPointer(SpaType PointerType, ulong Address) : SpaValue
 {
     /// <inheritdoc/>
@@ -283,6 +400,12 @@ public sealed record SpaPointer(SpaType PointerType, ulong Address) : SpaValue
 
 /// <summary>A file descriptor.</summary>
 /// <param name="Value">The descriptor number in the receiving process.</param>
+/// <remarks>
+/// A number, not a handle. Descriptors travel out of band over the socket as SCM_RIGHTS and are
+/// installed by the protocol before the pod is parsed; what the pod carries is the index the
+/// receiver ended up with. This value owns nothing: do not close it, and do not expect it to mean
+/// anything in a process that did not receive the message.
+/// </remarks>
 public sealed record SpaFd(long Value) : SpaValue
 {
     /// <inheritdoc/>

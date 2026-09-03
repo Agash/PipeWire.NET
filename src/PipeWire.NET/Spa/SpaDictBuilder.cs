@@ -67,6 +67,25 @@ internal unsafe ref struct SpaDictBuilder
         Append(CopyUtf8(key), EncodeUtf8(value));
     }
 
+    /// <summary>Adds a key and value both given as managed strings.</summary>
+    /// <remarks>
+    /// Without this a caller writing a string key has to encode it first, which allocates an array
+    /// per property. Both sides are encoded straight into the scratch buffer instead.
+    /// </remarks>
+    public void Add(string key, string value)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(value);
+        Append(EncodeUtf8(key), EncodeUtf8(value));
+    }
+
+    /// <summary>Adds a string key whose value is a PipeWire global id, formatted in place.</summary>
+    public void Add(string key, uint value)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        Append(EncodeUtf8(key), FormatUtf8(value));
+    }
+
     /// <summary>Adds a key whose value is a PipeWire global id, formatted in place.</summary>
     public void Add(scoped ReadOnlySpan<byte> key, uint value) =>
         Append(CopyUtf8(key), FormatUtf8(value));
@@ -84,7 +103,14 @@ internal unsafe ref struct SpaDictBuilder
         // are sorted, after which it may binary-search an unsorted array and miss properties.
         flags = 0,
         n_items = (uint)_count,
-        items = (spa_dict_item*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_items)),
+
+        // An empty dictionary gets a null array rather than the address of a buffer holding
+        // nothing. Native code is entitled to look at the pointer before the count, and the address
+        // of an empty span is whatever the storage behind it happens to be - live stack, in the
+        // stackalloc case, which outlives nothing.
+        items = _count == 0
+            ? null
+            : (spa_dict_item*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_items)),
     };
 
     private void Append(sbyte* key, sbyte* value)
@@ -97,6 +123,15 @@ internal unsafe ref struct SpaDictBuilder
 
     private sbyte* CopyUtf8(scoped ReadOnlySpan<byte> utf8)
     {
+        // Same rule as the string path: native reads this as a C string, so a NUL inside it
+        // truncates the value there while the managed side believes it sent the whole thing.
+        if (utf8.Contains((byte)0))
+        {
+            throw new ArgumentException(
+                "a property reaches native code as a C string, so it cannot contain a NUL.",
+                nameof(utf8));
+        }
+
         Span<byte> dst = Reserve(utf8.Length + 1);
         utf8.CopyTo(dst);
         dst[utf8.Length] = 0;
@@ -105,6 +140,16 @@ internal unsafe ref struct SpaDictBuilder
 
     private sbyte* EncodeUtf8(string value)
     {
+        // The dictionary is read by native code as an array of C strings, so a NUL inside a value
+        // silently truncates it there while the managed side still believes it sent the whole
+        // thing. Refused here, where the caller's own string is still in hand to name.
+        if (value.Contains('\0', StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "a property value reaches native code as a C string, so it cannot contain a NUL.",
+                nameof(value));
+        }
+
         Span<byte> dst = Reserve(Encoding.UTF8.GetByteCount(value) + 1);
         int written = Encoding.UTF8.GetBytes(value, dst);
         dst[written] = 0;

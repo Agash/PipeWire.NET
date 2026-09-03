@@ -54,7 +54,7 @@ internal static class PipeWireKeys
 
     public static ReadOnlySpan<byte> CoreName => "core.name"u8;
     public static ReadOnlySpan<byte> CoreVersion => "core.version"u8;
-    public static ReadOnlySpan<byte> HostName => "host.name"u8;
+    public static ReadOnlySpan<byte> HostName => "application.process.host"u8;
     public static ReadOnlySpan<byte> UserName => "application.process.user"u8;
     public static ReadOnlySpan<byte> AudioPosition => "audio.position"u8;
 

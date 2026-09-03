@@ -30,8 +30,25 @@ public readonly record struct SpaKey
 
     /// <summary>Reads the key as the enum the enclosing object type is documented to use.</summary>
     /// <typeparam name="TEnum">The enum to read it as; it must be four bytes wide, as every SPA enum is.</typeparam>
-    public TEnum As<TEnum>() where TEnum : unmanaged, Enum =>
-        System.Runtime.CompilerServices.Unsafe.BitCast<uint, TEnum>(Value);
+    /// <exception cref="ArgumentException">
+    /// <typeparamref name="TEnum"/> is not four bytes wide, so it is not a SPA key enum.
+    /// </exception>
+    /// <remarks>
+    /// The width cannot be constrained at compile time, and the reinterpret it does otherwise
+    /// throws a <see cref="NotSupportedException"/> naming neither type. Since the size is a
+    /// constant for any given <typeparamref name="TEnum"/>, the check costs nothing once inlined.
+    /// </remarks>
+    public unsafe TEnum As<TEnum>() where TEnum : unmanaged, Enum
+    {
+        if (sizeof(TEnum) != sizeof(uint))
+        {
+            throw new ArgumentException(
+                $"{typeof(TEnum).Name} is {sizeof(TEnum)} bytes; a SPA key enum is four. "
+                + "This key does not belong to that enum.", nameof(TEnum));
+        }
+
+        return System.Runtime.CompilerServices.Unsafe.BitCast<uint, TEnum>(Value);
+    }
 
     /// <summary>A key naming part of a media format.</summary>
     /// <param name="key">The key.</param>
@@ -114,13 +131,27 @@ public readonly record struct SpaIdValue
 
     /// <summary>Reads the id as the enum the property carrying it is documented to use.</summary>
     /// <typeparam name="TEnum">The enum to read it as; it must be four bytes wide, as every SPA enum is.</typeparam>
+    /// <exception cref="ArgumentException">
+    /// <typeparamref name="TEnum"/> is not four bytes wide, so it is not a SPA id enum.
+    /// </exception>
     /// <remarks>
     /// The value comes from the daemon, so it may name a member this version of the enum does not
     /// have. That is not an error - it is a newer PipeWire - and the result compares equal to
-    /// nothing rather than throwing.
+    /// nothing rather than throwing. A wrongly sized enum is a different matter and is a caller
+    /// error, reported as one here rather than as a NotSupportedException out of the reinterpret
+    /// that names neither type.
     /// </remarks>
-    public TEnum As<TEnum>() where TEnum : unmanaged, Enum =>
-        System.Runtime.CompilerServices.Unsafe.BitCast<uint, TEnum>(Value);
+    public unsafe TEnum As<TEnum>() where TEnum : unmanaged, Enum
+    {
+        if (sizeof(TEnum) != sizeof(uint))
+        {
+            throw new ArgumentException(
+                $"{typeof(TEnum).Name} is {sizeof(TEnum)} bytes; a SPA id enum is four. "
+                + "This id does not belong to that enum.", nameof(TEnum));
+        }
+
+        return System.Runtime.CompilerServices.Unsafe.BitCast<uint, TEnum>(Value);
+    }
 
     /// <summary>An id drawn from <see cref="SpaType"/>.</summary>
     /// <param name="id">The id.</param>

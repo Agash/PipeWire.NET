@@ -74,8 +74,15 @@ internal ref struct SpaPodBuilder
     /// <paramref name="propFlags"/> on the first negotiation pass so the producer narrows the set
     /// to what it supports without fixating, then re-offer a single modifier to fixate.
     /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="values"/> is empty.</exception>
     public void AddChoiceEnumLong(SpaKey key, ReadOnlySpan<long> values, uint propFlags = 0)
     {
+        // A choice with no children is a header claiming alternatives it does not carry. Our own
+        // reader rejects it, and a producer reading it has nothing to select, so refuse to write
+        // one rather than emit a pod that only fails later on someone else's parser.
+        if (values.IsEmpty)
+            throw new ArgumentException("a Choice must offer at least one value.", nameof(values));
+
         WritePropHeader(key, propFlags);
         int start = _pos;
         WriteU32(0u);                // pod size - back-patched
@@ -90,17 +97,10 @@ internal ref struct SpaPodBuilder
         // once would be a default with NO alternatives - the consumer then has nothing to select and dmabuf
         // negotiation fails ("no more input formats"). Matches pipewire's video-src-fixate.c, which writes the
         // first modifier twice.
-        if (!values.IsEmpty)
-        {
-            MemoryMarshal.Write(_buf.Slice(_pos, 8), values[0]);
-            _pos += 8;
-        }
+        WriteI64(values[0]);
 
         foreach (long v in values)
-        {
-            MemoryMarshal.Write(_buf.Slice(_pos, 8), v);
-            _pos += 8;
-        }
+            WriteI64(v);
 
         PatchSize(start);
         Align8();
@@ -108,8 +108,12 @@ internal ref struct SpaPodBuilder
 
     // - Choice: Enum (list of allowed Id values) -
 
+    /// <exception cref="ArgumentException"><paramref name="values"/> is empty.</exception>
     public void AddChoiceEnum(SpaKey key, params ReadOnlySpan<SpaIdValue> values)
     {
+        if (values.IsEmpty)
+            throw new ArgumentException("a Choice must offer at least one value.", nameof(values));
+
         // SPA Choice wire format (spa/pod/pod.h):
         //   [size][type=Choice]                            <- pod header
         //   [choiceType][flags][child.size][child.type]    <- spa_pod_choice_body
@@ -127,8 +131,7 @@ internal ref struct SpaPodBuilder
         // selectable alternatives, so the default has to appear again among them. Written once, the
         // first value becomes a default that is not itself selectable - the same mistake the Long
         // variant documents, and it silently removes the preferred format from the offer.
-        if (!values.IsEmpty)
-            WriteU32(values[0]);
+        WriteU32(values[0]);
 
         foreach (SpaIdValue v in values)
             WriteU32(v);
@@ -153,7 +156,6 @@ internal ref struct SpaPodBuilder
     }
 
     /// <summary>Choice(Flags) over Int - a single bitmask value (e.g. allowed buffer data types).</summary>
-    /// <summary>Choice(Flags) over Int.</summary>
     /// <remarks>
     /// One value, not two. spa/pod/pod.h documents SPA_CHOICE_Flags as "first value is flags",
     /// unlike Range and Enum which take a default plus alternatives. Writing a second value as a
@@ -228,8 +230,14 @@ internal ref struct SpaPodBuilder
     }
 
     /// <summary>Closes the innermost open object, back-patching its size.</summary>
+    /// <exception cref="InvalidOperationException">No object is open.</exception>
     public void Pop()
     {
+        // Without this the index goes negative and back-patches a size at whatever sits before the
+        // stack, which is silent corruption rather than a caller error.
+        if (_depth == 0)
+            throw new InvalidOperationException("SpaPodBuilder: Pop with no open object.");
+
         int start = _stack[--_depth];
         PatchSize(start);
         Align8();
@@ -249,6 +257,7 @@ internal ref struct SpaPodBuilder
         int size = Unsafe.SizeOf<T>();
         WriteU32((uint)size);
         WriteU32(type);
+        EnsureRoom(size);
         MemoryMarshal.Write(_buf.Slice(_pos, size), value);
         _pos += size;
         Align8();
@@ -258,8 +267,7 @@ internal ref struct SpaPodBuilder
     {
         WriteU32(8);
         WriteU32(SpaType.Long);
-        MemoryMarshal.Write(_buf.Slice(_pos, 8), value);
-        _pos += 8;                  // already 8-byte aligned
+        WriteI64(value);            // already 8-byte aligned
     }
 
     private void WriteFraction(uint num, uint denom)
@@ -286,7 +294,6 @@ internal ref struct SpaPodBuilder
     }
 
     /// <summary>Back-patches the 4-byte size field of a pod whose header starts at <paramref name="start"/>.</summary>
-    /// <summary>Back-patches a pod's size field.</summary>
     /// <remarks>
     /// Called before the trailing <see cref="Align8"/>, never after. A pod's size counts its body
     /// only; the padding that follows belongs between pods. Including it makes a reader compute one
@@ -308,16 +315,52 @@ internal ref struct SpaPodBuilder
 
     private void WriteU32(uint value)
     {
+        EnsureRoom(4);
         MemoryMarshal.Write(_buf.Slice(_pos, 4), value);
         _pos += 4;
     }
 
+    private void WriteI64(long value)
+    {
+        EnsureRoom(8);
+        MemoryMarshal.Write(_buf.Slice(_pos, 8), value);
+        _pos += 8;
+    }
+
+    /// <remarks>
+    /// The pad is cleared, not skipped. A pod's padding goes on the wire like the rest of it, so
+    /// leaving it as whatever the caller's buffer already held makes the bytes non-deterministic
+    /// and hands the daemon whatever that buffer was last used for. Callers that pass a fresh
+    /// stackalloc get zeroes either way; one reusing a scratch buffer does not.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Align8()
     {
         int rem = _pos & 7;
-        if (rem != 0) _pos += 8 - rem;
+        if (rem == 0) return;
+
+        int pad = 8 - rem;
+        EnsureRoom(pad);
+        _buf.Slice(_pos, pad).Clear();
+        _pos += pad;
     }
+
+    /// <summary>Fails with the builder's own error rather than out of a <c>Slice</c> deep inside.</summary>
+    /// <remarks>
+    /// Every write goes through here. Without it an over-long pod surfaces as an
+    /// <see cref="ArgumentOutOfRangeException"/> naming a span offset, which tells a caller nothing
+    /// about which buffer to enlarge.
+    /// </remarks>
+    private readonly void EnsureRoom(int bytes)
+    {
+        if (bytes > _buf.Length - _pos)
+            ThrowBufferExhausted(bytes, _buf.Length - _pos, _buf.Length);
+    }
+
+    private static void ThrowBufferExhausted(int needed, int left, int capacity) =>
+        throw new InvalidOperationException(
+            $"SpaPodBuilder needs {needed} more bytes and {left} of {capacity} remain; "
+            + "size the buffer to the pod.");
 
     private void Push(int offset)
     {

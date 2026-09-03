@@ -45,9 +45,9 @@ internal static class SpaFormatPod
     /// <param name="blocks">Data blocks per buffer: one per plane.</param>
     /// <param name="sizeIsAnyOf">
     /// When true the size is offered as an open range rather than a fixed value, which is what a
-    /// consumer wants: the producer owns the layout and we read whatever <c>chunk-&gt;size</c> says.
-    /// Pinning a value made the daemon refuse allocation outright whenever the producer laid its
-    /// planes out differently. PipeWire's own <c>gstpipewiresrc</c> offers a range for the same reason.
+    /// consumer wants: the producer owns the layout and the consumer reads whatever <c>chunk-&gt;size</c> says.
+    /// A fixed value risks refusal when the producer lays its planes out differently. PipeWire's own
+    /// <c>gstpipewiresrc</c> offers a range for the same reason.
     /// </param>
     internal static int WriteVideoBuffersParam(
         Span<byte> buf, int size, int stride, int dataTypes, int blocks = 1, bool sizeIsAnyOf = false)
@@ -128,7 +128,13 @@ internal static class SpaFormatPod
             PixelFormat.Yuv420 => (w * h) + (2 * chroma),   // Y + U + V
             PixelFormat.Nv12   => (w * h) + (2 * chroma),   // Y + interleaved UV
             PixelFormat.Yuyv   => w * h * 2,
-            _                  => w * h * 4,
+
+            // Packed formats only. Anything else has no layout this code knows, and assuming four
+            // bytes per pixel for it sizes the buffer from a guess.
+            PixelFormat.Rgba or PixelFormat.Bgra or PixelFormat.Rgbx or PixelFormat.Bgrx
+                => w * h * 4,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(fmt), fmt, "no known image size for this format"),
         };
 
         if (size > int.MaxValue)
@@ -174,11 +180,21 @@ internal static class SpaFormatPod
     /// header PTS (audio timing is derived from the graph clock + sample position), so audio
     /// frames usually report -1 here.
     /// </remarks>
+    /// <summary>The most metadata entries a buffer will be walked for.</summary>
+    /// <remarks>
+    /// A bound on someone else's count. The buffer struct belongs to the pool, so <c>n_metas</c> is
+    /// a number this process reads rather than one it set, and walking it unchecked turns a wrong
+    /// value into an out-of-bounds read on the realtime path. Real buffers carry a handful: header,
+    /// cursor, region, and a few more.
+    /// </remarks>
+    private const uint MaxMetasWalked = 64;
+
     internal static unsafe long FindPresentationTimeNs(spa_buffer* buf)
     {
         if (buf is null || buf->metas is null) return -1;
         uint headerType = (uint)SpaMetaType.Header;
-        for (uint i = 0; i < buf->n_metas; i++)
+        uint count = Math.Min(buf->n_metas, MaxMetasWalked);
+        for (uint i = 0; i < count; i++)
         {
             spa_meta* m = &buf->metas[i];
             if (m->type == headerType && m->data is not null && m->size >= (uint)sizeof(spa_meta_header))
@@ -214,6 +230,22 @@ internal static class SpaFormatPod
         ulong Modifier = DrmFormatModifier.Invalid,
         bool ModifierNeedsFixation = false);
 
+    /// <summary>The largest parameter pod this library will parse, in bytes.</summary>
+    /// <remarks>
+    /// A ceiling, not a format limit, and the tightest one that still fits real traffic. The pods
+    /// that reach this parser are negotiated Format objects: a handful of properties, or an
+    /// EnumFormat listing every format and modifier a GPU supports, which is a few kilobytes at the
+    /// outside.
+    /// <para>
+    /// It cannot make the read correct. A <c>spa_pod*</c> carries no allocation length - the size in
+    /// its own header is how PipeWire itself measures every pod - so a size that is wrong but
+    /// plausible is indistinguishable from a true one, here and in the C code alike. What the cap
+    /// does is bound how far a wrong one reaches, and every access inside it is checked against the
+    /// declared size by the reader, so the exposure is that bound and nothing more.
+    /// </para>
+    /// </remarks>
+    internal const uint MaxParamPodBytes = 64 * 1024;
+
     /// <summary>The negotiated audio format extracted from a Format pod.</summary>
     internal readonly record struct AudioFormatInfo(AudioSampleFormat Format, int SampleRate, int Channels);
 
@@ -222,15 +254,28 @@ internal static class SpaFormatPod
     {
         var (fmt, w, h, color) = (current.Format, current.Width, current.Height, current.Color);
         var (range, matrix, transfer, primaries) = (color.Range, color.Matrix, color.Transfer, color.Primaries);
-        ulong modifier = current.Modifier;
-        bool modifierNeedsFixation = current.ModifierNeedsFixation;
+        // Not carried over from the incoming format. An absent VideoModifier means the producer
+        // negotiated host memory, and keeping the last DMA-BUF modifier there makes the fallback
+        // look like a still-active GPU path to everything downstream that imports by modifier.
+        ulong modifier = DrmFormatModifier.Invalid;
+        bool modifierNeedsFixation = false;
 
+        // Null means the parameter was withdrawn, not that it is empty; there is nothing to read
+        // and dereferencing it is a fault in a callback the loop thread cannot survive.
+        if (param is null) return current;
+
+        // The size is the producer's word about memory this process does not own the length of.
+        // Overflow is not the only lie available: a size within int range but far past the real
+        // allocation makes a span the reader walks off the end of, and the fault lands in the
+        // middle of a stream callback. Nothing legitimate is anywhere near the cap.
         uint size = ((uint*)param)[0];
+        if (size > MaxParamPodBytes) return current;
+
         var pod = new ReadOnlySpan<byte>(param, 8 + (int)size);
         var reader = new SpaPodReader(pod);
         if (reader.EnterObject(out uint objType, out _, out _) && (SpaType)objType == SpaType.ObjectFormat)
         {
-            while (reader.TryReadProperty(out SpaKey key, out var value))
+            while (reader.TryReadProperty(out SpaKey key, out uint propFlags, out var value))
             {
                 try
                 {
@@ -240,19 +285,33 @@ internal static class SpaFormatPod
                     {
                         // The producer returns either a single fixated modifier or, when it honoured
                         // DONT_FIXATE, a choice of several it supports. We only need the preferred one
-                        // (to use/fixate on) and whether more than one came back (must fixate) - both
-                        // read in place with no allocation. See VideoFormatInfo for why the full set
-                        // is intentionally discarded.
+                        // (to use/fixate on) - read in place with no allocation. See VideoFormatInfo
+                        // for why the full set is intentionally discarded.
+                        //
+                        // Whether it still needs fixating is the producer's own DONT_FIXATE flag,
+                        // not the number of values. A Choice(Enum) is { default, alt... }, so the
+                        // preferred value appears twice and a single-modifier offer counts two -
+                        // reading the count as the alternative count fixates offers that are
+                        // already fixed. Upstream reads the flag, and so does this.
                         if (value.TryReadModifier(out long first, out int n) && n > 0)
                         {
                             modifier = (ulong)first;
-                            modifierNeedsFixation = n > 1;
+                            modifierNeedsFixation = (propFlags & SpaPodPropFlag.DontFixate) != 0;
                         }
                     }
                     else if (key == SpaFormat.VideoSize)
                     {
                         var (rw, rh) = value.TryUnwrapChoice(out var i) ? i.ReadRectangle() : value.ReadRectangle();
-                        w = (int)rw; h = (int)rh;
+
+                        // Dimensions arrive as uint32 and are used as int everywhere below. A value
+                        // past int.MaxValue casts negative and every size derived from it is wrong;
+                        // a zero is a frame with no pixels. Neither is a format worth adopting, so
+                        // the previous one is kept.
+                        if (rw is > 0 and <= int.MaxValue && rh is > 0 and <= int.MaxValue)
+                        {
+                            w = (int)rw;
+                            h = (int)rh;
+                        }
                     }
                     else if (key == SpaFormat.VideoColorRange)
                         range = MapColorRange((SpaVideoColorRange)ReadId(ref value));
@@ -277,7 +336,17 @@ internal static class SpaFormatPod
     {
         var (fmt, rate, ch) = (current.Format, current.SampleRate, current.Channels);
 
+        // Null means the parameter was withdrawn, not that it is empty; there is nothing to read
+        // and dereferencing it is a fault in a callback the loop thread cannot survive.
+        if (param is null) return current;
+
+        // The size is the producer's word about memory this process does not own the length of.
+        // Overflow is not the only lie available: a size within int range but far past the real
+        // allocation makes a span the reader walks off the end of, and the fault lands in the
+        // middle of a stream callback. Nothing legitimate is anywhere near the cap.
         uint size = ((uint*)param)[0];
+        if (size > MaxParamPodBytes) return current;
+
         var pod = new ReadOnlySpan<byte>(param, 8 + (int)size);
         var reader = new SpaPodReader(pod);
         if (reader.EnterObject(out uint objType, out _, out _) && (SpaType)objType == SpaType.ObjectFormat)
@@ -400,7 +469,13 @@ internal static class SpaFormatPod
         PixelFormat.Yuyv   => SpaVideoFormat.Yuy2,
         PixelFormat.Yuv420 => SpaVideoFormat.I420,
         PixelFormat.Nv12   => SpaVideoFormat.Nv12,
-        _                  => SpaVideoFormat.Bgra,
+
+        // Unknown is what a negotiation reports when the producer named a format this version does
+        // not model; there is nothing to ask for. Falling through to BGRA would offer the wrong format
+        // and decode whatever comes back as BGRA, which renders as a tinted, sheared image
+        // rather than failing.
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(fmt), fmt, "not a pixel format that can be offered"),
     };
 
     internal static PixelFormat FromSpaVideoFormat(SpaVideoFormat spa) => spa switch
@@ -430,12 +505,20 @@ internal static class SpaFormatPod
     };
 
     /// <summary>Bytes per pixel in the primary plane (planar formats report the Y-plane stride unit).</summary>
+    /// <exception cref="ArgumentOutOfRangeException">The format is not one this version models.</exception>
+    /// <remarks>
+    /// No four-byte default. An unmodelled format is not necessarily packed 32bpp, and guessing that
+    /// it is sizes every buffer and stride derived from it wrongly rather than reporting that the
+    /// format is not understood.
+    /// </remarks>
     internal static int BytesPerPixel(PixelFormat fmt) => fmt switch
     {
         PixelFormat.Yuv420 => 1,
         PixelFormat.Nv12   => 1,
         PixelFormat.Yuyv   => 2,
-        _                  => 4,
+        PixelFormat.Rgba or PixelFormat.Bgra or PixelFormat.Rgbx or PixelFormat.Bgrx => 4,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(fmt), fmt, "no known bytes-per-pixel for this format"),
     };
 
     // - Audio -
@@ -460,7 +543,12 @@ internal static class SpaFormatPod
         AudioSampleFormat.S24Le => SpaAudioFormat.S24Le,
         AudioSampleFormat.S32Le => SpaAudioFormat.S32Le,
         AudioSampleFormat.F32Le => SpaAudioFormat.F32Le,
-        _                       => SpaAudioFormat.F32Le,
+        AudioSampleFormat.S24_32Le => SpaAudioFormat.S24_32Le,
+        AudioSampleFormat.F64Le => SpaAudioFormat.F64Le,
+
+        // Unknown is what a negotiation reports, never something to offer: there is nothing to ask
+        // for. Anything else is a caller passing a value the enum does not define.
+        _ => throw new ArgumentOutOfRangeException(nameof(fmt), fmt, "not a format that can be offered"),
     };
 
     // - Color enum mapping -
@@ -506,6 +594,12 @@ internal static class SpaFormatPod
         SpaAudioFormat.S24Le => AudioSampleFormat.S24Le,
         SpaAudioFormat.S32Le => AudioSampleFormat.S32Le,
         SpaAudioFormat.F32Le => AudioSampleFormat.F32Le,
-        _                                   => AudioSampleFormat.F32Le,
+        SpaAudioFormat.S24_32Le => AudioSampleFormat.S24_32Le,
+        SpaAudioFormat.F64Le => AudioSampleFormat.F64Le,
+
+        // Not F32Le. Claiming a format the producer did not negotiate makes the consumer read the
+        // wrong number of bytes per sample and every channel after the first is offset: audio that
+        // plays, sounds wrong, and blames the device.
+        _ => AudioSampleFormat.Unknown,
     };
 }
