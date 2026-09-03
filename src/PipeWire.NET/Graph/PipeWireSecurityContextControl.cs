@@ -46,7 +46,7 @@ public sealed partial class PipeWireSecurityContextControl : IDisposable, IAsync
         // No events are subscribed: the interface's only event is a lifecycle signal this type has
         // no use for, and the zeroed table keeps the binding shape the same as every other.
         control._bound = BoundProxy.Bind(
-            ctx, registry, id, Native.PW_TYPE_INTERFACE_SECURITY_CONTEXT, version,
+            ctx, registry, id, Native.PW_TYPE_INTERFACE_SECURITY_CONTEXT, version, Native.PW_VERSION_SECURITY_CONTEXT,
             sizeof(pw_security_context_events),
             events => ((pw_security_context_events*)events)->version = 0,
             static (_, _, _, _) => 0,
@@ -64,7 +64,10 @@ public sealed partial class PipeWireSecurityContextControl : IDisposable, IAsync
     /// The properties every client connecting through <paramref name="listenFd"/> is given, such as
     /// <c>pipewire.access</c> and <c>pipewire.sec.engine</c>.
     /// </param>
-    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait. The request is already on its way, so cancelling does not recall
+    /// it: the daemon can still apply the change after this throws.
+    /// </param>
     /// <exception cref="ArgumentOutOfRangeException">A descriptor is negative.</exception>
     /// <exception cref="ObjectDisposedException">This control has been disposed.</exception>
     /// <exception cref="PipeWireException">The daemon refused the request.</exception>
@@ -92,17 +95,21 @@ public sealed partial class PipeWireSecurityContextControl : IDisposable, IAsync
         foreach ((string key, string value) in properties)
             bytes += Encoding.UTF8.GetByteCount(key) + Encoding.UTF8.GetByteCount(value) + 2;
 
-        Span<byte> scratch = bytes <= 512 ? stackalloc byte[512] : new byte[bytes];
+        // A stackalloc cannot move; a heap fallback can, and this array's address goes to native
+        // code, so the fallback has to be pinned.
+        Span<byte> scratch = bytes <= 512
+            ? stackalloc byte[512]
+            : GC.AllocateUninitializedArray<byte>(bytes, pinned: true);
         Span<spa_dict_item> items = properties.Count <= 16
             ? stackalloc spa_dict_item[16]
-            : new spa_dict_item[properties.Count];
+            : GC.AllocateUninitializedArray<spa_dict_item>(properties.Count, pinned: true);
 
         var builder = new SpaDictBuilder(scratch, items);
         foreach ((string key, string value) in properties)
-            builder.Add(Encoding.UTF8.GetBytes(key), value);
+            builder.Add(key, value);
 
         if (!_bound!.TryUse(out BoundProxy.Use proxy))
-            throw new ObjectDisposedException(GetType().Name);
+            throw new ObjectDisposedException(nameof(PipeWireSecurityContextControl));
 
         using (proxy)
         using (_ctx.Lock())

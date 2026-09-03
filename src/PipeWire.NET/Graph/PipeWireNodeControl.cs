@@ -36,7 +36,7 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
     {
         var control = new PipeWireNodeControl(ctx, id, logger);
         control.Attach(BoundProxy.Bind(
-            ctx, registry, id, Native.PW_TYPE_INTERFACE_NODE, version,
+            ctx, registry, id, Native.PW_TYPE_INTERFACE_NODE, version, Native.PW_VERSION_NODE,
             sizeof(pw_node_events),
             events =>
             {
@@ -94,16 +94,26 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
 
     /// <summary>Sets the node's overall volume.</summary>
     /// <param name="volume">Linear amplitude; negative values are refused.</param>
-    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait. The request is already on its way, so cancelling does not recall
+    /// it: the daemon can still apply the change after this throws.
+    /// </param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="volume"/> is negative.</exception>
     /// <remarks>
     /// This is the node's master <c>volume</c> property. Session managers and desktop mixers read
     /// <c>channelVolumes</c> instead, so a change made here is correct but will not show up in
-    /// wpctl or pavucontrol. Use <see cref="SetChannelVolumesAsync"/> for the volume a user sees.
+    /// wpctl or pavucontrol. Use <see cref="SetChannelVolumesAsync(ReadOnlySpan{float}, CancellationToken)"/> for the volume a user sees.
     /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="volume"/> is negative or not a number.
+    /// </exception>
     public Task SetVolumeAsync(float volume, CancellationToken cancellationToken = default)
     {
+        // NaN as well as negative. ThrowIfNegative asks IsNegative, which is false for NaN, so a
+        // NaN went into a float pod and reached the daemon as a volume.
         ArgumentOutOfRangeException.ThrowIfNegative(volume);
+        if (float.IsNaN(volume))
+            throw new ArgumentOutOfRangeException(nameof(volume), volume, "a volume must be a number.");
         return SetParameterAsync(
             SpaParamType.Props,
             new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
@@ -113,7 +123,10 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
 
     /// <summary>Sets the node's per-channel volumes.</summary>
     /// <param name="volumes">One linear amplitude per channel, in the node's channel order.</param>
-    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait. The request is already on its way, so cancelling does not recall
+    /// it: the daemon can still apply the change after this throws.
+    /// </param>
     /// <remarks>
     /// <para>
     /// The count must match the node's channel map, and nothing enforces that. PipeWire stores the
@@ -151,12 +164,59 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
             cancellationToken);
     }
 
+    /// <summary>Sets the per-channel volumes, checking the count against the node first.</summary>
+    /// <param name="volumes">One linear amplitude per channel, in the node's channel order.</param>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="volumes"/> is empty, holds a negative value, or its count matches neither
+    /// the node's channel map nor the volumes it currently holds.
+    /// </exception>
+    /// <param name="matchChannelMap">
+    /// Reads the node's channel map first and refuses a count that matches neither it nor the
+    /// volumes the node currently holds.
+    /// <para>
+    /// Deliberately not a hard equality against the map: a pro-audio node legitimately holds fewer
+    /// volumes than its map has entries, so refusing on that alone would reject writes the daemon
+    /// accepts. Without it a mismatched count is stored verbatim and sticks, which is the daemon's
+    /// own behaviour. With it, one extra round trip.
+    /// </para>
+    /// </param>
+    public Task SetChannelVolumesAsync(
+        ReadOnlySpan<float> volumes,
+        bool matchChannelMap,
+        CancellationToken cancellationToken = default)
+    {
+        float[] copy = volumes.ToArray();
+        return matchChannelMap
+            ? SetCheckedAsync(copy, cancellationToken)
+            : SetChannelVolumesAsync(copy, cancellationToken);
+    }
+
+    private async Task SetCheckedAsync(float[] volumes, CancellationToken cancellationToken)
+    {
+        ImmutableArray<SpaAudioChannel> map =
+            await GetChannelMapAsync(cancellationToken).ConfigureAwait(false);
+        ImmutableArray<float> current =
+            await GetChannelVolumesAsync(cancellationToken).ConfigureAwait(false);
+
+        if (volumes.Length != map.Length && volumes.Length != current.Length)
+        {
+            throw new ArgumentException(
+                $"{volumes.Length} volumes match neither the node's channel map ({map.Length}) "
+                + $"nor the {current.Length} it currently holds.",
+                nameof(volumes));
+        }
+
+        await SetChannelVolumesAsync(volumes, cancellationToken).ConfigureAwait(false);
+    }
+
+
     /// <summary>
     /// The channels this node actually has, in order, or empty if it does not say.
     /// </summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
     /// <remarks>
-    /// The authority on how many entries <see cref="SetChannelVolumesAsync"/> should be given.
+    /// The authority on how many entries <see cref="SetChannelVolumesAsync(ReadOnlySpan{float}, CancellationToken)"/> should be given.
     /// Unlike the volume array, this reflects the node rather than the last thing written to it.
     /// </remarks>
     public async Task<ImmutableArray<SpaAudioChannel>> GetChannelMapAsync(
@@ -179,7 +239,10 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
 
     /// <summary>Mutes or unmutes the node.</summary>
     /// <param name="muted">Whether to mute it.</param>
-    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait. The request is already on its way, so cancelling does not recall
+    /// it: the daemon can still apply the change after this throws.
+    /// </param>
     public Task SetMutedAsync(bool muted, CancellationToken cancellationToken = default) =>
         SetParameterAsync(
             SpaParamType.Props,
@@ -200,7 +263,10 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
 
     /// <summary>Sets the extra latency applied to this node.</summary>
     /// <param name="nanoseconds">The offset. Negative values pull the node earlier.</param>
-    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait. The request is already on its way, so cancelling does not recall
+    /// it: the daemon can still apply the change after this throws.
+    /// </param>
     public Task SetLatencyOffsetAsync(long nanoseconds, CancellationToken cancellationToken = default) =>
         SetParameterAsync(
             SpaParamType.Props,
@@ -281,6 +347,59 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
             // Deliberately not logged: the instance the logger belongs to is what failed to resolve,
             // and there is nothing else to report it through from inside a native callback.
         }
+    }
+
+    // ------------------------------------------------------------------ latency and tags
+
+    /// <summary>What this node declares it costs the graph to process.</summary>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <returns>The declared latency, or null when the node declares none.</returns>
+    public async Task<PipeWireProcessLatency?> GetProcessLatencyAsync(
+        CancellationToken cancellationToken = default) =>
+        PipeWireProcessLatency.From(
+            await GetParameterAsync(SpaParamType.ProcessLatency, cancellationToken).ConfigureAwait(false));
+
+    /// <summary>Declares what this node costs the graph to process.</summary>
+    /// <param name="latency">The delay this node adds. See the type for which unit to use.</param>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <remarks>
+    /// Only meaningful on a node this client owns. The daemon recomputes the latency of every path
+    /// through it, so a wrong figure here is not a local error: it moves the numbers every consumer
+    /// downstream uses to align audio against video.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="latency"/> is null.</exception>
+    public Task SetProcessLatencyAsync(
+        PipeWireProcessLatency latency, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(latency);
+        return SetParameterAsync(SpaParamType.ProcessLatency, latency.ToParameter(), cancellationToken);
+    }
+
+    /// <summary>The metadata travelling with this node's stream, per direction.</summary>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    public async Task<ImmutableArray<PipeWireTag>> GetTagsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        ImmutableArray<SpaObject> raw =
+            await EnumerateParametersAsync(SpaParamType.Tag, cancellationToken).ConfigureAwait(false);
+
+        var tags = ImmutableArray.CreateBuilder<PipeWireTag>(raw.Length);
+        foreach (SpaObject param in raw)
+        {
+            if (PipeWireTag.From(param) is { } tag) tags.Add(tag);
+        }
+
+        return tags.ToImmutable();
+    }
+
+    /// <summary>Sets the metadata travelling with this node's stream.</summary>
+    /// <param name="tag">The direction and the key and value pairs.</param>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="tag"/> is null.</exception>
+    public Task SetTagAsync(PipeWireTag tag, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(tag);
+        return SetParameterAsync(SpaParamType.Tag, tag.ToParameter(), cancellationToken);
     }
 
     [LoggerMessage(EventId = 33000, Level = LogLevel.Error,

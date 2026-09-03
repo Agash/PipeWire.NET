@@ -31,10 +31,16 @@ public static class PipeWireGraphExtensions
     extension(IPipeWireObject obj)
     {
         /// <summary>
-        /// True when this client may call methods on the object. Methods that modify it also need
-        /// <see cref="PipeWirePermissions.Write"/>, so this alone does not imply a destroy will be
-        /// authorised.
+        /// True when this client holds <see cref="PipeWirePermissions.Execute"/> on the object.
         /// </summary>
+        /// <remarks>
+        /// Not an authorisation check, and not usable as one. Anything that modifies the object
+        /// also needs <see cref="PipeWirePermissions.Write"/>, and permissions can be revoked
+        /// between reading this and making the call, so a caller that branches on it has decided
+        /// something the daemon decides again anyway. Handle
+        /// <see cref="PipeWireException.IsPermissionDenied"/> on the call instead; this is for
+        /// showing a person what they may do, not for deciding whether to try.
+        /// </remarks>
         public bool CanInvokeMethods => obj.Permissions.HasFlag(PipeWirePermissions.Execute);
     }
 
@@ -81,12 +87,17 @@ public static class PipeWireGraphExtensions
         }
 
         /// <summary>Nodes carrying video that media can actually be read from.</summary>
-        public ImmutableArray<PipeWireNode> VideoSources =>
+        /// <remarks>
+        /// A method rather than a property: it filters the whole graph and allocates every time it
+        /// is called, which is not what a property should cost. Hold the result rather than reading
+        /// it in a loop.
+        /// </remarks>
+        public ImmutableArray<PipeWireNode> GetVideoSources() =>
             [.. graph.Nodes.Where(n => n.Media is PipeWireMediaKind.Video && graph.CanCaptureFrom(n))];
 
         /// <summary>Nodes carrying audio that media can actually be read from.</summary>
         /// <remarks>Includes sinks, which are readable through their monitor ports.</remarks>
-        public ImmutableArray<PipeWireNode> AudioSources =>
+        public ImmutableArray<PipeWireNode> GetAudioSources() =>
             [.. graph.Nodes.Where(n => n.Media is PipeWireMediaKind.Audio && graph.CanCaptureFrom(n))];
     }
 }

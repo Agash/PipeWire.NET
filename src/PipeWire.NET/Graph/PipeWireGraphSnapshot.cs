@@ -154,10 +154,9 @@ public sealed class PipeWireGraphSnapshot
     /// <summary>The security context, or <see langword="null"/> if the daemon offers none.</summary>
     public PipeWireSecurityContext? SecurityContext => Single<PipeWireSecurityContext>();
 
-    // One lock for all of them, created with the snapshot. Creating one lazily per collection was a
-    // race: "lock (gate ??= new object())" is two operations, so two threads arriving together each
-    // made their own object, each locked it, and both entered the section at once.
-    private readonly Lock _kindGate = new();
+    // One lock for all of them, created with the snapshot. Creating one lazily per collection races:
+    // "lock (gate ??= new object())" is two operations, so two threads arriving together each make
+    // their own object, each locks it, and both enter the section at once.
 
     private ImmutableArray<PipeWireDevice> _devices;
     private ImmutableArray<PipeWireClient> _clients;
@@ -167,16 +166,20 @@ public sealed class PipeWireGraphSnapshot
 
     // Filtered on first read and kept, for the same reason the indexes are: most snapshots are
     // published and replaced without anyone asking.
+    //
+    // Published with a compare-exchange rather than under a lock. Two readers arriving together
+    // both build the array and one of them wins, which costs a wasted filter and gives every
+    // reader the same instance; a lock would serialise readers of an immutable snapshot for no
+    // benefit, and the unlocked fast path it needed was reading a field the lock was meant to
+    // protect.
     private ImmutableArray<T> OfKind<T>(ref ImmutableArray<T> cache)
         where T : class, IPipeWireObject
     {
-        if (!cache.IsDefault) return cache;
+        ImmutableArray<T> current = cache;
+        if (!current.IsDefault) return current;
 
-        lock (_kindGate)
-        {
-            if (cache.IsDefault) cache = [.. Objects.OfType<T>()];
-            return cache;
-        }
+        ImmutableInterlocked.InterlockedInitialize(ref cache, [.. Objects.OfType<T>()]);
+        return cache;
     }
 
     private T? Single<T>() where T : class, IPipeWireObject

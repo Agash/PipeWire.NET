@@ -35,7 +35,7 @@ public sealed partial class PipeWireDeviceControl : PipeWireParameterObject
     {
         var control = new PipeWireDeviceControl(ctx, id, logger);
         control.Attach(BoundProxy.Bind(
-            ctx, registry, id, Native.PW_TYPE_INTERFACE_DEVICE, version,
+            ctx, registry, id, Native.PW_TYPE_INTERFACE_DEVICE, version, Native.PW_VERSION_DEVICE,
             sizeof(pw_device_events),
             events =>
             {
@@ -67,7 +67,10 @@ public sealed partial class PipeWireDeviceControl : PipeWireParameterObject
     /// <see cref="EnumerateProfilesAsync"/>.
     /// </summary>
     /// <param name="index">The profile index.</param>
-    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait. The request is already on its way, so cancelling does not recall
+    /// it: the daemon can still apply the change after this throws.
+    /// </param>
     /// <remarks>
     /// Destructive to the graph: the nodes the old profile provided are removed and the new
     /// profile's appear, so anything holding node ids across this call must re-resolve them.
@@ -98,7 +101,10 @@ public sealed partial class PipeWireDeviceControl : PipeWireParameterObject
     /// <param name="devicePort">
     /// Which of the device's ports to apply it to, from the route's <c>devices</c> property.
     /// </param>
-    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait. The request is already on its way, so cancelling does not recall
+    /// it: the daemon can still apply the change after this throws.
+    /// </param>
     public Task SetRouteAsync(
         int routeIndex, int devicePort, CancellationToken cancellationToken = default) =>
         SetParameterAsync(
@@ -117,17 +123,30 @@ public sealed partial class PipeWireDeviceControl : PipeWireParameterObject
     /// <param name="devicePort">Which of the device's ports the route applies to.</param>
     /// <param name="channelVolumes">One linear amplitude per channel.</param>
     /// <param name="muted">Whether to mute it.</param>
-    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait. The request is already on its way, so cancelling does not recall
+    /// it: the daemon can still apply the change after this throws.
+    /// </param>
     /// <remarks>
     /// This is the mixer control on the card itself, which is why it survives the application that
     /// set it. A node's volume does not.
     /// </remarks>
+    /// <param name="save">
+    /// Whether the daemon should persist this setting for the device, so it survives a reboot.
+    /// <para>
+    /// Off by default. Persisting is right for a change a person made in a mixer and wrong for one
+    /// a program made on its own, and only the caller knows which this is. A saved route
+    /// outlives the process and the session: undoing it means writing the old value back or
+    /// clearing the session manager's state, not restarting anything.
+    /// </para>
+    /// </param>
     /// <exception cref="ArgumentException"><paramref name="channelVolumes"/> is empty or holds a negative value.</exception>
     public Task SetRouteVolumeAsync(
         int routeIndex,
         int devicePort,
         ReadOnlySpan<float> channelVolumes,
         bool muted,
+        bool save = false,
         CancellationToken cancellationToken = default)
     {
         if (channelVolumes.IsEmpty)
@@ -157,7 +176,7 @@ public sealed partial class PipeWireDeviceControl : PipeWireParameterObject
                 new SpaProperty(SpaParamRoute.Index, 0, new SpaInt(routeIndex)),
                 new SpaProperty(SpaParamRoute.Device, 0, new SpaInt(devicePort)),
                 new SpaProperty(SpaParamRoute.Props, 0, props),
-                new SpaProperty(SpaParamRoute.Save, 0, new SpaBool(true)),
+                new SpaProperty(SpaParamRoute.Save, 0, new SpaBool(save)),
             ]),
             cancellationToken);
     }

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
@@ -25,6 +26,14 @@ namespace PipeWire.NET.Graph;
 /// subscribe to <see cref="NodeAdded"/>/<see cref="NodeRemoved"/> -> dispose.
 /// </para>
 /// <para>Events are raised on the PipeWire main-loop thread.</para>
+/// <para>
+/// <b>Dispose it; do not let it fall out of scope.</b> The callbacks the daemon holds refer back
+/// here through a weak handle, so an instance the application drops is collected and simply stops
+/// delivering, with no error and no final state change. That is the deliberate half of the trade:
+/// a strong handle would keep every one ever made alive for the life of the process. What it costs
+/// is that the garbage collector cannot be the thing that closes one, because by the time it runs
+/// there is nothing left to close it from.
+/// </para>
 /// </remarks>
 [SupportedOSPlatform("linux")]
 public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
@@ -43,10 +52,66 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     // pw_proxy_destroy may be called exactly once, so the handle is the only thing that may.
     private readonly ConcurrentDictionary<uint, PipeWireProxyHandle> _ownedProxies = new();
 
+    // Ids whose proxy exists on the daemon but has not reached _ownedProxies yet, because the
+    // creation is still waiting for the graph to publish it. The value records whether a
+    // global_remove arrived in the meantime. Without this, a removal in that window finds nothing
+    // to release and the proxy is then filed anyway, where it stays until the registry is disposed:
+    // the leak is invisible because the object it belonged to is long gone. Bounded by the number
+    // of creations in flight.
+    private readonly ConcurrentDictionary<uint, bool> _creating = new();
+
     // Creations that know their id and are waiting for the object to be published. Registered
     // between `bound` and the registry `global`, so the entity is handed over as it is added
-    // rather than looked up afterwards, which used to race anything removing it in between.
-    private readonly ConcurrentDictionary<uint, TaskCompletionSource<IPipeWireObject>> _awaitingPublish = new();
+    // rather than looked up afterwards, which would race anything removing it in between.
+    private readonly ConcurrentDictionary<uint, PublishWaiters> _awaitingPublish = new();
+
+    /// <summary>Everyone waiting for one id's global to arrive.</summary>
+    /// <remarks>
+    /// A list rather than a single source. Ids are reused as objects come and go, so two callers can
+    /// be waiting on the same one; sharing a <see cref="TaskCompletionSource"/> between them means
+    /// one caller's cancellation cancels the other's wait, and either caller's exit removes the
+    /// registration the other is still relying on.
+    /// </remarks>
+    private sealed class PublishWaiters
+    {
+        private readonly List<TaskCompletionSource<IPipeWireObject>> _waiters = [];
+
+        internal TaskCompletionSource<IPipeWireObject> Add()
+        {
+            var waiter = new TaskCompletionSource<IPipeWireObject>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            lock (_waiters) _waiters.Add(waiter);
+            return waiter;
+        }
+
+        /// <summary>Removes one waiter and reports whether any remain.</summary>
+        internal bool Remove(TaskCompletionSource<IPipeWireObject> waiter)
+        {
+            lock (_waiters)
+            {
+                _waiters.Remove(waiter);
+                return _waiters.Count == 0;
+            }
+        }
+
+        internal void CompleteAll(IPipeWireObject published)
+        {
+            foreach (TaskCompletionSource<IPipeWireObject> waiter in Snapshot())
+                waiter.TrySetResult(published);
+        }
+
+        internal void FailAll(Exception error)
+        {
+            foreach (TaskCompletionSource<IPipeWireObject> waiter in Snapshot())
+                waiter.TrySetException(error);
+        }
+
+        private TaskCompletionSource<IPipeWireObject>[] Snapshot()
+        {
+            lock (_waiters) return [.. _waiters];
+        }
+    }
 
     private PipeWireGraphSnapshot _current = PipeWireGraphSnapshot.Empty;
     private long _version;
@@ -84,13 +149,13 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// <summary>Raised when a new port appears in the graph</summary>
     public event Action<PipeWirePort>? PortAdded;
 
-    /// <summary>Raised when a new port appears in the graph</summary>
+    /// <summary>Raised when a port is removed (carries the global id of the removed port).</summary>
     public event Action<uint>? PortRemoved;
 
     /// <summary>Raised when a new link appears in the graph</summary>
     public event Action<PipeWireLink>? LinkAdded;
 
-    /// <summary>Raised when a new link appears in the graph</summary>
+    /// <summary>Raised when a link is removed (carries the global id of the removed link).</summary>
     public event Action<uint>? LinkRemoved;
 
     /// <summary>Raised once when disposal begins, so watchers can finish rather than block.</summary>
@@ -102,7 +167,9 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         ArgumentNullException.ThrowIfNull(context);
         _ctx = context;
         _logger = context.LoggerFactory.CreateLogger("PipeWire.NET.Registry");
-        _selfHandle = GCHandle.Alloc(this, GCHandleType.Normal);
+        // Weak, for the reason given in BoundProxy: a strong handle here roots the registry
+        // through its own listener, so an undisposed registry could never be finalized.
+        _selfHandle = GCHandle.Alloc(this, GCHandleType.Weak);
         InitializeNative();
     }
 
@@ -124,7 +191,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                     _registryOwner = new PipeWireProxyHandle(
                         (pw_proxy*)registry, _ctx.LoopOwner, _ctx.CoreOwner);
                 if (registry is null)
-                    throw new InvalidOperationException("pw_core_get_registry returned null.");
+                    throw new PipeWireException("pw_core_get_registry", -12);   // ENOMEM
 
                 _events = (pw_registry_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_registry_events));
                 _events->version       = Native.PW_VERSION_REGISTRY_EVENTS;
@@ -164,8 +231,8 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // passed CancellationToken.None never gets control back.
         foreach (uint id in _awaitingPublish.Keys)
         {
-            if (_awaitingPublish.TryRemove(id, out TaskCompletionSource<IPipeWireObject>? waiter))
-                waiter.TrySetException(new ObjectDisposedException(nameof(PipeWireRegistry),
+            if (_awaitingPublish.TryRemove(id, out PublishWaiters? waiters))
+                waiters.FailAll(new ObjectDisposedException(nameof(PipeWireRegistry),
                     $"the registry was disposed while object {id} was being created."));
         }
 
@@ -202,18 +269,107 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     private void ReleaseOwnedProxy(uint id)
     {
         if (_ownedProxies.TryRemove(id, out PipeWireProxyHandle? proxy))
+        {
             proxy.Dispose();
+            return;
+        }
+
+        // Nothing filed yet. If this id is still being created, say so, and whoever finishes the
+        // creation disposes the proxy instead of filing it.
+        _creating.TryUpdate(id, newValue: true, comparisonValue: false);
+    }
+
+    /// <summary>How many created objects this registry is still holding a proxy for.</summary>
+    /// <remarks>
+    /// Exposed to the tests because the leak it measures is otherwise invisible: a proxy left here
+    /// after its object is gone costs nothing observable until the registry is disposed, so no
+    /// descriptor count, daemon-side count or graph assertion moves when it happens.
+    /// </remarks>
+    internal int OwnedProxyCount => _ownedProxies.Count;
+
+    /// <summary>Files a freshly created proxy, or disposes it if its object is already gone.</summary>
+    private void TakeOwnership(uint id, PipeWireProxyHandle proxy)
+    {
+        bool removedWhileCreating = _creating.TryRemove(id, out bool removed) && removed;
+
+        if (removedWhileCreating)
+        {
+            proxy.Dispose();
+            return;
+        }
+
+        _ownedProxies[id] = proxy;
+    }
+
+    /// <summary>Releases a proxy whose creation did not finish, without double-disposing it.</summary>
+    private void AbandonOwnership(uint id, PipeWireProxyHandle proxy)
+    {
+        _creating.TryRemove(id, out _);
+
+        // TryRemove rather than a bare Dispose: a global_remove between filing and here has already
+        // taken and disposed it.
+        if (_ownedProxies.TryRemove(id, out PipeWireProxyHandle? filed))
+        {
+            filed.Dispose();
+            return;
+        }
+
+        proxy.Dispose();
     }
 
     private PipeWireNode? GetNodeOrNull(uint id) => _sources.GetValueOrDefault(id);
 
     private PipeWireLink? GetLinkOrNull(uint id) => _links.GetValueOrDefault(id);
 
-    /// <summary>Hands a newly published object to a creation that is waiting for its id.</summary>
+    /// <summary>Removes the ports and links that belonged to a node that has just gone.</summary>
+    /// <remarks>
+    /// Raises the same removal events the daemon's own events would have, so a subscriber sees each
+    /// object leave exactly once whichever order the daemon reports them in. The later events find
+    /// the entries already gone and do nothing.
+    /// </remarks>
+    private void CascadeRemove(uint nodeId)
+    {
+        foreach ((uint portId, PipeWirePort port) in _ports)
+        {
+            if (port.NodeId != nodeId) continue;
+
+            foreach ((uint linkId, PipeWireLink link) in _links)
+            {
+                if (link.LinkOutputPort != portId && link.LinkInputPort != portId) continue;
+                if (!_links.TryRemove(linkId, out _)) continue;
+
+                LogRemoved("link", linkId);
+                RaiseIsolated(LinkRemoved, linkId, nameof(LinkRemoved));
+            }
+
+            if (!_ports.TryRemove(portId, out _)) continue;
+
+            LogRemoved("port", portId);
+            RaiseIsolated(PortRemoved, portId, nameof(PortRemoved));
+        }
+    }
+
+    /// <summary>Hands a newly published object to every creation waiting for its id.</summary>
     private void CompletePublishWaiter(uint id, IPipeWireObject published)
     {
-        if (_awaitingPublish.TryRemove(id, out TaskCompletionSource<IPipeWireObject>? waiter))
-            waiter.TrySetResult(published);
+        if (_awaitingPublish.TryRemove(id, out PublishWaiters? waiters))
+            waiters.CompleteAll(published);
+    }
+
+    /// <summary>Fails everyone waiting for an id whose global arrived but could not be used.</summary>
+    /// <remarks>
+    /// A global the daemon sent and this library could not parse is still an answer. Dropping it
+    /// silently leaves the creation that asked for the object waiting for a publish that has already
+    /// been and gone, and the caller then blocks until its own token fires - a hang where the honest
+    /// outcome is an error naming the property that could not be read.
+    /// </remarks>
+    private void FailPublishWaiter(uint id, string reason)
+    {
+        if (_awaitingPublish.TryRemove(id, out PublishWaiters? waiters))
+        {
+            waiters.FailAll(new PipeWireException(
+                $"object {id} was published but could not be read: {reason}", -22));
+        }
     }
 
     /// <summary>
@@ -227,13 +383,13 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // disposal, so this has to be checked here rather than only when disposal runs.
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        var waiter = new TaskCompletionSource<IPipeWireObject>(TaskCreationOptions.RunContinuationsAsynchronously);
-        TaskCompletionSource<IPipeWireObject> registered = _awaitingPublish.GetOrAdd(id, waiter);
+        PublishWaiters waiters = _awaitingPublish.GetOrAdd(id, static _ => new PublishWaiters());
+        TaskCompletionSource<IPipeWireObject> waiter = waiters.Add();
 
         // The global may already have been delivered before we got here.
         if (lookup(id) is T early)
         {
-            _awaitingPublish.TryRemove(id, out _);
+            Unregister(id, waiters, waiter);
             return early;
         }
 
@@ -241,37 +397,81 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // drain has already been and gone; fail here rather than wait for a publish that cannot come.
         if (_disposed)
         {
-            _awaitingPublish.TryRemove(id, out _);
+            Unregister(id, waiters, waiter);
             throw new ObjectDisposedException(nameof(PipeWireRegistry));
         }
 
-        using (cancellationToken.UnsafeRegister(static s => ((TaskCompletionSource<IPipeWireObject>)s!).TrySetCanceled(), registered))
+        // Cancels this caller's wait and nobody else's.
+        using (cancellationToken.UnsafeRegister(
+            static s => ((TaskCompletionSource<IPipeWireObject>)s!).TrySetCanceled(), waiter))
         {
             try
             {
-                return (T)await registered.Task.ConfigureAwait(false);
+                return (T)await waiter.Task.ConfigureAwait(false);
             }
             finally
             {
-                _awaitingPublish.TryRemove(id, out _);
+                Unregister(id, waiters, waiter);
             }
         }
     }
 
+    /// <summary>Drops one waiter, and the id's entry once it was the last.</summary>
+    private void Unregister(
+        uint id, PublishWaiters waiters, TaskCompletionSource<IPipeWireObject> waiter)
+    {
+        if (!waiters.Remove(waiter)) return;
+
+        // Conditional on identity: a waiter that registered after this one emptied the list holds a
+        // different instance, and removing by key alone would strand it.
+        _awaitingPublish.TryRemove(new KeyValuePair<uint, PublishWaiters>(id, waiters));
+    }
+
+    /// <summary>Resolves the instance a native callback belongs to, or null if it is gone.</summary>
+    private static unsafe PipeWireRegistry? FromData(void* data)
+    {
+        if (data is null) return null;
+
+        try
+        {
+            return GCHandle.FromIntPtr((nint)data).Target as PipeWireRegistry;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     /// <summary>The registry proxy, read from the handle that owns it.</summary>
+    /// <remarks>
+    /// Never null when it returns. Reading the disposed flag and then dereferencing the owner is
+    /// two steps, and teardown nulls the owner in between, which hands a null
+    /// <c>pw_registry*</c> to whatever native call the caller was about to make.
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The registry is disposed or being disposed.</exception>
     private unsafe pw_registry* RegistryHandle
     {
         get
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            return _registryOwner is null ? null : (pw_registry*)_registryOwner.Proxy;
+            PipeWireProxyHandle? owner = _registryOwner;
+            if (_disposed || owner is null || owner.IsInvalid)
+                throw new ObjectDisposedException(nameof(PipeWireRegistry));
+
+            var registry = (pw_registry*)owner.Proxy;
+            if (registry is null)
+                throw new ObjectDisposedException(nameof(PipeWireRegistry));
+
+            return registry;
         }
     }
 
     /// <summary>
     /// The graph as of the most recent change. Immutable and safe to hold; reading costs nothing.
     /// </summary>
-    public PipeWireGraphSnapshot Current => Volatile.Read(ref _current);
+    public PipeWireGraphSnapshot Current =>
+        Interlocked.Read(ref _builtRevision) == Interlocked.Read(ref _revision)
+            ? Volatile.Read(ref _current)
+            : Rebuild();
 
     /// <summary>Snapshot of currently-visible nodes.</summary>
     public IReadOnlyCollection<PipeWireNode> Nodes => Current.Nodes;
@@ -346,18 +546,58 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// Publishes before raising anything, so no handler can observe an event describing a change
     /// that <see cref="Current"/> does not yet contain.
     /// </remarks>
-    private void Publish()
+    /// <summary>Marks the graph changed. The snapshot itself is built when somebody asks.</summary>
+    /// <remarks>
+    /// The daemon delivers its whole graph as a run of global events when a registry is created, so
+    /// building a snapshot per event copies every object once per object - hundreds of arrays that
+    /// nothing reads, because a caller subscribes after construction and reads once at the end.
+    /// Marking dirty and building on demand collapses that burst to one build without needing to
+    /// know when the burst ended.
+    /// </remarks>
+    private void Publish() => Interlocked.Increment(ref _revision);
+
+    // A counter rather than a flag. A flag has to be cleared before the collections are read, or a
+    // change arriving mid-build is lost - and clearing it first opens a window where a reader sees
+    // "clean" while the new snapshot has not been published yet, and takes the stale one. The
+    // counter closes both: the built revision is only advanced once the snapshot is in place, and a
+    // change during the build leaves the counter ahead so the next reader rebuilds.
+    private long _revision = 1;
+    private long _builtRevision;
+    private readonly Lock _publishGate = new();
+
+    private PipeWireGraphSnapshot Rebuild()
     {
-        var snapshot = new PipeWireGraphSnapshot(
-            ++_version, _sources.Values, _ports.Values, _links.Values, _objects.Values);
-        Volatile.Write(ref _current, snapshot);
+        // Under one lock, so the four collections are read at one instant rather than four. A
+        // reader arriving mid-burst still sees a coherent set rather than ports from one moment
+        // and links from another.
+        lock (_publishGate)
+        {
+            long revision = Interlocked.Read(ref _revision);
+            if (revision == Interlocked.Read(ref _builtRevision)) return Volatile.Read(ref _current);
+
+            var snapshot = new PipeWireGraphSnapshot(
+                ++_version, _sources.Values, _ports.Values, _links.Values, _objects.Values);
+
+            Volatile.Write(ref _current, snapshot);
+            Interlocked.Exchange(ref _builtRevision, revision);
+            return snapshot;
+        }
     }
 
     private void RaiseGraphChanged()
     {
+        // Checked before Current, which is what forces the snapshot to be built. With nothing
+        // subscribed - the whole of the initial enumeration, since a caller subscribes after
+        // construction - there is nothing to build it for.
         GraphChangedHandler? handlers = GraphChanged;
+        if (handlers is null) return;
+
         PipeWireGraphSnapshot snapshot = Current;
-        SafeCallback.Raise(handlers, h => h(this, snapshot), ex => LogHandlerFaulted(nameof(GraphChanged), ex));
+        SafeCallback.Raise(
+            handlers,
+            (Registry: this, Snapshot: snapshot),
+            static (h, s) => h(s.Registry, s.Snapshot),
+            static (s, ex) => s.Registry.LogHandlerFaulted(nameof(GraphChanged), ex));
     }
 
     /// <summary>
@@ -381,14 +621,18 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// <param name="description">Human-readable name, shown to users as <c>node.description</c>.</param>
     /// <param name="name">Stable <c>node.name</c>; a GUID is used when omitted.</param>
     /// <param name="cancellationToken">Abandons the wait and destroys the half-created node.</param>
-    /// <exception cref="InvalidOperationException">The daemon refused the request.</exception>
+    /// <exception cref="PipeWireException">
+    /// The daemon refused the request. <see cref="PipeWireException.Result"/> carries its code, so
+    /// a refused permission and a format that cannot be negotiated are told apart without reading
+    /// the message.
+    /// </exception>
     /// <remarks>
     /// <para>
     /// The returned node exists in the graph, but <em>its ports may not yet</em>: the daemon
     /// announces those as separate globals while the node initialises. Await them through
     /// <see cref="WatchAsync"/> or <see cref="PortAdded"/> rather than assuming they are present:
     /// <code>
-    /// var node = await registry.CreateVirtualStereoNodeAsync("Mix", ct);
+    /// var node = await registry.CreateVirtualNodeAsync("Mix", ct);
     /// await foreach (var graph in registry.WatchAsync(ct))
     ///     if (graph.GetPortsForNode(node.NodeId).Length == 4) break;
     /// </code>
@@ -398,21 +642,42 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// the registry factories and will not appear in a factory listing.
     /// </para>
     /// </remarks>
-    public Task<PipeWireNode> CreateVirtualStereoNodeAsync(
+    public Task<PipeWireNode> CreateVirtualNodeAsync(
         string description, string? name = null, CancellationToken cancellationToken = default) =>
-        CreateVirtualStereoNode(description, name).ExecuteAsync(cancellationToken);
+        CreateVirtualNode(description, name).ExecuteAsync(cancellationToken);
 
     /// <summary>
-    /// Describes a virtual stereo sink for creation, so options can be chained before it is made.
+    /// Describes a virtual node for creation, so options can be chained before it is made.
     /// </summary>
     /// <remarks>
-    /// Nothing reaches the daemon until <see cref="PipeWireNodeCreation.ExecuteAsync"/> is awaited.
+    /// A stereo sink unless told otherwise: <see cref="PipeWireNodeCreation.WithMediaClass"/> makes
+    /// it a source and <see cref="PipeWireNodeCreation.WithChannelPositions"/> changes its channel
+    /// map, so the defaults are a starting point rather than what this can build. Nothing reaches
+    /// the daemon until <see cref="PipeWireNodeCreation.ExecuteAsync"/> is awaited.
     /// </remarks>
-    public PipeWireNodeCreation CreateVirtualStereoNode(string description, string? name = null)
+    public PipeWireNodeCreation CreateVirtualNode(string description, string? name = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(description);
         return new PipeWireNodeCreation(this, description, name, default);
     }
+
+    /// <summary>
+    /// Describes a virtual audio source: a node other clients capture from, rather than play into.
+    /// </summary>
+    /// <param name="description">What a mixer shows for it.</param>
+    /// <param name="name">Its <c>node.name</c>. Generated when omitted.</param>
+    /// <remarks>
+    /// The same factory as <see cref="CreateVirtualNode"/> with <c>media.class</c> set to
+    /// <c>Audio/Source</c>, named because it is the second of the two shapes that factory makes and
+    /// there is nothing in "virtual node" to say which one a caller gets. A sink is something to
+    /// play into; this is something to capture from, which is how a virtual microphone is built.
+    /// <para>
+    /// Whatever is written into it still arrives through a stream this client owns: the node carries
+    /// no audio on its own, it gives other clients somewhere to read from.
+    /// </para>
+    /// </remarks>
+    public PipeWireNodeCreation CreateVirtualSource(string description, string? name = null) =>
+        CreateVirtualNode(description, name).WithMediaClass("Audio/Source");
 
     internal async Task<PipeWireNode> ExecuteNodeCreationAsync(
         string description, string? name, PipeWireObjectOptions options, CancellationToken cancellationToken)
@@ -423,18 +688,24 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
         (uint id, PipeWireProxyHandle proxy) = await CreateObjectAsync(
             isLink: false, description, name, default, default, options,
-            boundId => published = AwaitPublishedAsync(boundId, GetNodeOrNull, cancellationToken),
+            boundId =>
+            {
+                // Marked before anything can be awaited, so a removal arriving while the graph
+                // catches up has somewhere to record itself.
+                _creating[boundId] = false;
+                published = AwaitPublishedAsync(boundId, GetNodeOrNull, cancellationToken);
+            },
             cancellationToken).ConfigureAwait(false);
 
         try
         {
             PipeWireNode node = await published!.WaitAsync(cancellationToken).ConfigureAwait(false);
-            _ownedProxies[id] = proxy;
+            TakeOwnership(id, proxy);
             return node;
         }
         catch
         {
-            proxy.Dispose();
+            AbandonOwnership(id, proxy);
             throw;
         }
     }
@@ -446,7 +717,11 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// <param name="input">The port data arrives at; must be <see cref="PipeWirePortDirection.In"/>.</param>
     /// <param name="cancellationToken">Abandons the wait and destroys the half-created link.</param>
     /// <exception cref="ArgumentException">A port faces the wrong way.</exception>
-    /// <exception cref="InvalidOperationException">The daemon refused the request.</exception>
+    /// <exception cref="PipeWireException">
+    /// The daemon refused the request. <see cref="PipeWireException.Result"/> carries its code, so
+    /// a refused permission and a format that cannot be negotiated are told apart without reading
+    /// the message.
+    /// </exception>
     public Task<PipeWireLink> CreateLinkAsync(
         PipeWirePort output, PipeWirePort input, CancellationToken cancellationToken = default) =>
         CreateLink(output, input).ExecuteAsync(cancellationToken);
@@ -473,6 +748,54 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         return new PipeWireLinkCreation(this, output, input, default);
     }
 
+    /// <summary>
+    /// Describes a link between two ports named by id, for a caller that has ids rather than the
+    /// port records.
+    /// </summary>
+    /// <param name="outputPortId">The port data leaves from.</param>
+    /// <param name="inputPortId">The port data arrives at.</param>
+    /// <remarks>
+    /// The ids are resolved against the current graph so the direction check still happens here
+    /// rather than reaching the daemon as a refusal. A caller holding ids from a configuration file
+    /// or another process would otherwise have to search the graph itself to call the overload
+    /// above, which is the same lookup written again at every call site.
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// An id is not a port in the current graph, or a port faces the wrong way.
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
+    public PipeWireLinkCreation CreateLink(uint outputPortId, uint inputPortId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        PipeWireGraphSnapshot graph = Current;
+
+        PipeWirePort output = graph.GetPort(outputPortId)
+            ?? throw new ArgumentException(
+                $"{outputPortId} is not a port in the current graph.", nameof(outputPortId));
+
+        PipeWirePort input = graph.GetPort(inputPortId)
+            ?? throw new ArgumentException(
+                $"{inputPortId} is not a port in the current graph.", nameof(inputPortId));
+
+        return CreateLink(output, input);
+    }
+
+    /// <summary>Links two ports named by id and returns the link once the graph reports it.</summary>
+    /// <param name="outputPortId">The port data leaves from.</param>
+    /// <param name="inputPortId">The port data arrives at.</param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait. The request is already on its way, so cancelling does not recall it: the
+    /// daemon can still create the link after this throws.
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// An id is not a port in the current graph, or a port faces the wrong way.
+    /// </exception>
+    /// <exception cref="PipeWireException">The daemon refused the request.</exception>
+    public Task<PipeWireLink> CreateLinkAsync(
+        uint outputPortId, uint inputPortId, CancellationToken cancellationToken = default) =>
+        CreateLink(outputPortId, inputPortId).ExecuteAsync(cancellationToken);
+
     internal async Task<PipeWireLink> ExecuteLinkCreationAsync(
         PipeWirePort output, PipeWirePort input, PipeWireObjectOptions options,
         CancellationToken cancellationToken)
@@ -481,18 +804,22 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
         (uint id, PipeWireProxyHandle proxy) = await CreateObjectAsync(
             isLink: true, null, null, output, input, options,
-            boundId => published = AwaitPublishedAsync(boundId, GetLinkOrNull, cancellationToken),
+            boundId =>
+            {
+                _creating[boundId] = false;
+                published = AwaitPublishedAsync(boundId, GetLinkOrNull, cancellationToken);
+            },
             cancellationToken).ConfigureAwait(false);
 
         try
         {
             PipeWireLink link = await published!.WaitAsync(cancellationToken).ConfigureAwait(false);
-            _ownedProxies[id] = proxy;
+            TakeOwnership(id, proxy);
             return link;
         }
         catch
         {
-            proxy.Dispose();
+            AbandonOwnership(id, proxy);
             throw;
         }
     }
@@ -501,15 +828,16 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// Removes a link. Works for links this client created and for links owned by anyone else,
     /// which is the common case for a patchbay.
     /// </summary>
-    /// <exception cref="InvalidOperationException">
-    /// The daemon refused, usually for want of execute permission on the global.
+    /// <exception cref="PipeWireException">
+    /// The daemon refused, usually for want of execute permission on the global. Check
+    /// <see cref="PipeWireException.IsPermissionDenied"/> rather than the message.
     /// </exception>
     public Task RemoveLinkAsync(uint linkId, CancellationToken cancellationToken = default) =>
-        RemoveObjectAsync(linkId, cancellationToken);
+        DestroyGlobalAsync(linkId, cancellationToken);
 
     /// <summary>
-    /// Asks the daemon to destroy any global by id - a node, a link, or anything else the registry
-    /// can see.
+    /// Asks the daemon to destroy any global by id: a node, a link, or anything else the registry
+    /// can see. This destroys the object for every client on the machine, not just for this one.
     /// </summary>
     /// <remarks>
     /// The counterpart to <see cref="PipeWireNodeCreation.WithLinger"/>: an object created to
@@ -520,11 +848,11 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="id"/> is the core, which is the connection itself and cannot be destroyed.
     /// </exception>
-    /// <exception cref="InvalidOperationException">
-    /// The daemon refused - for want of execute permission on the global, or because no global has
-    /// that id.
+    /// <exception cref="PipeWireException">
+    /// The daemon refused, for want of execute permission on the global or because no global has
+    /// that id. <see cref="PipeWireException.IsPermissionDenied"/> separates the two.
     /// </exception>
-    public unsafe Task RemoveObjectAsync(uint id, CancellationToken cancellationToken = default)
+    public unsafe Task DestroyGlobalAsync(uint id, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -539,13 +867,26 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                 "the core is the connection itself and cannot be destroyed; dispose the context instead.");
         }
 
+        // An object this client created is destroyed through the proxy it was created with, which
+        // is the single destruction operation for it. Going through the registry instead leaves the
+        // proxy alive until the daemon's global_remove arrives and disposes it, so a dispose racing
+        // that window destroys it twice - which PipeWire aborts on.
+        if (_ownedProxies.TryRemove(id, out PipeWireProxyHandle? owned))
+        {
+            owned.Dispose();
+
+            // Still round-tripped. Destroying the proxy only queues the request, and this method's
+            // completion is what a caller reads as "the daemon has dealt with it" - the removal is
+            // dispatched before the barrier answers, so the graph agrees by the time this returns.
+            return CoreSync.RoundTripAsync(_ctx, cancellationToken);
+        }
+
         // destroy is asynchronous: it returns SPA_ASYNC_BIT | seq, never a status. A refusal comes
         // back later as a core error carrying that seq, so the only way to report one is to
         // round-trip the core and watch for it. Testing the return value alone detects nothing.
         //
         // Issued through the round-trip so the listener is already attached: sending it first and
-        // subscribing afterwards loses any refusal the daemon answered in between, which made a
-        // removal the daemon had rejected report success.
+        // subscribing afterwards loses any refusal the daemon answered in between.
         return CoreSync.RoundTripAsync(
             _ctx, () => Native.pw_registry_destroy_global(RegistryHandle, id), cancellationToken);
     }
@@ -567,37 +908,81 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // PipeWire puts no length limit on a property: spa_dict_item is a pair of const char*.
         // So size the scratch to the caller's strings rather than imposing a limit of our own -
         // a stackalloc covers every ordinary name, and anything longer rents.
+        ImmutableArray<KeyValuePair<string, string>> extra = options.Properties.IsDefault
+            ? []
+            : options.Properties;
+
         int needed = FixedPropertyBytes
             + (name is null ? 0 : Encoding.UTF8.GetByteCount(name) + 1)
             + (description is null ? 0 : Encoding.UTF8.GetByteCount(description) + 1);
 
-        byte[]? rented = needed > StackScratchBytes ? ArrayPool<byte>.Shared.Rent(needed) : null;
+        foreach ((string key, string value) in extra)
+            needed += Encoding.UTF8.GetByteCount(key) + Encoding.UTF8.GetByteCount(value) + 2;
+
+        // Pinned rather than pooled. The array's address is handed to native code, and a pooled
+        // array is an ordinary movable one: a collection between Build and the native call would
+        // leave the daemon reading whatever replaced it.
+        byte[]? rented = needed > StackScratchBytes
+            ? GC.AllocateUninitializedArray<byte>(needed, pinned: true)
+            : null;
         try
         {
             Span<byte> scratch = rented ?? stackalloc byte[StackScratchBytes];
-            Span<spa_dict_item> items = stackalloc spa_dict_item[8];
+
+            // Eight covers everything the library sets itself; the caller's properties are on top
+            // of that, and the count is theirs to decide.
+            Span<spa_dict_item> items = extra.Length <= 8
+                ? stackalloc spa_dict_item[16]
+                : GC.AllocateUninitializedArray<spa_dict_item>(8 + extra.Length, pinned: true);
+
+            // spa_dict_lookup walks the items and returns the FIRST match, so a repeated key is not
+            // an override, it is a value that never gets read. The caller's properties therefore go
+            // in first and each default is written only if the caller did not name it, which means
+            // no key is ever written twice.
+            bool Supplied(string key)
+            {
+                foreach ((string k, _) in extra)
+                {
+                    if (string.Equals(k, key, StringComparison.Ordinal)) return true;
+                }
+
+                return false;
+            }
             var dict = new SpaDictBuilder(scratch, items);
 
-            if (options.Linger) dict.Add(PipeWireKeys.ObjectLinger, PipeWireKeys.True);
+            foreach ((string key, string value) in extra) dict.Add(key, value);
+
+            if (options.Linger && !Supplied("object.linger"))
+                dict.Add(PipeWireKeys.ObjectLinger, PipeWireKeys.True);
 
             if (isLink)
             {
+                // The endpoints are what the link is, not a property of it, so they are not
+                // overridable and are written unconditionally.
                 dict.Add(PipeWireKeys.LinkOutputNode, output!.NodeId);
                 dict.Add(PipeWireKeys.LinkOutputPort, output.PortId);
                 dict.Add(PipeWireKeys.LinkInputNode, input!.NodeId);
                 dict.Add(PipeWireKeys.LinkInputPort, input.PortId);
-                if (options.Passive) dict.Add(PipeWireKeys.LinkPassive, PipeWireKeys.True);
+
+                if (options.Passive && !Supplied("link.passive"))
+                    dict.Add(PipeWireKeys.LinkPassive, PipeWireKeys.True);
 
                 return NativeObjectCreation.CreateAsync(
                     _ctx, PipeWireKeys.LinkFactory, PipeWireKeys.InterfaceLink,
                     Native.PW_VERSION_LINK, dict.Build(), cancellationToken, onBound);
             }
 
+            // The factory is what kind of object this is rather than a property of it, so it is
+            // not overridable.
             dict.Add(PipeWireKeys.FactoryName, PipeWireKeys.NullAudioSink);
-            dict.Add(PipeWireKeys.NodeName, name!);
-            dict.Add(PipeWireKeys.NodeDescription, description!);
-            dict.Add(PipeWireKeys.MediaClass, PipeWireKeys.AudioSink);
-            dict.Add(PipeWireKeys.AudioPosition, PipeWireKeys.StereoPosition);
+
+            if (!Supplied("node.name")) dict.Add(PipeWireKeys.NodeName, name!);
+            if (!Supplied("node.description")) dict.Add(PipeWireKeys.NodeDescription, description!);
+
+            // Defaults, and only defaults: a stereo sink is the useful shape for a virtual device,
+            // and a caller naming either key gets theirs instead.
+            if (!Supplied("media.class")) dict.Add(PipeWireKeys.MediaClass, PipeWireKeys.AudioSink);
+            if (!Supplied("audio.position")) dict.Add(PipeWireKeys.AudioPosition, PipeWireKeys.StereoPosition);
 
             return NativeObjectCreation.CreateAsync(
                 _ctx, PipeWireKeys.Adapter, PipeWireKeys.InterfaceNode,
@@ -607,7 +992,9 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         {
             // create_object copies the properties into the daemon's own pw_properties before
             // returning, so the buffer is dead the moment CreateAsync has run its synchronous part.
-            if (rented is not null) ArrayPool<byte>.Shared.Return(rented);
+            // Nothing to return: the fallback is a pinned allocation rather than a pooled array,
+            // because its address goes to native code. It is collected like anything else once the
+            // native call has copied out of it.
         }
     }
 
@@ -617,7 +1004,23 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// <summary>
     /// Upper bound on the constant keys and values either creation path writes, NUL bytes included.
     /// </summary>
-    private const int FixedPropertyBytes = 256;
+    /// <remarks>
+    /// Computed from the literals rather than guessed, so adding a default cannot silently outgrow
+    /// it. The link path is the larger of the two: four endpoint keys with their ten-digit ids, plus
+    /// linger and passive. Doubled for headroom, because exhausting it fails a creation that would
+    /// otherwise have worked and the scratch is transient either way.
+    /// </remarks>
+    private static readonly int FixedPropertyBytes = 2 * (
+        PipeWireKeys.LinkOutputNode.Length + PipeWireKeys.LinkOutputPort.Length
+        + PipeWireKeys.LinkInputNode.Length + PipeWireKeys.LinkInputPort.Length
+        + (4 * 11)                                              // one uint32 per endpoint key
+        + PipeWireKeys.ObjectLinger.Length + PipeWireKeys.LinkPassive.Length
+        + PipeWireKeys.FactoryName.Length + PipeWireKeys.NullAudioSink.Length
+        + PipeWireKeys.NodeName.Length + PipeWireKeys.NodeDescription.Length
+        + PipeWireKeys.MediaClass.Length + PipeWireKeys.AudioSink.Length
+        + PipeWireKeys.AudioPosition.Length + PipeWireKeys.StereoPosition.Length
+        + PipeWireKeys.True.Length
+        + 32);                                                  // one NUL per key and value
 
     /// <inheritdoc/>
     /// <summary>Tears down synchronously. Disposal here does no I/O.</summary>
@@ -705,6 +1108,101 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             ?? throw new ArgumentException($"{clientId} is not a client in the current graph.", nameof(clientId));
 
         return PipeWireClientControl.Bind(_ctx, RegistryHandle, clientId, client.InterfaceVersion, _logger);
+    }
+
+    /// <summary>
+    /// Binds a port so its parameters can be read.
+    /// </summary>
+    /// <param name="portId">The port to bind.</param>
+    /// <remarks>
+    /// The registry says a port exists, its direction and whose node it is. The format negotiated
+    /// on it and the latency the graph settled on for it live on the port's own params, which need
+    /// the proxy bound. Read-only: a port's format comes out of the negotiation between the nodes
+    /// at either end.
+    /// </remarks>
+    /// <exception cref="ArgumentException">The id is not a port in the current graph.</exception>
+    /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
+    public unsafe PipeWirePortControl BindPort(uint portId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        PipeWirePort port = Current.GetPort(portId)
+            ?? throw new ArgumentException($"{portId} is not a port in the current graph.", nameof(portId));
+
+        return PipeWirePortControl.Bind(_ctx, RegistryHandle, portId, port.InterfaceVersion, _logger);
+    }
+
+    /// <summary>
+    /// Binds the daemon's security context, for opening a sandboxed connection point.
+    /// </summary>
+    /// <param name="securityContextId">The security context to bind.</param>
+    /// <remarks>
+    /// A session manager or sandbox supervisor uses this to hand the daemon a socket that
+    /// sandboxed clients connect through, with the properties they are all given. An ordinary
+    /// application has no reason to, and the daemon refuses it one.
+    /// </remarks>
+    /// <exception cref="ArgumentException">The id is not a security context in the current graph.</exception>
+    /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
+    public unsafe PipeWireSecurityContextControl BindSecurityContext(uint securityContextId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        PipeWireSecurityContext context = Current.SecurityContext is { } found && found.Id == securityContextId
+            ? found
+            : throw new ArgumentException(
+                $"{securityContextId} is not a security context in the current graph.",
+                nameof(securityContextId));
+
+        return PipeWireSecurityContextControl.Bind(
+            _ctx, RegistryHandle, securityContextId, context.InterfaceVersion, _logger);
+    }
+
+    /// <summary>
+    /// Binds the profiler so its periodic reports can be read.
+    /// </summary>
+    /// <param name="profilerId">The profiler to bind.</param>
+    /// <remarks>
+    /// The daemon publishes at most one, and only when it was built with profiling. Each report is
+    /// a Profiler object carrying the graph's timings for one cycle, which is what <c>pw-top</c>
+    /// renders. Binding it makes the daemon start producing them, so dispose it when done.
+    /// </remarks>
+    /// <exception cref="ArgumentException">The id is not the profiler in the current graph.</exception>
+    /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
+    public unsafe PipeWireProfilerReader BindProfiler(uint profilerId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        PipeWireProfiler profiler = Current.Profiler is { } found && found.Id == profilerId
+            ? found
+            : throw new ArgumentException(
+                $"{profilerId} is not the profiler in the current graph.", nameof(profilerId));
+
+        return PipeWireProfilerReader.Bind(
+            _ctx, RegistryHandle, profilerId, profiler.InterfaceVersion, _logger);
+    }
+
+    /// <summary>
+    /// Binds a link so its state can be watched.
+    /// </summary>
+    /// <param name="linkId">The link to bind.</param>
+    /// <remarks>
+    /// The registry says a link exists and which ports it joins; it does not say whether anything
+    /// is flowing. Negotiating, paused, active and errored are all reported on the link's own info
+    /// event, which needs the proxy bound, so this is per link rather than something the graph
+    /// carries for all of them: a session with hundreds of links should not pay a proxy each to
+    /// answer a question about a few. Await <see cref="PipeWireLinkControl.ReadyAsync"/> before
+    /// reading, or the state is whatever it was initialised to.
+    /// </remarks>
+    /// <exception cref="ArgumentException">The id is not a link in the current graph.</exception>
+    /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
+    public unsafe PipeWireLinkControl BindLink(uint linkId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        PipeWireLink link = Current.GetLink(linkId)
+            ?? throw new ArgumentException($"{linkId} is not a link in the current graph.", nameof(linkId));
+
+        return PipeWireLinkControl.Bind(_ctx, RegistryHandle, linkId, link.InterfaceVersion, _logger);
     }
 
     /// <summary>
@@ -800,15 +1298,26 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnGlobal(void* data, uint id, uint permissions, sbyte* type, uint version, spa_dict* props)
     {
-        var self = (PipeWireRegistry?)GCHandle.FromIntPtr((nint)data).Target;
+        // An exception escaping a reverse P/Invoke aborts the process, so nothing below may throw -
+        // including the handle lookup, which throws for a handle that has already been freed.
+        PipeWireRegistry? self = FromData(data);
         if (self is null || self._disposed) return;
 
-        // An exception escaping a reverse P/Invoke aborts the process, so nothing below may throw.
         try
         {
+            // A global with no interface name is not one this library can place. Checked rather
+            // than left to the span helper's own argument check, so the outcome does not depend on
+            // which exception that helper happens to throw.
+            if (type is null)
+            {
+                self.LogGlobalWithoutType(id);
+                self.FailPublishWaiter(id, "the daemon published it with no interface type");
+                return;
+            }
+
             var perms = (PipeWirePermissions)permissions;
 
-            ReadOnlySpan<byte> kind = MemoryMarshal.CreateReadOnlySpanFromNullTerminated((byte*)type);
+            ReadOnlySpan<byte> kind = DaemonText.Bytes(type);
 
             if      (kind.SequenceEqual(PipeWireKeys.InterfaceNode)) self.AddNode(id, perms, version, props);
             else if (kind.SequenceEqual(PipeWireKeys.InterfacePort)) self.AddPort(id, perms, version, props);
@@ -818,6 +1327,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         catch (Exception ex)
         {
             self.LogHandlerFaulted("global", ex);
+
+            // The node parser throws rather than reporting failure, so its failures land here. The
+            // waiter still has to be answered or the creation that asked for this id hangs.
+            self.FailPublishWaiter(id, ex.Message);
         }
     }
 
@@ -827,8 +1340,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         string? name = source.NodeName;
         string? mediaClass = source.MediaClass;
 
-        lock (_sources)
-            _sources[id] = source;
+        // No lock. The collection is concurrent, every write to it comes from the loop thread,
+        // and nothing else takes this monitor - so it excludes nobody while making the field look
+        // like it has a lock discipline that readers would have to respect.
+        _sources[id] = source;
         LogNodeAdded(id, name, mediaClass);
         Publish();
         CompletePublishWaiter(id, source);
@@ -844,12 +1359,12 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                 out PipeWirePort? parsed, out string reason, out string? offending))
         {
             LogPortSkipped(id, reason, offending);
+            FailPublishWaiter(id, reason);
             return;
         }
 
         PipeWirePort port = parsed!;
-        lock (_ports)
-            _ports[id] = port;
+        _ports[id] = port;
         LogPortAdded(id, port.PortName, port.PortDirection, port.NodeId);
         Publish();
         CompletePublishWaiter(id, port);
@@ -865,6 +1380,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                 out PipeWireLink? parsed, out string reason, out string? offending))
         {
             LogLinkSkipped(id, reason, offending);
+            FailPublishWaiter(id, reason);
             return;
         }
 
@@ -872,8 +1388,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         uint outputNode = link.LinkOutputNode, outputPort = link.LinkOutputPort;
         uint inputNode = link.LinkInputNode, inputPort = link.LinkInputPort;
 
-        lock (_links)
-            _links[id] = link;
+        _links[id] = link;
         LogLinkAdded(id, outputNode, outputPort, inputNode, inputPort);
         Publish();
         CompletePublishWaiter(id, link);
@@ -885,16 +1400,30 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnGlobalRemove(void* data, uint id)
     {
-        var self = (PipeWireRegistry?)GCHandle.FromIntPtr((nint)data).Target;
+        PipeWireRegistry? self = FromData(data);
         if (self is null || self._disposed) return;
 
         try
         {
             self.ReleaseOwnedProxy(id);
 
+            // Anyone still waiting for this id to be published never will be: the object existed
+            // and is gone. Without this the creation that asked for it waits until its own token
+            // fires, which is a hang where the honest answer is that it was destroyed first.
+            self.FailPublishWaiter(id, "it was destroyed before it reached the registry");
+
             if (self._sources.TryRemove(id, out _))
             {
                 self.LogRemoved("node", id);
+
+                // The daemon removes a node's ports and links in their own events, which arrive
+                // after this one. Publishing in between leaves a snapshot holding ports whose node
+                // is not in it and links whose endpoints are not either, so GetNodeForPort returns
+                // null for a port the snapshot still lists - and the snapshot documents itself as
+                // internally consistent. They go with the node, and their own removals then find
+                // nothing left to do.
+                self.CascadeRemove(id);
+
                 self.Publish();
                 self.RaiseIsolated(self.NodeRemoved, id, nameof(NodeRemoved));
                 self.RaiseGraphChanged();
@@ -953,6 +1482,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
     [LoggerMessage(EventId = 6, Level = LogLevel.Warning, Message = "skipped link {Id}: {Reason} ({Value})")]
     private partial void LogLinkSkipped(uint id, string reason, string? value);
+
+    [LoggerMessage(EventId = 11, Level = LogLevel.Warning,
+        Message = "the daemon published global {Id} with no interface type")]
+    private partial void LogGlobalWithoutType(uint id);
 
     [LoggerMessage(EventId = 7, Level = LogLevel.Error, Message = "a {Event} handler threw")]
     private partial void LogHandlerFaulted(string @event, Exception exception);

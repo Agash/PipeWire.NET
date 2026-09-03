@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Runtime.Versioning;
 
 namespace PipeWire.NET.Graph;
@@ -32,6 +33,32 @@ public readonly struct PipeWireLinkCreation
         _output = output;
         _input = input;
         _options = options;
+    }
+
+    /// <summary>Sets any creation property the daemon understands.</summary>
+    /// <param name="key">The property name, such as <c>link.passive</c> or <c>object.linger</c>.</param>
+    /// <param name="value">Its value.</param>
+    /// <remarks>
+    /// The general form, for the same reason as on node creation: the useful keys are PipeWire's
+    /// and grow with each release. A caller's value wins over the library's default for the same
+    /// key. The endpoints and the factory are refused rather than overridden - they are what the
+    /// link is, not properties of it, and setting one here would route the link somewhere the
+    /// caller did not ask for or hand the request to a different factory.
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="key"/> is empty, or names the factory or one of the endpoints.
+    /// </exception>
+    public PipeWireLinkCreation WithProperty(string key, string value)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        ArgumentNullException.ThrowIfNull(value);
+        PipeWireObjectOptions.ThrowIfReserved(key, forLink: true);
+
+        ImmutableArray<KeyValuePair<string, string>> existing =
+            _options.Properties.IsDefault ? [] : _options.Properties;
+
+        return new(_registry, _output, _input,
+            _options with { Properties = existing.Add(new(key, value)) });
     }
 
     /// <summary>

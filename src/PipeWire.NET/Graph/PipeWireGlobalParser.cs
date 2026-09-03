@@ -233,19 +233,31 @@ internal static unsafe class PipeWireGlobalParser
         {
             spa_dict_item* item = dict->items + i;
             if (item->key is null) continue;
-            if (!MemoryMarshal.CreateReadOnlySpanFromNullTerminated((byte*)item->key).SequenceEqual(keyUtf8))
+            if (!DaemonText.Bytes(item->key).SequenceEqual(keyUtf8))
                 continue;
 
-            if (item->value is not null)
-                value = MemoryMarshal.CreateReadOnlySpanFromNullTerminated((byte*)item->value);
+            // A null value is the property not being there. spa_dict_item allows it, and every
+            // caller would turn the empty span it used to produce back into null anyway - so the
+            // three states the daemon can express (absent, present and null, present and empty)
+            // collapse to two here, and only the genuinely empty one reads as an empty string.
+            if (item->value is null) return false;
+
+            value = DaemonText.Bytes(item->value);
             return true;
         }
         return false;
     }
 
     /// <summary>Reads a property that the entity keeps, transcoding it once.</summary>
+    /// <remarks>
+    /// Null means the property is not there. A property that is there and empty comes back as an
+    /// empty string, because those are different facts about the object and the daemon can report
+    /// either.
+    /// </remarks>
     internal static string? ReadString(spa_dict* dict, ReadOnlySpan<byte> keyUtf8) =>
-        TryReadValue(dict, keyUtf8, out ReadOnlySpan<byte> value) ? Utf8ToString(value) : null;
+        TryReadValue(dict, keyUtf8, out ReadOnlySpan<byte> value)
+            ? (value.IsEmpty ? string.Empty : Encoding.UTF8.GetString(value))
+            : null;
 
     /// <summary>Reads a boolean property without materialising it.</summary>
     internal static bool ReadBool(spa_dict* dict, ReadOnlySpan<byte> keyUtf8) =>

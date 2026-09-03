@@ -28,6 +28,14 @@ namespace PipeWire.NET.Graph;
 /// Ports are added before connecting and describe themselves as mono 32-bit float, which is the one
 /// format the graph's DSP links carry. Stereo is two ports.
 /// </para>
+/// <para>
+/// <b>Dispose it; do not let it fall out of scope.</b> The callbacks the daemon holds refer back
+/// here through a weak handle, so an instance the application drops is collected and simply stops
+/// delivering, with no error and no final state change. That is the deliberate half of the trade:
+/// a strong handle would keep every one ever made alive for the life of the process. What it costs
+/// is that the garbage collector cannot be the thing that closes one, because by the time it runs
+/// there is nothing left to close it from.
+/// </para>
 /// </remarks>
 [SupportedOSPlatform("linux")]
 public sealed partial class PipeWireFilter : IAsyncDisposable
@@ -102,7 +110,15 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
         {
             if (_disposed || _handle is null || !_connected) return null;
 
-            uint id = Native.pw_filter_get_node_id(_handle.Filter);
+            // Under the loop lock, like the stream's equivalent: pw_filter_* is called with the
+            // loop held, and without it this reads a field the loop thread is free to be writing
+            // while the handle it is read through could be torn down underneath.
+            uint id;
+            using (_ctx.Lock())
+            {
+                if (_disposed || _handle is null) return null;
+                id = Native.pw_filter_get_node_id(_handle.Filter);
+            }
 
             // Zero is the core's id and can never be a filter's, so the daemon reporting it means
             // "not yet", exactly as SPA_ID_INVALID does.
@@ -139,8 +155,11 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
 
             if (NodeId is { } assigned) return assigned;
 
-            // No delay between round-trips: each one already waits for the daemon to finish what it
-            // had queued, so sleeping on top of it only adds latency to the answer.
+            // Paced. Each round trip already waits for the daemon to finish what it had queued, so
+            // there is no need to sleep on top of it - but a node id the daemon never assigns turns
+            // this into an unbounded loop against the socket, so the caller's token is the only
+            // thing that ends it and a tick between attempts keeps that cheap.
+            await Task.Delay(TimeSpan.FromMilliseconds(5), cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -201,7 +220,18 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
                 if (native is null)
                     throw new InvalidOperationException("pw_filter_new failed.");
 
-                filter._handle = new PipeWireFilterHandle(native, context.LoopOwner, context.CoreOwner);
+                try
+                {
+                    filter._handle = new PipeWireFilterHandle(native, context.LoopOwner, context.CoreOwner);
+                }
+                catch
+                {
+                    // Nothing knows about this filter yet, so a throw out of the handle
+                    // constructor - the loop or core refusing a reference to a disposing context -
+                    // would strand it.
+                    Native.pw_filter_destroy(native);
+                    throw;
+                }
 
                 filter._events = (pw_filter_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_filter_events));
                 filter._events->version = Native.PW_VERSION_FILTER_EVENTS;
@@ -332,7 +362,7 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
 
         var builder = new SpaDictBuilder(scratch, items);
         foreach ((string key, string value) in properties)
-            builder.Add(Encoding.UTF8.GetBytes(key), value);
+            builder.Add(key, value);
 
         spa_dict dict = builder.Build();
         return Native.pw_properties_new_dict(&dict);
@@ -374,7 +404,7 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
             string? message = error is null
                 ? null
                 : Encoding.UTF8.GetString(
-                    MemoryMarshal.CreateReadOnlySpanFromNullTerminated((byte*)error));
+                    DaemonText.Bytes((sbyte*)error));
 
             self.RaiseStateChanged(old, state, message);
         }
@@ -404,10 +434,22 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
 
     private unsafe void Release()
     {
-        // The listener's memory belongs to the handle, which frees it after pw_filter_destroy has
-        // actually run - disposal only destroys once nothing else holds a reference.
+        // The listener's memory belongs to the handle once OwnListener has run, and the handle
+        // frees it after pw_filter_destroy rather than racing it.
+        bool ownedByHandle = _handle?.OwnsListener ?? false;
+
         _handle?.Dispose();
         _handle = null;
+
+        // Only when the handover never happened. Creation allocates these before it hands them
+        // over, so a throw in between leaves blocks and a GCHandle that nothing else will free.
+        if (!ownedByHandle)
+        {
+            if (_hook is not null) NativeMemory.Free(_hook);
+            if (_events is not null) NativeMemory.Free(_events);
+            if (_self.IsAllocated) _self.Free();
+        }
+
         _hook = null;
         _events = null;
 

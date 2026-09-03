@@ -46,7 +46,7 @@ public sealed partial class PipeWireProfilerReader : IDisposable, IAsyncDisposab
     {
         var reader = new PipeWireProfilerReader(ctx, id, logger);
         reader._bound = BoundProxy.Bind(
-            ctx, registry, id, Native.PW_TYPE_INTERFACE_PROFILER, version,
+            ctx, registry, id, Native.PW_TYPE_INTERFACE_PROFILER, version, Native.PW_VERSION_PROFILER,
             sizeof(pw_profiler_events),
             events =>
             {
@@ -65,7 +65,18 @@ public sealed partial class PipeWireProfilerReader : IDisposable, IAsyncDisposab
     private static unsafe void OnProfileCallback(void* data, spa_pod* pod)
     {
         if (data is null || pod is null) return;
-        if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireProfilerReader self) return;
+        PipeWireProfilerReader? self;
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireProfilerReader found) return;
+            self = found;
+        }
+        catch (Exception)
+        {
+            // A freed handle throws out of the lookup, and this is a native frame.
+            return;
+        }
+
         if (self._disposed) return;
 
         try

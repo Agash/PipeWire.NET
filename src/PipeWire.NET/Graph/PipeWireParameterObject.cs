@@ -34,9 +34,7 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     private readonly PipeWireContext _ctx;
     // Concurrent rather than a dictionary behind a lock, and deliberately so. A param event is
     // dispatched by the loop thread with the loop lock already held, so anything it waits on must
-    // never be held by a thread that is itself waiting for the loop lock. Registering a collector
-    // under a monitor while holding the loop lock produced exactly that inversion, and it deadlocked
-    // the moment a read overlapped an event.
+    // never be held by a thread that is itself waiting for the loop lock.
     private readonly ConcurrentDictionary<int, List<SpaObject>> _answers = new();
     private BoundProxy? _bound;
     // The array reference, not the ImmutableArray wrapping it. A struct assignment has no atomicity
@@ -138,8 +136,7 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
 
     // Each takes the proxy pointer rather than reading it from the binding. Destroying a proxy
     // clears that pointer before it takes the loop lock, so a pointer re-read inside the call could
-    // be null even though the lock is held and a check just passed - which is how a read racing a
-    // disposal reached native dispatch with null and came back as an ArgumentNullException.
+    // be null even though the lock is held and a check just passed.
 
     /// <summary>Dispatches this interface's <c>enum_params</c>.</summary>
     private protected abstract unsafe int EnumParamsNative(void* proxy, int seq, uint id, uint start, uint num);
@@ -212,7 +209,10 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     /// </summary>
     /// <param name="parameter">Which parameter to write.</param>
     /// <param name="value">The value, which must be an object pod of the matching type.</param>
-    /// <param name="cancellationToken">Abandons the wait for the daemon to catch up.</param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait. The request is already on its way, so cancelling does not recall
+    /// it: the daemon can still apply the change after this throws.
+    /// </param>
     /// <remarks>
     /// Returns once the daemon has processed the write, not once it has taken effect: an object may
     /// legitimately clamp a volume or ignore a property it does not support. Read the parameter back
@@ -233,21 +233,12 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
         await BeginWrite(parameter, pod, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Issues the request and files a collector for its answers, with the round-trip's listener
-    /// already attached and the proxy referenced for the call.
-    /// </summary>
-    /// <remarks>
-    /// The request goes out inside the round-trip rather than before it. Issued first and
-    /// subscribed to afterwards, a refusal the daemon answered in between is never seen, and the
-    /// read reports an empty result instead of the error it was given.
-    /// </remarks>
     /// <summary>Issues a parameter write inside its round-trip, under a held reference.</summary>
     private unsafe Task BeginWrite(
         SpaParamType parameter, byte[] pod, CancellationToken cancellationToken)
     {
         if (!Bound.TryUse(out BoundProxy.Use proxy))
-            throw new ObjectDisposedException(GetType().Name);
+            throw new ObjectDisposedException(nameof(PipeWireParameterObject));
 
         using (proxy)
         {
@@ -264,7 +255,7 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
         SpaParamType parameter, Action<int> onKey, CancellationToken cancellationToken)
     {
         if (!Bound.TryUse(out BoundProxy.Use proxy))
-            throw new ObjectDisposedException(GetType().Name);
+            throw new ObjectDisposedException(nameof(PipeWireParameterObject));
 
         // The request is issued synchronously inside the round-trip, so the reference only has to
         // outlive that call. A pointer cannot be captured, so it travels as an IntPtr.
@@ -279,7 +270,11 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
                 // Filed while the loop lock is still held, so no param event for this request can
                 // have been dispatched yet - the loop thread dispatches them, and it is blocked on
                 // that lock until the scope closes.
-                if (rc >= 0)
+                // Only when the daemon actually queued the request. A synchronous result has no
+                // sequence, and filing a collector under key 0 makes OnParam route any seq-0 param
+                // into this enumeration: the caller collects a parameter it did not ask for, and
+                // the subscriber that should have been told about it is not.
+                if (Native.SPA_RESULT_IS_ASYNC(rc))
                 {
                     int key = Native.SPA_RESULT_ASYNC_SEQ(rc);
                     _answers[key] = [];
@@ -294,7 +289,7 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     private unsafe int WriteParameter(SpaParamType parameter, ReadOnlySpan<byte> pod)
     {
         if (!Bound.TryUse(out BoundProxy.Use proxy))
-            throw new ObjectDisposedException(GetType().Name);
+            throw new ObjectDisposedException(nameof(PipeWireParameterObject));
 
         using (proxy)
         using (_ctx.Lock())
@@ -303,6 +298,22 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
                 return SetParamNative(proxy.Object, (uint)parameter, 0, (spa_pod*)p);
         }
     }
+
+    private SpaParamType[] _subscribed = [];
+
+    /// <summary>The parameters currently subscribed to, in the order they were asked for.</summary>
+    /// <remarks>
+    /// Empty until <see cref="SubscribeParameters"/> succeeds. The daemon keeps one set per bound
+    /// object and each call replaces it, so this is the whole subscription rather than a history.
+    /// </remarks>
+    public ImmutableArray<SpaParamType> SubscribedParameters => [.. Volatile.Read(ref _subscribed)];
+
+    /// <summary>Stops watching every parameter this binding had subscribed to.</summary>
+    /// <remarks>
+    /// The daemon takes an empty set as "watch nothing", which is the same call with no ids.
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The binding has been disposed.</exception>
+    public void UnsubscribeParameters() => SubscribeParameters();
 
     /// <summary>
     /// Asks the daemon to raise <see cref="ParameterChanged"/> whenever one of these parameters
@@ -323,7 +334,7 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
 
         int rc;
         if (!Bound.TryUse(out BoundProxy.Use proxy))
-            throw new ObjectDisposedException(GetType().Name);
+            throw new ObjectDisposedException(nameof(PipeWireParameterObject));
 
         using (proxy)
         using (_ctx.Lock())
@@ -331,6 +342,11 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
             fixed (uint* p = ids)
                 rc = SubscribeParamsNative(proxy.Object, p, (uint)ids.Length);
         }
+
+        // Recorded so a caller can see what it asked for and stop it again. The call replaces the
+        // daemon's set rather than adding to it, so the last request is the whole subscription.
+        if (rc >= 0)
+            Volatile.Write(ref _subscribed, parameters.ToArray());
 
         if (rc < 0)
             throw new PipeWireException("subscribe_params", rc);
@@ -349,7 +365,12 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     {
         if (param is null) return;
 
+        // The size is the producer's, and it is used to build the very span the parser then bounds
+        // itself against, so a lie here is one the parser cannot see through. Guarded the way
+        // PipeWireProfilerReader guards the same shape.
         uint size = *(uint*)param;
+        if (size > int.MaxValue - 8) return;
+
         var bytes = new ReadOnlySpan<byte>(param, 8 + (int)size);
         if (!SpaPod.TryParse(bytes, out SpaValue? value) || value is not SpaObject parsed)
             return;

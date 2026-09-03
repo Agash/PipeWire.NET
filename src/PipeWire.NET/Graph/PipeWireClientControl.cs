@@ -23,6 +23,14 @@ namespace PipeWire.NET.Graph;
 /// <see cref="UpdatePermissionsAsync"/> round-trips rather than returning as soon as the call is
 /// made.
 /// </para>
+/// <para>
+/// <strong>Do not write permissions to a client you do not manage.</strong> On PipeWire 1.6.8 the
+/// daemon does not refuse it, it dies: a default-deny entry against a client the caller has no
+/// manager rights over segfaults inside <c>pw_impl_client_update_permissions</c> and takes the
+/// session with it, so the round-trip never answers and the caller sees a cancellation rather than
+/// the documented refusal. Restricting the connection's own client is safe, and is what
+/// <see cref="ConfineToAsync"/> is normally for.
+/// </para>
 /// </remarks>
 [SupportedOSPlatform("linux")]
 public sealed partial class PipeWireClientControl : IDisposable, IAsyncDisposable
@@ -54,7 +62,7 @@ public sealed partial class PipeWireClientControl : IDisposable, IAsyncDisposabl
     {
         var control = new PipeWireClientControl(ctx, id, logger);
         control._bound = BoundProxy.Bind(
-            ctx, registry, id, Native.PW_TYPE_INTERFACE_CLIENT, version,
+            ctx, registry, id, Native.PW_TYPE_INTERFACE_CLIENT, version, Native.PW_VERSION_CLIENT,
             sizeof(pw_client_events),
             events => ((pw_client_events*)events)->version = Native.PW_VERSION_CLIENT_EVENTS,
             static (proxy, hook, events, data) => Native.pw_client_add_listener(
@@ -72,9 +80,24 @@ public sealed partial class PipeWireClientControl : IDisposable, IAsyncDisposabl
     /// </param>
     /// <param name="cancellationToken">Abandons the wait for the daemon to catch up.</param>
     /// <remarks>
+    /// <para>
     /// Absolute, not a delta: an object listed with fewer bits than it had loses the difference. An
     /// object not listed at all keeps what it had, which is why confining a client starts by setting
     /// <see cref="AnyObject"/> to <see cref="PipeWirePermissions.None"/>.
+    /// </para>
+    /// <para>
+    /// Three rules of the daemon's own, none of them visible from the call. An
+    /// <see cref="AnyObject"/> entry changes the default and re-applies it only to objects that have
+    /// no entry of their own, so it does not undo grants made in the same array whichever order they
+    /// appear in. An id naming an object the daemon does not have is skipped with a log line rather
+    /// than reported, so a stale id looks like success. And a client changing its <em>own</em>
+    /// permissions can only ever reduce them - the daemon intersects the request with what the
+    /// client already had - so a self-directed grant silently does nothing.
+    /// </para>
+    /// <para>
+    /// Writing permissions to a client this connection does not manage can kill the daemon on
+    /// 1.6.8; see the remarks on this class.
+    /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException"><paramref name="permissions"/> is empty.</exception>
     /// <exception cref="InvalidOperationException">The daemon refused.</exception>
@@ -85,6 +108,20 @@ public sealed partial class PipeWireClientControl : IDisposable, IAsyncDisposabl
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (permissions.IsEmpty)
             throw new ArgumentException("at least one permission is required.", nameof(permissions));
+
+        // Bits the daemon does not define are a caller mistake, not a forward-compatible extension:
+        // permission.h has held the same five since 0.3.77, and a stray bit is either a cast from
+        // the wrong enum or arithmetic that went wrong. Forwarding it asks the daemon to interpret
+        // a number this library cannot describe.
+        foreach (PipeWireObjectPermission entry in permissions.Span)
+        {
+            if ((entry.Permissions & ~PipeWirePermissions.All) == 0) continue;
+
+            throw new ArgumentException(
+                $"object {entry.ObjectId} carries permission bits this library does not define: "
+                + $"0x{(uint)(entry.Permissions & ~PipeWirePermissions.All):x}.",
+                nameof(permissions));
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -100,15 +137,39 @@ public sealed partial class PipeWireClientControl : IDisposable, IAsyncDisposabl
     /// <param name="allowed">The objects it may see, and what it may do with each.</param>
     /// <param name="cancellationToken">Abandons the wait.</param>
     /// <remarks>
+    /// <para>
     /// The safe shape of <see cref="UpdatePermissionsAsync"/>: it writes the deny-everything default
     /// first, so nothing is left permitted by omission.
+    /// </para>
+    /// <para>
+    /// Safe against the connection's own client. Against a client this connection does not manage it
+    /// is the exact shape that kills the daemon on 1.6.8; see the remarks on this class.
+    /// </para>
     /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="allowed"/> names <see cref="AnyObject"/>, which is not a grant.
+    /// </exception>
     public Task ConfineToAsync(
         ReadOnlySpan<PipeWireObjectPermission> allowed,
         CancellationToken cancellationToken = default)
     {
         var all = new PipeWireObjectPermission[allowed.Length + 1];
         all[0] = new PipeWireObjectPermission(AnyObject, PipeWirePermissions.None);
+
+        // The default is this method's own, and a second one in the grants contradicts the confining
+        // it exists to do. Sending both leaves which one the daemon ends on to the array order,
+        // which is not something a caller should have to reason about to get a sandbox.
+        foreach (PipeWireObjectPermission grant in allowed)
+        {
+            if (grant.ObjectId == AnyObject)
+            {
+                throw new ArgumentException(
+                    "AnyObject is the default this method writes for you; it cannot also be a grant. "
+                    + "Use UpdatePermissionsAsync to set a default of your own.",
+                    nameof(allowed));
+            }
+        }
+
         allowed.CopyTo(all.AsSpan(1));
         return UpdatePermissionsAsync(all, cancellationToken);
     }
@@ -145,7 +206,7 @@ public sealed partial class PipeWireClientControl : IDisposable, IAsyncDisposabl
         // Referenced for the duration of the call. Destroying a proxy clears its pointer before it
         // takes the loop lock, so the lock alone does not stop this becoming null mid-call.
         if (!_bound!.TryUse(out BoundProxy.Use proxy))
-            throw new ObjectDisposedException(GetType().Name);
+            throw new ObjectDisposedException(nameof(PipeWireClientControl));
 
         using (proxy)
         using (_ctx.Lock())
@@ -173,12 +234,12 @@ public sealed partial class PipeWireClientControl : IDisposable, IAsyncDisposabl
 
         var builder = new SpaDictBuilder(scratch, items);
         foreach ((string key, string value) in properties)
-            builder.Add(Encoding.UTF8.GetBytes(key), value);
+            builder.Add(key, value);
 
         // Referenced for the duration of the call. Destroying a proxy clears its pointer before it
         // takes the loop lock, so the lock alone does not stop this becoming null mid-call.
         if (!_bound!.TryUse(out BoundProxy.Use proxy))
-            throw new ObjectDisposedException(GetType().Name);
+            throw new ObjectDisposedException(nameof(PipeWireClientControl));
 
         using (proxy)
         using (_ctx.Lock())

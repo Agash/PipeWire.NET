@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -70,7 +71,7 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
     {
         var store = new PipeWireMetadataStore(ctx, id, logger);
         store._bound = BoundProxy.Bind(
-            ctx, registry, id, Native.PW_TYPE_INTERFACE_METADATA, version,
+            ctx, registry, id, Native.PW_TYPE_INTERFACE_METADATA, version, Native.PW_VERSION_METADATA,
             sizeof(pw_metadata_events),
             events =>
             {
@@ -93,6 +94,12 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
     /// The store starts pushing entries the moment the listener attaches, so reading before this
     /// completes reports whatever happened to have arrived. Events are ordered, so a core round-trip
     /// cannot answer before the whole burst has been dispatched.
+    /// <para>
+    /// It orders this connection and nothing else. A store like <c>default</c> is served by the
+    /// session manager, a separate process, so a write by another client travels through it and
+    /// back; no barrier on either client waits for that hop. To observe someone else's write, wait
+    /// for <see cref="EntryChanged"/>, not for this.
+    /// </para>
     /// </remarks>
     public Task ReadyAsync(CancellationToken cancellationToken = default)
     {
@@ -101,6 +108,11 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
     }
 
     /// <summary>Every entry the store currently holds.</summary>
+    /// <remarks>
+    /// Coherent as it stands: ConcurrentDictionary.Values takes every one of the dictionary's locks
+    /// and returns a collection built there, so this is a point-in-time snapshot rather than a walk
+    /// over something being written. It reads like a live enumeration and is not one.
+    /// </remarks>
     public IReadOnlyCollection<PipeWireMetadataEntry> Entries => [.. _entries.Values];
 
     /// <summary>The value of one entry, or <see langword="null"/> if the store has no such entry.</summary>
@@ -119,7 +131,10 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
     /// <param name="value">The value, normally JSON. <see langword="null"/> removes the entry.</param>
     /// <param name="type">The value's type, or <see langword="null"/> to let the daemon decide.</param>
     /// <param name="subject">Which object the entry is about.</param>
-    /// <param name="cancellationToken">Abandons the wait for the daemon to catch up.</param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait. The request is already on its way, so cancelling does not recall
+    /// it: the daemon can still apply the change after this throws.
+    /// </param>
     /// <remarks>
     /// <para>
     /// Returns once the daemon has processed the write, and <see cref="Get"/> reflects it straight
@@ -158,35 +173,122 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
         long epoch = Volatile.Read(ref _epoch);
         MetadataReconciler.PendingWrite pending = _reconciler.NoteWrite(subject, key, type, value);
 
+        // Whether the request actually went out decides what a failure means in the catch below.
+        bool issued = false;
+
+        // What the cache held before the optimistic apply, so a refusal can be undone.
+        var applied = new PipeWireMetadataEntry(subject, key, type, value);
+        PipeWireMetadataEntry? previous = null;
+        bool didApply = false;
+
         try
         {
             // Permission is refused out of band, on the core's error stream, so the call returning
             // without a negative code proves nothing on its own - and the write has to go out with
             // the listener already attached, or a refusal answered in between is never seen.
             Task roundTrip = CoreSync.RoundTripAsync(
-                _ctx, () => Write(subject, key, type, value), cancellationToken);
+                _ctx,
+                () =>
+                {
+                    issued = true;
+                    return Write(subject, key, type, value);
+                },
+                cancellationToken);
 
             // Raised here, not when the echo lands. A write superseded before its echo arrives
             // never gets one, and a caller should still be told about a change it made. Skipped
             // when a clear happened while this was in flight, since the clear is the later intent.
-            if (Volatile.Read(ref _epoch) == epoch)
+            //
+            // Checked and applied under one gate, which ClearAsync also takes. Separately, the
+            // check could pass against the old epoch and the apply then land after the clear had
+            // emptied the store, putting a cleared entry back.
+            lock (_clearGate)
             {
-                var applied = new PipeWireMetadataEntry(subject, key, type, value);
-                Apply(applied);
-                Raise(applied);
+                if (Volatile.Read(ref _epoch) == epoch)
+                {
+                    _entries.TryGetValue((subject, key), out previous);
+                    Apply(applied);
+                    Raise(applied);
+                    didApply = true;
+                }
             }
 
             await roundTrip.ConfigureAwait(false);
             _reconciler.Settle(subject, key);
         }
+        catch (PipeWireException)
+        {
+            // A refusal, not a cancellation. The value was applied optimistically and the daemon
+            // said no, so nothing will ever correct it: no echo is coming for a write that did not
+            // happen, and the key reads back as the value it was refused. Cancellation deliberately
+            // does not roll back - the request is already on its way and the daemon may still apply
+            // it, so the optimistic value remains the better guess there.
+            Rollback(subject, key, applied, previous, didApply);
+            if (!issued) _reconciler.Forget(subject, key, pending);
+            else _reconciler.Settle(subject, key);
+            throw;
+        }
         catch
         {
-            // A write that never landed must not stay outstanding, or its value keeps suppressing
-            // an echo that will never come.
-            // This write's own entry, by identity. Removing every entry with the same value would
-            // discard the bookkeeping of an identical write that is still in flight.
-            _reconciler.Forget(subject, key, pending);
+            // Only a write that never went out is forgotten. One that was issued and then failed,
+            // which is what cancelling gives you, is still going to be echoed: the daemon was never
+            // told to stop. Forgetting it makes that echo read as another client's change, so it
+            // gets applied - after any newer write, which it then overwrites. A cancelled write
+            // followed by a successful one leaves the cancelled value in the cache.
+            //
+            // Left outstanding, the record does its job: the echo is recognised as ours and, being
+            // superseded by the later write, suppressed. It expires with the window if the echo
+            // never comes at all.
+            //
+            // By identity, not by value: removing every entry with the same value would discard the
+            // bookkeeping of an identical write that is still in flight.
+            // Records age from acknowledgement, and a write that went out and then failed will
+            // never get one. Starting the clock here is what keeps it from being kept for ever;
+            // it stays recognisable for the window, which is the whole reason it was not forgotten.
+            if (!issued) _reconciler.Forget(subject, key, pending);
+            else _reconciler.Settle(subject, key);
             throw;
+        }
+    }
+
+    /// <summary>Serialises the optimistic apply against a store-wide clear.</summary>
+    private readonly object _clearGate = new();
+
+    /// <summary>Undoes an optimistic apply the daemon refused.</summary>
+    /// <remarks>
+    /// Only when the cache still holds exactly what this write put there. A later write that
+    /// succeeded, or an external change that arrived meanwhile, is the newer truth and must not be
+    /// replaced by a value from before a write that never happened.
+    /// </remarks>
+    private void Rollback(
+        uint subject,
+        string key,
+        PipeWireMetadataEntry applied,
+        PipeWireMetadataEntry? previous,
+        bool didApply)
+    {
+        if (!didApply) return;
+
+        lock (_clearGate)
+        {
+            _entries.TryGetValue((subject, key), out PipeWireMetadataEntry? now);
+
+            bool stillOurs = now is null
+                ? applied.Value is null
+                : string.Equals(now.Value, applied.Value, StringComparison.Ordinal)
+                  && string.Equals(now.Type, applied.Type, StringComparison.Ordinal);
+
+            if (!stillOurs) return;
+
+            if (previous is null)
+                _entries.TryRemove((subject, key), out _);
+            else
+                _entries[(subject, key)] = previous;
+
+            // The subscriber was told the value changed, so it has to be told it changed back. A
+            // removal is reported as an entry with no value, which is how every other removal here
+            // is reported.
+            Raise(previous ?? new PipeWireMetadataEntry(subject, key, null, null));
         }
     }
 
@@ -212,9 +314,87 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
     /// <inheritdoc cref="DefaultAudioSink" path="/remarks"/>
     public PipeWireMetadataEntry? DefaultAudioSource => Find("default.audio.source");
 
+    // ------------------------------------------------------------------ the settings store
+
+    /// <summary>The graph's sample rate in Hz, or null when the store does not carry it.</summary>
+    /// <remarks>
+    /// Only meaningful on the <c>settings</c> store, and this is the rate the graph is negotiating
+    /// around rather than the rate it is running at: a driver that cannot follow keeps its own and
+    /// resamples. Unlike the default-device keys, the settings values are bare integers with no
+    /// type, not JSON (<c>pipewire/settings.c:255-275</c>).
+    /// </remarks>
+    public int? ClockRate => Integer("clock.rate");
+
+    /// <summary>The graph's buffer size in samples, or null when the store does not carry it.</summary>
+    /// <inheritdoc cref="ClockRate" path="/remarks"/>
+    public int? ClockQuantum => Integer("clock.quantum");
+
+    /// <summary>The smallest quantum the graph will negotiate down to.</summary>
+    /// <inheritdoc cref="ClockRate" path="/remarks"/>
+    public int? ClockMinQuantum => Integer("clock.min-quantum");
+
+    /// <summary>The largest quantum the graph will negotiate up to.</summary>
+    /// <inheritdoc cref="ClockRate" path="/remarks"/>
+    public int? ClockMaxQuantum => Integer("clock.max-quantum");
+
+    /// <summary>The rate the graph is pinned to, or 0 when it is free to negotiate.</summary>
+    /// <inheritdoc cref="ClockRate" path="/remarks"/>
+    public int? ClockForcedRate => Integer("clock.force-rate");
+
+    /// <summary>The quantum the graph is pinned to, or 0 when it is free to negotiate.</summary>
+    /// <inheritdoc cref="ClockRate" path="/remarks"/>
+    public int? ClockForcedQuantum => Integer("clock.force-quantum");
+
+    /// <summary>Pins the graph to one quantum, or releases it.</summary>
+    /// <param name="samples">The quantum to hold, or 0 to let the graph negotiate again.</param>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <remarks>
+    /// Affects every client on the machine, not just this one, which is what makes it the setting a
+    /// low-latency application reaches for and the setting most likely to make someone else glitch.
+    /// Release it when finished.
+    /// <para>
+    /// <b>A value the daemon rejects is accepted and ignored.</b> Outside
+    /// <see cref="ClockMinQuantum"/> to <see cref="ClockMaxQuantum"/> the write succeeds, the daemon
+    /// logs at info level and nothing changes (<c>pipewire/settings.c:178-187</c>) - there is no
+    /// error to surface. Read <see cref="ClockForcedQuantum"/> back to find out whether it took.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="samples"/> is negative.</exception>
+    public Task SetForcedQuantumAsync(int samples, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(samples);
+        return SetAsync("clock.force-quantum", samples.ToString(CultureInfo.InvariantCulture),
+            null, SubjectCore, cancellationToken);
+    }
+
+    /// <summary>Pins the graph to one sample rate, or releases it.</summary>
+    /// <param name="hz">The rate to hold, or 0 to let the graph negotiate again.</param>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <remarks>
+    /// <inheritdoc cref="SetForcedQuantumAsync" path="/remarks/para"/>
+    /// The rate is checked against the daemon's allowed-rates list rather than a range
+    /// (<c>pipewire/settings.c:171-177</c>); read <see cref="ClockForcedRate"/> back to confirm.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="hz"/> is negative.</exception>
+    public Task SetForcedRateAsync(int hz, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(hz);
+        return SetAsync("clock.force-rate", hz.ToString(CultureInfo.InvariantCulture),
+            null, SubjectCore, cancellationToken);
+    }
+
+    /// <summary>Reads a settings value that is a bare integer, or null if it is absent or not one.</summary>
+    private int? Integer(string key) =>
+        Find(key)?.Value is { } raw && int.TryParse(raw, CultureInfo.InvariantCulture, out int value)
+            ? value
+            : null;
+
     /// <summary>Sets the default audio sink by node name.</summary>
     /// <param name="nodeName">The <c>node.name</c> of the sink, not its id.</param>
-    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait. The request is already on its way, so cancelling does not recall
+    /// it: the daemon can still apply the change after this throws.
+    /// </param>
     /// <remarks>
     /// By name rather than by id deliberately, and that is the daemon's choice: ids are reused as
     /// objects come and go, so a default stored by id would drift onto a different device.
@@ -229,7 +409,10 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
 
     /// <summary>Sets the default audio source by node name.</summary>
     /// <param name="nodeName">The <c>node.name</c> of the source, not its id.</param>
-    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait. The request is already on its way, so cancelling does not recall
+    /// it: the daemon can still apply the change after this throws.
+    /// </param>
     /// <inheritdoc cref="SetDefaultAudioSinkAsync" path="/remarks"/>
     /// <exception cref="ArgumentException"><paramref name="nodeName"/> is null or empty.</exception>
     public Task SetDefaultAudioSourceAsync(string nodeName, CancellationToken cancellationToken = default)
@@ -240,7 +423,10 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
     }
 
     /// <summary>Removes every entry in the store.</summary>
-    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait. The request is already on its way, so cancelling does not recall
+    /// it: the daemon can still apply the change after this throws.
+    /// </param>
     /// <exception cref="InvalidOperationException">The daemon refused.</exception>
     public async Task ClearAsync(CancellationToken cancellationToken = default)
     {
@@ -248,13 +434,19 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
 
         await CoreSync.RoundTripAsync(_ctx, ClearNative, cancellationToken).ConfigureAwait(false);
 
-        // Bumped first, so a write already in flight sees a different epoch and declines to apply
-        // itself after this. The cache and the in-flight records go with it: left alone, a read
-        // straight after a clear still reports the old entries, and echoes of writes issued before
-        // it are still recognised as ours and put their values back into an emptied store.
-        Interlocked.Increment(ref _epoch);
-        _entries.Clear();
-        _reconciler.Clear();
+        // The bump and the emptying are one step, under the gate a write takes to apply itself, so
+        // a write in flight either lands entirely before this or sees the new epoch and declines.
+        // Split apart, a write can pass its epoch check against the old value and then apply into a
+        // store this has already emptied, putting a cleared entry back.
+        //
+        // The in-flight records go too: left alone, echoes of writes issued before the clear are
+        // still recognised as ours and their values go back into an emptied store.
+        lock (_clearGate)
+        {
+            Interlocked.Increment(ref _epoch);
+            _entries.Clear();
+            _reconciler.Clear();
+        }
     }
 
     private unsafe int ClearNative()
@@ -262,7 +454,7 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
         // Referenced for the duration of the call. Destroying a proxy clears its pointer before it
         // takes the loop lock, so the lock alone does not stop this becoming null mid-call.
         if (!_bound!.TryUse(out BoundProxy.Use proxy))
-            throw new ObjectDisposedException(GetType().Name);
+            throw new ObjectDisposedException(nameof(PipeWireMetadataStore));
 
         using (proxy)
         using (_ctx.Lock())
@@ -287,7 +479,7 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
         // Referenced for the duration of the call. Destroying a proxy clears its pointer before it
         // takes the loop lock, so the lock alone does not stop this becoming null mid-call.
         if (!_bound!.TryUse(out BoundProxy.Use proxy))
-            throw new ObjectDisposedException(GetType().Name);
+            throw new ObjectDisposedException(nameof(PipeWireMetadataStore));
 
         using (proxy)
         using (_ctx.Lock())
@@ -306,16 +498,35 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
 
     private void OnProperty(uint subject, string? key, string? type, string? value)
     {
+        // Sampled at the top, before anything is decided. A clear is issued from a caller thread
+        // and completes its round trip there, while this runs on the loop thread: the daemon
+        // dispatches in order, but the two threads do not, so an echo that was dispatched before
+        // the clear can still be executing here when the clear empties the store. Comparing the
+        // epoch under the same gate the clear takes is what separates "arrived before the clear"
+        // from "arrived after it", which the event itself carries no way to tell.
+        long epoch = Volatile.Read(ref _epoch);
+
         // A null key means "every entry for this subject is gone", which is how a store reports a
         // bulk removal. Anything else is one entry set or, with a null value, removed.
         if (key is null)
         {
+            // SPA_ID_INVALID means every subject, not a subject numbered 0xFFFFFFFF. Comparing it
+            // to a stored subject matches nothing, so a store-wide clear would drop no entries at
+            // all and the cache would keep reporting values the server no longer has.
+            //
+            // Defensive: whether the daemon uses this form for a clear is not something the test
+            // box can show, because a served store cannot yet be bound by another client and
+            // clearing the session's own store would take the machine's audio routing with it. If
+            // the daemon never sends it the branch is dead, and if it does this is the difference
+            // between an empty cache and a stale one.
+            bool everySubject = subject == Native.SPA_ID_INVALID;
+
             // Reported one entry at a time. A subject-wide clear changes the store exactly as an
             // individual removal does, and a consumer that only listens would otherwise never learn
             // that the entries went.
             foreach ((uint Subject, string Key) existing in _entries.Keys)
             {
-                if (existing.Subject != subject) continue;
+                if (!everySubject && existing.Subject != subject) continue;
                 if (_entries.TryRemove(existing, out PipeWireMetadataEntry? removed))
                     Raise(new PipeWireMetadataEntry(removed.Subject, removed.Key, removed.Type, null));
             }
@@ -325,20 +536,22 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
 
         var entry = new PipeWireMetadataEntry(subject, key, type, value);
 
-        switch (_reconciler.Classify(subject, key, type, value))
+        MetadataReconciler.EchoAction action = _reconciler.Classify(subject, key, type, value);
+        if (action == MetadataReconciler.EchoAction.Drop) return;
+
+        lock (_clearGate)
         {
-            case MetadataReconciler.EchoAction.Drop:
-                return;
+            // A clear landed between this event being dispatched and being handled, so whatever
+            // this reports is from before the store was emptied. Applying it now would put a
+            // cleared entry back, and the correcting event for that never comes.
+            if (Volatile.Read(ref _epoch) != epoch) return;
 
-            case MetadataReconciler.EchoAction.AlreadyKnown:
-                Apply(entry);
-                return;
-
-            default:
-                Apply(entry);
-                Raise(entry);
-                return;
+            Apply(entry);
         }
+
+        // Outside the gate. Subscribers are user code running on the loop thread, and holding a
+        // lock across them lets one that waits on anything else stall every writer.
+        if (action != MetadataReconciler.EchoAction.AlreadyKnown) Raise(entry);
     }
 
     /// <summary>Reports one change to subscribers, isolating a handler that throws.</summary>
@@ -368,7 +581,7 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
 
         static string? Utf8(sbyte* p) =>
             p is null ? null : Encoding.UTF8.GetString(
-                MemoryMarshal.CreateReadOnlySpanFromNullTerminated((byte*)p));
+                DaemonText.Bytes((sbyte*)p));
     }
 
     /// <inheritdoc/>

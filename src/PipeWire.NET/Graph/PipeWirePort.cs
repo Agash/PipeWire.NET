@@ -6,7 +6,6 @@ namespace PipeWire.NET.Graph;
 
 /// <summary>
 /// A discoverable port of a node in the local PipeWire graph.
-/// Denotes an accessible endpoint for a PipeWire data stream.
 /// </summary>
 [SupportedOSPlatform("linux")]
 public sealed record PipeWirePort : IPipeWireObject

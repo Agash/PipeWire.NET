@@ -34,4 +34,12 @@ public enum PipeWirePermissions : uint
 
     /// <summary>The object is visible and its events are delivered. C octal <c>0400</c>.</summary>
     Read = 0x100,
+
+    /// <summary>Every bit PipeWire defines.</summary>
+    /// <remarks>
+    /// The mask, for telling a value this library can describe from one it cannot. PipeWire has
+    /// held these five since 0.3.77, so a bit outside them is a cast from the wrong enum rather
+    /// than a newer daemon.
+    /// </remarks>
+    All = Metadata | Link | Execute | Write | Read,
 }
