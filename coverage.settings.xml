@@ -1,13 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Coverage scope. Keeps the report to the hand-written library code: the test assembly itself and
-  anything a generator emitted are excluded, so the headline figure reflects code someone maintains.
+  Coverage scope. Keeps the report to the hand-written library code, so the headline figure
+  reflects code someone maintains.
+
+  The generated bindings are excluded by source path, not by module or attribute. They ship inside
+  PipeWire.NET.dll rather than an assembly of their own, so a ModulePath rule matches nothing, and
+  ClangSharp emits an "auto-generated" comment rather than GeneratedCodeAttribute, so the attribute
+  rule matches nothing either. Both rules are kept for anything that does carry them.
 -->
 <Configuration>
   <CodeCoverage>
+    <Sources>
+      <Exclude>
+        <Source>.*[/\\]generated[/\\].*</Source>
+      </Exclude>
+    </Sources>
     <ModulePaths>
       <Exclude>
-        <ModulePath>.*\.Generated\.dll$</ModulePath>
         <ModulePath>.*\.Tests\.dll$</ModulePath>
       </Exclude>
     </ModulePaths>

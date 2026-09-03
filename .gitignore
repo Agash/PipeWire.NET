@@ -20,3 +20,8 @@ nuget/
 
 # Test run output (coverage reports)
 TestResults/
+
+# Upstream sources kept locally for reference only: PipeWire, WirePlumber, GStreamer
+# and anything else worth reading while working on the bindings. Cloned by
+# build/fetch-upstream.sh, never committed - the pin that matters is generate/HEADER-VERSION.
+external/

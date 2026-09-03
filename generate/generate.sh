@@ -19,7 +19,14 @@
 set -uo pipefail
 
 REFRESH_NAMES=0
-[ "${1:-}" = "--refresh-names" ] && REFRESH_NAMES=1
+ALLOW_VERSION_CHANGE=0
+for arg in "$@"; do
+  case "$arg" in
+    --refresh-names)         REFRESH_NAMES=1 ;;
+    --allow-version-change)  ALLOW_VERSION_CHANGE=1 ;;
+    *) echo "ERROR: unknown option $arg"; exit 1 ;;
+  esac
+done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TOOL="$HOME/.dotnet/tools/ClangSharpPInvokeGenerator"
@@ -35,6 +42,33 @@ if [ ! -f /usr/include/pipewire-0.3/pipewire/pipewire.h ]; then
   echo "ERROR: PipeWire headers not found at /usr/include/pipewire-0.3/."
   echo "Install: sudo apt-get install libpipewire-0.3-dev   (or pipewire-devel)"
   exit 1
+fi
+
+# The generated bindings are a wire contract, and the headers that produce them come from whatever
+# the build machine happens to have installed. Two machines a release apart generate subtly
+# different output from the same command, and nothing in the committed .g.cs files says which was
+# used. Pin it: the version that produced the committed bindings lives in generate/HEADER-VERSION,
+# and a mismatch stops the run unless it is declared with --allow-version-change.
+PINNED_FILE="$REPO_ROOT/generate/HEADER-VERSION"
+HEADER_VERSION="$(pkg-config --modversion libpipewire-0.3 2>/dev/null || true)"
+
+if [ -z "$HEADER_VERSION" ]; then
+  echo "ERROR: pkg-config cannot report a libpipewire-0.3 version, so the bindings would be"
+  echo "generated against headers of unknown provenance. Install pkg-config and libpipewire-0.3-dev."
+  exit 1
+fi
+
+if [ -f "$PINNED_FILE" ]; then
+  PINNED="$(tr -d '[:space:]' < "$PINNED_FILE")"
+  if [ "$PINNED" != "$HEADER_VERSION" ]; then
+    if [ "$ALLOW_VERSION_CHANGE" = "0" ]; then
+      echo "ERROR: the committed bindings were generated against PipeWire $PINNED, this machine has"
+      echo "$HEADER_VERSION. Regenerating here would mix two header sets into one contract."
+      echo "To move the pin deliberately: bash generate/generate.sh --allow-version-change"
+      exit 1
+    fi
+    echo "Moving the header pin from $PINNED to $HEADER_VERSION."
+  fi
 fi
 
 # The dotnet tool packaging does not bundle native libclang/libClangSharp; load them
@@ -57,9 +91,28 @@ export LD_LIBRARY_PATH="$LIBCLANG_NATIVE:$CLANGSHARP_NATIVE:${LD_LIBRARY_PATH:-}
 
 # Clang's resource directory holds its builtin headers (stdbool.h, stddef.h, ...). The generator
 # only locates it unaided when the matching LLVM release is installed system-wide, so name it.
-CLANG_INC="$(ls -d /usr/lib/llvm-*/lib/clang/*/include /usr/lib/clang/*/include 2>/dev/null | head -1)"
+# The major must match the pinned libclang, and this is worth being strict about: libclang 21
+# handed clang 22's builtin headers does not fail. It parses less, ClangSharp emits fewer
+# declarations, and the run reports success - which produces a truncated naming block or a
+# truncated set of bindings that looks like a deliberate reduction in the diff.
+LIBCLANG_MAJOR=21
+
+CLANG_INC=""
+for candidate in /usr/lib/llvm-$LIBCLANG_MAJOR/lib/clang/*/include                  /usr/lib/clang/$LIBCLANG_MAJOR*/include; do
+  [ -d "$candidate" ] && { CLANG_INC="$candidate"; break; }
+done
+
 if [ -z "$CLANG_INC" ]; then
-  echo "ERROR: clang builtin include dir not found. Install: sudo apt-get install libclang-dev"
+  FOUND="$(ls -d /usr/lib/llvm-*/lib/clang/*/include /usr/lib/clang/*/include 2>/dev/null | tr '
+' ' ')"
+  echo "ERROR: no clang $LIBCLANG_MAJOR builtin include dir, and $LIBCLANG_MAJOR is the major the"
+  echo "pinned libclang (21.1.8) needs."
+  if [ -n "$FOUND" ]; then
+    echo "Present instead: $FOUND"
+    echo "Using one of those parses fewer declarations and still exits 0, so it is refused rather"
+    echo "than allowed to write a truncated contract."
+  fi
+  echo "Install clang $LIBCLANG_MAJOR: apt clang-$LIBCLANG_MAJOR, or the distribution's equivalent."
   exit 1
 fi
 CLANG_RESOURCE_DIR="$(dirname "$CLANG_INC")"
@@ -202,6 +255,7 @@ if [ "$REFRESH_NAMES" = "1" ]; then
       split(pascal_members, pm, /[ \n]+/); for (i in pm) if (pm[i] != "") wantPascal[pm[i]] = 1
       split(public_enums,  pe, /[ \n]+/); for (i in pe) if (pe[i] != "") isPublic[pe[i]]  = 1
       nTypes = 0
+      nPublic = 0
     }
     {
       native = $2; name = typename(native, $1 == "enum")
@@ -259,6 +313,13 @@ if [ "$REFRESH_NAMES" = "1" ]; then
         else if (name ~ /^Spa/) ns = "PipeWire.NET.Spa"
         else continue
         print "--with-namespace"; print name "=" ns
+        public_names[++nPublic] = name
+      }
+      print ""
+      print "# Opted back out of the internal catch-all: the same types, for the same reason. A"
+      print "# caller that reads a format or a state reads these; everything else is plumbing."
+      for (i = 1; i <= nPublic; i++) {
+        print "--without-access-specifier"; print public_names[i]
       }
       print ""
       print "# Members: drop the prefix the C name already spells out."
@@ -289,6 +350,24 @@ if [ "$REFRESH_NAMES" = "1" ]; then
       print "# <<< end naming block"
       if (failed) exit 1
     }' "$WORK/types.txt" > "$WORK/block.txt"
+
+  # A refresh replaces the committed contract, so a discovery pass that saw less than the last one
+  # must not be written. It exits 0 either way: a resource-directory or header problem shows up as
+  # fewer declarations, not as an error, and the resulting block reads in the diff like a deliberate
+  # reduction. Growth is fine and is the reason to run this; a collapse is not.
+  OLD_OPTS=$(grep -c '^--' "$RSP")
+  NEW_OPTS=$(grep -c '^--' "$WORK/block.txt")
+  STATIC_OPTS=$(awk -v b="$BLOCK_BEGIN" -v e="$BLOCK_END" '
+    index($0,b)==1 {skip=1} !skip && /^--/ {n++} index($0,e)==1 {skip=0} END {print n+0}' "$RSP")
+
+  if [ "$NEW_OPTS" -lt $(( (OLD_OPTS - STATIC_OPTS) * 9 / 10 )) ]; then
+    echo "ERROR: discovery found $NEW_OPTS naming options where the committed block has"
+    echo "$(( OLD_OPTS - STATIC_OPTS )). That is a collapse, not a refresh, and it is almost always"
+    echo "a clang resource directory or header set the parser could not read - which exits 0."
+    echo "The committed block was left alone. New block kept at $WORK/block.txt for inspection."
+    trap - EXIT
+    exit 1
+  fi
 
   awk -v b="$BLOCK_BEGIN" -v e="$BLOCK_END" -v blockfile="$WORK/block.txt" '
     index($0,b)==1 { while ((getline line < blockfile) > 0) print line; skip=1; next }
@@ -385,7 +464,10 @@ for f in "$WORK"/*.cs; do
   ' "$f" > "$OUT/${base}.g.cs"
 done
 
+printf '%s
+' "$HEADER_VERSION" > "$PINNED_FILE"
+
 count=$(ls "$OUT"/*.g.cs 2>/dev/null | wc -l)
 loc=$(wc -l "$OUT"/*.g.cs 2>/dev/null | tail -1 | awk '{print $1}')
-echo "Generated $count files / $loc LOC into $OUT"
+echo "Generated $count files / $loc LOC into $OUT against PipeWire $HEADER_VERSION"
 echo "Review the diff and commit."

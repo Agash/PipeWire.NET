@@ -39,10 +39,23 @@ the next run starts from whatever the last one left.
 | `TestCategory=RequiresDaemon` | a running PipeWire session |
 | `TestCategory=RequiresGStreamer` | `gst-launch-1.0` with `pipewiresink` |
 | `TestCategory=RequiresGpu` | a GPU that can import DMA-BUF |
-| `TestCategory=PenTest` | a session; `PWNET_PEN_SECONDS` to soak |
+| `TestCategory=PenTest` | a session of its own; `PWNET_PEN_SECONDS` to soak |
+| `TestCategory=KillsTheDaemon` | a session you are willing to lose |
 
 Stateful modules run with `--max-parallel-test-modules 1`. They share one graph, so running them
 concurrently makes them fail on each other's changes instead of on defects.
+
+Two categories are excluded from every ordinary leg and have to be asked for by name.
+
+**`PenTest`** churns one session hard for seconds at a time - twelve contexts opening at once,
+metadata written in a loop - so anything sharing that session fails on this traffic rather than on
+anything of its own. Give it a session to itself.
+
+**`KillsTheDaemon`** is one test, and it does what it says: on PipeWire 1.6.8, asking the daemon to
+confine a client this connection does not manage segfaults it inside
+`pw_impl_client_update_permissions` instead of returning the refusal it should. Everything after it
+in the same run fails to connect. It stays in the tree because it is the test that will say when
+that is fixed.
 
 ## External tools
 

@@ -1822,6 +1822,14 @@ PipeWire.NET.Interop
 --method-class-name
 Native
 
+# The ABI layer is plumbing, not surface. Every raw struct and every P/Invoke is emitted internal;
+# the enums a caller reads are opted back out by name in the naming block below, which is also
+# where the namespace routing that decides "caller reads this" lives. Consumers reach the native
+# layer through the managed types, so nothing public depends on a generated struct - and shipping
+# ~1100 of them publicly would freeze the header set into the package's compatibility contract.
+--with-access-specifier
+*=Internal
+
 --library-path
 libpipewire-0.3
 

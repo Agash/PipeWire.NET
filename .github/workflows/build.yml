@@ -41,7 +41,7 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           # net11.0 target requires the .NET 11 preview SDK alongside the .NET 10 SDK.
-          # global.json (rollForward latestMajor, allowPrerelease) then selects the 11 SDK,
+          # global.json (rollForward latestFeature, allowPrerelease) then selects the 11 SDK,
           # which builds both the net10.0 and net11.0 target frameworks.
           dotnet-version: |
             10.0.x
@@ -78,7 +78,8 @@ jobs:
           def pct(attr):
               return float(root.get(attr) or 0) * 100
 
-          print('### Coverage\n')
+          print('### Coverage (unit tests only)\n')
+          print('_The daemon-backed legs run separately and are not counted here._\n')
           print('| Metric | Covered | Total | Rate |')
           print('| --- | ---: | ---: | ---: |')
           print(f"| Lines | {root.get('lines-covered')} | {root.get('lines-valid')} | {pct('line-rate'):.1f}% |")
@@ -121,6 +122,29 @@ jobs:
 
       - name: Verify generated bindings are up to date
         run: |
+          # The committed bindings are generated against one PipeWire version, recorded in
+          # generate/HEADER-VERSION. Regenerating against a different one produces a diff that says
+          # nothing about whether the bindings are current, only that the runner's distribution is
+          # on another release, so the comparison is only run when the runner can actually provide
+          # the pinned headers. Skipping loudly beats failing for a reason nobody can act on.
+          PINNED="$(tr -d '[:space:]' < generate/HEADER-VERSION)"
+          HAVE="$(pkg-config --modversion libpipewire-0.3 2>/dev/null || echo unknown)"
+
+          if [ "$PINNED" != "$HAVE" ]; then
+            echo "::notice::Skipping the binding check: pinned to PipeWire $PINNED, this runner has $HAVE."
+            echo "Regenerate on a machine with $PINNED, or move the pin with --allow-version-change."
+
+            # Pin rot. A skip that can never fail turns a green check into "never checked", so the
+            # one case that is not a runner accident is called out: a pin older than what every
+            # runner offers means nobody has regenerated for at least a release.
+            OLDEST="$(printf '%s\n%s\n' "$PINNED" "$HAVE" | sort -V | head -n1)"
+            if [ "$OLDEST" = "$PINNED" ] && [ "$PINNED" != "$HAVE" ]; then
+              echo "::warning::The binding pin ($PINNED) is older than this runner's PipeWire ($HAVE)."
+            fi
+
+            exit 0
+          fi
+
           bash generate/generate.sh
           if ! git diff --quiet -- src/PipeWire.NET/generated/; then
             echo "::error::Generated bindings are out of date."
@@ -131,7 +155,7 @@ jobs:
 
       - name: Run Linux integration tests (against installed runtime, no daemon required)
         run: dotnet test PipeWire.NET.slnx --no-build -c Release
-             --filter "TestCategory=Integration&TestCategory!=RequiresDaemon" --max-parallel-test-modules 1
+             --filter "TestCategory=Integration&TestCategory!=RequiresDaemon&TestCategory!=PenTest&TestCategory!=KillsTheDaemon" --max-parallel-test-modules 1
 
       - name: Install a headless PipeWire session
         run: |
@@ -142,29 +166,27 @@ jobs:
       - name: Graph tests against a real daemon
         # Gating. Registry enumeration, object creation and linking need only the daemon and the
         # SPA support plugins, both of which a headless runner hosts reliably.
+        env:
+          # The image installs pipewire-bin, so a missing pw-cli or wpctl here is a broken image,
+          # not a machine without the tools. Fail instead of quietly skipping the category.
+          PWNET_REQUIRE_TOOLS: "1"
         run: |
-          # A private session, not just a private socket. WirePlumber persists default nodes,
-          # saved routes and profiles under XDG_STATE_HOME, so sharing it lets one run's writes
-          # decide the next run's starting state.
-          export XDG_RUNTIME_DIR="$(mktemp -d)"
-          export XDG_CONFIG_HOME="$(mktemp -d)"
-          export XDG_STATE_HOME="$(mktemp -d)"
-          export XDG_DATA_HOME="$(mktemp -d)"
-          pipewire &           PW_PID=$!
-          wireplumber &        WP_PID=$!
-          for i in $(seq 1 40); do pw-cli info 0 >/dev/null 2>&1 && break; sleep 0.25; done
+          source build/session.sh
+          pwnet_session_start
           set +e
           dotnet test PipeWire.NET.slnx --no-build -c Release \
-            --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer" --max-parallel-test-modules 1
+            --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon" --max-parallel-test-modules 1
           RC=$?
           set -e
-          kill $WP_PID $PW_PID 2>/dev/null || true
+          pwnet_session_stop
           exit $RC
 
       - name: Session diagnostics
         if: failure()
         # "test timed out" is not diagnosable from a log. This is the state the daemon was in.
         run: |
+          echo "::group::pipewire.log";    tail -300 "$RUNNER_TEMP/pipewire.log"    2>/dev/null || true; echo "::endgroup::"
+          echo "::group::wireplumber.log"; tail -300 "$RUNNER_TEMP/wireplumber.log" 2>/dev/null || true; echo "::endgroup::"
           echo "::group::pw-dump"; pw-dump 2>&1 | head -400 || true; echo "::endgroup::"
           echo "::group::wpctl status"; wpctl status 2>&1 || true; echo "::endgroup::"
           echo "::group::links"; pw-link -l -I 2>&1 || true; echo "::endgroup::"
@@ -181,16 +203,8 @@ jobs:
           test -x "$BIN"
           ldd "$BIN" | grep -q libcoreclr && { echo "not a native AOT binary"; exit 1; }
 
-          # A private session, not just a private socket. WirePlumber persists default nodes,
-          # saved routes and profiles under XDG_STATE_HOME, so sharing it lets one run's writes
-          # decide the next run's starting state.
-          export XDG_RUNTIME_DIR="$(mktemp -d)"
-          export XDG_CONFIG_HOME="$(mktemp -d)"
-          export XDG_STATE_HOME="$(mktemp -d)"
-          export XDG_DATA_HOME="$(mktemp -d)"
-          pipewire &           PW_PID=$!
-          wireplumber &        WP_PID=$!
-          for i in $(seq 1 40); do pw-cli info 0 >/dev/null 2>&1 && break; sleep 0.25; done
+          source build/session.sh
+          pwnet_session_start
 
           # Exit 1 is the sample's "no video source", which a headless runner has. Connecting and
           # enumerating is what is being checked.
@@ -198,33 +212,43 @@ jobs:
           OUT=$("$BIN" 2>&1); RC=$?
           set -e
           echo "$OUT"
-          kill $WP_PID $PW_PID 2>/dev/null || true
+          pwnet_session_stop
 
           echo "$OUT" | grep -q "connected to daemon" || { echo "AOT binary did not reach the daemon"; exit 1; }
           test $RC -le 1
 
-      - name: Daemon end-to-end tests (GStreamer real sources)
-        # Non-gating: these exercise a real GStreamer -> PipeWire graph and pass in a proper
-        # PipeWire session (e.g. a desktop or WSL), but GitHub's headless runners cannot
-        # reliably host pipewiresink producers, so frames never arrive and the tests time out.
-        # Kept for signal; run locally for authoritative end-to-end validation.
+      - name: DMA-BUF lifetime tests (no GPU required)
+        # The zero-copy path is excluded from every daemon leg by TestCategory!=RequiresGpu, so the
+        # shipped ConnectDmaBuf surface rides on nothing in CI. The lifetime assertions - buffer
+        # index reuse, descriptors returned on teardown - need a daemon and not a GPU, so they can
+        # run here; the import itself still cannot.
+        continue-on-error: true
         run: |
-          # A private session, not just a private socket. WirePlumber persists default nodes,
-          # saved routes and profiles under XDG_STATE_HOME, so sharing it lets one run's writes
-          # decide the next run's starting state.
-          export XDG_RUNTIME_DIR="$(mktemp -d)"
-          export XDG_CONFIG_HOME="$(mktemp -d)"
-          export XDG_STATE_HOME="$(mktemp -d)"
-          export XDG_DATA_HOME="$(mktemp -d)"
-          pipewire &           PW_PID=$!
-          wireplumber &        WP_PID=$!
-          for i in $(seq 1 40); do pw-cli info 0 >/dev/null 2>&1 && break; sleep 0.25; done
+          source build/session.sh
+          pwnet_session_start
           set +e
           dotnet test PipeWire.NET.slnx --no-build -c Release \
-            --filter "TestCategory=RequiresGStreamer&TestCategory!=RequiresGpu" --max-parallel-test-modules 1
+            --filter "TestCategory=RequiresGpu&TestCategory!=RequiresGStreamer" --max-parallel-test-modules 1
           RC=$?
           set -e
-          kill $WP_PID $PW_PID 2>/dev/null || true
+          pwnet_session_stop
+          echo "::notice::DMA-BUF leg exit $RC (non-gating: a hosted runner has no GPU to import with)"
+
+      - name: Daemon end-to-end tests (GStreamer real sources)
+        # Non-gating, and now actually so. These exercise a real GStreamer to PipeWire graph and
+        # pass in a proper session, but GitHub's headless runners cannot reliably host a
+        # pipewiresink producer, so frames never arrive and the tests time out. Kept for signal;
+        # run locally for authoritative end-to-end validation.
+        continue-on-error: true
+        run: |
+          source build/session.sh
+          pwnet_session_start
+          set +e
+          dotnet test PipeWire.NET.slnx --no-build -c Release \
+            --filter "TestCategory=RequiresGStreamer&TestCategory!=RequiresGpu&TestCategory!=PenTest" --max-parallel-test-modules 1
+          RC=$?
+          set -e
+          pwnet_session_stop
           exit $RC
 
       - name: Pack
@@ -249,6 +273,97 @@ jobs:
           if-no-files-found: error
           retention-days: 1
           path: ${{ env.NuGetDirectory }}/*.nupkg
+
+  windows_unit:
+    name: Unit tests on Windows
+    # Nothing here touches libpipewire: the SPA pod layer, the value model, the ABI layout checks
+    # and the surface baseline are all managed. Running them on Windows is what catches a test that
+    # reaches the daemon without a runtime guard, which the SupportedOSPlatform attribute cannot -
+    # it is an analyzer hint, and the Linux legs never exercise the other branch.
+    runs-on: windows-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - name: Build
+        run: dotnet build PipeWire.NET.slnx -c Release
+
+      - name: Unit tests
+        run: dotnet test PipeWire.NET.slnx --no-build -c Release --filter "TestCategory!=Integration"
+
+  aot_arm64:
+    name: Native AOT and ABI on arm64
+    # The reason to run arm64 at all is that the parts most likely to differ are the parts nothing
+    # else checks: struct offsets, function-pointer calling convention, and whether the AOT compiler
+    # can lay out the interop surface without the x64 assumptions. The daemon tests would mostly
+    # re-run what the x64 job already proved, so this runs the ABI tests and the AOT publish.
+    #
+    # The ABI tests are the cheap half and need no daemon, so they run on pull requests too: struct
+    # offsets and calling convention are exactly what a pull request can break and nothing else
+    # checks. The AOT publish, which needs a session, stays off pull requests.
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install PipeWire runtime and headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends             libpipewire-0.3-0 libpipewire-0.3-dev pipewire wireplumber pipewire-bin
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - name: Build
+        run: dotnet build PipeWire.NET.slnx -c Release
+
+      - name: ABI and unit tests
+        # The struct layouts and enum widths are what arm64 is here to disagree about, and these
+        # need no daemon.
+        run: |
+          dotnet test PipeWire.NET.slnx --no-build -c Release             --filter "TestCategory!=Integration"
+
+      - name: Native AOT publish and run
+        # Not on pull requests: it needs a session, and an arm64 runner for every push buys little
+        # against how rarely the interop layout moves.
+        if: github.event_name != 'pull_request'
+        run: |
+          dotnet publish samples/PipeWire.NET.SampleConsole/PipeWire.NET.SampleConsole.csproj             -f net11.0 -r linux-arm64 -c Release -p:PublishAot=true -o "$RUNNER_TEMP/aot"
+
+          BIN="$RUNNER_TEMP/aot/PipeWire.NET.SampleConsole"
+          test -x "$BIN"
+          ldd "$BIN" | grep -q libcoreclr && { echo "not a native AOT binary"; exit 1; }
+          file "$BIN" | grep -q "ARM aarch64" || { echo "not an arm64 binary"; exit 1; }
+
+          source build/session.sh
+          pwnet_session_start
+
+          set +e
+          OUT=$("$BIN" 2>&1); RC=$?
+          set -e
+          echo "$OUT"
+          pwnet_session_stop
+
+          echo "$OUT" | grep -q "connected to daemon" || { echo "AOT binary did not reach the daemon"; exit 1; }
+          test $RC -le 1
 
   daemon_version_skew:
     name: Daemon skew (PipeWire ${{ matrix.os }})
@@ -282,28 +397,44 @@ jobs:
 
       - name: Report the versions under test
         run: |
-          pipewire --version || true
-          wireplumber --version || true
+          PW="$(pipewire --version 2>&1 | head -1)"
+          WP="$(wireplumber --version 2>&1 | head -1)"
+          echo "$PW"; echo "$WP"
+
+          # Written to the run summary, not just the log. This job is non-gating, so its result is
+          # only useful if somebody can see at a glance which daemon versions were exercised and
+          # how each did; a red X buried in a collapsed log tells nobody anything.
+          {
+            echo "### Daemon skew: ${{ matrix.os }}"
+            echo ""
+            echo "- pinned headers: \`$(tr -d '[:space:]' < generate/HEADER-VERSION)\`"
+            echo "- daemon: \`$PW\`"
+            echo "- session manager: \`$WP\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Graph tests against this daemon
         run: |
-          export XDG_RUNTIME_DIR="$(mktemp -d)"
-          export XDG_CONFIG_HOME="$(mktemp -d)"
-          export XDG_STATE_HOME="$(mktemp -d)"
-          export XDG_DATA_HOME="$(mktemp -d)"
-          pipewire &           PW_PID=$!
-          wireplumber &        WP_PID=$!
-          for i in $(seq 1 40); do pw-cli info 0 >/dev/null 2>&1 && break; sleep 0.25; done
+          source build/session.sh
+          pwnet_session_start
           set +e
-          dotnet test PipeWire.NET.slnx -c Release             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer"             --max-parallel-test-modules 1
+          dotnet test PipeWire.NET.slnx -c Release             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon"             --max-parallel-test-modules 1
           RC=$?
           set -e
-          kill $WP_PID $PW_PID 2>/dev/null || true
+          pwnet_session_stop
+
+          if [ $RC -eq 0 ]; then
+            echo "- result: passed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- result: **failed** (this job is non-gating)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
           exit $RC
 
       - name: Session diagnostics
         if: failure()
         run: |
+          echo "::group::pipewire.log";    tail -300 "$RUNNER_TEMP/pipewire.log"    2>/dev/null || true; echo "::endgroup::"
+          echo "::group::wireplumber.log"; tail -300 "$RUNNER_TEMP/wireplumber.log" 2>/dev/null || true; echo "::endgroup::"
           echo "::group::pw-dump"; pw-dump 2>&1 | head -400 || true; echo "::endgroup::"
           echo "::group::wpctl status"; wpctl status 2>&1 || true; echo "::endgroup::"
 

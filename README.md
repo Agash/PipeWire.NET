@@ -29,7 +29,8 @@ await Task.Delay(TimeSpan.FromSeconds(5));
 - Frame timestamps on a shared clock, so audio and video can be kept in sync.
 - Efficient buffers: frames are read straight from shared memory with no copy, and DMA-BUF file
   descriptors are exposed for GPU import on the capture side.
-- NativeAOT friendly: source-generated P/Invoke, no reflection.
+- NativeAOT friendly: no reflection on any hot or throwing path, and the interop surface is
+  hand-checked against the headers rather than discovered at runtime.
 
 ## Requirements
 
@@ -37,6 +38,7 @@ await Task.Delay(TimeSpan.FromSeconds(5));
 |---|---|
 | OS | Linux (x64 / arm64) |
 | Runtime | `libpipewire-0.3.so.0` (ships with any PipeWire install) |
+| PipeWire | Bindings generated against 1.6.8; see the version policy below |
 | Daemon | A running PipeWire daemon plus a session manager such as WirePlumber |
 | .NET | .NET 10, or .NET 11 (preview) |
 
@@ -46,11 +48,32 @@ sudo dnf install pipewire wireplumber          # Fedora
 sudo pacman -S pipewire wireplumber            # Arch
 ```
 
+### PipeWire version policy
+
+The native bindings are generated from the PipeWire headers of one specific release, recorded in
+`generate/HEADER-VERSION` and enforced by the generator. That release is what the committed bindings
+describe, and it is the version the gating test job runs against.
+
+Older daemons are not rejected, and mostly work: the library binds a small, long-stable part of the
+protocol. What an older daemon can lack is a whole interface, and binding one that is not there
+fails at the bind rather than silently misbehaving. Which interfaces are missing on which release is
+what the daemon-skew job exists to find out. That job is deliberately not gating, so a distribution
+two years behind cannot block a release, and its results say what actually works rather than what is
+promised.
+
+If you need a specific older release supported, open an issue with the version. Making it a
+guarantee means adding it to the skew matrix as a gating leg, which is a commitment worth making
+deliberately rather than implying.
+
 ## Install
 
 ```sh
-dotnet add package PipeWire.NET
+dotnet add package PipeWire.NET          # graph, metadata, control
+dotnet add package PipeWire.NET.Media    # audio and video streams
 ```
+
+The graph package stands alone. `PipeWire.NET.Media` adds the capture and output types and
+pulls the graph package in with it.
 
 ## Usage
 
@@ -60,8 +83,9 @@ dotnet add package PipeWire.NET
 await using var registry = new PipeWireRegistry(ctx);
 await registry.WaitForInitialEnumerationAsync();
 
-foreach (var source in registry.Nodes.Where(s => s.IsVideoSource))
-    Console.WriteLine($"[{source.NodeId}] {source.Description} ({source.Class})");
+foreach (var source in registry.Nodes.Where(n => n.Media == PipeWireMediaKind.Video
+                                              && n.Flow == PipeWireMediaFlow.Source))
+    Console.WriteLine($"[{source.NodeId}] {source.Description} ({source.MediaClass})");
 ```
 
 ### Capture video

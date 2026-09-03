@@ -1,0 +1,3041 @@
+PipeWire.NET.Graph.IPipeWireObject
+PipeWire.NET.Graph.IPipeWireObject.Id : UInt32
+PipeWire.NET.Graph.IPipeWireObject.InterfaceVersion : UInt32
+PipeWire.NET.Graph.IPipeWireObject.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.IPipeWireObject.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireClient
+PipeWire.NET.Graph.PipeWireClient.Access : String
+PipeWire.NET.Graph.PipeWireClient.ApplicationName : String
+PipeWire.NET.Graph.PipeWireClient.Equals(Object)
+PipeWire.NET.Graph.PipeWireClient.Equals(PipeWireClient)
+PipeWire.NET.Graph.PipeWireClient.GetHashCode()
+PipeWire.NET.Graph.PipeWireClient.GroupId : Nullable<UInt32>
+PipeWire.NET.Graph.PipeWireClient.Id : UInt32
+PipeWire.NET.Graph.PipeWireClient.InterfaceVersion : UInt32
+PipeWire.NET.Graph.PipeWireClient.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireClient.ModuleId : Nullable<UInt32>
+PipeWire.NET.Graph.PipeWireClient.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireClient.ProcessId : Nullable<Int32>
+PipeWire.NET.Graph.PipeWireClient.Protocol : String
+PipeWire.NET.Graph.PipeWireClient.ToString()
+PipeWire.NET.Graph.PipeWireClient.UserId : Nullable<UInt32>
+PipeWire.NET.Graph.PipeWireClientControl
+PipeWire.NET.Graph.PipeWireClientControl.AnyObject = UInt32
+PipeWire.NET.Graph.PipeWireClientControl.ConfineToAsync(ReadOnlySpan<PipeWireObjectPermission>, CancellationToken)
+PipeWire.NET.Graph.PipeWireClientControl.Dispose()
+PipeWire.NET.Graph.PipeWireClientControl.DisposeAsync()
+PipeWire.NET.Graph.PipeWireClientControl.Id : UInt32
+PipeWire.NET.Graph.PipeWireClientControl.UpdatePermissionsAsync(ReadOnlyMemory<PipeWireObjectPermission>, CancellationToken)
+PipeWire.NET.Graph.PipeWireClientControl.UpdatePropertiesAsync(IReadOnlyDictionary<String, String>, CancellationToken)
+PipeWire.NET.Graph.PipeWireCoreObject
+PipeWire.NET.Graph.PipeWireCoreObject.CoreName : String
+PipeWire.NET.Graph.PipeWireCoreObject.CoreVersion : String
+PipeWire.NET.Graph.PipeWireCoreObject.Equals(Object)
+PipeWire.NET.Graph.PipeWireCoreObject.Equals(PipeWireCoreObject)
+PipeWire.NET.Graph.PipeWireCoreObject.GetHashCode()
+PipeWire.NET.Graph.PipeWireCoreObject.HostName : String
+PipeWire.NET.Graph.PipeWireCoreObject.Id : UInt32
+PipeWire.NET.Graph.PipeWireCoreObject.InterfaceVersion : UInt32
+PipeWire.NET.Graph.PipeWireCoreObject.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireCoreObject.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireCoreObject.ToString()
+PipeWire.NET.Graph.PipeWireCoreObject.UserName : String
+PipeWire.NET.Graph.PipeWireDevice
+PipeWire.NET.Graph.PipeWireDevice.Api : String
+PipeWire.NET.Graph.PipeWireDevice.ClientId : Nullable<UInt32>
+PipeWire.NET.Graph.PipeWireDevice.Description : String
+PipeWire.NET.Graph.PipeWireDevice.DeviceName : String
+PipeWire.NET.Graph.PipeWireDevice.Equals(Object)
+PipeWire.NET.Graph.PipeWireDevice.Equals(PipeWireDevice)
+PipeWire.NET.Graph.PipeWireDevice.FactoryId : Nullable<UInt32>
+PipeWire.NET.Graph.PipeWireDevice.GetHashCode()
+PipeWire.NET.Graph.PipeWireDevice.Id : UInt32
+PipeWire.NET.Graph.PipeWireDevice.InterfaceVersion : UInt32
+PipeWire.NET.Graph.PipeWireDevice.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireDevice.MediaClass : String
+PipeWire.NET.Graph.PipeWireDevice.Nick : String
+PipeWire.NET.Graph.PipeWireDevice.ObjectPath : String
+PipeWire.NET.Graph.PipeWireDevice.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireDevice.ToString()
+PipeWire.NET.Graph.PipeWireDeviceControl
+PipeWire.NET.Graph.PipeWireDeviceControl.EnumerateProfilesAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireDeviceControl.EnumerateRoutesAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireDeviceControl.GetActiveRoutesAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireDeviceControl.GetProfileAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireDeviceControl.SetProfileAsync(Int32, CancellationToken)
+PipeWire.NET.Graph.PipeWireDeviceControl.SetRouteAsync(Int32, Int32, CancellationToken)
+PipeWire.NET.Graph.PipeWireDeviceControl.SetRouteVolumeAsync(Int32, Int32, ReadOnlySpan<Single>, Boolean, Boolean, CancellationToken)
+PipeWire.NET.Graph.PipeWireFactory
+PipeWire.NET.Graph.PipeWireFactory.Equals(Object)
+PipeWire.NET.Graph.PipeWireFactory.Equals(PipeWireFactory)
+PipeWire.NET.Graph.PipeWireFactory.FactoryName : String
+PipeWire.NET.Graph.PipeWireFactory.GetHashCode()
+PipeWire.NET.Graph.PipeWireFactory.Id : UInt32
+PipeWire.NET.Graph.PipeWireFactory.InterfaceVersion : UInt32
+PipeWire.NET.Graph.PipeWireFactory.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireFactory.ModuleId : Nullable<UInt32>
+PipeWire.NET.Graph.PipeWireFactory.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireFactory.ToString()
+PipeWire.NET.Graph.PipeWireFactory.TypeName : String
+PipeWire.NET.Graph.PipeWireFactory.TypeVersion : Nullable<UInt32>
+PipeWire.NET.Graph.PipeWireFilter
+PipeWire.NET.Graph.PipeWireFilter.AddAudioPort(PipeWirePortDirection, String)
+PipeWire.NET.Graph.PipeWireFilter.ConnectAsync(PipeWireFilterFlags, CancellationToken)
+PipeWire.NET.Graph.PipeWireFilter.Create(PipeWireContext, String, IReadOnlyDictionary<String, String>)
+PipeWire.NET.Graph.PipeWireFilter.DisposeAsync()
+PipeWire.NET.Graph.PipeWireFilter.Name : String
+PipeWire.NET.Graph.PipeWireFilter.NodeId : Nullable<UInt32>
+PipeWire.NET.Graph.PipeWireFilter.Ports : IReadOnlyList<PipeWireFilterPort>
+PipeWire.NET.Graph.PipeWireFilter.ProcessCallback : Action<PipeWireFilter, UInt32>
+PipeWire.NET.Graph.PipeWireFilter.State : PipeWireFilterState
+PipeWire.NET.Graph.PipeWireFilter.StateChanged event
+PipeWire.NET.Graph.PipeWireFilter.WaitForNodeIdAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireFilterPort
+PipeWire.NET.Graph.PipeWireFilterPort.Direction : PipeWirePortDirection
+PipeWire.NET.Graph.PipeWireFilterPort.GetSamples(UInt32)
+PipeWire.NET.Graph.PipeWireFilterPort.Name : String
+PipeWire.NET.Graph.PipeWireGraphExtensions
+PipeWire.NET.Graph.PipeWireGraphExtensions.CanCaptureFrom(PipeWireGraphSnapshot, PipeWireNode)
+PipeWire.NET.Graph.PipeWireGraphExtensions.CanSendTo(PipeWireGraphSnapshot, PipeWireNode)
+PipeWire.NET.Graph.PipeWireGraphExtensions.GetAudioSources(PipeWireGraphSnapshot)
+PipeWire.NET.Graph.PipeWireGraphExtensions.GetEndpoints(PipeWireGraphSnapshot, PipeWireLink)
+PipeWire.NET.Graph.PipeWireGraphExtensions.GetNodeForPort(PipeWireGraphSnapshot, PipeWirePort)
+PipeWire.NET.Graph.PipeWireGraphExtensions.GetPortsForNode(PipeWireGraphSnapshot, UInt32, PipeWirePortDirection)
+PipeWire.NET.Graph.PipeWireGraphExtensions.GetVideoSources(PipeWireGraphSnapshot)
+PipeWire.NET.Graph.PipeWireGraphExtensions.get_CanInvokeMethods(IPipeWireObject)
+PipeWire.NET.Graph.PipeWireGraphExtensions.get_IsControl(PipeWirePort)
+PipeWire.NET.Graph.PipeWireGraphExtensions.get_IsDataInput(PipeWirePort)
+PipeWire.NET.Graph.PipeWireGraphExtensions.get_IsDataOutput(PipeWirePort)
+PipeWire.NET.Graph.PipeWireGraphExtensions.get_IsNotify(PipeWirePort)
+PipeWire.NET.Graph.PipeWireGraphSnapshot
+PipeWire.NET.Graph.PipeWireGraphSnapshot.Clients : ImmutableArray<PipeWireClient>
+PipeWire.NET.Graph.PipeWireGraphSnapshot.Core : PipeWireCoreObject
+PipeWire.NET.Graph.PipeWireGraphSnapshot.Devices : ImmutableArray<PipeWireDevice>
+PipeWire.NET.Graph.PipeWireGraphSnapshot.Empty : PipeWireGraphSnapshot
+PipeWire.NET.Graph.PipeWireGraphSnapshot.Factories : ImmutableArray<PipeWireFactory>
+PipeWire.NET.Graph.PipeWireGraphSnapshot.GetClient(UInt32)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.GetDevice(UInt32)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.GetFactory(UInt32)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.GetInputLinksForPort(UInt32)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.GetLink(UInt32)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.GetLinksForNode(UInt32)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.GetMetadataStore(String)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.GetModule(UInt32)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.GetNode(UInt32)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.GetOutputLinksForPort(UInt32)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.GetPort(UInt32)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.GetPortsForNode(UInt32)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.Links : ImmutableArray<PipeWireLink>
+PipeWire.NET.Graph.PipeWireGraphSnapshot.MetadataStores : ImmutableArray<PipeWireMetadataObject>
+PipeWire.NET.Graph.PipeWireGraphSnapshot.Modules : ImmutableArray<PipeWireModule>
+PipeWire.NET.Graph.PipeWireGraphSnapshot.Nodes : ImmutableArray<PipeWireNode>
+PipeWire.NET.Graph.PipeWireGraphSnapshot.Objects : ImmutableArray<IPipeWireObject>
+PipeWire.NET.Graph.PipeWireGraphSnapshot.Ports : ImmutableArray<PipeWirePort>
+PipeWire.NET.Graph.PipeWireGraphSnapshot.Profiler : PipeWireProfiler
+PipeWire.NET.Graph.PipeWireGraphSnapshot.SecurityContext : PipeWireSecurityContext
+PipeWire.NET.Graph.PipeWireGraphSnapshot.TryGetLink(UInt32, PipeWireLink&)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.TryGetNode(UInt32, PipeWireNode&)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.TryGetObject(UInt32, IPipeWireObject&)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.TryGetPort(UInt32, PipeWirePort&)
+PipeWire.NET.Graph.PipeWireGraphSnapshot.Version : Int64
+PipeWire.NET.Graph.PipeWireLatency
+PipeWire.NET.Graph.PipeWireLatency..ctor(SpaDirection, Single, Single, Int32, Int32, Int64, Int64)
+PipeWire.NET.Graph.PipeWireLatency.Deconstruct(SpaDirection&, Single&, Single&, Int32&, Int32&, Int64&, Int64&)
+PipeWire.NET.Graph.PipeWireLatency.Direction : SpaDirection
+PipeWire.NET.Graph.PipeWireLatency.Equals(Object)
+PipeWire.NET.Graph.PipeWireLatency.Equals(PipeWireLatency)
+PipeWire.NET.Graph.PipeWireLatency.From(SpaObject)
+PipeWire.NET.Graph.PipeWireLatency.GetHashCode()
+PipeWire.NET.Graph.PipeWireLatency.MaxNs : Int64
+PipeWire.NET.Graph.PipeWireLatency.MaxQuantum : Single
+PipeWire.NET.Graph.PipeWireLatency.MaxRate : Int32
+PipeWire.NET.Graph.PipeWireLatency.MinNs : Int64
+PipeWire.NET.Graph.PipeWireLatency.MinQuantum : Single
+PipeWire.NET.Graph.PipeWireLatency.MinRate : Int32
+PipeWire.NET.Graph.PipeWireLatency.ToParameter()
+PipeWire.NET.Graph.PipeWireLatency.ToString()
+PipeWire.NET.Graph.PipeWireLink
+PipeWire.NET.Graph.PipeWireLink.Equals(Object)
+PipeWire.NET.Graph.PipeWireLink.Equals(PipeWireLink)
+PipeWire.NET.Graph.PipeWireLink.GetHashCode()
+PipeWire.NET.Graph.PipeWireLink.Id : UInt32
+PipeWire.NET.Graph.PipeWireLink.InterfaceVersion : UInt32
+PipeWire.NET.Graph.PipeWireLink.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireLink.LinkId : UInt32
+PipeWire.NET.Graph.PipeWireLink.LinkInputNode : UInt32
+PipeWire.NET.Graph.PipeWireLink.LinkInputPort : UInt32
+PipeWire.NET.Graph.PipeWireLink.LinkOutputNode : UInt32
+PipeWire.NET.Graph.PipeWireLink.LinkOutputPort : UInt32
+PipeWire.NET.Graph.PipeWireLink.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireLink.ToString()
+PipeWire.NET.Graph.PipeWireLinkControl
+PipeWire.NET.Graph.PipeWireLinkControl.Dispose()
+PipeWire.NET.Graph.PipeWireLinkControl.DisposeAsync()
+PipeWire.NET.Graph.PipeWireLinkControl.Error : String
+PipeWire.NET.Graph.PipeWireLinkControl.InputNode : UInt32
+PipeWire.NET.Graph.PipeWireLinkControl.InputPort : UInt32
+PipeWire.NET.Graph.PipeWireLinkControl.IsActive : Boolean
+PipeWire.NET.Graph.PipeWireLinkControl.LinkId : UInt32
+PipeWire.NET.Graph.PipeWireLinkControl.OutputNode : UInt32
+PipeWire.NET.Graph.PipeWireLinkControl.OutputPort : UInt32
+PipeWire.NET.Graph.PipeWireLinkControl.ReadyAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireLinkControl.State : PipeWireLinkState
+PipeWire.NET.Graph.PipeWireLinkControl.StateChanged event
+PipeWire.NET.Graph.PipeWireLinkCreation
+PipeWire.NET.Graph.PipeWireLinkCreation.ExecuteAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireLinkCreation.Passive()
+PipeWire.NET.Graph.PipeWireLinkCreation.WithLinger()
+PipeWire.NET.Graph.PipeWireLinkCreation.WithProperty(String, String)
+PipeWire.NET.Graph.PipeWireMetadataEntry
+PipeWire.NET.Graph.PipeWireMetadataEntry..ctor(UInt32, String, String, String)
+PipeWire.NET.Graph.PipeWireMetadataEntry.Deconstruct(UInt32&, String&, String&, String&)
+PipeWire.NET.Graph.PipeWireMetadataEntry.Equals(Object)
+PipeWire.NET.Graph.PipeWireMetadataEntry.Equals(PipeWireMetadataEntry)
+PipeWire.NET.Graph.PipeWireMetadataEntry.GetHashCode()
+PipeWire.NET.Graph.PipeWireMetadataEntry.Key : String
+PipeWire.NET.Graph.PipeWireMetadataEntry.NameValue : String
+PipeWire.NET.Graph.PipeWireMetadataEntry.Subject : UInt32
+PipeWire.NET.Graph.PipeWireMetadataEntry.ToString()
+PipeWire.NET.Graph.PipeWireMetadataEntry.Type : String
+PipeWire.NET.Graph.PipeWireMetadataEntry.Value : String
+PipeWire.NET.Graph.PipeWireMetadataObject
+PipeWire.NET.Graph.PipeWireMetadataObject.Equals(Object)
+PipeWire.NET.Graph.PipeWireMetadataObject.Equals(PipeWireMetadataObject)
+PipeWire.NET.Graph.PipeWireMetadataObject.GetHashCode()
+PipeWire.NET.Graph.PipeWireMetadataObject.Id : UInt32
+PipeWire.NET.Graph.PipeWireMetadataObject.InterfaceVersion : UInt32
+PipeWire.NET.Graph.PipeWireMetadataObject.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireMetadataObject.MetadataName : String
+PipeWire.NET.Graph.PipeWireMetadataObject.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireMetadataObject.ToString()
+PipeWire.NET.Graph.PipeWireMetadataProvider
+PipeWire.NET.Graph.PipeWireMetadataProvider.Clear()
+PipeWire.NET.Graph.PipeWireMetadataProvider.Create(PipeWireContext, String, Boolean)
+PipeWire.NET.Graph.PipeWireMetadataProvider.Dispose()
+PipeWire.NET.Graph.PipeWireMetadataProvider.DisposeAsync()
+PipeWire.NET.Graph.PipeWireMetadataProvider.Entries : IReadOnlyCollection<PipeWireMetadataEntry>
+PipeWire.NET.Graph.PipeWireMetadataProvider.EntryChanged event
+PipeWire.NET.Graph.PipeWireMetadataProvider.Get(String, UInt32)
+PipeWire.NET.Graph.PipeWireMetadataProvider.Name : String
+PipeWire.NET.Graph.PipeWireMetadataProvider.Set(String, String, String, UInt32)
+PipeWire.NET.Graph.PipeWireMetadataStore
+PipeWire.NET.Graph.PipeWireMetadataStore.ClearAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireMetadataStore.ClockForcedQuantum : Nullable<Int32>
+PipeWire.NET.Graph.PipeWireMetadataStore.ClockForcedRate : Nullable<Int32>
+PipeWire.NET.Graph.PipeWireMetadataStore.ClockMaxQuantum : Nullable<Int32>
+PipeWire.NET.Graph.PipeWireMetadataStore.ClockMinQuantum : Nullable<Int32>
+PipeWire.NET.Graph.PipeWireMetadataStore.ClockQuantum : Nullable<Int32>
+PipeWire.NET.Graph.PipeWireMetadataStore.ClockRate : Nullable<Int32>
+PipeWire.NET.Graph.PipeWireMetadataStore.DefaultAudioSink : PipeWireMetadataEntry
+PipeWire.NET.Graph.PipeWireMetadataStore.DefaultAudioSource : PipeWireMetadataEntry
+PipeWire.NET.Graph.PipeWireMetadataStore.Dispose()
+PipeWire.NET.Graph.PipeWireMetadataStore.DisposeAsync()
+PipeWire.NET.Graph.PipeWireMetadataStore.Entries : IReadOnlyCollection<PipeWireMetadataEntry>
+PipeWire.NET.Graph.PipeWireMetadataStore.EntryChanged event
+PipeWire.NET.Graph.PipeWireMetadataStore.Get(String, UInt32)
+PipeWire.NET.Graph.PipeWireMetadataStore.Id : UInt32
+PipeWire.NET.Graph.PipeWireMetadataStore.ReadyAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireMetadataStore.SetAsync(String, String, String, UInt32, CancellationToken)
+PipeWire.NET.Graph.PipeWireMetadataStore.SetDefaultAudioSinkAsync(String, CancellationToken)
+PipeWire.NET.Graph.PipeWireMetadataStore.SetDefaultAudioSourceAsync(String, CancellationToken)
+PipeWire.NET.Graph.PipeWireMetadataStore.SetForcedQuantumAsync(Int32, CancellationToken)
+PipeWire.NET.Graph.PipeWireMetadataStore.SetForcedRateAsync(Int32, CancellationToken)
+PipeWire.NET.Graph.PipeWireMetadataStore.SubjectCore = UInt32
+PipeWire.NET.Graph.PipeWireModule
+PipeWire.NET.Graph.PipeWireModule.Author : String
+PipeWire.NET.Graph.PipeWireModule.Description : String
+PipeWire.NET.Graph.PipeWireModule.Equals(Object)
+PipeWire.NET.Graph.PipeWireModule.Equals(PipeWireModule)
+PipeWire.NET.Graph.PipeWireModule.GetHashCode()
+PipeWire.NET.Graph.PipeWireModule.Id : UInt32
+PipeWire.NET.Graph.PipeWireModule.InterfaceVersion : UInt32
+PipeWire.NET.Graph.PipeWireModule.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireModule.ModuleName : String
+PipeWire.NET.Graph.PipeWireModule.ModuleVersion : String
+PipeWire.NET.Graph.PipeWireModule.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireModule.ToString()
+PipeWire.NET.Graph.PipeWireNode
+PipeWire.NET.Graph.PipeWireNode.Description : String
+PipeWire.NET.Graph.PipeWireNode.Equals(Object)
+PipeWire.NET.Graph.PipeWireNode.Equals(PipeWireNode)
+PipeWire.NET.Graph.PipeWireNode.Flow : PipeWireMediaFlow
+PipeWire.NET.Graph.PipeWireNode.GetHashCode()
+PipeWire.NET.Graph.PipeWireNode.Id : UInt32
+PipeWire.NET.Graph.PipeWireNode.InterfaceVersion : UInt32
+PipeWire.NET.Graph.PipeWireNode.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireNode.Media : PipeWireMediaKind
+PipeWire.NET.Graph.PipeWireNode.MediaClass : String
+PipeWire.NET.Graph.PipeWireNode.NodeId : UInt32
+PipeWire.NET.Graph.PipeWireNode.NodeName : String
+PipeWire.NET.Graph.PipeWireNode.NodeNick : String
+PipeWire.NET.Graph.PipeWireNode.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireNode.ToString()
+PipeWire.NET.Graph.PipeWireNodeControl
+PipeWire.NET.Graph.PipeWireNodeControl.EnumerateFormatsAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeControl.EnumeratePropertyInfoAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeControl.GetChannelMapAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeControl.GetChannelVolumesAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeControl.GetLatencyOffsetAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeControl.GetMutedAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeControl.GetProcessLatencyAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeControl.GetTagsAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeControl.GetVolumeAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeControl.SetChannelVolumesAsync(ReadOnlySpan<Single>, Boolean, CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeControl.SetChannelVolumesAsync(ReadOnlySpan<Single>, CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeControl.SetLatencyOffsetAsync(Int64, CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeControl.SetMutedAsync(Boolean, CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeControl.SetProcessLatencyAsync(PipeWireProcessLatency, CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeControl.SetTagAsync(PipeWireTag, CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeControl.SetVolumeAsync(Single, CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeCreation
+PipeWire.NET.Graph.PipeWireNodeCreation.ExecuteAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireNodeCreation.WithAutoConnect(Boolean)
+PipeWire.NET.Graph.PipeWireNodeCreation.WithChannelPositions(String)
+PipeWire.NET.Graph.PipeWireNodeCreation.WithLinger()
+PipeWire.NET.Graph.PipeWireNodeCreation.WithMediaClass(String)
+PipeWire.NET.Graph.PipeWireNodeCreation.WithName(String)
+PipeWire.NET.Graph.PipeWireNodeCreation.WithProperty(String, String)
+PipeWire.NET.Graph.PipeWireNodeCreation.WithStayWithTheTarget()
+PipeWire.NET.Graph.PipeWireNodeCreation.WithTarget(PipeWireNode)
+PipeWire.NET.Graph.PipeWireNodeCreation.WithTarget(String)
+PipeWire.NET.Graph.PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireObjectKind.Client = PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireObjectKind.Core = PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireObjectKind.Device = PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireObjectKind.Factory = PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireObjectKind.Link = PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireObjectKind.Metadata = PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireObjectKind.Module = PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireObjectKind.Node = PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireObjectKind.Port = PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireObjectKind.Profiler = PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireObjectKind.SecurityContext = PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireObjectKind.value__ = Byte
+PipeWire.NET.Graph.PipeWireObjectPermission
+PipeWire.NET.Graph.PipeWireObjectPermission..ctor(UInt32, PipeWirePermissions)
+PipeWire.NET.Graph.PipeWireObjectPermission.Deconstruct(UInt32&, PipeWirePermissions&)
+PipeWire.NET.Graph.PipeWireObjectPermission.Equals(Object)
+PipeWire.NET.Graph.PipeWireObjectPermission.Equals(PipeWireObjectPermission)
+PipeWire.NET.Graph.PipeWireObjectPermission.GetHashCode()
+PipeWire.NET.Graph.PipeWireObjectPermission.ObjectId : UInt32
+PipeWire.NET.Graph.PipeWireObjectPermission.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireObjectPermission.ToString()
+PipeWire.NET.Graph.PipeWireParameterInfo
+PipeWire.NET.Graph.PipeWireParameterInfo..ctor(SpaParamType, Boolean, Boolean)
+PipeWire.NET.Graph.PipeWireParameterInfo.CanRead : Boolean
+PipeWire.NET.Graph.PipeWireParameterInfo.CanWrite : Boolean
+PipeWire.NET.Graph.PipeWireParameterInfo.Deconstruct(SpaParamType&, Boolean&, Boolean&)
+PipeWire.NET.Graph.PipeWireParameterInfo.Equals(Object)
+PipeWire.NET.Graph.PipeWireParameterInfo.Equals(PipeWireParameterInfo)
+PipeWire.NET.Graph.PipeWireParameterInfo.GetHashCode()
+PipeWire.NET.Graph.PipeWireParameterInfo.Parameter : SpaParamType
+PipeWire.NET.Graph.PipeWireParameterInfo.ToString()
+PipeWire.NET.Graph.PipeWireParameterObject
+PipeWire.NET.Graph.PipeWireParameterObject.CanRead(SpaParamType)
+PipeWire.NET.Graph.PipeWireParameterObject.CanWrite(SpaParamType)
+PipeWire.NET.Graph.PipeWireParameterObject.Dispose()
+PipeWire.NET.Graph.PipeWireParameterObject.DisposeAsync()
+PipeWire.NET.Graph.PipeWireParameterObject.EnumerateParametersAsync(SpaParamType, CancellationToken)
+PipeWire.NET.Graph.PipeWireParameterObject.GetParameterAsync(SpaParamType, CancellationToken)
+PipeWire.NET.Graph.PipeWireParameterObject.Id : UInt32
+PipeWire.NET.Graph.PipeWireParameterObject.InfoChanged event
+PipeWire.NET.Graph.PipeWireParameterObject.ParameterChanged event
+PipeWire.NET.Graph.PipeWireParameterObject.Parameters : ImmutableArray<PipeWireParameterInfo>
+PipeWire.NET.Graph.PipeWireParameterObject.ReadyAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireParameterObject.SetParameterAsync(SpaParamType, SpaObject, CancellationToken)
+PipeWire.NET.Graph.PipeWireParameterObject.SubscribeParameters(ReadOnlySpan<SpaParamType>)
+PipeWire.NET.Graph.PipeWireParameterObject.SubscribedParameters : ImmutableArray<SpaParamType>
+PipeWire.NET.Graph.PipeWireParameterObject.UnsubscribeParameters()
+PipeWire.NET.Graph.PipeWirePermissions
+PipeWire.NET.Graph.PipeWirePermissions.All = PipeWirePermissions
+PipeWire.NET.Graph.PipeWirePermissions.Execute = PipeWirePermissions
+PipeWire.NET.Graph.PipeWirePermissions.Link = PipeWirePermissions
+PipeWire.NET.Graph.PipeWirePermissions.Metadata = PipeWirePermissions
+PipeWire.NET.Graph.PipeWirePermissions.None = PipeWirePermissions
+PipeWire.NET.Graph.PipeWirePermissions.Read = PipeWirePermissions
+PipeWire.NET.Graph.PipeWirePermissions.Write = PipeWirePermissions
+PipeWire.NET.Graph.PipeWirePermissions.value__ = UInt32
+PipeWire.NET.Graph.PipeWirePort
+PipeWire.NET.Graph.PipeWirePort.Equals(Object)
+PipeWire.NET.Graph.PipeWirePort.Equals(PipeWirePort)
+PipeWire.NET.Graph.PipeWirePort.Exclusive : Boolean
+PipeWire.NET.Graph.PipeWirePort.GetHashCode()
+PipeWire.NET.Graph.PipeWirePort.Id : UInt32
+PipeWire.NET.Graph.PipeWirePort.InterfaceVersion : UInt32
+PipeWire.NET.Graph.PipeWirePort.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.PipeWirePort.Monitor : Boolean
+PipeWire.NET.Graph.PipeWirePort.NodeId : UInt32
+PipeWire.NET.Graph.PipeWirePort.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWirePort.PortDirection : PipeWirePortDirection
+PipeWire.NET.Graph.PipeWirePort.PortId : UInt32
+PipeWire.NET.Graph.PipeWirePort.PortName : String
+PipeWire.NET.Graph.PipeWirePort.ToString()
+PipeWire.NET.Graph.PipeWirePortControl
+PipeWire.NET.Graph.PipeWirePortControl.EnumerateFormatsAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWirePortControl.EnumerateLatencyAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWirePortControl.EnumerateSupportedFormatsAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWirePortControl.GetLatenciesAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWirePortControl.GetTagsAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWirePortDirection
+PipeWire.NET.Graph.PipeWirePortDirection.Control = PipeWirePortDirection
+PipeWire.NET.Graph.PipeWirePortDirection.In = PipeWirePortDirection
+PipeWire.NET.Graph.PipeWirePortDirection.Notify = PipeWirePortDirection
+PipeWire.NET.Graph.PipeWirePortDirection.Out = PipeWirePortDirection
+PipeWire.NET.Graph.PipeWirePortDirection.value__ = Int32
+PipeWire.NET.Graph.PipeWireProcessLatency
+PipeWire.NET.Graph.PipeWireProcessLatency..ctor(Single, Int32, Int64)
+PipeWire.NET.Graph.PipeWireProcessLatency.Deconstruct(Single&, Int32&, Int64&)
+PipeWire.NET.Graph.PipeWireProcessLatency.Equals(Object)
+PipeWire.NET.Graph.PipeWireProcessLatency.Equals(PipeWireProcessLatency)
+PipeWire.NET.Graph.PipeWireProcessLatency.From(SpaObject)
+PipeWire.NET.Graph.PipeWireProcessLatency.GetHashCode()
+PipeWire.NET.Graph.PipeWireProcessLatency.Ns : Int64
+PipeWire.NET.Graph.PipeWireProcessLatency.Quantum : Single
+PipeWire.NET.Graph.PipeWireProcessLatency.Rate : Int32
+PipeWire.NET.Graph.PipeWireProcessLatency.ToParameter()
+PipeWire.NET.Graph.PipeWireProcessLatency.ToString()
+PipeWire.NET.Graph.PipeWireProfiler
+PipeWire.NET.Graph.PipeWireProfiler.Equals(Object)
+PipeWire.NET.Graph.PipeWireProfiler.Equals(PipeWireProfiler)
+PipeWire.NET.Graph.PipeWireProfiler.GetHashCode()
+PipeWire.NET.Graph.PipeWireProfiler.Id : UInt32
+PipeWire.NET.Graph.PipeWireProfiler.InterfaceVersion : UInt32
+PipeWire.NET.Graph.PipeWireProfiler.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireProfiler.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireProfiler.ToString()
+PipeWire.NET.Graph.PipeWireProfilerReader
+PipeWire.NET.Graph.PipeWireProfilerReader.Dispose()
+PipeWire.NET.Graph.PipeWireProfilerReader.DisposeAsync()
+PipeWire.NET.Graph.PipeWireProfilerReader.Id : UInt32
+PipeWire.NET.Graph.PipeWireProfilerReader.ProfileReceived event
+PipeWire.NET.Graph.PipeWireRegistry
+PipeWire.NET.Graph.PipeWireRegistry+GraphChangedHandler
+PipeWire.NET.Graph.PipeWireRegistry+GraphChangedHandler..ctor(Object, IntPtr)
+PipeWire.NET.Graph.PipeWireRegistry+GraphChangedHandler.BeginInvoke(PipeWireRegistry, PipeWireGraphSnapshot, AsyncCallback, Object)
+PipeWire.NET.Graph.PipeWireRegistry+GraphChangedHandler.EndInvoke(IAsyncResult)
+PipeWire.NET.Graph.PipeWireRegistry+GraphChangedHandler.Invoke(PipeWireRegistry, PipeWireGraphSnapshot)
+PipeWire.NET.Graph.PipeWireRegistry..ctor(PipeWireContext)
+PipeWire.NET.Graph.PipeWireRegistry.BindClient(UInt32)
+PipeWire.NET.Graph.PipeWireRegistry.BindDevice(UInt32)
+PipeWire.NET.Graph.PipeWireRegistry.BindLink(UInt32)
+PipeWire.NET.Graph.PipeWireRegistry.BindMetadataStore(String)
+PipeWire.NET.Graph.PipeWireRegistry.BindMetadataStore(UInt32)
+PipeWire.NET.Graph.PipeWireRegistry.BindNode(UInt32)
+PipeWire.NET.Graph.PipeWireRegistry.BindPort(UInt32)
+PipeWire.NET.Graph.PipeWireRegistry.BindProfiler(UInt32)
+PipeWire.NET.Graph.PipeWireRegistry.BindSecurityContext(UInt32)
+PipeWire.NET.Graph.PipeWireRegistry.CreateLink(PipeWirePort, PipeWirePort)
+PipeWire.NET.Graph.PipeWireRegistry.CreateLink(UInt32, UInt32)
+PipeWire.NET.Graph.PipeWireRegistry.CreateLinkAsync(PipeWirePort, PipeWirePort, CancellationToken)
+PipeWire.NET.Graph.PipeWireRegistry.CreateLinkAsync(UInt32, UInt32, CancellationToken)
+PipeWire.NET.Graph.PipeWireRegistry.CreateVirtualNode(String, String)
+PipeWire.NET.Graph.PipeWireRegistry.CreateVirtualNodeAsync(String, String, CancellationToken)
+PipeWire.NET.Graph.PipeWireRegistry.CreateVirtualSource(String, String)
+PipeWire.NET.Graph.PipeWireRegistry.Current : PipeWireGraphSnapshot
+PipeWire.NET.Graph.PipeWireRegistry.DestroyGlobalAsync(UInt32, CancellationToken)
+PipeWire.NET.Graph.PipeWireRegistry.Dispose()
+PipeWire.NET.Graph.PipeWireRegistry.DisposeAsync()
+PipeWire.NET.Graph.PipeWireRegistry.GraphChanged event
+PipeWire.NET.Graph.PipeWireRegistry.GraphChangedHandler
+PipeWire.NET.Graph.PipeWireRegistry.LinkAdded event
+PipeWire.NET.Graph.PipeWireRegistry.LinkRemoved event
+PipeWire.NET.Graph.PipeWireRegistry.NodeAdded event
+PipeWire.NET.Graph.PipeWireRegistry.NodeRemoved event
+PipeWire.NET.Graph.PipeWireRegistry.Nodes : IReadOnlyCollection<PipeWireNode>
+PipeWire.NET.Graph.PipeWireRegistry.PortAdded event
+PipeWire.NET.Graph.PipeWireRegistry.PortRemoved event
+PipeWire.NET.Graph.PipeWireRegistry.RemoveLinkAsync(PipeWireLink, CancellationToken)
+PipeWire.NET.Graph.PipeWireRegistry.RemoveLinkAsync(UInt32, CancellationToken)
+PipeWire.NET.Graph.PipeWireRegistry.WaitForInitialEnumerationAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireRegistry.WatchAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireSecurityContext
+PipeWire.NET.Graph.PipeWireSecurityContext.Equals(Object)
+PipeWire.NET.Graph.PipeWireSecurityContext.Equals(PipeWireSecurityContext)
+PipeWire.NET.Graph.PipeWireSecurityContext.GetHashCode()
+PipeWire.NET.Graph.PipeWireSecurityContext.Id : UInt32
+PipeWire.NET.Graph.PipeWireSecurityContext.InterfaceVersion : UInt32
+PipeWire.NET.Graph.PipeWireSecurityContext.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireSecurityContext.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireSecurityContext.ToString()
+PipeWire.NET.Graph.PipeWireSecurityContextControl
+PipeWire.NET.Graph.PipeWireSecurityContextControl.CreateAsync(Int32, Int32, IReadOnlyDictionary<String, String>, CancellationToken)
+PipeWire.NET.Graph.PipeWireSecurityContextControl.Dispose()
+PipeWire.NET.Graph.PipeWireSecurityContextControl.DisposeAsync()
+PipeWire.NET.Graph.PipeWireSecurityContextControl.Id : UInt32
+PipeWire.NET.Graph.PipeWireTag
+PipeWire.NET.Graph.PipeWireTag..ctor(SpaDirection, ImmutableArray<KeyValuePair<String, String>>)
+PipeWire.NET.Graph.PipeWireTag.Deconstruct(SpaDirection&, ImmutableArray`1&)
+PipeWire.NET.Graph.PipeWireTag.Direction : SpaDirection
+PipeWire.NET.Graph.PipeWireTag.Equals(Object)
+PipeWire.NET.Graph.PipeWireTag.Equals(PipeWireTag)
+PipeWire.NET.Graph.PipeWireTag.From(SpaObject)
+PipeWire.NET.Graph.PipeWireTag.GetHashCode()
+PipeWire.NET.Graph.PipeWireTag.Info : ImmutableArray<KeyValuePair<String, String>>
+PipeWire.NET.Graph.PipeWireTag.ToParameter()
+PipeWire.NET.Graph.PipeWireTag.ToString()
+PipeWire.NET.Interop.Native
+PipeWire.NET.Interop.Native.GetInterface(Void*, TMethods*&, Void*&)
+PipeWire.NET.Interop.Native.PW_ID_ANY = UInt32
+PipeWire.NET.Interop.Native.PW_ID_CORE = UInt32
+PipeWire.NET.Interop.Native.PW_KEY_FACTORY_NAME = String
+PipeWire.NET.Interop.Native.PW_KEY_LINK_INPUT_NODE = String
+PipeWire.NET.Interop.Native.PW_KEY_LINK_INPUT_PORT = String
+PipeWire.NET.Interop.Native.PW_KEY_LINK_OUTPUT_NODE = String
+PipeWire.NET.Interop.Native.PW_KEY_LINK_OUTPUT_PORT = String
+PipeWire.NET.Interop.Native.PW_KEY_LINK_PASSIVE = String
+PipeWire.NET.Interop.Native.PW_KEY_MEDIA_CATEGORY = String
+PipeWire.NET.Interop.Native.PW_KEY_MEDIA_CLASS = String
+PipeWire.NET.Interop.Native.PW_KEY_MEDIA_ROLE = String
+PipeWire.NET.Interop.Native.PW_KEY_MEDIA_TYPE = String
+PipeWire.NET.Interop.Native.PW_KEY_NODE_DESCRIPTION = String
+PipeWire.NET.Interop.Native.PW_KEY_NODE_ID = String
+PipeWire.NET.Interop.Native.PW_KEY_NODE_NAME = String
+PipeWire.NET.Interop.Native.PW_KEY_NODE_NICK = String
+PipeWire.NET.Interop.Native.PW_KEY_OBJECT_LINGER = String
+PipeWire.NET.Interop.Native.PW_KEY_PORT_DIRECTION = String
+PipeWire.NET.Interop.Native.PW_KEY_PORT_EXCLUSIVE = String
+PipeWire.NET.Interop.Native.PW_KEY_PORT_MONITOR = String
+PipeWire.NET.Interop.Native.PW_KEY_PORT_NAME = String
+PipeWire.NET.Interop.Native.PW_KEY_TARGET_OBJECT = String
+PipeWire.NET.Interop.Native.PW_TYPE_INFO_INTERFACE_BASE = String
+PipeWire.NET.Interop.Native.PW_TYPE_INTERFACE_CLIENT = String
+PipeWire.NET.Interop.Native.PW_TYPE_INTERFACE_DEVICE = String
+PipeWire.NET.Interop.Native.PW_TYPE_INTERFACE_FACTORY = String
+PipeWire.NET.Interop.Native.PW_TYPE_INTERFACE_LINK = String
+PipeWire.NET.Interop.Native.PW_TYPE_INTERFACE_METADATA = String
+PipeWire.NET.Interop.Native.PW_TYPE_INTERFACE_MODULE = String
+PipeWire.NET.Interop.Native.PW_TYPE_INTERFACE_NODE = String
+PipeWire.NET.Interop.Native.PW_TYPE_INTERFACE_PORT = String
+PipeWire.NET.Interop.Native.PW_TYPE_INTERFACE_PROFILER = String
+PipeWire.NET.Interop.Native.PW_TYPE_INTERFACE_SECURITY_CONTEXT = String
+PipeWire.NET.Interop.Native.PW_VERSION_CLIENT = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_CLIENT_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_CLIENT_METHODS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_CLIENT_METHODS2 = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_CONTEXT_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_CONTROL_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_CORE = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_CORE_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_CORE_METHODS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_DATA_LOOP_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_DEVICE = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_DEVICE_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_DEVICE_METHODS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_FACTORY = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_FACTORY_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_FILTER_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_GLOBAL_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_IMPL_METADATA_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_LINK = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_LINK_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_MAIN_LOOP_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_METADATA = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_METADATA_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_METADATA_METHODS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_MODULE = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_NODE = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_NODE_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_NODE_METHODS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_PORT = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_PORT_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_PROFILER = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_PROFILER_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_PROXY_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_REGISTRY = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_REGISTRY_EVENTS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_REGISTRY_METHODS = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_SECURITY_CONTEXT = UInt32
+PipeWire.NET.Interop.Native.PW_VERSION_STREAM_EVENTS = UInt32
+PipeWire.NET.Interop.Native.SPA_ASYNC_BIT = Int32
+PipeWire.NET.Interop.Native.SPA_ASYNC_SEQ_MASK = Int32
+PipeWire.NET.Interop.Native.SPA_ID_INVALID = UInt32
+PipeWire.NET.Interop.Native.SPA_KEY_AUDIO_POSITION = String
+PipeWire.NET.Interop.Native.SPA_RESULT_ASYNC_SEQ(Int32)
+PipeWire.NET.Interop.Native.SPA_RESULT_IS_ASYNC(Int32)
+PipeWire.NET.Interop.Native.pw_check_option(SByte*, SByte*)
+PipeWire.NET.Interop.Native.pw_client_add_listener(pw_client*, spa_hook*, pw_client_events*, Void*)
+PipeWire.NET.Interop.Native.pw_client_get_permissions(pw_client*, UInt32, UInt32)
+PipeWire.NET.Interop.Native.pw_client_info_free(pw_client_info*)
+PipeWire.NET.Interop.Native.pw_client_info_merge(pw_client_info*, pw_client_info*, Boolean)
+PipeWire.NET.Interop.Native.pw_client_info_update(pw_client_info*, pw_client_info*)
+PipeWire.NET.Interop.Native.pw_client_update_permissions(pw_client*, UInt32, pw_permission*)
+PipeWire.NET.Interop.Native.pw_client_update_properties(pw_client*, spa_dict*)
+PipeWire.NET.Interop.Native.pw_context_acquire_loop(pw_context*, spa_dict*)
+PipeWire.NET.Interop.Native.pw_context_add_listener(pw_context*, spa_hook*, pw_context_events*, Void*)
+PipeWire.NET.Interop.Native.pw_context_add_spa_lib(pw_context*, SByte*, SByte*)
+PipeWire.NET.Interop.Native.pw_context_conf_section_for_each(pw_context*, SByte*, , Void*)
+PipeWire.NET.Interop.Native.pw_context_conf_section_match_rules(pw_context*, SByte*, spa_dict*, , Void*)
+PipeWire.NET.Interop.Native.pw_context_conf_update_props(pw_context*, SByte*, pw_properties*)
+PipeWire.NET.Interop.Native.pw_context_connect(pw_context*, pw_properties*, UIntPtr)
+PipeWire.NET.Interop.Native.pw_context_connect_fd(pw_context*, Int32, pw_properties*, UIntPtr)
+PipeWire.NET.Interop.Native.pw_context_connect_self(pw_context*, pw_properties*, UIntPtr)
+PipeWire.NET.Interop.Native.pw_context_create_metadata(pw_context*, SByte*, pw_properties*, UIntPtr)
+PipeWire.NET.Interop.Native.pw_context_destroy(pw_context*)
+PipeWire.NET.Interop.Native.pw_context_find_export_type(pw_context*, SByte*)
+PipeWire.NET.Interop.Native.pw_context_find_global(pw_context*, UInt32)
+PipeWire.NET.Interop.Native.pw_context_find_protocol(pw_context*, SByte*)
+PipeWire.NET.Interop.Native.pw_context_find_spa_lib(pw_context*, SByte*)
+PipeWire.NET.Interop.Native.pw_context_for_each_global(pw_context*, , Void*)
+PipeWire.NET.Interop.Native.pw_context_get_conf_section(pw_context*, SByte*)
+PipeWire.NET.Interop.Native.pw_context_get_data_loop(pw_context*)
+PipeWire.NET.Interop.Native.pw_context_get_main_loop(pw_context*)
+PipeWire.NET.Interop.Native.pw_context_get_mempool(pw_context*)
+PipeWire.NET.Interop.Native.pw_context_get_object(pw_context*, SByte*)
+PipeWire.NET.Interop.Native.pw_context_get_properties(pw_context*)
+PipeWire.NET.Interop.Native.pw_context_get_support(pw_context*, UInt32*)
+PipeWire.NET.Interop.Native.pw_context_get_timer_queue(pw_context*)
+PipeWire.NET.Interop.Native.pw_context_get_user_data(pw_context*)
+PipeWire.NET.Interop.Native.pw_context_get_work_queue(pw_context*)
+PipeWire.NET.Interop.Native.pw_context_load_module(pw_context*, SByte*, SByte*, pw_properties*)
+PipeWire.NET.Interop.Native.pw_context_load_spa_handle(pw_context*, SByte*, spa_dict*)
+PipeWire.NET.Interop.Native.pw_context_new(pw_loop*, pw_properties*, UIntPtr)
+PipeWire.NET.Interop.Native.pw_context_parse_conf_section(pw_context*, pw_properties*, SByte*)
+PipeWire.NET.Interop.Native.pw_context_register_export_type(pw_context*, pw_export_type*)
+PipeWire.NET.Interop.Native.pw_context_release_loop(pw_context*, pw_loop*)
+PipeWire.NET.Interop.Native.pw_context_set_object(pw_context*, SByte*, Void*)
+PipeWire.NET.Interop.Native.pw_context_update_properties(pw_context*, spa_dict*)
+PipeWire.NET.Interop.Native.pw_core_add_listener(pw_core*, spa_hook*, pw_core_events*, Void*)
+PipeWire.NET.Interop.Native.pw_core_create_object(pw_core*, SByte*, SByte*, UInt32, spa_dict*, UIntPtr)
+PipeWire.NET.Interop.Native.pw_core_disconnect(pw_core*)
+PipeWire.NET.Interop.Native.pw_core_export(pw_core*, SByte*, spa_dict*, Void*, UIntPtr)
+PipeWire.NET.Interop.Native.pw_core_find_proxy(pw_core*, UInt32)
+PipeWire.NET.Interop.Native.pw_core_get_client(pw_core*)
+PipeWire.NET.Interop.Native.pw_core_get_context(pw_core*)
+PipeWire.NET.Interop.Native.pw_core_get_mempool(pw_core*)
+PipeWire.NET.Interop.Native.pw_core_get_properties(pw_core*)
+PipeWire.NET.Interop.Native.pw_core_get_registry(pw_core*, UInt32, UIntPtr)
+PipeWire.NET.Interop.Native.pw_core_get_user_data(pw_core*)
+PipeWire.NET.Interop.Native.pw_core_info_free(pw_core_info*)
+PipeWire.NET.Interop.Native.pw_core_info_merge(pw_core_info*, pw_core_info*, Boolean)
+PipeWire.NET.Interop.Native.pw_core_info_update(pw_core_info*, pw_core_info*)
+PipeWire.NET.Interop.Native.pw_core_set_paused(pw_core*, Boolean)
+PipeWire.NET.Interop.Native.pw_core_steal_fd(pw_core*)
+PipeWire.NET.Interop.Native.pw_core_sync(pw_core*, UInt32, Int32)
+PipeWire.NET.Interop.Native.pw_core_update_properties(pw_core*, spa_dict*)
+PipeWire.NET.Interop.Native.pw_debug_is_category_enabled(SByte*)
+PipeWire.NET.Interop.Native.pw_deinit()
+PipeWire.NET.Interop.Native.pw_device_add_listener(pw_device*, spa_hook*, pw_device_events*, Void*)
+PipeWire.NET.Interop.Native.pw_device_enum_params(pw_device*, Int32, UInt32, UInt32, UInt32, spa_pod*)
+PipeWire.NET.Interop.Native.pw_device_info_free(pw_device_info*)
+PipeWire.NET.Interop.Native.pw_device_info_merge(pw_device_info*, pw_device_info*, Boolean)
+PipeWire.NET.Interop.Native.pw_device_info_update(pw_device_info*, pw_device_info*)
+PipeWire.NET.Interop.Native.pw_device_set_param(pw_device*, UInt32, UInt32, spa_pod*)
+PipeWire.NET.Interop.Native.pw_device_subscribe_params(pw_device*, UInt32*, UInt32)
+PipeWire.NET.Interop.Native.pw_direction_as_string(SpaDirection)
+PipeWire.NET.Interop.Native.pw_direction_reverse(SpaDirection)
+PipeWire.NET.Interop.Native.pw_factory_info_free(pw_factory_info*)
+PipeWire.NET.Interop.Native.pw_factory_info_merge(pw_factory_info*, pw_factory_info*, Boolean)
+PipeWire.NET.Interop.Native.pw_factory_info_update(pw_factory_info*, pw_factory_info*)
+PipeWire.NET.Interop.Native.pw_filter_add_listener(pw_filter*, spa_hook*, pw_filter_events*, Void*)
+PipeWire.NET.Interop.Native.pw_filter_add_port(pw_filter*, SpaDirection, PipeWireFilterPortFlags, UIntPtr, pw_properties*, spa_pod**, UInt32)
+PipeWire.NET.Interop.Native.pw_filter_connect(pw_filter*, PipeWireFilterFlags, spa_pod**, UInt32)
+PipeWire.NET.Interop.Native.pw_filter_dequeue_buffer(Void*)
+PipeWire.NET.Interop.Native.pw_filter_destroy(pw_filter*)
+PipeWire.NET.Interop.Native.pw_filter_disconnect(pw_filter*)
+PipeWire.NET.Interop.Native.pw_filter_emit_event(pw_filter*, spa_event*)
+PipeWire.NET.Interop.Native.pw_filter_flush(pw_filter*, Boolean)
+PipeWire.NET.Interop.Native.pw_filter_get_core(pw_filter*)
+PipeWire.NET.Interop.Native.pw_filter_get_data_loop(pw_filter*)
+PipeWire.NET.Interop.Native.pw_filter_get_dsp_buffer(Void*, UInt32)
+PipeWire.NET.Interop.Native.pw_filter_get_name(pw_filter*)
+PipeWire.NET.Interop.Native.pw_filter_get_node_id(pw_filter*)
+PipeWire.NET.Interop.Native.pw_filter_get_nsec(pw_filter*)
+PipeWire.NET.Interop.Native.pw_filter_get_properties(pw_filter*, Void*)
+PipeWire.NET.Interop.Native.pw_filter_get_state(pw_filter*, SByte**)
+PipeWire.NET.Interop.Native.pw_filter_get_time(pw_filter*, pw_time*)
+PipeWire.NET.Interop.Native.pw_filter_is_driving(pw_filter*)
+PipeWire.NET.Interop.Native.pw_filter_is_lazy(pw_filter*)
+PipeWire.NET.Interop.Native.pw_filter_new(pw_core*, SByte*, pw_properties*)
+PipeWire.NET.Interop.Native.pw_filter_new_simple(pw_loop*, SByte*, pw_properties*, pw_filter_events*, Void*)
+PipeWire.NET.Interop.Native.pw_filter_queue_buffer(Void*, pw_buffer*)
+PipeWire.NET.Interop.Native.pw_filter_remove_port(Void*)
+PipeWire.NET.Interop.Native.pw_filter_set_active(pw_filter*, Boolean)
+PipeWire.NET.Interop.Native.pw_filter_state_as_string(PipeWireFilterState)
+PipeWire.NET.Interop.Native.pw_filter_trigger_process(pw_filter*)
+PipeWire.NET.Interop.Native.pw_filter_update_params(pw_filter*, Void*, spa_pod**, UInt32)
+PipeWire.NET.Interop.Native.pw_filter_update_properties(pw_filter*, Void*, spa_dict*)
+PipeWire.NET.Interop.Native.pw_get_application_name()
+PipeWire.NET.Interop.Native.pw_get_client_name()
+PipeWire.NET.Interop.Native.pw_get_domain()
+PipeWire.NET.Interop.Native.pw_get_host_name()
+PipeWire.NET.Interop.Native.pw_get_prgname()
+PipeWire.NET.Interop.Native.pw_get_support(spa_support*, UInt32)
+PipeWire.NET.Interop.Native.pw_get_user_name()
+PipeWire.NET.Interop.Native.pw_impl_metadata_add_listener(pw_impl_metadata*, spa_hook*, pw_impl_metadata_events*, Void*)
+PipeWire.NET.Interop.Native.pw_impl_metadata_destroy(pw_impl_metadata*)
+PipeWire.NET.Interop.Native.pw_impl_metadata_get_global(pw_impl_metadata*)
+PipeWire.NET.Interop.Native.pw_impl_metadata_get_implementation(pw_impl_metadata*)
+PipeWire.NET.Interop.Native.pw_impl_metadata_get_properties(pw_impl_metadata*)
+PipeWire.NET.Interop.Native.pw_impl_metadata_get_user_data(pw_impl_metadata*)
+PipeWire.NET.Interop.Native.pw_impl_metadata_register(pw_impl_metadata*, pw_properties*)
+PipeWire.NET.Interop.Native.pw_impl_metadata_set_implementation(pw_impl_metadata*, pw_metadata*)
+PipeWire.NET.Interop.Native.pw_impl_metadata_set_property(pw_impl_metadata*, UInt32, SByte*, SByte*, SByte*)
+PipeWire.NET.Interop.Native.pw_impl_module_add_listener(pw_impl_module*, spa_hook*, pw_impl_module_events*, Void*)
+PipeWire.NET.Interop.Native.pw_impl_module_destroy(pw_impl_module*)
+PipeWire.NET.Interop.Native.pw_impl_module_get_context(pw_impl_module*)
+PipeWire.NET.Interop.Native.pw_impl_module_get_global(pw_impl_module*)
+PipeWire.NET.Interop.Native.pw_impl_module_get_info(pw_impl_module*)
+PipeWire.NET.Interop.Native.pw_impl_module_get_properties(pw_impl_module*)
+PipeWire.NET.Interop.Native.pw_impl_module_schedule_destroy(pw_impl_module*)
+PipeWire.NET.Interop.Native.pw_impl_module_update_properties(pw_impl_module*, spa_dict*)
+PipeWire.NET.Interop.Native.pw_init(Int32*, SByte***)
+PipeWire.NET.Interop.Native.pw_link_add_listener(pw_link*, spa_hook*, pw_link_events*, Void*)
+PipeWire.NET.Interop.Native.pw_link_info_free(pw_link_info*)
+PipeWire.NET.Interop.Native.pw_link_info_merge(pw_link_info*, pw_link_info*, Boolean)
+PipeWire.NET.Interop.Native.pw_link_info_update(pw_link_info*, pw_link_info*)
+PipeWire.NET.Interop.Native.pw_link_state_as_string(PipeWireLinkState)
+PipeWire.NET.Interop.Native.pw_load_spa_handle(SByte*, SByte*, spa_dict*, UInt32, spa_support*)
+PipeWire.NET.Interop.Native.pw_log_set_level(Int32)
+PipeWire.NET.Interop.Native.pw_loop_destroy(pw_loop*)
+PipeWire.NET.Interop.Native.pw_loop_new(spa_dict*)
+PipeWire.NET.Interop.Native.pw_loop_set_name(pw_loop*, SByte*)
+PipeWire.NET.Interop.Native.pw_main_loop_add_listener(pw_main_loop*, spa_hook*, pw_main_loop_events*, Void*)
+PipeWire.NET.Interop.Native.pw_main_loop_destroy(pw_main_loop*)
+PipeWire.NET.Interop.Native.pw_main_loop_get_loop(pw_main_loop*)
+PipeWire.NET.Interop.Native.pw_main_loop_new(spa_dict*)
+PipeWire.NET.Interop.Native.pw_main_loop_quit(pw_main_loop*)
+PipeWire.NET.Interop.Native.pw_main_loop_run(pw_main_loop*)
+PipeWire.NET.Interop.Native.pw_memblock_free(pw_memblock*)
+PipeWire.NET.Interop.Native.pw_memblock_map(pw_memblock*, PipeWireMemmapFlags, UInt32, UInt32, UInt32*)
+PipeWire.NET.Interop.Native.pw_memmap_free(pw_memmap*)
+PipeWire.NET.Interop.Native.pw_mempool_add_listener(pw_mempool*, spa_hook*, pw_mempool_events*, Void*)
+PipeWire.NET.Interop.Native.pw_mempool_alloc(pw_mempool*, PipeWireMemblockFlags, UInt32, UIntPtr)
+PipeWire.NET.Interop.Native.pw_mempool_clear(pw_mempool*)
+PipeWire.NET.Interop.Native.pw_mempool_destroy(pw_mempool*)
+PipeWire.NET.Interop.Native.pw_mempool_find_fd(pw_mempool*, Int32)
+PipeWire.NET.Interop.Native.pw_mempool_find_id(pw_mempool*, UInt32)
+PipeWire.NET.Interop.Native.pw_mempool_find_ptr(pw_mempool*, Void*)
+PipeWire.NET.Interop.Native.pw_mempool_find_tag(pw_mempool*, UInt32*, UIntPtr)
+PipeWire.NET.Interop.Native.pw_mempool_import(pw_mempool*, PipeWireMemblockFlags, UInt32, Int32)
+PipeWire.NET.Interop.Native.pw_mempool_import_block(pw_mempool*, pw_memblock*)
+PipeWire.NET.Interop.Native.pw_mempool_import_map(pw_mempool*, pw_mempool*, Void*, UInt32, UInt32*)
+PipeWire.NET.Interop.Native.pw_mempool_map_id(pw_mempool*, UInt32, PipeWireMemmapFlags, UInt32, UInt32, UInt32*)
+PipeWire.NET.Interop.Native.pw_mempool_new(pw_properties*)
+PipeWire.NET.Interop.Native.pw_mempool_remove_id(pw_mempool*, UInt32)
+PipeWire.NET.Interop.Native.pw_metadata_add_listener(pw_metadata*, spa_hook*, pw_metadata_events*, Void*)
+PipeWire.NET.Interop.Native.pw_metadata_clear(pw_metadata*)
+PipeWire.NET.Interop.Native.pw_metadata_set_property(pw_metadata*, UInt32, SByte*, SByte*, SByte*)
+PipeWire.NET.Interop.Native.pw_module_info_free(pw_module_info*)
+PipeWire.NET.Interop.Native.pw_module_info_merge(pw_module_info*, pw_module_info*, Boolean)
+PipeWire.NET.Interop.Native.pw_module_info_update(pw_module_info*, pw_module_info*)
+PipeWire.NET.Interop.Native.pw_node_add_listener(pw_node*, spa_hook*, pw_node_events*, Void*)
+PipeWire.NET.Interop.Native.pw_node_enum_params(pw_node*, Int32, UInt32, UInt32, UInt32, spa_pod*)
+PipeWire.NET.Interop.Native.pw_node_info_free(pw_node_info*)
+PipeWire.NET.Interop.Native.pw_node_info_merge(pw_node_info*, pw_node_info*, Boolean)
+PipeWire.NET.Interop.Native.pw_node_info_update(pw_node_info*, pw_node_info*)
+PipeWire.NET.Interop.Native.pw_node_set_param(pw_node*, UInt32, UInt32, spa_pod*)
+PipeWire.NET.Interop.Native.pw_node_state_as_string(PipeWireNodeState)
+PipeWire.NET.Interop.Native.pw_node_subscribe_params(pw_node*, UInt32*, UInt32)
+PipeWire.NET.Interop.Native.pw_port_add_listener(pw_port*, spa_hook*, pw_port_events*, Void*)
+PipeWire.NET.Interop.Native.pw_port_enum_params(pw_port*, Int32, UInt32, UInt32, UInt32, spa_pod*)
+PipeWire.NET.Interop.Native.pw_port_info_free(pw_port_info*)
+PipeWire.NET.Interop.Native.pw_port_info_merge(pw_port_info*, pw_port_info*, Boolean)
+PipeWire.NET.Interop.Native.pw_port_info_update(pw_port_info*, pw_port_info*)
+PipeWire.NET.Interop.Native.pw_port_subscribe_params(pw_port*, UInt32*, UInt32)
+PipeWire.NET.Interop.Native.pw_profiler_add_listener(Void*, spa_hook*, pw_profiler_events*, Void*)
+PipeWire.NET.Interop.Native.pw_properties_add(pw_properties*, spa_dict*)
+PipeWire.NET.Interop.Native.pw_properties_add_keys(pw_properties*, spa_dict*, SByte**)
+PipeWire.NET.Interop.Native.pw_properties_clear(pw_properties*)
+PipeWire.NET.Interop.Native.pw_properties_copy(pw_properties*)
+PipeWire.NET.Interop.Native.pw_properties_fetch_bool(pw_properties*, SByte*, Boolean*)
+PipeWire.NET.Interop.Native.pw_properties_fetch_int32(pw_properties*, SByte*, Int32*)
+PipeWire.NET.Interop.Native.pw_properties_fetch_int64(pw_properties*, SByte*, Int64*)
+PipeWire.NET.Interop.Native.pw_properties_fetch_uint32(pw_properties*, SByte*, UInt32*)
+PipeWire.NET.Interop.Native.pw_properties_fetch_uint64(pw_properties*, SByte*, UInt64*)
+PipeWire.NET.Interop.Native.pw_properties_free(pw_properties*)
+PipeWire.NET.Interop.Native.pw_properties_get(pw_properties*, SByte*)
+PipeWire.NET.Interop.Native.pw_properties_iterate(pw_properties*, Void**)
+PipeWire.NET.Interop.Native.pw_properties_new_dict(spa_dict*)
+PipeWire.NET.Interop.Native.pw_properties_new_string(SByte*)
+PipeWire.NET.Interop.Native.pw_properties_new_string_checked(SByte*, UIntPtr, spa_error_location*)
+PipeWire.NET.Interop.Native.pw_properties_set(pw_properties*, SByte*, SByte*)
+PipeWire.NET.Interop.Native.pw_properties_update(pw_properties*, spa_dict*)
+PipeWire.NET.Interop.Native.pw_properties_update_ignore(pw_properties*, spa_dict*, SByte**)
+PipeWire.NET.Interop.Native.pw_properties_update_keys(pw_properties*, spa_dict*, SByte**)
+PipeWire.NET.Interop.Native.pw_properties_update_string(pw_properties*, SByte*, UIntPtr)
+PipeWire.NET.Interop.Native.pw_properties_update_string_checked(pw_properties*, SByte*, UIntPtr, spa_error_location*)
+PipeWire.NET.Interop.Native.pw_protocol_add_listener(pw_protocol*, spa_hook*, pw_protocol_events*, Void*)
+PipeWire.NET.Interop.Native.pw_protocol_add_marshal(pw_protocol*, pw_protocol_marshal*)
+PipeWire.NET.Interop.Native.pw_protocol_destroy(pw_protocol*)
+PipeWire.NET.Interop.Native.pw_protocol_get_context(pw_protocol*)
+PipeWire.NET.Interop.Native.pw_protocol_get_extension(pw_protocol*)
+PipeWire.NET.Interop.Native.pw_protocol_get_marshal(pw_protocol*, SByte*, UInt32, UInt32)
+PipeWire.NET.Interop.Native.pw_protocol_get_user_data(pw_protocol*)
+PipeWire.NET.Interop.Native.pw_protocol_new(pw_context*, SByte*, UIntPtr)
+PipeWire.NET.Interop.Native.pw_proxy_add_listener(pw_proxy*, spa_hook*, pw_proxy_events*, Void*)
+PipeWire.NET.Interop.Native.pw_proxy_add_object_listener(pw_proxy*, spa_hook*, Void*, Void*)
+PipeWire.NET.Interop.Native.pw_proxy_destroy(pw_proxy*)
+PipeWire.NET.Interop.Native.pw_proxy_error(pw_proxy*, Int32, SByte*)
+PipeWire.NET.Interop.Native.pw_proxy_get_bound_id(pw_proxy*)
+PipeWire.NET.Interop.Native.pw_proxy_get_id(pw_proxy*)
+PipeWire.NET.Interop.Native.pw_proxy_get_marshal(pw_proxy*)
+PipeWire.NET.Interop.Native.pw_proxy_get_object_listeners(pw_proxy*)
+PipeWire.NET.Interop.Native.pw_proxy_get_protocol(pw_proxy*)
+PipeWire.NET.Interop.Native.pw_proxy_get_type(pw_proxy*, UInt32*)
+PipeWire.NET.Interop.Native.pw_proxy_get_user_data(pw_proxy*)
+PipeWire.NET.Interop.Native.pw_proxy_install_marshal(pw_proxy*, Boolean)
+PipeWire.NET.Interop.Native.pw_proxy_new(pw_proxy*, SByte*, UInt32, UIntPtr)
+PipeWire.NET.Interop.Native.pw_proxy_ref(pw_proxy*)
+PipeWire.NET.Interop.Native.pw_proxy_set_bound_id(pw_proxy*, UInt32)
+PipeWire.NET.Interop.Native.pw_proxy_sync(pw_proxy*, Int32)
+PipeWire.NET.Interop.Native.pw_proxy_unref(pw_proxy*)
+PipeWire.NET.Interop.Native.pw_registry_add_listener(pw_registry*, spa_hook*, pw_registry_events*, Void*)
+PipeWire.NET.Interop.Native.pw_registry_bind(pw_registry*, UInt32, SByte*, UInt32, UIntPtr)
+PipeWire.NET.Interop.Native.pw_registry_destroy(pw_registry*)
+PipeWire.NET.Interop.Native.pw_registry_destroy_global(pw_registry*, UInt32)
+PipeWire.NET.Interop.Native.pw_security_context_create(Void*, Int32, Int32, spa_dict*)
+PipeWire.NET.Interop.Native.pw_set_domain(SByte*)
+PipeWire.NET.Interop.Native.pw_stream_add_listener(pw_stream*, spa_hook*, pw_stream_events*, Void*)
+PipeWire.NET.Interop.Native.pw_stream_connect(pw_stream*, SpaDirection, UInt32, PipeWireStreamFlags, spa_pod**, UInt32)
+PipeWire.NET.Interop.Native.pw_stream_dequeue_buffer(pw_stream*)
+PipeWire.NET.Interop.Native.pw_stream_destroy(pw_stream*)
+PipeWire.NET.Interop.Native.pw_stream_disconnect(pw_stream*)
+PipeWire.NET.Interop.Native.pw_stream_emit_event(pw_stream*, spa_event*)
+PipeWire.NET.Interop.Native.pw_stream_flush(pw_stream*, Boolean)
+PipeWire.NET.Interop.Native.pw_stream_get_control(pw_stream*, UInt32)
+PipeWire.NET.Interop.Native.pw_stream_get_core(pw_stream*)
+PipeWire.NET.Interop.Native.pw_stream_get_data_loop(pw_stream*)
+PipeWire.NET.Interop.Native.pw_stream_get_name(pw_stream*)
+PipeWire.NET.Interop.Native.pw_stream_get_node_id(pw_stream*)
+PipeWire.NET.Interop.Native.pw_stream_get_nsec(pw_stream*)
+PipeWire.NET.Interop.Native.pw_stream_get_properties(pw_stream*)
+PipeWire.NET.Interop.Native.pw_stream_get_state(pw_stream*, SByte**)
+PipeWire.NET.Interop.Native.pw_stream_get_time(pw_stream*, pw_time*)
+PipeWire.NET.Interop.Native.pw_stream_get_time_n(pw_stream*, pw_time*, UIntPtr)
+PipeWire.NET.Interop.Native.pw_stream_is_driving(pw_stream*)
+PipeWire.NET.Interop.Native.pw_stream_is_lazy(pw_stream*)
+PipeWire.NET.Interop.Native.pw_stream_new(pw_core*, SByte*, pw_properties*)
+PipeWire.NET.Interop.Native.pw_stream_new_simple(pw_loop*, SByte*, pw_properties*, pw_stream_events*, Void*)
+PipeWire.NET.Interop.Native.pw_stream_queue_buffer(pw_stream*, pw_buffer*)
+PipeWire.NET.Interop.Native.pw_stream_return_buffer(pw_stream*, pw_buffer*)
+PipeWire.NET.Interop.Native.pw_stream_set_active(pw_stream*, Boolean)
+PipeWire.NET.Interop.Native.pw_stream_set_param(pw_stream*, UInt32, spa_pod*)
+PipeWire.NET.Interop.Native.pw_stream_set_rate(pw_stream*, Double)
+PipeWire.NET.Interop.Native.pw_stream_state_as_string(PipeWireStreamState)
+PipeWire.NET.Interop.Native.pw_stream_trigger_process(pw_stream*)
+PipeWire.NET.Interop.Native.pw_stream_update_params(pw_stream*, spa_pod**, UInt32)
+PipeWire.NET.Interop.Native.pw_stream_update_properties(pw_stream*, spa_dict*)
+PipeWire.NET.Interop.Native.pw_thread_loop_accept(pw_thread_loop*)
+PipeWire.NET.Interop.Native.pw_thread_loop_add_listener(pw_thread_loop*, spa_hook*, pw_thread_loop_events*, Void*)
+PipeWire.NET.Interop.Native.pw_thread_loop_destroy(pw_thread_loop*)
+PipeWire.NET.Interop.Native.pw_thread_loop_get_loop(pw_thread_loop*)
+PipeWire.NET.Interop.Native.pw_thread_loop_in_thread(pw_thread_loop*)
+PipeWire.NET.Interop.Native.pw_thread_loop_lock(pw_thread_loop*)
+PipeWire.NET.Interop.Native.pw_thread_loop_new(SByte*, spa_dict*)
+PipeWire.NET.Interop.Native.pw_thread_loop_new_full(pw_loop*, SByte*, spa_dict*)
+PipeWire.NET.Interop.Native.pw_thread_loop_signal(pw_thread_loop*, Boolean)
+PipeWire.NET.Interop.Native.pw_thread_loop_start(pw_thread_loop*)
+PipeWire.NET.Interop.Native.pw_thread_loop_stop(pw_thread_loop*)
+PipeWire.NET.Interop.Native.pw_thread_loop_timed_wait(pw_thread_loop*, Int32)
+PipeWire.NET.Interop.Native.pw_thread_loop_unlock(pw_thread_loop*)
+PipeWire.NET.Interop.Native.pw_thread_loop_wait(pw_thread_loop*)
+PipeWire.NET.Interop.Native.pw_unload_spa_handle(spa_handle*)
+PipeWire.NET.Interop.Native.spa_handle_factory_enum(spa_handle_factory**, UInt32*)
+PipeWire.NET.Interop.Native.spa_hook_remove(spa_hook*)
+PipeWire.NET.Interop.PipeWireMemblockFlags
+PipeWire.NET.Interop.PipeWireMemblockFlags.DontClose = PipeWireMemblockFlags
+PipeWire.NET.Interop.PipeWireMemblockFlags.DontNotify = PipeWireMemblockFlags
+PipeWire.NET.Interop.PipeWireMemblockFlags.Map = PipeWireMemblockFlags
+PipeWire.NET.Interop.PipeWireMemblockFlags.None = PipeWireMemblockFlags
+PipeWire.NET.Interop.PipeWireMemblockFlags.Readable = PipeWireMemblockFlags
+PipeWire.NET.Interop.PipeWireMemblockFlags.Readwrite = PipeWireMemblockFlags
+PipeWire.NET.Interop.PipeWireMemblockFlags.Seal = PipeWireMemblockFlags
+PipeWire.NET.Interop.PipeWireMemblockFlags.Unmappable = PipeWireMemblockFlags
+PipeWire.NET.Interop.PipeWireMemblockFlags.Writable = PipeWireMemblockFlags
+PipeWire.NET.Interop.PipeWireMemblockFlags.value__ = UInt32
+PipeWire.NET.Interop.PipeWireMemmapFlags
+PipeWire.NET.Interop.PipeWireMemmapFlags.Locked = PipeWireMemmapFlags
+PipeWire.NET.Interop.PipeWireMemmapFlags.None = PipeWireMemmapFlags
+PipeWire.NET.Interop.PipeWireMemmapFlags.Private = PipeWireMemmapFlags
+PipeWire.NET.Interop.PipeWireMemmapFlags.Read = PipeWireMemmapFlags
+PipeWire.NET.Interop.PipeWireMemmapFlags.Readwrite = PipeWireMemmapFlags
+PipeWire.NET.Interop.PipeWireMemmapFlags.Twice = PipeWireMemmapFlags
+PipeWire.NET.Interop.PipeWireMemmapFlags.Write = PipeWireMemmapFlags
+PipeWire.NET.Interop.PipeWireMemmapFlags.value__ = UInt32
+PipeWire.NET.Interop.pw_buffer
+PipeWire.NET.Interop.pw_buffer.buffer = spa_buffer*
+PipeWire.NET.Interop.pw_buffer.requested = UInt64
+PipeWire.NET.Interop.pw_buffer.size = UInt64
+PipeWire.NET.Interop.pw_buffer.time = UInt64
+PipeWire.NET.Interop.pw_buffer.user_data = Void*
+PipeWire.NET.Interop.pw_client
+PipeWire.NET.Interop.pw_client_events
+PipeWire.NET.Interop.pw_client_events.info = 
+PipeWire.NET.Interop.pw_client_events.permissions = 
+PipeWire.NET.Interop.pw_client_events.version = UInt32
+PipeWire.NET.Interop.pw_client_info
+PipeWire.NET.Interop.pw_client_info.change_mask = UInt64
+PipeWire.NET.Interop.pw_client_info.id = UInt32
+PipeWire.NET.Interop.pw_client_info.props = spa_dict*
+PipeWire.NET.Interop.pw_client_methods
+PipeWire.NET.Interop.pw_client_methods.add_listener = 
+PipeWire.NET.Interop.pw_client_methods.error = 
+PipeWire.NET.Interop.pw_client_methods.get_permissions = 
+PipeWire.NET.Interop.pw_client_methods.update_permissions = 
+PipeWire.NET.Interop.pw_client_methods.update_properties = 
+PipeWire.NET.Interop.pw_client_methods.version = UInt32
+PipeWire.NET.Interop.pw_context
+PipeWire.NET.Interop.pw_context_events
+PipeWire.NET.Interop.pw_context_events.check_access = 
+PipeWire.NET.Interop.pw_context_events.destroy = 
+PipeWire.NET.Interop.pw_context_events.driver_added = 
+PipeWire.NET.Interop.pw_context_events.driver_removed = 
+PipeWire.NET.Interop.pw_context_events.free = 
+PipeWire.NET.Interop.pw_context_events.global_added = 
+PipeWire.NET.Interop.pw_context_events.global_removed = 
+PipeWire.NET.Interop.pw_context_events.version = UInt32
+PipeWire.NET.Interop.pw_core
+PipeWire.NET.Interop.pw_core_events
+PipeWire.NET.Interop.pw_core_events.add_mem = 
+PipeWire.NET.Interop.pw_core_events.bound_id = 
+PipeWire.NET.Interop.pw_core_events.bound_props = 
+PipeWire.NET.Interop.pw_core_events.done = 
+PipeWire.NET.Interop.pw_core_events.error = 
+PipeWire.NET.Interop.pw_core_events.info = 
+PipeWire.NET.Interop.pw_core_events.ping = 
+PipeWire.NET.Interop.pw_core_events.remove_id = 
+PipeWire.NET.Interop.pw_core_events.remove_mem = 
+PipeWire.NET.Interop.pw_core_events.version = UInt32
+PipeWire.NET.Interop.pw_core_info
+PipeWire.NET.Interop.pw_core_info.change_mask = UInt64
+PipeWire.NET.Interop.pw_core_info.cookie = UInt32
+PipeWire.NET.Interop.pw_core_info.host_name = SByte*
+PipeWire.NET.Interop.pw_core_info.id = UInt32
+PipeWire.NET.Interop.pw_core_info.name = SByte*
+PipeWire.NET.Interop.pw_core_info.props = spa_dict*
+PipeWire.NET.Interop.pw_core_info.user_name = SByte*
+PipeWire.NET.Interop.pw_core_info.version = SByte*
+PipeWire.NET.Interop.pw_core_methods
+PipeWire.NET.Interop.pw_core_methods.add_listener = 
+PipeWire.NET.Interop.pw_core_methods.create_object = 
+PipeWire.NET.Interop.pw_core_methods.destroy = 
+PipeWire.NET.Interop.pw_core_methods.error = 
+PipeWire.NET.Interop.pw_core_methods.get_registry = 
+PipeWire.NET.Interop.pw_core_methods.hello = 
+PipeWire.NET.Interop.pw_core_methods.pong = 
+PipeWire.NET.Interop.pw_core_methods.sync = 
+PipeWire.NET.Interop.pw_core_methods.version = UInt32
+PipeWire.NET.Interop.pw_data_loop
+PipeWire.NET.Interop.pw_device
+PipeWire.NET.Interop.pw_device_events
+PipeWire.NET.Interop.pw_device_events.info = 
+PipeWire.NET.Interop.pw_device_events.param = 
+PipeWire.NET.Interop.pw_device_events.version = UInt32
+PipeWire.NET.Interop.pw_device_info
+PipeWire.NET.Interop.pw_device_info.change_mask = UInt64
+PipeWire.NET.Interop.pw_device_info.id = UInt32
+PipeWire.NET.Interop.pw_device_info.n_params = UInt32
+PipeWire.NET.Interop.pw_device_info.params = spa_param_info*
+PipeWire.NET.Interop.pw_device_info.props = spa_dict*
+PipeWire.NET.Interop.pw_device_methods
+PipeWire.NET.Interop.pw_device_methods.add_listener = 
+PipeWire.NET.Interop.pw_device_methods.enum_params = 
+PipeWire.NET.Interop.pw_device_methods.set_param = 
+PipeWire.NET.Interop.pw_device_methods.subscribe_params = 
+PipeWire.NET.Interop.pw_device_methods.version = UInt32
+PipeWire.NET.Interop.pw_export_type
+PipeWire.NET.Interop.pw_export_type.func = 
+PipeWire.NET.Interop.pw_export_type.link = spa_list
+PipeWire.NET.Interop.pw_export_type.type = SByte*
+PipeWire.NET.Interop.pw_factory
+PipeWire.NET.Interop.pw_factory_events
+PipeWire.NET.Interop.pw_factory_events.info = 
+PipeWire.NET.Interop.pw_factory_events.version = UInt32
+PipeWire.NET.Interop.pw_factory_info
+PipeWire.NET.Interop.pw_factory_info.change_mask = UInt64
+PipeWire.NET.Interop.pw_factory_info.id = UInt32
+PipeWire.NET.Interop.pw_factory_info.name = SByte*
+PipeWire.NET.Interop.pw_factory_info.props = spa_dict*
+PipeWire.NET.Interop.pw_factory_info.type = SByte*
+PipeWire.NET.Interop.pw_factory_info.version = UInt32
+PipeWire.NET.Interop.pw_factory_methods
+PipeWire.NET.Interop.pw_factory_methods.add_listener = 
+PipeWire.NET.Interop.pw_factory_methods.version = UInt32
+PipeWire.NET.Interop.pw_filter
+PipeWire.NET.Interop.pw_filter_events
+PipeWire.NET.Interop.pw_filter_events.add_buffer = 
+PipeWire.NET.Interop.pw_filter_events.command = 
+PipeWire.NET.Interop.pw_filter_events.destroy = 
+PipeWire.NET.Interop.pw_filter_events.drained = 
+PipeWire.NET.Interop.pw_filter_events.io_changed = 
+PipeWire.NET.Interop.pw_filter_events.param_changed = 
+PipeWire.NET.Interop.pw_filter_events.process = 
+PipeWire.NET.Interop.pw_filter_events.remove_buffer = 
+PipeWire.NET.Interop.pw_filter_events.state_changed = 
+PipeWire.NET.Interop.pw_filter_events.version = UInt32
+PipeWire.NET.Interop.pw_global
+PipeWire.NET.Interop.pw_impl_client
+PipeWire.NET.Interop.pw_impl_metadata
+PipeWire.NET.Interop.pw_impl_metadata_events
+PipeWire.NET.Interop.pw_impl_metadata_events.destroy = 
+PipeWire.NET.Interop.pw_impl_metadata_events.free = 
+PipeWire.NET.Interop.pw_impl_metadata_events.property = 
+PipeWire.NET.Interop.pw_impl_metadata_events.version = UInt32
+PipeWire.NET.Interop.pw_impl_module
+PipeWire.NET.Interop.pw_impl_module_events
+PipeWire.NET.Interop.pw_impl_module_events.destroy = 
+PipeWire.NET.Interop.pw_impl_module_events.free = 
+PipeWire.NET.Interop.pw_impl_module_events.initialized = 
+PipeWire.NET.Interop.pw_impl_module_events.registered = 
+PipeWire.NET.Interop.pw_impl_module_events.version = UInt32
+PipeWire.NET.Interop.pw_impl_node
+PipeWire.NET.Interop.pw_link
+PipeWire.NET.Interop.pw_link_events
+PipeWire.NET.Interop.pw_link_events.info = 
+PipeWire.NET.Interop.pw_link_events.version = UInt32
+PipeWire.NET.Interop.pw_link_info
+PipeWire.NET.Interop.pw_link_info.change_mask = UInt64
+PipeWire.NET.Interop.pw_link_info.error = SByte*
+PipeWire.NET.Interop.pw_link_info.format = spa_pod*
+PipeWire.NET.Interop.pw_link_info.id = UInt32
+PipeWire.NET.Interop.pw_link_info.input_node_id = UInt32
+PipeWire.NET.Interop.pw_link_info.input_port_id = UInt32
+PipeWire.NET.Interop.pw_link_info.output_node_id = UInt32
+PipeWire.NET.Interop.pw_link_info.output_port_id = UInt32
+PipeWire.NET.Interop.pw_link_info.props = spa_dict*
+PipeWire.NET.Interop.pw_link_info.state = PipeWireLinkState
+PipeWire.NET.Interop.pw_link_methods
+PipeWire.NET.Interop.pw_link_methods.add_listener = 
+PipeWire.NET.Interop.pw_link_methods.version = UInt32
+PipeWire.NET.Interop.pw_loop
+PipeWire.NET.Interop.pw_loop.control = spa_loop_control*
+PipeWire.NET.Interop.pw_loop.loop = spa_loop*
+PipeWire.NET.Interop.pw_loop.name = SByte*
+PipeWire.NET.Interop.pw_loop.system = spa_system*
+PipeWire.NET.Interop.pw_loop.utils = spa_loop_utils*
+PipeWire.NET.Interop.pw_main_loop
+PipeWire.NET.Interop.pw_main_loop_events
+PipeWire.NET.Interop.pw_main_loop_events.destroy = 
+PipeWire.NET.Interop.pw_main_loop_events.version = UInt32
+PipeWire.NET.Interop.pw_map_range
+PipeWire.NET.Interop.pw_map_range.offset = UInt32
+PipeWire.NET.Interop.pw_map_range.size = UInt32
+PipeWire.NET.Interop.pw_map_range.start = UInt32
+PipeWire.NET.Interop.pw_memblock
+PipeWire.NET.Interop.pw_memblock.fd = Int32
+PipeWire.NET.Interop.pw_memblock.flags = UInt32
+PipeWire.NET.Interop.pw_memblock.id = UInt32
+PipeWire.NET.Interop.pw_memblock.map = pw_memmap*
+PipeWire.NET.Interop.pw_memblock.pool = pw_mempool*
+PipeWire.NET.Interop.pw_memblock.ref = Int32
+PipeWire.NET.Interop.pw_memblock.size = UInt32
+PipeWire.NET.Interop.pw_memblock.type = UInt32
+PipeWire.NET.Interop.pw_memchunk
+PipeWire.NET.Interop.pw_memmap
+PipeWire.NET.Interop.pw_memmap+_tag_e__FixedBuffer
+PipeWire.NET.Interop.pw_memmap+_tag_e__FixedBuffer.e0 = UInt32
+PipeWire.NET.Interop.pw_memmap._tag_e__FixedBuffer
+PipeWire.NET.Interop.pw_memmap.block = pw_memblock*
+PipeWire.NET.Interop.pw_memmap.flags = UInt32
+PipeWire.NET.Interop.pw_memmap.offset = UInt32
+PipeWire.NET.Interop.pw_memmap.ptr = Void*
+PipeWire.NET.Interop.pw_memmap.size = UInt32
+PipeWire.NET.Interop.pw_memmap.tag = _tag_e__FixedBuffer
+PipeWire.NET.Interop.pw_mempool
+PipeWire.NET.Interop.pw_mempool.props = pw_properties*
+PipeWire.NET.Interop.pw_mempool_events
+PipeWire.NET.Interop.pw_mempool_events.added = 
+PipeWire.NET.Interop.pw_mempool_events.destroy = 
+PipeWire.NET.Interop.pw_mempool_events.removed = 
+PipeWire.NET.Interop.pw_mempool_events.version = UInt32
+PipeWire.NET.Interop.pw_metadata
+PipeWire.NET.Interop.pw_metadata_events
+PipeWire.NET.Interop.pw_metadata_events.property = 
+PipeWire.NET.Interop.pw_metadata_events.version = UInt32
+PipeWire.NET.Interop.pw_metadata_methods
+PipeWire.NET.Interop.pw_metadata_methods.add_listener = 
+PipeWire.NET.Interop.pw_metadata_methods.clear = 
+PipeWire.NET.Interop.pw_metadata_methods.set_property = 
+PipeWire.NET.Interop.pw_metadata_methods.version = UInt32
+PipeWire.NET.Interop.pw_module
+PipeWire.NET.Interop.pw_module_events
+PipeWire.NET.Interop.pw_module_events.info = 
+PipeWire.NET.Interop.pw_module_events.version = UInt32
+PipeWire.NET.Interop.pw_module_info
+PipeWire.NET.Interop.pw_module_info.args = SByte*
+PipeWire.NET.Interop.pw_module_info.change_mask = UInt64
+PipeWire.NET.Interop.pw_module_info.filename = SByte*
+PipeWire.NET.Interop.pw_module_info.id = UInt32
+PipeWire.NET.Interop.pw_module_info.name = SByte*
+PipeWire.NET.Interop.pw_module_info.props = spa_dict*
+PipeWire.NET.Interop.pw_module_methods
+PipeWire.NET.Interop.pw_module_methods.add_listener = 
+PipeWire.NET.Interop.pw_module_methods.version = UInt32
+PipeWire.NET.Interop.pw_node
+PipeWire.NET.Interop.pw_node_events
+PipeWire.NET.Interop.pw_node_events.info = 
+PipeWire.NET.Interop.pw_node_events.param = 
+PipeWire.NET.Interop.pw_node_events.version = UInt32
+PipeWire.NET.Interop.pw_node_info
+PipeWire.NET.Interop.pw_node_info.change_mask = UInt64
+PipeWire.NET.Interop.pw_node_info.error = SByte*
+PipeWire.NET.Interop.pw_node_info.id = UInt32
+PipeWire.NET.Interop.pw_node_info.max_input_ports = UInt32
+PipeWire.NET.Interop.pw_node_info.max_output_ports = UInt32
+PipeWire.NET.Interop.pw_node_info.n_input_ports = UInt32
+PipeWire.NET.Interop.pw_node_info.n_output_ports = UInt32
+PipeWire.NET.Interop.pw_node_info.n_params = UInt32
+PipeWire.NET.Interop.pw_node_info.params = spa_param_info*
+PipeWire.NET.Interop.pw_node_info.props = spa_dict*
+PipeWire.NET.Interop.pw_node_info.state = PipeWireNodeState
+PipeWire.NET.Interop.pw_node_methods
+PipeWire.NET.Interop.pw_node_methods.add_listener = 
+PipeWire.NET.Interop.pw_node_methods.enum_params = 
+PipeWire.NET.Interop.pw_node_methods.send_command = 
+PipeWire.NET.Interop.pw_node_methods.set_param = 
+PipeWire.NET.Interop.pw_node_methods.subscribe_params = 
+PipeWire.NET.Interop.pw_node_methods.version = UInt32
+PipeWire.NET.Interop.pw_permission
+PipeWire.NET.Interop.pw_permission.id = UInt32
+PipeWire.NET.Interop.pw_permission.permissions = UInt32
+PipeWire.NET.Interop.pw_port
+PipeWire.NET.Interop.pw_port_events
+PipeWire.NET.Interop.pw_port_events.info = 
+PipeWire.NET.Interop.pw_port_events.param = 
+PipeWire.NET.Interop.pw_port_events.version = UInt32
+PipeWire.NET.Interop.pw_port_info
+PipeWire.NET.Interop.pw_port_info.change_mask = UInt64
+PipeWire.NET.Interop.pw_port_info.direction = SpaDirection
+PipeWire.NET.Interop.pw_port_info.id = UInt32
+PipeWire.NET.Interop.pw_port_info.n_params = UInt32
+PipeWire.NET.Interop.pw_port_info.params = spa_param_info*
+PipeWire.NET.Interop.pw_port_info.props = spa_dict*
+PipeWire.NET.Interop.pw_port_methods
+PipeWire.NET.Interop.pw_port_methods.add_listener = 
+PipeWire.NET.Interop.pw_port_methods.enum_params = 
+PipeWire.NET.Interop.pw_port_methods.subscribe_params = 
+PipeWire.NET.Interop.pw_port_methods.version = UInt32
+PipeWire.NET.Interop.pw_profiler
+PipeWire.NET.Interop.pw_profiler_events
+PipeWire.NET.Interop.pw_profiler_events.profile = 
+PipeWire.NET.Interop.pw_profiler_events.version = UInt32
+PipeWire.NET.Interop.pw_profiler_methods
+PipeWire.NET.Interop.pw_profiler_methods.add_listener = 
+PipeWire.NET.Interop.pw_profiler_methods.version = UInt32
+PipeWire.NET.Interop.pw_properties
+PipeWire.NET.Interop.pw_properties.dict = spa_dict
+PipeWire.NET.Interop.pw_properties.flags = UInt32
+PipeWire.NET.Interop.pw_protocol
+PipeWire.NET.Interop.pw_protocol_client
+PipeWire.NET.Interop.pw_protocol_client.connect = 
+PipeWire.NET.Interop.pw_protocol_client.connect_fd = 
+PipeWire.NET.Interop.pw_protocol_client.core = pw_core*
+PipeWire.NET.Interop.pw_protocol_client.destroy = 
+PipeWire.NET.Interop.pw_protocol_client.disconnect = 
+PipeWire.NET.Interop.pw_protocol_client.link = spa_list
+PipeWire.NET.Interop.pw_protocol_client.protocol = pw_protocol*
+PipeWire.NET.Interop.pw_protocol_client.set_paused = 
+PipeWire.NET.Interop.pw_protocol_client.steal_fd = 
+PipeWire.NET.Interop.pw_protocol_events
+PipeWire.NET.Interop.pw_protocol_events.destroy = 
+PipeWire.NET.Interop.pw_protocol_events.version = UInt32
+PipeWire.NET.Interop.pw_protocol_marshal
+PipeWire.NET.Interop.pw_protocol_marshal.client_demarshal = Void*
+PipeWire.NET.Interop.pw_protocol_marshal.client_marshal = Void*
+PipeWire.NET.Interop.pw_protocol_marshal.flags = UInt32
+PipeWire.NET.Interop.pw_protocol_marshal.n_client_methods = UInt32
+PipeWire.NET.Interop.pw_protocol_marshal.n_server_methods = UInt32
+PipeWire.NET.Interop.pw_protocol_marshal.server_demarshal = Void*
+PipeWire.NET.Interop.pw_protocol_marshal.server_marshal = Void*
+PipeWire.NET.Interop.pw_protocol_marshal.type = SByte*
+PipeWire.NET.Interop.pw_protocol_marshal.version = UInt32
+PipeWire.NET.Interop.pw_protocol_server
+PipeWire.NET.Interop.pw_protocol_server+pw_impl_core
+PipeWire.NET.Interop.pw_protocol_server.client_list = spa_list
+PipeWire.NET.Interop.pw_protocol_server.core = pw_impl_core*
+PipeWire.NET.Interop.pw_protocol_server.destroy = 
+PipeWire.NET.Interop.pw_protocol_server.link = spa_list
+PipeWire.NET.Interop.pw_protocol_server.protocol = pw_protocol*
+PipeWire.NET.Interop.pw_protocol_server.pw_impl_core
+PipeWire.NET.Interop.pw_proxy
+PipeWire.NET.Interop.pw_proxy_events
+PipeWire.NET.Interop.pw_proxy_events.bound = 
+PipeWire.NET.Interop.pw_proxy_events.bound_props = 
+PipeWire.NET.Interop.pw_proxy_events.destroy = 
+PipeWire.NET.Interop.pw_proxy_events.done = 
+PipeWire.NET.Interop.pw_proxy_events.error = 
+PipeWire.NET.Interop.pw_proxy_events.removed = 
+PipeWire.NET.Interop.pw_proxy_events.version = UInt32
+PipeWire.NET.Interop.pw_registry
+PipeWire.NET.Interop.pw_registry_events
+PipeWire.NET.Interop.pw_registry_events.global = 
+PipeWire.NET.Interop.pw_registry_events.global_remove = 
+PipeWire.NET.Interop.pw_registry_events.version = UInt32
+PipeWire.NET.Interop.pw_registry_methods
+PipeWire.NET.Interop.pw_registry_methods.add_listener = 
+PipeWire.NET.Interop.pw_registry_methods.bind = 
+PipeWire.NET.Interop.pw_registry_methods.destroy = 
+PipeWire.NET.Interop.pw_registry_methods.version = UInt32
+PipeWire.NET.Interop.pw_security_context
+PipeWire.NET.Interop.pw_security_context_events
+PipeWire.NET.Interop.pw_security_context_events.version = UInt32
+PipeWire.NET.Interop.pw_security_context_methods
+PipeWire.NET.Interop.pw_security_context_methods.add_listener = 
+PipeWire.NET.Interop.pw_security_context_methods.create = 
+PipeWire.NET.Interop.pw_security_context_methods.version = UInt32
+PipeWire.NET.Interop.pw_stream
+PipeWire.NET.Interop.pw_stream_control
+PipeWire.NET.Interop.pw_stream_control.def = Single
+PipeWire.NET.Interop.pw_stream_control.flags = UInt32
+PipeWire.NET.Interop.pw_stream_control.max = Single
+PipeWire.NET.Interop.pw_stream_control.max_values = UInt32
+PipeWire.NET.Interop.pw_stream_control.min = Single
+PipeWire.NET.Interop.pw_stream_control.n_values = UInt32
+PipeWire.NET.Interop.pw_stream_control.name = SByte*
+PipeWire.NET.Interop.pw_stream_control.values = Single*
+PipeWire.NET.Interop.pw_stream_events
+PipeWire.NET.Interop.pw_stream_events.add_buffer = 
+PipeWire.NET.Interop.pw_stream_events.command = 
+PipeWire.NET.Interop.pw_stream_events.control_info = 
+PipeWire.NET.Interop.pw_stream_events.destroy = 
+PipeWire.NET.Interop.pw_stream_events.drained = 
+PipeWire.NET.Interop.pw_stream_events.io_changed = 
+PipeWire.NET.Interop.pw_stream_events.param_changed = 
+PipeWire.NET.Interop.pw_stream_events.process = 
+PipeWire.NET.Interop.pw_stream_events.remove_buffer = 
+PipeWire.NET.Interop.pw_stream_events.state_changed = 
+PipeWire.NET.Interop.pw_stream_events.trigger_done = 
+PipeWire.NET.Interop.pw_stream_events.version = UInt32
+PipeWire.NET.Interop.pw_thread_loop
+PipeWire.NET.Interop.pw_thread_loop_events
+PipeWire.NET.Interop.pw_thread_loop_events.destroy = 
+PipeWire.NET.Interop.pw_thread_loop_events.version = UInt32
+PipeWire.NET.Interop.pw_time
+PipeWire.NET.Interop.pw_time.avail_buffers = UInt32
+PipeWire.NET.Interop.pw_time.buffered = UInt64
+PipeWire.NET.Interop.pw_time.delay = Int64
+PipeWire.NET.Interop.pw_time.now = Int64
+PipeWire.NET.Interop.pw_time.queued = UInt64
+PipeWire.NET.Interop.pw_time.queued_buffers = UInt32
+PipeWire.NET.Interop.pw_time.rate = spa_fraction
+PipeWire.NET.Interop.pw_time.size = UInt64
+PipeWire.NET.Interop.pw_time.ticks = UInt64
+PipeWire.NET.Interop.pw_timer_queue
+PipeWire.NET.Interop.pw_work_queue
+PipeWire.NET.Interop.spa_audio_info_raw
+PipeWire.NET.Interop.spa_audio_info_raw+_position_e__FixedBuffer
+PipeWire.NET.Interop.spa_audio_info_raw+_position_e__FixedBuffer.e0 = UInt32
+PipeWire.NET.Interop.spa_audio_info_raw._position_e__FixedBuffer
+PipeWire.NET.Interop.spa_audio_info_raw.channels = UInt32
+PipeWire.NET.Interop.spa_audio_info_raw.flags = UInt32
+PipeWire.NET.Interop.spa_audio_info_raw.format = SpaAudioFormat
+PipeWire.NET.Interop.spa_audio_info_raw.position = _position_e__FixedBuffer
+PipeWire.NET.Interop.spa_audio_info_raw.rate = UInt32
+PipeWire.NET.Interop.spa_buffer
+PipeWire.NET.Interop.spa_buffer.datas = spa_data*
+PipeWire.NET.Interop.spa_buffer.metas = spa_meta*
+PipeWire.NET.Interop.spa_buffer.n_datas = UInt32
+PipeWire.NET.Interop.spa_buffer.n_metas = UInt32
+PipeWire.NET.Interop.spa_callbacks
+PipeWire.NET.Interop.spa_callbacks.data = Void*
+PipeWire.NET.Interop.spa_callbacks.funcs = Void*
+PipeWire.NET.Interop.spa_chunk
+PipeWire.NET.Interop.spa_chunk.flags = Int32
+PipeWire.NET.Interop.spa_chunk.offset = UInt32
+PipeWire.NET.Interop.spa_chunk.size = UInt32
+PipeWire.NET.Interop.spa_chunk.stride = Int32
+PipeWire.NET.Interop.spa_command
+PipeWire.NET.Interop.spa_command.body = spa_command_body
+PipeWire.NET.Interop.spa_command.pod = spa_pod
+PipeWire.NET.Interop.spa_command_body
+PipeWire.NET.Interop.spa_command_body.body = spa_pod_object_body
+PipeWire.NET.Interop.spa_data
+PipeWire.NET.Interop.spa_data.chunk = spa_chunk*
+PipeWire.NET.Interop.spa_data.data = Void*
+PipeWire.NET.Interop.spa_data.fd = Int64
+PipeWire.NET.Interop.spa_data.flags = UInt32
+PipeWire.NET.Interop.spa_data.mapoffset = UInt32
+PipeWire.NET.Interop.spa_data.maxsize = UInt32
+PipeWire.NET.Interop.spa_data.type = UInt32
+PipeWire.NET.Interop.spa_dict
+PipeWire.NET.Interop.spa_dict.flags = UInt32
+PipeWire.NET.Interop.spa_dict.items = spa_dict_item*
+PipeWire.NET.Interop.spa_dict.n_items = UInt32
+PipeWire.NET.Interop.spa_dict_item
+PipeWire.NET.Interop.spa_dict_item.key = SByte*
+PipeWire.NET.Interop.spa_dict_item.value = SByte*
+PipeWire.NET.Interop.spa_error_location
+PipeWire.NET.Interop.spa_error_location.col = Int32
+PipeWire.NET.Interop.spa_error_location.len = UIntPtr
+PipeWire.NET.Interop.spa_error_location.line = Int32
+PipeWire.NET.Interop.spa_error_location.location = SByte*
+PipeWire.NET.Interop.spa_error_location.reason = SByte*
+PipeWire.NET.Interop.spa_event
+PipeWire.NET.Interop.spa_event.body = spa_event_body
+PipeWire.NET.Interop.spa_event.pod = spa_pod
+PipeWire.NET.Interop.spa_event_body
+PipeWire.NET.Interop.spa_event_body.body = spa_pod_object_body
+PipeWire.NET.Interop.spa_fraction
+PipeWire.NET.Interop.spa_fraction.denom = UInt32
+PipeWire.NET.Interop.spa_fraction.num = UInt32
+PipeWire.NET.Interop.spa_handle
+PipeWire.NET.Interop.spa_handle.clear = 
+PipeWire.NET.Interop.spa_handle.get_interface = 
+PipeWire.NET.Interop.spa_handle.version = UInt32
+PipeWire.NET.Interop.spa_handle_factory
+PipeWire.NET.Interop.spa_handle_factory.enum_interface_info = 
+PipeWire.NET.Interop.spa_handle_factory.get_size = 
+PipeWire.NET.Interop.spa_handle_factory.info = spa_dict*
+PipeWire.NET.Interop.spa_handle_factory.init = 
+PipeWire.NET.Interop.spa_handle_factory.name = SByte*
+PipeWire.NET.Interop.spa_handle_factory.version = UInt32
+PipeWire.NET.Interop.spa_hook
+PipeWire.NET.Interop.spa_hook.cb = spa_callbacks
+PipeWire.NET.Interop.spa_hook.link = spa_list
+PipeWire.NET.Interop.spa_hook.priv = Void*
+PipeWire.NET.Interop.spa_hook.removed = 
+PipeWire.NET.Interop.spa_hook_list
+PipeWire.NET.Interop.spa_hook_list.list = spa_list
+PipeWire.NET.Interop.spa_interface
+PipeWire.NET.Interop.spa_interface.cb = spa_callbacks
+PipeWire.NET.Interop.spa_interface.type = SByte*
+PipeWire.NET.Interop.spa_interface.version = UInt32
+PipeWire.NET.Interop.spa_interface_info
+PipeWire.NET.Interop.spa_interface_info.type = SByte*
+PipeWire.NET.Interop.spa_io_async_buffers
+PipeWire.NET.Interop.spa_io_async_buffers+_buffers_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_async_buffers+_buffers_e__FixedBuffer.e0 = spa_io_buffers
+PipeWire.NET.Interop.spa_io_async_buffers._buffers_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_async_buffers.buffers = _buffers_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_buffers
+PipeWire.NET.Interop.spa_io_buffers.buffer_id = UInt32
+PipeWire.NET.Interop.spa_io_buffers.status = Int32
+PipeWire.NET.Interop.spa_io_clock
+PipeWire.NET.Interop.spa_io_clock+_name_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_clock+_name_e__FixedBuffer.e0 = SByte
+PipeWire.NET.Interop.spa_io_clock._name_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_clock.cycle = UInt32
+PipeWire.NET.Interop.spa_io_clock.delay = Int64
+PipeWire.NET.Interop.spa_io_clock.duration = UInt64
+PipeWire.NET.Interop.spa_io_clock.flags = UInt32
+PipeWire.NET.Interop.spa_io_clock.id = UInt32
+PipeWire.NET.Interop.spa_io_clock.name = _name_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_clock.next_nsec = UInt64
+PipeWire.NET.Interop.spa_io_clock.nsec = UInt64
+PipeWire.NET.Interop.spa_io_clock.position = UInt64
+PipeWire.NET.Interop.spa_io_clock.rate = spa_fraction
+PipeWire.NET.Interop.spa_io_clock.rate_diff = Double
+PipeWire.NET.Interop.spa_io_clock.target_duration = UInt64
+PipeWire.NET.Interop.spa_io_clock.target_rate = spa_fraction
+PipeWire.NET.Interop.spa_io_clock.target_seq = UInt32
+PipeWire.NET.Interop.spa_io_clock.xrun = UInt64
+PipeWire.NET.Interop.spa_io_latency
+PipeWire.NET.Interop.spa_io_latency.max = UInt64
+PipeWire.NET.Interop.spa_io_latency.min = UInt64
+PipeWire.NET.Interop.spa_io_latency.rate = spa_fraction
+PipeWire.NET.Interop.spa_io_memory
+PipeWire.NET.Interop.spa_io_memory.data = Void*
+PipeWire.NET.Interop.spa_io_memory.size = UInt32
+PipeWire.NET.Interop.spa_io_memory.status = Int32
+PipeWire.NET.Interop.spa_io_position
+PipeWire.NET.Interop.spa_io_position+_segments_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_position+_segments_e__FixedBuffer.e0 = spa_io_segment
+PipeWire.NET.Interop.spa_io_position._segments_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_position.clock = spa_io_clock
+PipeWire.NET.Interop.spa_io_position.n_segments = UInt32
+PipeWire.NET.Interop.spa_io_position.offset = Int64
+PipeWire.NET.Interop.spa_io_position.segments = _segments_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_position.state = UInt32
+PipeWire.NET.Interop.spa_io_position.video = spa_io_video_size
+PipeWire.NET.Interop.spa_io_range
+PipeWire.NET.Interop.spa_io_range.max_size = UInt32
+PipeWire.NET.Interop.spa_io_range.min_size = UInt32
+PipeWire.NET.Interop.spa_io_range.offset = UInt64
+PipeWire.NET.Interop.spa_io_rate_match
+PipeWire.NET.Interop.spa_io_rate_match+_padding_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_rate_match+_padding_e__FixedBuffer.e0 = UInt32
+PipeWire.NET.Interop.spa_io_rate_match._padding_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_rate_match.delay = UInt32
+PipeWire.NET.Interop.spa_io_rate_match.delay_frac = Int32
+PipeWire.NET.Interop.spa_io_rate_match.flags = UInt32
+PipeWire.NET.Interop.spa_io_rate_match.padding = _padding_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_rate_match.rate = Double
+PipeWire.NET.Interop.spa_io_rate_match.size = UInt32
+PipeWire.NET.Interop.spa_io_segment
+PipeWire.NET.Interop.spa_io_segment.bar = spa_io_segment_bar
+PipeWire.NET.Interop.spa_io_segment.duration = UInt64
+PipeWire.NET.Interop.spa_io_segment.flags = UInt32
+PipeWire.NET.Interop.spa_io_segment.position = UInt64
+PipeWire.NET.Interop.spa_io_segment.rate = Double
+PipeWire.NET.Interop.spa_io_segment.start = UInt64
+PipeWire.NET.Interop.spa_io_segment.version = UInt32
+PipeWire.NET.Interop.spa_io_segment.video = spa_io_segment_video
+PipeWire.NET.Interop.spa_io_segment_bar
+PipeWire.NET.Interop.spa_io_segment_bar+_padding_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_segment_bar+_padding_e__FixedBuffer.e0 = UInt32
+PipeWire.NET.Interop.spa_io_segment_bar._padding_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_segment_bar.bar_start_tick = Double
+PipeWire.NET.Interop.spa_io_segment_bar.beat = Double
+PipeWire.NET.Interop.spa_io_segment_bar.bpm = Double
+PipeWire.NET.Interop.spa_io_segment_bar.flags = UInt32
+PipeWire.NET.Interop.spa_io_segment_bar.offset = UInt32
+PipeWire.NET.Interop.spa_io_segment_bar.padding = _padding_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_segment_bar.signature_denom = Single
+PipeWire.NET.Interop.spa_io_segment_bar.signature_num = Single
+PipeWire.NET.Interop.spa_io_segment_bar.ticks_per_beat = Double
+PipeWire.NET.Interop.spa_io_segment_video
+PipeWire.NET.Interop.spa_io_segment_video+_padding_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_segment_video+_padding_e__FixedBuffer.e0 = UInt32
+PipeWire.NET.Interop.spa_io_segment_video._padding_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_segment_video.field_count = UInt32
+PipeWire.NET.Interop.spa_io_segment_video.flags = UInt32
+PipeWire.NET.Interop.spa_io_segment_video.framerate = spa_fraction
+PipeWire.NET.Interop.spa_io_segment_video.frames = UInt32
+PipeWire.NET.Interop.spa_io_segment_video.hours = UInt32
+PipeWire.NET.Interop.spa_io_segment_video.minutes = UInt32
+PipeWire.NET.Interop.spa_io_segment_video.offset = UInt32
+PipeWire.NET.Interop.spa_io_segment_video.padding = _padding_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_segment_video.seconds = UInt32
+PipeWire.NET.Interop.spa_io_sequence
+PipeWire.NET.Interop.spa_io_sequence.sequence = spa_pod_sequence
+PipeWire.NET.Interop.spa_io_video_size
+PipeWire.NET.Interop.spa_io_video_size+_padding_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_video_size+_padding_e__FixedBuffer.e0 = UInt32
+PipeWire.NET.Interop.spa_io_video_size._padding_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_video_size.flags = UInt32
+PipeWire.NET.Interop.spa_io_video_size.framerate = spa_fraction
+PipeWire.NET.Interop.spa_io_video_size.padding = _padding_e__FixedBuffer
+PipeWire.NET.Interop.spa_io_video_size.size = spa_rectangle
+PipeWire.NET.Interop.spa_io_video_size.stride = UInt32
+PipeWire.NET.Interop.spa_latency_info
+PipeWire.NET.Interop.spa_latency_info.direction = SpaDirection
+PipeWire.NET.Interop.spa_latency_info.max_ns = Int64
+PipeWire.NET.Interop.spa_latency_info.max_quantum = Single
+PipeWire.NET.Interop.spa_latency_info.max_rate = Int32
+PipeWire.NET.Interop.spa_latency_info.min_ns = Int64
+PipeWire.NET.Interop.spa_latency_info.min_quantum = Single
+PipeWire.NET.Interop.spa_latency_info.min_rate = Int32
+PipeWire.NET.Interop.spa_list
+PipeWire.NET.Interop.spa_list.next = spa_list*
+PipeWire.NET.Interop.spa_list.prev = spa_list*
+PipeWire.NET.Interop.spa_loop
+PipeWire.NET.Interop.spa_loop.iface = spa_interface
+PipeWire.NET.Interop.spa_loop_control
+PipeWire.NET.Interop.spa_loop_control.iface = spa_interface
+PipeWire.NET.Interop.spa_loop_methods
+PipeWire.NET.Interop.spa_loop_methods.add_source = 
+PipeWire.NET.Interop.spa_loop_methods.invoke = 
+PipeWire.NET.Interop.spa_loop_methods.locked = 
+PipeWire.NET.Interop.spa_loop_methods.remove_source = 
+PipeWire.NET.Interop.spa_loop_methods.update_source = 
+PipeWire.NET.Interop.spa_loop_methods.version = UInt32
+PipeWire.NET.Interop.spa_loop_utils
+PipeWire.NET.Interop.spa_loop_utils.iface = spa_interface
+PipeWire.NET.Interop.spa_meta
+PipeWire.NET.Interop.spa_meta.data = Void*
+PipeWire.NET.Interop.spa_meta.size = UInt32
+PipeWire.NET.Interop.spa_meta.type = UInt32
+PipeWire.NET.Interop.spa_meta_bitmap
+PipeWire.NET.Interop.spa_meta_bitmap.format = UInt32
+PipeWire.NET.Interop.spa_meta_bitmap.offset = UInt32
+PipeWire.NET.Interop.spa_meta_bitmap.size = spa_rectangle
+PipeWire.NET.Interop.spa_meta_bitmap.stride = Int32
+PipeWire.NET.Interop.spa_meta_busy
+PipeWire.NET.Interop.spa_meta_busy.count = UInt32
+PipeWire.NET.Interop.spa_meta_busy.flags = UInt32
+PipeWire.NET.Interop.spa_meta_control
+PipeWire.NET.Interop.spa_meta_control.sequence = spa_pod_sequence
+PipeWire.NET.Interop.spa_meta_cursor
+PipeWire.NET.Interop.spa_meta_cursor.bitmap_offset = UInt32
+PipeWire.NET.Interop.spa_meta_cursor.flags = UInt32
+PipeWire.NET.Interop.spa_meta_cursor.hotspot = spa_point
+PipeWire.NET.Interop.spa_meta_cursor.id = UInt32
+PipeWire.NET.Interop.spa_meta_cursor.position = spa_point
+PipeWire.NET.Interop.spa_meta_header
+PipeWire.NET.Interop.spa_meta_header.dts_offset = Int64
+PipeWire.NET.Interop.spa_meta_header.flags = UInt32
+PipeWire.NET.Interop.spa_meta_header.offset = UInt32
+PipeWire.NET.Interop.spa_meta_header.pts = Int64
+PipeWire.NET.Interop.spa_meta_header.seq = UInt64
+PipeWire.NET.Interop.spa_meta_region
+PipeWire.NET.Interop.spa_meta_region.region = spa_region
+PipeWire.NET.Interop.spa_meta_sync_timeline
+PipeWire.NET.Interop.spa_meta_sync_timeline.acquire_point = UInt64
+PipeWire.NET.Interop.spa_meta_sync_timeline.flags = UInt32
+PipeWire.NET.Interop.spa_meta_sync_timeline.padding = UInt32
+PipeWire.NET.Interop.spa_meta_sync_timeline.release_point = UInt64
+PipeWire.NET.Interop.spa_meta_videotransform
+PipeWire.NET.Interop.spa_meta_videotransform.transform = UInt32
+PipeWire.NET.Interop.spa_param_info
+PipeWire.NET.Interop.spa_param_info+_padding_e__FixedBuffer
+PipeWire.NET.Interop.spa_param_info+_padding_e__FixedBuffer.e0 = UInt32
+PipeWire.NET.Interop.spa_param_info._padding_e__FixedBuffer
+PipeWire.NET.Interop.spa_param_info.flags = UInt32
+PipeWire.NET.Interop.spa_param_info.id = UInt32
+PipeWire.NET.Interop.spa_param_info.padding = _padding_e__FixedBuffer
+PipeWire.NET.Interop.spa_param_info.seq = Int32
+PipeWire.NET.Interop.spa_param_info.user = UInt32
+PipeWire.NET.Interop.spa_pod
+PipeWire.NET.Interop.spa_pod.size = UInt32
+PipeWire.NET.Interop.spa_pod.type = UInt32
+PipeWire.NET.Interop.spa_pod_array
+PipeWire.NET.Interop.spa_pod_array.body = spa_pod_array_body
+PipeWire.NET.Interop.spa_pod_array.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_array_body
+PipeWire.NET.Interop.spa_pod_array_body.child = spa_pod
+PipeWire.NET.Interop.spa_pod_bitmap
+PipeWire.NET.Interop.spa_pod_bitmap.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_bool
+PipeWire.NET.Interop.spa_pod_bool._padding = Int32
+PipeWire.NET.Interop.spa_pod_bool.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_bool.value = Int32
+PipeWire.NET.Interop.spa_pod_bytes
+PipeWire.NET.Interop.spa_pod_bytes.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_choice
+PipeWire.NET.Interop.spa_pod_choice.body = spa_pod_choice_body
+PipeWire.NET.Interop.spa_pod_choice.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_choice_body
+PipeWire.NET.Interop.spa_pod_choice_body.child = spa_pod
+PipeWire.NET.Interop.spa_pod_choice_body.flags = UInt32
+PipeWire.NET.Interop.spa_pod_choice_body.type = UInt32
+PipeWire.NET.Interop.spa_pod_control
+PipeWire.NET.Interop.spa_pod_control.offset = UInt32
+PipeWire.NET.Interop.spa_pod_control.type = UInt32
+PipeWire.NET.Interop.spa_pod_control.value = spa_pod
+PipeWire.NET.Interop.spa_pod_double
+PipeWire.NET.Interop.spa_pod_double.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_double.value = Double
+PipeWire.NET.Interop.spa_pod_fd
+PipeWire.NET.Interop.spa_pod_fd.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_fd.value = Int64
+PipeWire.NET.Interop.spa_pod_float
+PipeWire.NET.Interop.spa_pod_float._padding = Int32
+PipeWire.NET.Interop.spa_pod_float.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_float.value = Single
+PipeWire.NET.Interop.spa_pod_fraction
+PipeWire.NET.Interop.spa_pod_fraction.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_fraction.value = spa_fraction
+PipeWire.NET.Interop.spa_pod_id
+PipeWire.NET.Interop.spa_pod_id._padding = Int32
+PipeWire.NET.Interop.spa_pod_id.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_id.value = UInt32
+PipeWire.NET.Interop.spa_pod_int
+PipeWire.NET.Interop.spa_pod_int._padding = Int32
+PipeWire.NET.Interop.spa_pod_int.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_int.value = Int32
+PipeWire.NET.Interop.spa_pod_long
+PipeWire.NET.Interop.spa_pod_long.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_long.value = Int64
+PipeWire.NET.Interop.spa_pod_object
+PipeWire.NET.Interop.spa_pod_object.body = spa_pod_object_body
+PipeWire.NET.Interop.spa_pod_object.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_object_body
+PipeWire.NET.Interop.spa_pod_object_body.id = UInt32
+PipeWire.NET.Interop.spa_pod_object_body.type = UInt32
+PipeWire.NET.Interop.spa_pod_pointer
+PipeWire.NET.Interop.spa_pod_pointer.body = spa_pod_pointer_body
+PipeWire.NET.Interop.spa_pod_pointer.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_pointer_body
+PipeWire.NET.Interop.spa_pod_pointer_body._padding = UInt32
+PipeWire.NET.Interop.spa_pod_pointer_body.type = UInt32
+PipeWire.NET.Interop.spa_pod_pointer_body.value = Void*
+PipeWire.NET.Interop.spa_pod_prop
+PipeWire.NET.Interop.spa_pod_prop.flags = UInt32
+PipeWire.NET.Interop.spa_pod_prop.key = UInt32
+PipeWire.NET.Interop.spa_pod_prop.value = spa_pod
+PipeWire.NET.Interop.spa_pod_rectangle
+PipeWire.NET.Interop.spa_pod_rectangle.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_rectangle.value = spa_rectangle
+PipeWire.NET.Interop.spa_pod_sequence
+PipeWire.NET.Interop.spa_pod_sequence.body = spa_pod_sequence_body
+PipeWire.NET.Interop.spa_pod_sequence.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_sequence_body
+PipeWire.NET.Interop.spa_pod_sequence_body.pad = UInt32
+PipeWire.NET.Interop.spa_pod_sequence_body.unit = UInt32
+PipeWire.NET.Interop.spa_pod_string
+PipeWire.NET.Interop.spa_pod_string.pod = spa_pod
+PipeWire.NET.Interop.spa_pod_struct
+PipeWire.NET.Interop.spa_pod_struct.pod = spa_pod
+PipeWire.NET.Interop.spa_point
+PipeWire.NET.Interop.spa_point.x = Int32
+PipeWire.NET.Interop.spa_point.y = Int32
+PipeWire.NET.Interop.spa_poll_event
+PipeWire.NET.Interop.spa_poll_event.data = Void*
+PipeWire.NET.Interop.spa_poll_event.events = UInt32
+PipeWire.NET.Interop.spa_process_latency_info
+PipeWire.NET.Interop.spa_process_latency_info.ns = Int64
+PipeWire.NET.Interop.spa_process_latency_info.quantum = Single
+PipeWire.NET.Interop.spa_process_latency_info.rate = Int32
+PipeWire.NET.Interop.spa_rectangle
+PipeWire.NET.Interop.spa_rectangle.height = UInt32
+PipeWire.NET.Interop.spa_rectangle.width = UInt32
+PipeWire.NET.Interop.spa_region
+PipeWire.NET.Interop.spa_region.position = spa_point
+PipeWire.NET.Interop.spa_region.size = spa_rectangle
+PipeWire.NET.Interop.spa_source
+PipeWire.NET.Interop.spa_source.data = Void*
+PipeWire.NET.Interop.spa_source.fd = Int32
+PipeWire.NET.Interop.spa_source.func = 
+PipeWire.NET.Interop.spa_source.loop = spa_loop*
+PipeWire.NET.Interop.spa_source.mask = UInt32
+PipeWire.NET.Interop.spa_source.priv = Void*
+PipeWire.NET.Interop.spa_source.rmask = UInt32
+PipeWire.NET.Interop.spa_support
+PipeWire.NET.Interop.spa_support.data = Void*
+PipeWire.NET.Interop.spa_support.type = SByte*
+PipeWire.NET.Interop.spa_system
+PipeWire.NET.Interop.spa_system.iface = spa_interface
+PipeWire.NET.Interop.spa_tag_info
+PipeWire.NET.Interop.spa_tag_info.direction = SpaDirection
+PipeWire.NET.Interop.spa_tag_info.info = spa_pod*
+PipeWire.NET.Interop.spa_type_info
+PipeWire.NET.Interop.spa_type_info.name = SByte*
+PipeWire.NET.Interop.spa_type_info.parent = UInt32
+PipeWire.NET.Interop.spa_type_info.type = UInt32
+PipeWire.NET.Interop.spa_type_info.values = spa_type_info*
+PipeWire.NET.Interop.spa_video_colorimetry
+PipeWire.NET.Interop.spa_video_colorimetry.matrix = SpaVideoColorMatrix
+PipeWire.NET.Interop.spa_video_colorimetry.primaries = SpaVideoColorPrimaries
+PipeWire.NET.Interop.spa_video_colorimetry.range = SpaVideoColorRange
+PipeWire.NET.Interop.spa_video_colorimetry.transfer = SpaVideoTransferFunction
+PipeWire.NET.Interop.spa_video_info_raw
+PipeWire.NET.Interop.spa_video_info_raw.chroma_site = SpaVideoChromaSite
+PipeWire.NET.Interop.spa_video_info_raw.color_matrix = SpaVideoColorMatrix
+PipeWire.NET.Interop.spa_video_info_raw.color_primaries = SpaVideoColorPrimaries
+PipeWire.NET.Interop.spa_video_info_raw.color_range = SpaVideoColorRange
+PipeWire.NET.Interop.spa_video_info_raw.flags = UInt32
+PipeWire.NET.Interop.spa_video_info_raw.format = SpaVideoFormat
+PipeWire.NET.Interop.spa_video_info_raw.framerate = spa_fraction
+PipeWire.NET.Interop.spa_video_info_raw.interlace_mode = SpaVideoInterlaceMode
+PipeWire.NET.Interop.spa_video_info_raw.max_framerate = spa_fraction
+PipeWire.NET.Interop.spa_video_info_raw.modifier = UInt64
+PipeWire.NET.Interop.spa_video_info_raw.multiview_flags = SpaVideoMultiviewFlags
+PipeWire.NET.Interop.spa_video_info_raw.multiview_mode = SpaVideoMultiviewMode
+PipeWire.NET.Interop.spa_video_info_raw.pixel_aspect_ratio = spa_fraction
+PipeWire.NET.Interop.spa_video_info_raw.size = spa_rectangle
+PipeWire.NET.Interop.spa_video_info_raw.transfer_function = SpaVideoTransferFunction
+PipeWire.NET.Interop.spa_video_info_raw.views = UInt32
+PipeWire.NET.Media.AudioFrame
+PipeWire.NET.Media.AudioFrame..ctor(ReadOnlySpan<Byte>, Int32, Int32, AudioSampleFormat, UInt64, Int64, Int64, Int64, Int64)
+PipeWire.NET.Media.AudioFrame.CaptureClockNs : Nullable<Int64>
+PipeWire.NET.Media.AudioFrame.Channels : Int32
+PipeWire.NET.Media.AudioFrame.Clone()
+PipeWire.NET.Media.AudioFrame.DelayNs : Int64
+PipeWire.NET.Media.AudioFrame.Format : AudioSampleFormat
+PipeWire.NET.Media.AudioFrame.FrameCount : Int32
+PipeWire.NET.Media.AudioFrame.MediaClockNs : Nullable<Int64>
+PipeWire.NET.Media.AudioFrame.PresentationTimeNs : Nullable<Int64>
+PipeWire.NET.Media.AudioFrame.SampleRate : Int32
+PipeWire.NET.Media.AudioFrame.Samples : ReadOnlySpan<Byte>
+PipeWire.NET.Media.AudioFrame.SequenceNumber : UInt64
+PipeWire.NET.Media.AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.F32Le = AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.F64Le = AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.S16Le = AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.S24Le = AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.S24_32Le = AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.S32Le = AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.U8 = AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.Unknown = AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.value__ = Int32
+PipeWire.NET.Media.AudioSampleFormatExtensions
+PipeWire.NET.Media.AudioSampleFormatExtensions.BytesPerSample(AudioSampleFormat)
+PipeWire.NET.Media.DrmFormatModifier
+PipeWire.NET.Media.DrmFormatModifier.Invalid = UInt64
+PipeWire.NET.Media.DrmFormatModifier.Linear = UInt64
+PipeWire.NET.Media.OwnedAudioFrame
+PipeWire.NET.Media.OwnedAudioFrame..ctor(ImmutableArray<Byte>, Int32, Int32, AudioSampleFormat, UInt64, Nullable<Int64>, Nullable<Int64>, Nullable<Int64>, Int64)
+PipeWire.NET.Media.OwnedAudioFrame.CaptureClockNs : Nullable<Int64>
+PipeWire.NET.Media.OwnedAudioFrame.Channels : Int32
+PipeWire.NET.Media.OwnedAudioFrame.Deconstruct(ImmutableArray`1&, Int32&, Int32&, AudioSampleFormat&, UInt64&, Nullable`1&, Nullable`1&, Nullable`1&, Int64&)
+PipeWire.NET.Media.OwnedAudioFrame.DelayNs : Int64
+PipeWire.NET.Media.OwnedAudioFrame.Equals(Object)
+PipeWire.NET.Media.OwnedAudioFrame.Equals(OwnedAudioFrame)
+PipeWire.NET.Media.OwnedAudioFrame.Format : AudioSampleFormat
+PipeWire.NET.Media.OwnedAudioFrame.GetHashCode()
+PipeWire.NET.Media.OwnedAudioFrame.MediaClockNs : Nullable<Int64>
+PipeWire.NET.Media.OwnedAudioFrame.PresentationTimeNs : Nullable<Int64>
+PipeWire.NET.Media.OwnedAudioFrame.SampleRate : Int32
+PipeWire.NET.Media.OwnedAudioFrame.Samples : ImmutableArray<Byte>
+PipeWire.NET.Media.OwnedAudioFrame.SequenceNumber : UInt64
+PipeWire.NET.Media.OwnedAudioFrame.ToString()
+PipeWire.NET.Media.OwnedVideoFrame
+PipeWire.NET.Media.OwnedVideoFrame..ctor(ImmutableArray<Byte>, Int32, Int32, Int32, PixelFormat, UInt64, VideoColorInfo, Nullable<Int64>, Nullable<Int64>, Nullable<Int64>, Int64)
+PipeWire.NET.Media.OwnedVideoFrame.CaptureClockNs : Nullable<Int64>
+PipeWire.NET.Media.OwnedVideoFrame.Color : VideoColorInfo
+PipeWire.NET.Media.OwnedVideoFrame.Deconstruct(ImmutableArray`1&, Int32&, Int32&, Int32&, PixelFormat&, UInt64&, VideoColorInfo&, Nullable`1&, Nullable`1&, Nullable`1&, Int64&)
+PipeWire.NET.Media.OwnedVideoFrame.DelayNs : Int64
+PipeWire.NET.Media.OwnedVideoFrame.Equals(Object)
+PipeWire.NET.Media.OwnedVideoFrame.Equals(OwnedVideoFrame)
+PipeWire.NET.Media.OwnedVideoFrame.Format : PixelFormat
+PipeWire.NET.Media.OwnedVideoFrame.GetHashCode()
+PipeWire.NET.Media.OwnedVideoFrame.Height : Int32
+PipeWire.NET.Media.OwnedVideoFrame.MediaClockNs : Nullable<Int64>
+PipeWire.NET.Media.OwnedVideoFrame.Pixels : ImmutableArray<Byte>
+PipeWire.NET.Media.OwnedVideoFrame.PresentationTimeNs : Nullable<Int64>
+PipeWire.NET.Media.OwnedVideoFrame.SequenceNumber : UInt64
+PipeWire.NET.Media.OwnedVideoFrame.Stride : Int32
+PipeWire.NET.Media.OwnedVideoFrame.ToString()
+PipeWire.NET.Media.OwnedVideoFrame.Width : Int32
+PipeWire.NET.Media.PipeWireBufferType
+PipeWire.NET.Media.PipeWireBufferType.DmaBuf = PipeWireBufferType
+PipeWire.NET.Media.PipeWireBufferType.MemFd = PipeWireBufferType
+PipeWire.NET.Media.PipeWireBufferType.MemPtr = PipeWireBufferType
+PipeWire.NET.Media.PipeWireBufferType.Unknown = PipeWireBufferType
+PipeWire.NET.Media.PipeWireBufferType.value__ = Int32
+PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.PixelFormat.Bgra = PixelFormat
+PipeWire.NET.Media.PixelFormat.Bgrx = PixelFormat
+PipeWire.NET.Media.PixelFormat.Nv12 = PixelFormat
+PipeWire.NET.Media.PixelFormat.Rgba = PixelFormat
+PipeWire.NET.Media.PixelFormat.Rgbx = PixelFormat
+PipeWire.NET.Media.PixelFormat.Unknown = PixelFormat
+PipeWire.NET.Media.PixelFormat.Yuv420 = PixelFormat
+PipeWire.NET.Media.PixelFormat.Yuyv = PixelFormat
+PipeWire.NET.Media.PixelFormat.value__ = Int32
+PipeWire.NET.Media.StreamCategory
+PipeWire.NET.Media.StreamCategory.Capture = StreamCategory
+PipeWire.NET.Media.StreamCategory.Playback = StreamCategory
+PipeWire.NET.Media.StreamCategory.value__ = Int32
+PipeWire.NET.Media.StreamMediaType
+PipeWire.NET.Media.StreamMediaType.Audio = StreamMediaType
+PipeWire.NET.Media.StreamMediaType.Video = StreamMediaType
+PipeWire.NET.Media.StreamMediaType.value__ = Int32
+PipeWire.NET.Media.StreamProperties
+PipeWire.NET.Media.StreamProperties..ctor(StreamMediaType, StreamCategory)
+PipeWire.NET.Media.StreamProperties.Values : IReadOnlyDictionary<String, String>
+PipeWire.NET.Media.StreamProperties.With(String, String)
+PipeWire.NET.Media.StreamProperties.WithNodeDescription(String)
+PipeWire.NET.Media.StreamProperties.WithNodeName(String)
+PipeWire.NET.Media.StreamProperties.WithRole(String)
+PipeWire.NET.Media.StreamProperties.WithTargetObject(String)
+PipeWire.NET.Media.Streams.PipeWireAudioCapture
+PipeWire.NET.Media.Streams.PipeWireAudioCapture+FrameReadyHandler
+PipeWire.NET.Media.Streams.PipeWireAudioCapture+FrameReadyHandler..ctor(Object, IntPtr)
+PipeWire.NET.Media.Streams.PipeWireAudioCapture+FrameReadyHandler.BeginInvoke(PipeWireAudioCapture, AudioFrame, AsyncCallback, Object)
+PipeWire.NET.Media.Streams.PipeWireAudioCapture+FrameReadyHandler.EndInvoke(IAsyncResult)
+PipeWire.NET.Media.Streams.PipeWireAudioCapture+FrameReadyHandler.Invoke(PipeWireAudioCapture, AudioFrame)
+PipeWire.NET.Media.Streams.PipeWireAudioCapture..ctor(PipeWireContext, String)
+PipeWire.NET.Media.Streams.PipeWireAudioCapture.AnyNode = UInt32
+PipeWire.NET.Media.Streams.PipeWireAudioCapture.Connect(PipeWireNode, Int32, Int32, AudioSampleFormat, Boolean)
+PipeWire.NET.Media.Streams.PipeWireAudioCapture.Connect(UInt32, Int32, Int32, AudioSampleFormat, String, Boolean)
+PipeWire.NET.Media.Streams.PipeWireAudioCapture.DisposeAsync()
+PipeWire.NET.Media.Streams.PipeWireAudioCapture.FrameReady event
+PipeWire.NET.Media.Streams.PipeWireAudioCapture.FrameReadyHandler
+PipeWire.NET.Media.Streams.PipeWireAudioCapture.NodeId : Nullable<UInt32>
+PipeWire.NET.Media.Streams.PipeWireAudioCapture.StateChanged event
+PipeWire.NET.Media.Streams.PipeWireAudioOutput
+PipeWire.NET.Media.Streams.PipeWireAudioOutput+FillSamplesHandler
+PipeWire.NET.Media.Streams.PipeWireAudioOutput+FillSamplesHandler..ctor(Object, IntPtr)
+PipeWire.NET.Media.Streams.PipeWireAudioOutput+FillSamplesHandler.BeginInvoke(PipeWireAudioOutput, Span<Byte>, Int32, Int32, AudioSampleFormat, AsyncCallback, Object)
+PipeWire.NET.Media.Streams.PipeWireAudioOutput+FillSamplesHandler.EndInvoke(IAsyncResult)
+PipeWire.NET.Media.Streams.PipeWireAudioOutput+FillSamplesHandler.Invoke(PipeWireAudioOutput, Span<Byte>, Int32, Int32, AudioSampleFormat)
+PipeWire.NET.Media.Streams.PipeWireAudioOutput..ctor(PipeWireContext, String, Int32, Int32, AudioSampleFormat)
+PipeWire.NET.Media.Streams.PipeWireAudioOutput.AnyNode = UInt32
+PipeWire.NET.Media.Streams.PipeWireAudioOutput.Connect(UInt32, String, Boolean)
+PipeWire.NET.Media.Streams.PipeWireAudioOutput.DisposeAsync()
+PipeWire.NET.Media.Streams.PipeWireAudioOutput.FillSamples event
+PipeWire.NET.Media.Streams.PipeWireAudioOutput.FillSamplesHandler
+PipeWire.NET.Media.Streams.PipeWireAudioOutput.NodeId : Nullable<UInt32>
+PipeWire.NET.Media.Streams.PipeWireAudioOutput.StateChanged event
+PipeWire.NET.Media.Streams.PipeWireVideoCapture
+PipeWire.NET.Media.Streams.PipeWireVideoCapture+FrameReadyHandler
+PipeWire.NET.Media.Streams.PipeWireVideoCapture+FrameReadyHandler..ctor(Object, IntPtr)
+PipeWire.NET.Media.Streams.PipeWireVideoCapture+FrameReadyHandler.BeginInvoke(PipeWireVideoCapture, VideoFrame, AsyncCallback, Object)
+PipeWire.NET.Media.Streams.PipeWireVideoCapture+FrameReadyHandler.EndInvoke(IAsyncResult)
+PipeWire.NET.Media.Streams.PipeWireVideoCapture+FrameReadyHandler.Invoke(PipeWireVideoCapture, VideoFrame)
+PipeWire.NET.Media.Streams.PipeWireVideoCapture+StateChangedHandler
+PipeWire.NET.Media.Streams.PipeWireVideoCapture+StateChangedHandler..ctor(Object, IntPtr)
+PipeWire.NET.Media.Streams.PipeWireVideoCapture+StateChangedHandler.BeginInvoke(PipeWireVideoCapture, PipeWireStreamState, PipeWireStreamState, AsyncCallback, Object)
+PipeWire.NET.Media.Streams.PipeWireVideoCapture+StateChangedHandler.EndInvoke(IAsyncResult)
+PipeWire.NET.Media.Streams.PipeWireVideoCapture+StateChangedHandler.Invoke(PipeWireVideoCapture, PipeWireStreamState, PipeWireStreamState)
+PipeWire.NET.Media.Streams.PipeWireVideoCapture..ctor(PipeWireContext, String)
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.AnyNode = UInt32
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.Connect(PipeWireNode, ReadOnlySpan<PixelFormat>)
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.Connect(UInt32, ReadOnlySpan<PixelFormat>, String, ReadOnlySpan<Int64>, Boolean, Int32, Int32, Int32)
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.DisposeAsync()
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.FrameReady event
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.FrameReadyHandler
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.NegotiatedModifier : UInt64
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.NodeId : Nullable<UInt32>
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.StateChanged event
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.StateChangedHandler
+PipeWire.NET.Media.Streams.PipeWireVideoOutput
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+AllocateDmaBufHandler
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+AllocateDmaBufHandler..ctor(Object, IntPtr)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+AllocateDmaBufHandler.BeginInvoke(PipeWireVideoOutput, Int32, Int32, Int32, UInt64, Span<VideoPlane>, AsyncCallback, Object)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+AllocateDmaBufHandler.EndInvoke(IAsyncResult)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+AllocateDmaBufHandler.Invoke(PipeWireVideoOutput, Int32, Int32, Int32, UInt64, Span<VideoPlane>)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+FillDmaBufHandler
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+FillDmaBufHandler..ctor(Object, IntPtr)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+FillDmaBufHandler.BeginInvoke(PipeWireVideoOutput, Int32, AsyncCallback, Object)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+FillDmaBufHandler.EndInvoke(IAsyncResult)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+FillDmaBufHandler.Invoke(PipeWireVideoOutput, Int32)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+FillFrameHandler
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+FillFrameHandler..ctor(Object, IntPtr)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+FillFrameHandler.BeginInvoke(PipeWireVideoOutput, Span<Byte>, Int32, Int32, Int32, PixelFormat, AsyncCallback, Object)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+FillFrameHandler.EndInvoke(IAsyncResult)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+FillFrameHandler.Invoke(PipeWireVideoOutput, Span<Byte>, Int32, Int32, Int32, PixelFormat)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+ReleaseDmaBufHandler
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+ReleaseDmaBufHandler..ctor(Object, IntPtr)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+ReleaseDmaBufHandler.BeginInvoke(PipeWireVideoOutput, Int32, AsyncCallback, Object)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+ReleaseDmaBufHandler.EndInvoke(IAsyncResult)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput+ReleaseDmaBufHandler.Invoke(PipeWireVideoOutput, Int32)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput..ctor(PipeWireContext, String, Int32, Int32, PixelFormat, Int32)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.AllocateDmaBuf event
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.AllocateDmaBufHandler
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.Connect()
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.ConnectDmaBuf(ReadOnlySpan<Int64>)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.DisposeAsync()
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.FillDmaBuf event
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.FillDmaBufHandler
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.FillFrame event
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.FillFrameHandler
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.NodeId : Nullable<UInt32>
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.ReleaseDmaBuf event
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.ReleaseDmaBufHandler
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.StateChanged event
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.TriggerFrame()
+PipeWire.NET.Media.VideoColorInfo
+PipeWire.NET.Media.VideoColorInfo..ctor(VideoColorRange, VideoColorMatrix, VideoTransferFunction, VideoColorPrimaries)
+PipeWire.NET.Media.VideoColorInfo.Deconstruct(VideoColorRange&, VideoColorMatrix&, VideoTransferFunction&, VideoColorPrimaries&)
+PipeWire.NET.Media.VideoColorInfo.Equals(Object)
+PipeWire.NET.Media.VideoColorInfo.Equals(VideoColorInfo)
+PipeWire.NET.Media.VideoColorInfo.GetHashCode()
+PipeWire.NET.Media.VideoColorInfo.Matrix : VideoColorMatrix
+PipeWire.NET.Media.VideoColorInfo.Primaries : VideoColorPrimaries
+PipeWire.NET.Media.VideoColorInfo.Range : VideoColorRange
+PipeWire.NET.Media.VideoColorInfo.ToString()
+PipeWire.NET.Media.VideoColorInfo.Transfer : VideoTransferFunction
+PipeWire.NET.Media.VideoColorInfo.Unknown : VideoColorInfo
+PipeWire.NET.Media.VideoColorMatrix
+PipeWire.NET.Media.VideoColorMatrix.Bt2020 = VideoColorMatrix
+PipeWire.NET.Media.VideoColorMatrix.Bt601 = VideoColorMatrix
+PipeWire.NET.Media.VideoColorMatrix.Bt709 = VideoColorMatrix
+PipeWire.NET.Media.VideoColorMatrix.Rgb = VideoColorMatrix
+PipeWire.NET.Media.VideoColorMatrix.Unknown = VideoColorMatrix
+PipeWire.NET.Media.VideoColorMatrix.value__ = Int32
+PipeWire.NET.Media.VideoColorPrimaries
+PipeWire.NET.Media.VideoColorPrimaries.Bt2020 = VideoColorPrimaries
+PipeWire.NET.Media.VideoColorPrimaries.Bt709 = VideoColorPrimaries
+PipeWire.NET.Media.VideoColorPrimaries.Unknown = VideoColorPrimaries
+PipeWire.NET.Media.VideoColorPrimaries.value__ = Int32
+PipeWire.NET.Media.VideoColorRange
+PipeWire.NET.Media.VideoColorRange.Full_0_255 = VideoColorRange
+PipeWire.NET.Media.VideoColorRange.Limited_16_235 = VideoColorRange
+PipeWire.NET.Media.VideoColorRange.Unknown = VideoColorRange
+PipeWire.NET.Media.VideoColorRange.value__ = Int32
+PipeWire.NET.Media.VideoFrame
+PipeWire.NET.Media.VideoFrame..ctor(ReadOnlySpan<Byte>, Int32, Int32, Int32, PixelFormat, UInt64, PipeWireBufferType, Int64, UInt32, Int64, VideoColorInfo, Int64, Int64, Int64, UInt64, ReadOnlySpan<VideoPlane>)
+PipeWire.NET.Media.VideoFrame.BufferType : PipeWireBufferType
+PipeWire.NET.Media.VideoFrame.CaptureClockNs : Nullable<Int64>
+PipeWire.NET.Media.VideoFrame.Clone()
+PipeWire.NET.Media.VideoFrame.Color : VideoColorInfo
+PipeWire.NET.Media.VideoFrame.Data : ReadOnlySpan<Byte>
+PipeWire.NET.Media.VideoFrame.DelayNs : Int64
+PipeWire.NET.Media.VideoFrame.DuplicateFd()
+PipeWire.NET.Media.VideoFrame.Fd : Int64
+PipeWire.NET.Media.VideoFrame.Format : PixelFormat
+PipeWire.NET.Media.VideoFrame.Height : Int32
+PipeWire.NET.Media.VideoFrame.IsFdBacked : Boolean
+PipeWire.NET.Media.VideoFrame.MapOffset : UInt32
+PipeWire.NET.Media.VideoFrame.MediaClockNs : Nullable<Int64>
+PipeWire.NET.Media.VideoFrame.Modifier : UInt64
+PipeWire.NET.Media.VideoFrame.Planes : ReadOnlySpan<VideoPlane>
+PipeWire.NET.Media.VideoFrame.PresentationTimeNs : Nullable<Int64>
+PipeWire.NET.Media.VideoFrame.SequenceNumber : UInt64
+PipeWire.NET.Media.VideoFrame.Stride : Int32
+PipeWire.NET.Media.VideoFrame.Width : Int32
+PipeWire.NET.Media.VideoPlane
+PipeWire.NET.Media.VideoPlane..ctor(Int64, UInt32, Int32, UInt32)
+PipeWire.NET.Media.VideoPlane.Deconstruct(Int64&, UInt32&, Int32&, UInt32&)
+PipeWire.NET.Media.VideoPlane.DuplicateFd()
+PipeWire.NET.Media.VideoPlane.Equals(Object)
+PipeWire.NET.Media.VideoPlane.Equals(VideoPlane)
+PipeWire.NET.Media.VideoPlane.Fd : Int64
+PipeWire.NET.Media.VideoPlane.GetHashCode()
+PipeWire.NET.Media.VideoPlane.Offset : UInt32
+PipeWire.NET.Media.VideoPlane.Size : UInt32
+PipeWire.NET.Media.VideoPlane.Stride : Int32
+PipeWire.NET.Media.VideoPlane.ToString()
+PipeWire.NET.Media.VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Bt2020_12 = VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Bt709 = VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Gamma22 = VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Srgb = VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Unknown = VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.value__ = Int32
+PipeWire.NET.PipeWireContext
+PipeWire.NET.PipeWireContext+LoopLock
+PipeWire.NET.PipeWireContext+LoopLock.Dispose()
+PipeWire.NET.PipeWireContext..ctor(String, ILoggerFactory)
+PipeWire.NET.PipeWireContext.Dispose()
+PipeWire.NET.PipeWireContext.DisposeAsync()
+PipeWire.NET.PipeWireContext.IsDisposed : Boolean
+PipeWire.NET.PipeWireContext.Lock()
+PipeWire.NET.PipeWireContext.LoopLock
+PipeWire.NET.PipeWireContext.StartAsync(CancellationToken)
+PipeWire.NET.PipeWireContext.TryLock(LoopLock&)
+PipeWire.NET.PipeWireDiagnostics
+PipeWire.NET.PipeWireDiagnostics.Name = String
+PipeWire.NET.PipeWireDiagnostics.Source : ActivitySource
+PipeWire.NET.PipeWireException
+PipeWire.NET.PipeWireException..ctor()
+PipeWire.NET.PipeWireException..ctor(String)
+PipeWire.NET.PipeWireException..ctor(String, Exception)
+PipeWire.NET.PipeWireException..ctor(String, Int32, Nullable<UInt32>, String)
+PipeWire.NET.PipeWireException.DaemonMessage : String
+PipeWire.NET.PipeWireException.IsDisconnected : Boolean
+PipeWire.NET.PipeWireException.IsPermissionDenied : Boolean
+PipeWire.NET.PipeWireException.ObjectId : Nullable<UInt32>
+PipeWire.NET.PipeWireException.Operation : String
+PipeWire.NET.PipeWireException.Result : Int32
+PipeWire.NET.PipeWireFilterFlags
+PipeWire.NET.PipeWireFilterFlags.Async = PipeWireFilterFlags
+PipeWire.NET.PipeWireFilterFlags.CustomLatency = PipeWireFilterFlags
+PipeWire.NET.PipeWireFilterFlags.Driver = PipeWireFilterFlags
+PipeWire.NET.PipeWireFilterFlags.Inactive = PipeWireFilterFlags
+PipeWire.NET.PipeWireFilterFlags.None = PipeWireFilterFlags
+PipeWire.NET.PipeWireFilterFlags.RtProcess = PipeWireFilterFlags
+PipeWire.NET.PipeWireFilterFlags.Trigger = PipeWireFilterFlags
+PipeWire.NET.PipeWireFilterFlags.value__ = UInt32
+PipeWire.NET.PipeWireFilterPortFlags
+PipeWire.NET.PipeWireFilterPortFlags.AllocBuffers = PipeWireFilterPortFlags
+PipeWire.NET.PipeWireFilterPortFlags.MapBuffers = PipeWireFilterPortFlags
+PipeWire.NET.PipeWireFilterPortFlags.None = PipeWireFilterPortFlags
+PipeWire.NET.PipeWireFilterPortFlags.value__ = UInt32
+PipeWire.NET.PipeWireFilterState
+PipeWire.NET.PipeWireFilterState.Connecting = PipeWireFilterState
+PipeWire.NET.PipeWireFilterState.Error = PipeWireFilterState
+PipeWire.NET.PipeWireFilterState.Paused = PipeWireFilterState
+PipeWire.NET.PipeWireFilterState.Streaming = PipeWireFilterState
+PipeWire.NET.PipeWireFilterState.Unconnected = PipeWireFilterState
+PipeWire.NET.PipeWireFilterState.value__ = Int32
+PipeWire.NET.PipeWireLinkState
+PipeWire.NET.PipeWireLinkState.Active = PipeWireLinkState
+PipeWire.NET.PipeWireLinkState.Allocating = PipeWireLinkState
+PipeWire.NET.PipeWireLinkState.Error = PipeWireLinkState
+PipeWire.NET.PipeWireLinkState.Init = PipeWireLinkState
+PipeWire.NET.PipeWireLinkState.Negotiating = PipeWireLinkState
+PipeWire.NET.PipeWireLinkState.Paused = PipeWireLinkState
+PipeWire.NET.PipeWireLinkState.Unlinked = PipeWireLinkState
+PipeWire.NET.PipeWireLinkState.value__ = Int32
+PipeWire.NET.PipeWireLog
+PipeWire.NET.PipeWireLog.SetLevel(PipeWireLogLevel)
+PipeWire.NET.PipeWireLogLevel
+PipeWire.NET.PipeWireLogLevel.Debug = PipeWireLogLevel
+PipeWire.NET.PipeWireLogLevel.Error = PipeWireLogLevel
+PipeWire.NET.PipeWireLogLevel.Info = PipeWireLogLevel
+PipeWire.NET.PipeWireLogLevel.None = PipeWireLogLevel
+PipeWire.NET.PipeWireLogLevel.Trace = PipeWireLogLevel
+PipeWire.NET.PipeWireLogLevel.Warn = PipeWireLogLevel
+PipeWire.NET.PipeWireLogLevel.value__ = Int32
+PipeWire.NET.PipeWireMediaClass
+PipeWire.NET.PipeWireMediaClass.ParseFlow(String)
+PipeWire.NET.PipeWireMediaClass.ParseKind(String)
+PipeWire.NET.PipeWireMediaFlow
+PipeWire.NET.PipeWireMediaFlow.Duplex = PipeWireMediaFlow
+PipeWire.NET.PipeWireMediaFlow.Sink = PipeWireMediaFlow
+PipeWire.NET.PipeWireMediaFlow.Source = PipeWireMediaFlow
+PipeWire.NET.PipeWireMediaFlow.Unknown = PipeWireMediaFlow
+PipeWire.NET.PipeWireMediaFlow.value__ = Int32
+PipeWire.NET.PipeWireMediaKind
+PipeWire.NET.PipeWireMediaKind.Audio = PipeWireMediaKind
+PipeWire.NET.PipeWireMediaKind.Midi = PipeWireMediaKind
+PipeWire.NET.PipeWireMediaKind.Unknown = PipeWireMediaKind
+PipeWire.NET.PipeWireMediaKind.Video = PipeWireMediaKind
+PipeWire.NET.PipeWireMediaKind.value__ = Int32
+PipeWire.NET.PipeWireNodeState
+PipeWire.NET.PipeWireNodeState.Creating = PipeWireNodeState
+PipeWire.NET.PipeWireNodeState.Error = PipeWireNodeState
+PipeWire.NET.PipeWireNodeState.Idle = PipeWireNodeState
+PipeWire.NET.PipeWireNodeState.Running = PipeWireNodeState
+PipeWire.NET.PipeWireNodeState.Suspended = PipeWireNodeState
+PipeWire.NET.PipeWireNodeState.value__ = Int32
+PipeWire.NET.PipeWireStreamFlags
+PipeWire.NET.PipeWireStreamFlags.AllocBuffers = PipeWireStreamFlags
+PipeWire.NET.PipeWireStreamFlags.Async = PipeWireStreamFlags
+PipeWire.NET.PipeWireStreamFlags.Autoconnect = PipeWireStreamFlags
+PipeWire.NET.PipeWireStreamFlags.DontReconnect = PipeWireStreamFlags
+PipeWire.NET.PipeWireStreamFlags.Driver = PipeWireStreamFlags
+PipeWire.NET.PipeWireStreamFlags.EarlyProcess = PipeWireStreamFlags
+PipeWire.NET.PipeWireStreamFlags.Exclusive = PipeWireStreamFlags
+PipeWire.NET.PipeWireStreamFlags.Inactive = PipeWireStreamFlags
+PipeWire.NET.PipeWireStreamFlags.MapBuffers = PipeWireStreamFlags
+PipeWire.NET.PipeWireStreamFlags.NoConvert = PipeWireStreamFlags
+PipeWire.NET.PipeWireStreamFlags.None = PipeWireStreamFlags
+PipeWire.NET.PipeWireStreamFlags.RtProcess = PipeWireStreamFlags
+PipeWire.NET.PipeWireStreamFlags.RtTriggerDone = PipeWireStreamFlags
+PipeWire.NET.PipeWireStreamFlags.Trigger = PipeWireStreamFlags
+PipeWire.NET.PipeWireStreamFlags.value__ = UInt32
+PipeWire.NET.PipeWireStreamState
+PipeWire.NET.PipeWireStreamState.Connecting = PipeWireStreamState
+PipeWire.NET.PipeWireStreamState.Error = PipeWireStreamState
+PipeWire.NET.PipeWireStreamState.Paused = PipeWireStreamState
+PipeWire.NET.PipeWireStreamState.Streaming = PipeWireStreamState
+PipeWire.NET.PipeWireStreamState.Unconnected = PipeWireStreamState
+PipeWire.NET.PipeWireStreamState.value__ = Int32
+PipeWire.NET.Spa.SpaArray
+PipeWire.NET.Spa.SpaArray..ctor(SpaType, ImmutableArray<SpaValue>)
+PipeWire.NET.Spa.SpaArray.ChildType : SpaType
+PipeWire.NET.Spa.SpaArray.Deconstruct(SpaType&, ImmutableArray`1&)
+PipeWire.NET.Spa.SpaArray.Equals(Object)
+PipeWire.NET.Spa.SpaArray.Equals(SpaArray)
+PipeWire.NET.Spa.SpaArray.Equals(SpaValue)
+PipeWire.NET.Spa.SpaArray.GetHashCode()
+PipeWire.NET.Spa.SpaArray.Items : ImmutableArray<SpaValue>
+PipeWire.NET.Spa.SpaArray.ToString()
+PipeWire.NET.Spa.SpaArray.Type : SpaType
+PipeWire.NET.Spa.SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux0 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux1 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux10 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux11 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux12 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux13 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux14 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux15 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux16 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux17 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux18 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux19 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux2 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux20 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux21 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux22 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux23 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux24 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux25 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux26 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux27 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux28 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux29 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux3 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux30 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux31 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux32 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux33 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux34 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux35 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux36 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux37 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux38 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux39 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux4 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux40 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux41 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux42 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux43 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux44 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux45 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux46 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux47 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux48 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux49 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux5 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux50 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux51 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux52 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux53 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux54 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux55 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux56 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux57 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux58 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux59 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux6 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux60 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux61 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux62 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux63 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux7 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux8 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Aux9 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Bc = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Blc = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Brc = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Fc = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Fch = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Fl = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Flc = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Flh = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Flw = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Fr = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Frc = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Frh = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Frw = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.LastAux = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Lfe = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Lfe2 = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Llfe = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Mono = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Na = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Rc = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Rl = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Rlc = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Rlfe = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Rr = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Rrc = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Sl = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Sr = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.StartAux = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.StartCustom = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Tc = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Tfc = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Tfl = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Tflc = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Tfr = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Tfrc = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Trc = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Trl = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Trr = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Tsl = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Tsr = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.Unknown = SpaAudioChannel
+PipeWire.NET.Spa.SpaAudioChannel.value__ = UInt32
+PipeWire.NET.Spa.SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.Alaw = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.DspF32 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.DspF64 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.DspS32 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.Encoded = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.F32 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.F32Be = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.F32Le = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.F32Oe = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.F32P = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.F64 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.F64Be = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.F64Le = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.F64Oe = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.F64P = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S16 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S16Be = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S16Le = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S16Oe = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S16P = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S18 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S18Be = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S18Le = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S18Oe = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S20 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S20Be = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S20Le = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S20Oe = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S24 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S24Be = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S24Le = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S24Oe = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S24P = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S24_32 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S24_32Be = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S24_32Le = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S24_32Oe = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S24_32P = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S32 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S32Be = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S32Le = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S32Oe = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S32P = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S8 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.S8P = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.StartInterleaved = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.StartOther = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.StartPlanar = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U16 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U16Be = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U16Le = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U16Oe = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U18 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U18Be = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U18Le = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U18Oe = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U20 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U20Be = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U20Le = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U20Oe = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U24 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U24Be = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U24Le = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U24Oe = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U24_32 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U24_32Be = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U24_32Le = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U24_32Oe = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U32 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U32Be = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U32Le = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U32Oe = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U8 = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.U8P = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.Ulaw = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.Unknown = SpaAudioFormat
+PipeWire.NET.Spa.SpaAudioFormat.value__ = UInt32
+PipeWire.NET.Spa.SpaAudioVolumeRampScale
+PipeWire.NET.Spa.SpaAudioVolumeRampScale.Cubic = SpaAudioVolumeRampScale
+PipeWire.NET.Spa.SpaAudioVolumeRampScale.Invalid = SpaAudioVolumeRampScale
+PipeWire.NET.Spa.SpaAudioVolumeRampScale.Linear = SpaAudioVolumeRampScale
+PipeWire.NET.Spa.SpaAudioVolumeRampScale.value__ = UInt32
+PipeWire.NET.Spa.SpaBitmap
+PipeWire.NET.Spa.SpaBitmap..ctor(ImmutableArray<Byte>)
+PipeWire.NET.Spa.SpaBitmap.Bits : ImmutableArray<Byte>
+PipeWire.NET.Spa.SpaBitmap.Deconstruct(ImmutableArray`1&)
+PipeWire.NET.Spa.SpaBitmap.Equals(Object)
+PipeWire.NET.Spa.SpaBitmap.Equals(SpaBitmap)
+PipeWire.NET.Spa.SpaBitmap.Equals(SpaValue)
+PipeWire.NET.Spa.SpaBitmap.GetHashCode()
+PipeWire.NET.Spa.SpaBitmap.ToString()
+PipeWire.NET.Spa.SpaBitmap.Type : SpaType
+PipeWire.NET.Spa.SpaBool
+PipeWire.NET.Spa.SpaBool..ctor(Boolean)
+PipeWire.NET.Spa.SpaBool.Deconstruct(Boolean&)
+PipeWire.NET.Spa.SpaBool.Equals(Object)
+PipeWire.NET.Spa.SpaBool.Equals(SpaBool)
+PipeWire.NET.Spa.SpaBool.Equals(SpaValue)
+PipeWire.NET.Spa.SpaBool.GetHashCode()
+PipeWire.NET.Spa.SpaBool.ToString()
+PipeWire.NET.Spa.SpaBool.Type : SpaType
+PipeWire.NET.Spa.SpaBool.Value : Boolean
+PipeWire.NET.Spa.SpaBytes
+PipeWire.NET.Spa.SpaBytes..ctor(ImmutableArray<Byte>)
+PipeWire.NET.Spa.SpaBytes.Deconstruct(ImmutableArray`1&)
+PipeWire.NET.Spa.SpaBytes.Equals(Object)
+PipeWire.NET.Spa.SpaBytes.Equals(SpaBytes)
+PipeWire.NET.Spa.SpaBytes.Equals(SpaValue)
+PipeWire.NET.Spa.SpaBytes.GetHashCode()
+PipeWire.NET.Spa.SpaBytes.ToString()
+PipeWire.NET.Spa.SpaBytes.Type : SpaType
+PipeWire.NET.Spa.SpaBytes.Value : ImmutableArray<Byte>
+PipeWire.NET.Spa.SpaChoice
+PipeWire.NET.Spa.SpaChoice..ctor(SpaChoiceType, SpaType, ImmutableArray<SpaValue>)
+PipeWire.NET.Spa.SpaChoice.Alternatives : ImmutableArray<SpaValue>
+PipeWire.NET.Spa.SpaChoice.ChildType : SpaType
+PipeWire.NET.Spa.SpaChoice.Deconstruct(SpaChoiceType&, SpaType&, ImmutableArray`1&)
+PipeWire.NET.Spa.SpaChoice.Default : SpaValue
+PipeWire.NET.Spa.SpaChoice.Equals(Object)
+PipeWire.NET.Spa.SpaChoice.Equals(SpaChoice)
+PipeWire.NET.Spa.SpaChoice.Equals(SpaValue)
+PipeWire.NET.Spa.SpaChoice.GetHashCode()
+PipeWire.NET.Spa.SpaChoice.Kind : SpaChoiceType
+PipeWire.NET.Spa.SpaChoice.ToString()
+PipeWire.NET.Spa.SpaChoice.Type : SpaType
+PipeWire.NET.Spa.SpaChoiceType
+PipeWire.NET.Spa.SpaChoiceType.Enum = SpaChoiceType
+PipeWire.NET.Spa.SpaChoiceType.Flags = SpaChoiceType
+PipeWire.NET.Spa.SpaChoiceType.None = SpaChoiceType
+PipeWire.NET.Spa.SpaChoiceType.Range = SpaChoiceType
+PipeWire.NET.Spa.SpaChoiceType.Step = SpaChoiceType
+PipeWire.NET.Spa.SpaChoiceType.value__ = UInt32
+PipeWire.NET.Spa.SpaControl
+PipeWire.NET.Spa.SpaControl..ctor(UInt32, UInt32, SpaValue)
+PipeWire.NET.Spa.SpaControl.Deconstruct(UInt32&, UInt32&, SpaValue&)
+PipeWire.NET.Spa.SpaControl.Equals(Object)
+PipeWire.NET.Spa.SpaControl.Equals(SpaControl)
+PipeWire.NET.Spa.SpaControl.GetHashCode()
+PipeWire.NET.Spa.SpaControl.Offset : UInt32
+PipeWire.NET.Spa.SpaControl.ToString()
+PipeWire.NET.Spa.SpaControl.Type : UInt32
+PipeWire.NET.Spa.SpaControl.Value : SpaValue
+PipeWire.NET.Spa.SpaDataType
+PipeWire.NET.Spa.SpaDataType.DmaBuf = SpaDataType
+PipeWire.NET.Spa.SpaDataType.Invalid = SpaDataType
+PipeWire.NET.Spa.SpaDataType.MemFd = SpaDataType
+PipeWire.NET.Spa.SpaDataType.MemId = SpaDataType
+PipeWire.NET.Spa.SpaDataType.MemPtr = SpaDataType
+PipeWire.NET.Spa.SpaDataType.SyncObj = SpaDataType
+PipeWire.NET.Spa.SpaDataType.value__ = UInt32
+PipeWire.NET.Spa.SpaDirection
+PipeWire.NET.Spa.SpaDirection.Input = SpaDirection
+PipeWire.NET.Spa.SpaDirection.Output = SpaDirection
+PipeWire.NET.Spa.SpaDirection.value__ = UInt32
+PipeWire.NET.Spa.SpaDouble
+PipeWire.NET.Spa.SpaDouble..ctor(Double)
+PipeWire.NET.Spa.SpaDouble.Deconstruct(Double&)
+PipeWire.NET.Spa.SpaDouble.Equals(Object)
+PipeWire.NET.Spa.SpaDouble.Equals(SpaDouble)
+PipeWire.NET.Spa.SpaDouble.Equals(SpaValue)
+PipeWire.NET.Spa.SpaDouble.GetHashCode()
+PipeWire.NET.Spa.SpaDouble.ToString()
+PipeWire.NET.Spa.SpaDouble.Type : SpaType
+PipeWire.NET.Spa.SpaDouble.Value : Double
+PipeWire.NET.Spa.SpaFd
+PipeWire.NET.Spa.SpaFd..ctor(Int64)
+PipeWire.NET.Spa.SpaFd.Deconstruct(Int64&)
+PipeWire.NET.Spa.SpaFd.Equals(Object)
+PipeWire.NET.Spa.SpaFd.Equals(SpaFd)
+PipeWire.NET.Spa.SpaFd.Equals(SpaValue)
+PipeWire.NET.Spa.SpaFd.GetHashCode()
+PipeWire.NET.Spa.SpaFd.ToString()
+PipeWire.NET.Spa.SpaFd.Type : SpaType
+PipeWire.NET.Spa.SpaFd.Value : Int64
+PipeWire.NET.Spa.SpaFloat
+PipeWire.NET.Spa.SpaFloat..ctor(Single)
+PipeWire.NET.Spa.SpaFloat.Deconstruct(Single&)
+PipeWire.NET.Spa.SpaFloat.Equals(Object)
+PipeWire.NET.Spa.SpaFloat.Equals(SpaFloat)
+PipeWire.NET.Spa.SpaFloat.Equals(SpaValue)
+PipeWire.NET.Spa.SpaFloat.GetHashCode()
+PipeWire.NET.Spa.SpaFloat.ToString()
+PipeWire.NET.Spa.SpaFloat.Type : SpaType
+PipeWire.NET.Spa.SpaFloat.Value : Single
+PipeWire.NET.Spa.SpaFormat
+PipeWire.NET.Spa.SpaFormat.AudioAacStreamFormat = SpaFormat
+PipeWire.NET.Spa.SpaFormat.AudioAmrBandMode = SpaFormat
+PipeWire.NET.Spa.SpaFormat.AudioBitorder = SpaFormat
+PipeWire.NET.Spa.SpaFormat.AudioBitrate = SpaFormat
+PipeWire.NET.Spa.SpaFormat.AudioBlockAlign = SpaFormat
+PipeWire.NET.Spa.SpaFormat.AudioChannels = SpaFormat
+PipeWire.NET.Spa.SpaFormat.AudioDtsExtType = SpaFormat
+PipeWire.NET.Spa.SpaFormat.AudioFlags = SpaFormat
+PipeWire.NET.Spa.SpaFormat.AudioFormat = SpaFormat
+PipeWire.NET.Spa.SpaFormat.AudioIec958Codec = SpaFormat
+PipeWire.NET.Spa.SpaFormat.AudioInterleave = SpaFormat
+PipeWire.NET.Spa.SpaFormat.AudioMp3ChannelMode = SpaFormat
+PipeWire.NET.Spa.SpaFormat.AudioPosition = SpaFormat
+PipeWire.NET.Spa.SpaFormat.AudioRate = SpaFormat
+PipeWire.NET.Spa.SpaFormat.AudioWmaProfile = SpaFormat
+PipeWire.NET.Spa.SpaFormat.ControlTypes = SpaFormat
+PipeWire.NET.Spa.SpaFormat.MediaSubtype = SpaFormat
+PipeWire.NET.Spa.SpaFormat.MediaType = SpaFormat
+PipeWire.NET.Spa.SpaFormat.Start = SpaFormat
+PipeWire.NET.Spa.SpaFormat.StartApplication = SpaFormat
+PipeWire.NET.Spa.SpaFormat.StartAudio = SpaFormat
+PipeWire.NET.Spa.SpaFormat.StartBinary = SpaFormat
+PipeWire.NET.Spa.SpaFormat.StartImage = SpaFormat
+PipeWire.NET.Spa.SpaFormat.StartStream = SpaFormat
+PipeWire.NET.Spa.SpaFormat.StartVideo = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoChromaSite = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoColorMatrix = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoColorPrimaries = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoColorRange = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoDeviceId = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoFormat = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoFramerate = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoH264Alignment = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoH264StreamFormat = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoH265Alignment = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoH265StreamFormat = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoInterlaceMode = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoLevel = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoMaxFramerate = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoModifier = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoMultiviewFlags = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoMultiviewMode = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoPixelAspectRatio = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoProfile = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoSize = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoTransferFunction = SpaFormat
+PipeWire.NET.Spa.SpaFormat.VideoViews = SpaFormat
+PipeWire.NET.Spa.SpaFormat.value__ = UInt32
+PipeWire.NET.Spa.SpaFraction
+PipeWire.NET.Spa.SpaFraction..ctor(UInt32, UInt32)
+PipeWire.NET.Spa.SpaFraction.Deconstruct(UInt32&, UInt32&)
+PipeWire.NET.Spa.SpaFraction.Denominator : UInt32
+PipeWire.NET.Spa.SpaFraction.Equals(Object)
+PipeWire.NET.Spa.SpaFraction.Equals(SpaFraction)
+PipeWire.NET.Spa.SpaFraction.Equals(SpaValue)
+PipeWire.NET.Spa.SpaFraction.GetHashCode()
+PipeWire.NET.Spa.SpaFraction.Numerator : UInt32
+PipeWire.NET.Spa.SpaFraction.ToString()
+PipeWire.NET.Spa.SpaFraction.Type : SpaType
+PipeWire.NET.Spa.SpaId
+PipeWire.NET.Spa.SpaId..ctor(UInt32)
+PipeWire.NET.Spa.SpaId.Deconstruct(UInt32&)
+PipeWire.NET.Spa.SpaId.Equals(Object)
+PipeWire.NET.Spa.SpaId.Equals(SpaId)
+PipeWire.NET.Spa.SpaId.Equals(SpaValue)
+PipeWire.NET.Spa.SpaId.GetHashCode()
+PipeWire.NET.Spa.SpaId.ToString()
+PipeWire.NET.Spa.SpaId.Type : SpaType
+PipeWire.NET.Spa.SpaId.Value : UInt32
+PipeWire.NET.Spa.SpaIdValue
+PipeWire.NET.Spa.SpaIdValue.As()
+PipeWire.NET.Spa.SpaIdValue.Equals(Object)
+PipeWire.NET.Spa.SpaIdValue.Equals(SpaIdValue)
+PipeWire.NET.Spa.SpaIdValue.FromRaw(UInt32)
+PipeWire.NET.Spa.SpaIdValue.GetHashCode()
+PipeWire.NET.Spa.SpaIdValue.ToString()
+PipeWire.NET.Spa.SpaIdValue.Value : UInt32
+PipeWire.NET.Spa.SpaInt
+PipeWire.NET.Spa.SpaInt..ctor(Int32)
+PipeWire.NET.Spa.SpaInt.Deconstruct(Int32&)
+PipeWire.NET.Spa.SpaInt.Equals(Object)
+PipeWire.NET.Spa.SpaInt.Equals(SpaInt)
+PipeWire.NET.Spa.SpaInt.Equals(SpaValue)
+PipeWire.NET.Spa.SpaInt.GetHashCode()
+PipeWire.NET.Spa.SpaInt.ToString()
+PipeWire.NET.Spa.SpaInt.Type : SpaType
+PipeWire.NET.Spa.SpaInt.Value : Int32
+PipeWire.NET.Spa.SpaIoPositionState
+PipeWire.NET.Spa.SpaIoPositionState.Running = SpaIoPositionState
+PipeWire.NET.Spa.SpaIoPositionState.Starting = SpaIoPositionState
+PipeWire.NET.Spa.SpaIoPositionState.Stopped = SpaIoPositionState
+PipeWire.NET.Spa.SpaIoPositionState.value__ = UInt32
+PipeWire.NET.Spa.SpaIoType
+PipeWire.NET.Spa.SpaIoType.AsyncBuffers = SpaIoType
+PipeWire.NET.Spa.SpaIoType.Buffers = SpaIoType
+PipeWire.NET.Spa.SpaIoType.Clock = SpaIoType
+PipeWire.NET.Spa.SpaIoType.Control = SpaIoType
+PipeWire.NET.Spa.SpaIoType.Invalid = SpaIoType
+PipeWire.NET.Spa.SpaIoType.Latency = SpaIoType
+PipeWire.NET.Spa.SpaIoType.Memory = SpaIoType
+PipeWire.NET.Spa.SpaIoType.Notify = SpaIoType
+PipeWire.NET.Spa.SpaIoType.Position = SpaIoType
+PipeWire.NET.Spa.SpaIoType.Range = SpaIoType
+PipeWire.NET.Spa.SpaIoType.RateMatch = SpaIoType
+PipeWire.NET.Spa.SpaIoType.value__ = UInt32
+PipeWire.NET.Spa.SpaKey
+PipeWire.NET.Spa.SpaKey.As()
+PipeWire.NET.Spa.SpaKey.Equals(Object)
+PipeWire.NET.Spa.SpaKey.Equals(SpaKey)
+PipeWire.NET.Spa.SpaKey.FromRaw(UInt32)
+PipeWire.NET.Spa.SpaKey.GetHashCode()
+PipeWire.NET.Spa.SpaKey.ToString()
+PipeWire.NET.Spa.SpaKey.Value : UInt32
+PipeWire.NET.Spa.SpaLong
+PipeWire.NET.Spa.SpaLong..ctor(Int64)
+PipeWire.NET.Spa.SpaLong.Deconstruct(Int64&)
+PipeWire.NET.Spa.SpaLong.Equals(Object)
+PipeWire.NET.Spa.SpaLong.Equals(SpaLong)
+PipeWire.NET.Spa.SpaLong.Equals(SpaValue)
+PipeWire.NET.Spa.SpaLong.GetHashCode()
+PipeWire.NET.Spa.SpaLong.ToString()
+PipeWire.NET.Spa.SpaLong.Type : SpaType
+PipeWire.NET.Spa.SpaLong.Value : Int64
+PipeWire.NET.Spa.SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Aac = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Ac3 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Adpcm = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Alac = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Amr = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Ape = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Bayer = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Control = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Dsd = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Dsp = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Dts = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Dv = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Eac3 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Flac = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.G723 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.G726 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.G729 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Gsm = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.H263 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.H264 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.H265 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Iec958 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Jpeg = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Midi = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Mjpg = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Mp3 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Mpeg1 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Mpeg2 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Mpeg4 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Mpegh = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Mpegts = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Opus = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Ra = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Raw = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Sbc = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.StartApplication = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.StartAudio = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.StartBinary = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.StartImage = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.StartStream = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.StartVideo = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Truehd = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Unknown = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Vc1 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Vorbis = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Vp8 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Vp9 = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Wma = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.Xvid = SpaMediaSubtype
+PipeWire.NET.Spa.SpaMediaSubtype.value__ = UInt32
+PipeWire.NET.Spa.SpaMediaType
+PipeWire.NET.Spa.SpaMediaType.Application = SpaMediaType
+PipeWire.NET.Spa.SpaMediaType.Audio = SpaMediaType
+PipeWire.NET.Spa.SpaMediaType.Binary = SpaMediaType
+PipeWire.NET.Spa.SpaMediaType.Image = SpaMediaType
+PipeWire.NET.Spa.SpaMediaType.Stream = SpaMediaType
+PipeWire.NET.Spa.SpaMediaType.Unknown = SpaMediaType
+PipeWire.NET.Spa.SpaMediaType.Video = SpaMediaType
+PipeWire.NET.Spa.SpaMediaType.value__ = UInt32
+PipeWire.NET.Spa.SpaMetaType
+PipeWire.NET.Spa.SpaMetaType.Bitmap = SpaMetaType
+PipeWire.NET.Spa.SpaMetaType.Busy = SpaMetaType
+PipeWire.NET.Spa.SpaMetaType.Control = SpaMetaType
+PipeWire.NET.Spa.SpaMetaType.Cursor = SpaMetaType
+PipeWire.NET.Spa.SpaMetaType.Header = SpaMetaType
+PipeWire.NET.Spa.SpaMetaType.Invalid = SpaMetaType
+PipeWire.NET.Spa.SpaMetaType.StartCustom = SpaMetaType
+PipeWire.NET.Spa.SpaMetaType.StartFeatures = SpaMetaType
+PipeWire.NET.Spa.SpaMetaType.SyncTimeline = SpaMetaType
+PipeWire.NET.Spa.SpaMetaType.VideoCrop = SpaMetaType
+PipeWire.NET.Spa.SpaMetaType.VideoDamage = SpaMetaType
+PipeWire.NET.Spa.SpaMetaType.VideoTransform = SpaMetaType
+PipeWire.NET.Spa.SpaMetaType.value__ = UInt32
+PipeWire.NET.Spa.SpaMetaVideotransformValue
+PipeWire.NET.Spa.SpaMetaVideotransformValue.Flipped = SpaMetaVideotransformValue
+PipeWire.NET.Spa.SpaMetaVideotransformValue.Flipped180 = SpaMetaVideotransformValue
+PipeWire.NET.Spa.SpaMetaVideotransformValue.Flipped270 = SpaMetaVideotransformValue
+PipeWire.NET.Spa.SpaMetaVideotransformValue.Flipped90 = SpaMetaVideotransformValue
+PipeWire.NET.Spa.SpaMetaVideotransformValue.None = SpaMetaVideotransformValue
+PipeWire.NET.Spa.SpaMetaVideotransformValue.Rotate180 = SpaMetaVideotransformValue
+PipeWire.NET.Spa.SpaMetaVideotransformValue.Rotate270 = SpaMetaVideotransformValue
+PipeWire.NET.Spa.SpaMetaVideotransformValue.Rotate90 = SpaMetaVideotransformValue
+PipeWire.NET.Spa.SpaMetaVideotransformValue.value__ = UInt32
+PipeWire.NET.Spa.SpaNestedPod
+PipeWire.NET.Spa.SpaNestedPod..ctor(SpaValue)
+PipeWire.NET.Spa.SpaNestedPod.Deconstruct(SpaValue&)
+PipeWire.NET.Spa.SpaNestedPod.Equals(Object)
+PipeWire.NET.Spa.SpaNestedPod.Equals(SpaNestedPod)
+PipeWire.NET.Spa.SpaNestedPod.Equals(SpaValue)
+PipeWire.NET.Spa.SpaNestedPod.GetHashCode()
+PipeWire.NET.Spa.SpaNestedPod.ToString()
+PipeWire.NET.Spa.SpaNestedPod.Type : SpaType
+PipeWire.NET.Spa.SpaNestedPod.Value : SpaValue
+PipeWire.NET.Spa.SpaNone
+PipeWire.NET.Spa.SpaNone..ctor()
+PipeWire.NET.Spa.SpaNone.Equals(Object)
+PipeWire.NET.Spa.SpaNone.Equals(SpaNone)
+PipeWire.NET.Spa.SpaNone.Equals(SpaValue)
+PipeWire.NET.Spa.SpaNone.GetHashCode()
+PipeWire.NET.Spa.SpaNone.Instance : SpaNone
+PipeWire.NET.Spa.SpaNone.ToString()
+PipeWire.NET.Spa.SpaNone.Type : SpaType
+PipeWire.NET.Spa.SpaObject
+PipeWire.NET.Spa.SpaObject..ctor(SpaType, SpaParamType, ImmutableArray<SpaProperty>)
+PipeWire.NET.Spa.SpaObject.Deconstruct(SpaType&, SpaParamType&, ImmutableArray`1&)
+PipeWire.NET.Spa.SpaObject.Equals(Object)
+PipeWire.NET.Spa.SpaObject.Equals(SpaObject)
+PipeWire.NET.Spa.SpaObject.Equals(SpaValue)
+PipeWire.NET.Spa.SpaObject.Find(SpaKey)
+PipeWire.NET.Spa.SpaObject.GetHashCode()
+PipeWire.NET.Spa.SpaObject.Item : SpaValue
+PipeWire.NET.Spa.SpaObject.ObjectId : SpaParamType
+PipeWire.NET.Spa.SpaObject.ObjectType : SpaType
+PipeWire.NET.Spa.SpaObject.Properties : ImmutableArray<SpaProperty>
+PipeWire.NET.Spa.SpaObject.ToString()
+PipeWire.NET.Spa.SpaObject.Type : SpaType
+PipeWire.NET.Spa.SpaParamAvailability
+PipeWire.NET.Spa.SpaParamAvailability.No = SpaParamAvailability
+PipeWire.NET.Spa.SpaParamAvailability.Unknown = SpaParamAvailability
+PipeWire.NET.Spa.SpaParamAvailability.Yes = SpaParamAvailability
+PipeWire.NET.Spa.SpaParamAvailability.value__ = UInt32
+PipeWire.NET.Spa.SpaParamBitorder
+PipeWire.NET.Spa.SpaParamBitorder.Lsb = SpaParamBitorder
+PipeWire.NET.Spa.SpaParamBitorder.Msb = SpaParamBitorder
+PipeWire.NET.Spa.SpaParamBitorder.Unknown = SpaParamBitorder
+PipeWire.NET.Spa.SpaParamBitorder.value__ = UInt32
+PipeWire.NET.Spa.SpaParamBuffers
+PipeWire.NET.Spa.SpaParamBuffers.Align = SpaParamBuffers
+PipeWire.NET.Spa.SpaParamBuffers.Blocks = SpaParamBuffers
+PipeWire.NET.Spa.SpaParamBuffers.Buffers = SpaParamBuffers
+PipeWire.NET.Spa.SpaParamBuffers.DataType = SpaParamBuffers
+PipeWire.NET.Spa.SpaParamBuffers.MetaType = SpaParamBuffers
+PipeWire.NET.Spa.SpaParamBuffers.Size = SpaParamBuffers
+PipeWire.NET.Spa.SpaParamBuffers.Start = SpaParamBuffers
+PipeWire.NET.Spa.SpaParamBuffers.Stride = SpaParamBuffers
+PipeWire.NET.Spa.SpaParamBuffers.value__ = UInt32
+PipeWire.NET.Spa.SpaParamInfoFlags
+PipeWire.NET.Spa.SpaParamInfoFlags.Read = UInt32
+PipeWire.NET.Spa.SpaParamInfoFlags.Serial = UInt32
+PipeWire.NET.Spa.SpaParamInfoFlags.Write = UInt32
+PipeWire.NET.Spa.SpaParamIo
+PipeWire.NET.Spa.SpaParamIo.Id = SpaParamIo
+PipeWire.NET.Spa.SpaParamIo.Size = SpaParamIo
+PipeWire.NET.Spa.SpaParamIo.Start = SpaParamIo
+PipeWire.NET.Spa.SpaParamIo.value__ = UInt32
+PipeWire.NET.Spa.SpaParamLatency
+PipeWire.NET.Spa.SpaParamLatency.Direction = SpaParamLatency
+PipeWire.NET.Spa.SpaParamLatency.MaxNs = SpaParamLatency
+PipeWire.NET.Spa.SpaParamLatency.MaxQuantum = SpaParamLatency
+PipeWire.NET.Spa.SpaParamLatency.MaxRate = SpaParamLatency
+PipeWire.NET.Spa.SpaParamLatency.MinNs = SpaParamLatency
+PipeWire.NET.Spa.SpaParamLatency.MinQuantum = SpaParamLatency
+PipeWire.NET.Spa.SpaParamLatency.MinRate = SpaParamLatency
+PipeWire.NET.Spa.SpaParamLatency.Start = SpaParamLatency
+PipeWire.NET.Spa.SpaParamLatency.value__ = UInt32
+PipeWire.NET.Spa.SpaParamMeta
+PipeWire.NET.Spa.SpaParamMeta.Features = SpaParamMeta
+PipeWire.NET.Spa.SpaParamMeta.Size = SpaParamMeta
+PipeWire.NET.Spa.SpaParamMeta.Start = SpaParamMeta
+PipeWire.NET.Spa.SpaParamMeta.Type = SpaParamMeta
+PipeWire.NET.Spa.SpaParamMeta.value__ = UInt32
+PipeWire.NET.Spa.SpaParamPortConfig
+PipeWire.NET.Spa.SpaParamPortConfig.Control = SpaParamPortConfig
+PipeWire.NET.Spa.SpaParamPortConfig.Direction = SpaParamPortConfig
+PipeWire.NET.Spa.SpaParamPortConfig.Format = SpaParamPortConfig
+PipeWire.NET.Spa.SpaParamPortConfig.Mode = SpaParamPortConfig
+PipeWire.NET.Spa.SpaParamPortConfig.Monitor = SpaParamPortConfig
+PipeWire.NET.Spa.SpaParamPortConfig.Start = SpaParamPortConfig
+PipeWire.NET.Spa.SpaParamPortConfig.value__ = UInt32
+PipeWire.NET.Spa.SpaParamPortConfigMode
+PipeWire.NET.Spa.SpaParamPortConfigMode.Convert = SpaParamPortConfigMode
+PipeWire.NET.Spa.SpaParamPortConfigMode.Dsp = SpaParamPortConfigMode
+PipeWire.NET.Spa.SpaParamPortConfigMode.None = SpaParamPortConfigMode
+PipeWire.NET.Spa.SpaParamPortConfigMode.Passthrough = SpaParamPortConfigMode
+PipeWire.NET.Spa.SpaParamPortConfigMode.value__ = UInt32
+PipeWire.NET.Spa.SpaParamProcessLatency
+PipeWire.NET.Spa.SpaParamProcessLatency.Ns = SpaParamProcessLatency
+PipeWire.NET.Spa.SpaParamProcessLatency.Quantum = SpaParamProcessLatency
+PipeWire.NET.Spa.SpaParamProcessLatency.Rate = SpaParamProcessLatency
+PipeWire.NET.Spa.SpaParamProcessLatency.Start = SpaParamProcessLatency
+PipeWire.NET.Spa.SpaParamProcessLatency.value__ = UInt32
+PipeWire.NET.Spa.SpaParamProfile
+PipeWire.NET.Spa.SpaParamProfile.Available = SpaParamProfile
+PipeWire.NET.Spa.SpaParamProfile.Classes = SpaParamProfile
+PipeWire.NET.Spa.SpaParamProfile.Description = SpaParamProfile
+PipeWire.NET.Spa.SpaParamProfile.Index = SpaParamProfile
+PipeWire.NET.Spa.SpaParamProfile.Info = SpaParamProfile
+PipeWire.NET.Spa.SpaParamProfile.Name = SpaParamProfile
+PipeWire.NET.Spa.SpaParamProfile.Priority = SpaParamProfile
+PipeWire.NET.Spa.SpaParamProfile.Save = SpaParamProfile
+PipeWire.NET.Spa.SpaParamProfile.Start = SpaParamProfile
+PipeWire.NET.Spa.SpaParamProfile.value__ = UInt32
+PipeWire.NET.Spa.SpaParamRoute
+PipeWire.NET.Spa.SpaParamRoute.Available = SpaParamRoute
+PipeWire.NET.Spa.SpaParamRoute.Description = SpaParamRoute
+PipeWire.NET.Spa.SpaParamRoute.Device = SpaParamRoute
+PipeWire.NET.Spa.SpaParamRoute.Devices = SpaParamRoute
+PipeWire.NET.Spa.SpaParamRoute.Direction = SpaParamRoute
+PipeWire.NET.Spa.SpaParamRoute.Index = SpaParamRoute
+PipeWire.NET.Spa.SpaParamRoute.Info = SpaParamRoute
+PipeWire.NET.Spa.SpaParamRoute.Name = SpaParamRoute
+PipeWire.NET.Spa.SpaParamRoute.Priority = SpaParamRoute
+PipeWire.NET.Spa.SpaParamRoute.Profile = SpaParamRoute
+PipeWire.NET.Spa.SpaParamRoute.Profiles = SpaParamRoute
+PipeWire.NET.Spa.SpaParamRoute.Props = SpaParamRoute
+PipeWire.NET.Spa.SpaParamRoute.Save = SpaParamRoute
+PipeWire.NET.Spa.SpaParamRoute.Start = SpaParamRoute
+PipeWire.NET.Spa.SpaParamRoute.value__ = UInt32
+PipeWire.NET.Spa.SpaParamTag
+PipeWire.NET.Spa.SpaParamTag.Direction = SpaParamTag
+PipeWire.NET.Spa.SpaParamTag.Info = SpaParamTag
+PipeWire.NET.Spa.SpaParamTag.Start = SpaParamTag
+PipeWire.NET.Spa.SpaParamTag.value__ = UInt32
+PipeWire.NET.Spa.SpaParamType
+PipeWire.NET.Spa.SpaParamType.Buffers = SpaParamType
+PipeWire.NET.Spa.SpaParamType.Capability = SpaParamType
+PipeWire.NET.Spa.SpaParamType.Control = SpaParamType
+PipeWire.NET.Spa.SpaParamType.EnumFormat = SpaParamType
+PipeWire.NET.Spa.SpaParamType.EnumPortConfig = SpaParamType
+PipeWire.NET.Spa.SpaParamType.EnumProfile = SpaParamType
+PipeWire.NET.Spa.SpaParamType.EnumRoute = SpaParamType
+PipeWire.NET.Spa.SpaParamType.Format = SpaParamType
+PipeWire.NET.Spa.SpaParamType.Invalid = SpaParamType
+PipeWire.NET.Spa.SpaParamType.Io = SpaParamType
+PipeWire.NET.Spa.SpaParamType.Latency = SpaParamType
+PipeWire.NET.Spa.SpaParamType.Meta = SpaParamType
+PipeWire.NET.Spa.SpaParamType.PeerCapability = SpaParamType
+PipeWire.NET.Spa.SpaParamType.PeerEnumFormat = SpaParamType
+PipeWire.NET.Spa.SpaParamType.PortConfig = SpaParamType
+PipeWire.NET.Spa.SpaParamType.ProcessLatency = SpaParamType
+PipeWire.NET.Spa.SpaParamType.Profile = SpaParamType
+PipeWire.NET.Spa.SpaParamType.PropInfo = SpaParamType
+PipeWire.NET.Spa.SpaParamType.Props = SpaParamType
+PipeWire.NET.Spa.SpaParamType.Route = SpaParamType
+PipeWire.NET.Spa.SpaParamType.Tag = SpaParamType
+PipeWire.NET.Spa.SpaParamType.value__ = UInt32
+PipeWire.NET.Spa.SpaPod
+PipeWire.NET.Spa.SpaPod.GetByteCount(SpaValue)
+PipeWire.NET.Spa.SpaPod.MaxDepth = Int32
+PipeWire.NET.Spa.SpaPod.ToBytes(SpaValue)
+PipeWire.NET.Spa.SpaPod.TryParse(ReadOnlySpan<Byte>, SpaValue&)
+PipeWire.NET.Spa.SpaPod.TryWrite(SpaValue, Span<Byte>, Int32&)
+PipeWire.NET.Spa.SpaPodPropFlag
+PipeWire.NET.Spa.SpaPodPropFlag.DontFixate = UInt32
+PipeWire.NET.Spa.SpaPodPropFlag.Hardware = UInt32
+PipeWire.NET.Spa.SpaPodPropFlag.HintDict = UInt32
+PipeWire.NET.Spa.SpaPodPropFlag.Mandatory = UInt32
+PipeWire.NET.Spa.SpaPodPropFlag.Readonly = UInt32
+PipeWire.NET.Spa.SpaPointer
+PipeWire.NET.Spa.SpaPointer..ctor(SpaType, UInt64)
+PipeWire.NET.Spa.SpaPointer.Address : UInt64
+PipeWire.NET.Spa.SpaPointer.Deconstruct(SpaType&, UInt64&)
+PipeWire.NET.Spa.SpaPointer.Equals(Object)
+PipeWire.NET.Spa.SpaPointer.Equals(SpaPointer)
+PipeWire.NET.Spa.SpaPointer.Equals(SpaValue)
+PipeWire.NET.Spa.SpaPointer.GetHashCode()
+PipeWire.NET.Spa.SpaPointer.PointerType : SpaType
+PipeWire.NET.Spa.SpaPointer.ToString()
+PipeWire.NET.Spa.SpaPointer.Type : SpaType
+PipeWire.NET.Spa.SpaProfiler
+PipeWire.NET.Spa.SpaProfiler.Clock = SpaProfiler
+PipeWire.NET.Spa.SpaProfiler.DriverBlock = SpaProfiler
+PipeWire.NET.Spa.SpaProfiler.FollowerBlock = SpaProfiler
+PipeWire.NET.Spa.SpaProfiler.FollowerClock = SpaProfiler
+PipeWire.NET.Spa.SpaProfiler.Info = SpaProfiler
+PipeWire.NET.Spa.SpaProfiler.Start = SpaProfiler
+PipeWire.NET.Spa.SpaProfiler.StartCustom = SpaProfiler
+PipeWire.NET.Spa.SpaProfiler.StartDriver = SpaProfiler
+PipeWire.NET.Spa.SpaProfiler.StartFollower = SpaProfiler
+PipeWire.NET.Spa.SpaProfiler.value__ = UInt32
+PipeWire.NET.Spa.SpaProp
+PipeWire.NET.Spa.SpaProp.BluetoothAudioCodec = SpaProp
+PipeWire.NET.Spa.SpaProp.BluetoothOffloadActive = SpaProp
+PipeWire.NET.Spa.SpaProp.Brightness = SpaProp
+PipeWire.NET.Spa.SpaProp.Card = SpaProp
+PipeWire.NET.Spa.SpaProp.CardName = SpaProp
+PipeWire.NET.Spa.SpaProp.ChannelMap = SpaProp
+PipeWire.NET.Spa.SpaProp.ChannelVolumes = SpaProp
+PipeWire.NET.Spa.SpaProp.ClockDevice = SpaProp
+PipeWire.NET.Spa.SpaProp.ClockId = SpaProp
+PipeWire.NET.Spa.SpaProp.ClockInterface = SpaProp
+PipeWire.NET.Spa.SpaProp.Contrast = SpaProp
+PipeWire.NET.Spa.SpaProp.Device = SpaProp
+PipeWire.NET.Spa.SpaProp.DeviceFd = SpaProp
+PipeWire.NET.Spa.SpaProp.DeviceName = SpaProp
+PipeWire.NET.Spa.SpaProp.DitherType = SpaProp
+PipeWire.NET.Spa.SpaProp.Exposure = SpaProp
+PipeWire.NET.Spa.SpaProp.Frequency = SpaProp
+PipeWire.NET.Spa.SpaProp.Gain = SpaProp
+PipeWire.NET.Spa.SpaProp.Gamma = SpaProp
+PipeWire.NET.Spa.SpaProp.Hue = SpaProp
+PipeWire.NET.Spa.SpaProp.Iec958Codecs = SpaProp
+PipeWire.NET.Spa.SpaProp.LatencyOffsetNsec = SpaProp
+PipeWire.NET.Spa.SpaProp.Live = SpaProp
+PipeWire.NET.Spa.SpaProp.MaxLatency = SpaProp
+PipeWire.NET.Spa.SpaProp.MinLatency = SpaProp
+PipeWire.NET.Spa.SpaProp.MonitorMute = SpaProp
+PipeWire.NET.Spa.SpaProp.MonitorVolumes = SpaProp
+PipeWire.NET.Spa.SpaProp.Mute = SpaProp
+PipeWire.NET.Spa.SpaProp.Params = SpaProp
+PipeWire.NET.Spa.SpaProp.PatternType = SpaProp
+PipeWire.NET.Spa.SpaProp.PeriodEvent = SpaProp
+PipeWire.NET.Spa.SpaProp.PeriodSize = SpaProp
+PipeWire.NET.Spa.SpaProp.Periods = SpaProp
+PipeWire.NET.Spa.SpaProp.Quality = SpaProp
+PipeWire.NET.Spa.SpaProp.Rate = SpaProp
+PipeWire.NET.Spa.SpaProp.Saturation = SpaProp
+PipeWire.NET.Spa.SpaProp.Sharpness = SpaProp
+PipeWire.NET.Spa.SpaProp.SoftMute = SpaProp
+PipeWire.NET.Spa.SpaProp.SoftVolumes = SpaProp
+PipeWire.NET.Spa.SpaProp.Start = SpaProp
+PipeWire.NET.Spa.SpaProp.StartAudio = SpaProp
+PipeWire.NET.Spa.SpaProp.StartCustom = SpaProp
+PipeWire.NET.Spa.SpaProp.StartDevice = SpaProp
+PipeWire.NET.Spa.SpaProp.StartOther = SpaProp
+PipeWire.NET.Spa.SpaProp.StartVideo = SpaProp
+PipeWire.NET.Spa.SpaProp.Truncate = SpaProp
+PipeWire.NET.Spa.SpaProp.Unknown = SpaProp
+PipeWire.NET.Spa.SpaProp.Volume = SpaProp
+PipeWire.NET.Spa.SpaProp.VolumeBase = SpaProp
+PipeWire.NET.Spa.SpaProp.VolumeRampSamples = SpaProp
+PipeWire.NET.Spa.SpaProp.VolumeRampScale = SpaProp
+PipeWire.NET.Spa.SpaProp.VolumeRampStepSamples = SpaProp
+PipeWire.NET.Spa.SpaProp.VolumeRampStepTime = SpaProp
+PipeWire.NET.Spa.SpaProp.VolumeRampTime = SpaProp
+PipeWire.NET.Spa.SpaProp.VolumeStep = SpaProp
+PipeWire.NET.Spa.SpaProp.WaveType = SpaProp
+PipeWire.NET.Spa.SpaProp.value__ = UInt32
+PipeWire.NET.Spa.SpaPropInfo
+PipeWire.NET.Spa.SpaPropInfo.Container = SpaPropInfo
+PipeWire.NET.Spa.SpaPropInfo.Description = SpaPropInfo
+PipeWire.NET.Spa.SpaPropInfo.Id = SpaPropInfo
+PipeWire.NET.Spa.SpaPropInfo.Labels = SpaPropInfo
+PipeWire.NET.Spa.SpaPropInfo.Name = SpaPropInfo
+PipeWire.NET.Spa.SpaPropInfo.Params = SpaPropInfo
+PipeWire.NET.Spa.SpaPropInfo.Start = SpaPropInfo
+PipeWire.NET.Spa.SpaPropInfo.Type = SpaPropInfo
+PipeWire.NET.Spa.SpaPropInfo.value__ = UInt32
+PipeWire.NET.Spa.SpaProperty
+PipeWire.NET.Spa.SpaProperty..ctor(SpaKey, UInt32, SpaValue)
+PipeWire.NET.Spa.SpaProperty.Deconstruct(SpaKey&, UInt32&, SpaValue&)
+PipeWire.NET.Spa.SpaProperty.Equals(Object)
+PipeWire.NET.Spa.SpaProperty.Equals(SpaProperty)
+PipeWire.NET.Spa.SpaProperty.Flags : UInt32
+PipeWire.NET.Spa.SpaProperty.GetHashCode()
+PipeWire.NET.Spa.SpaProperty.Key : SpaKey
+PipeWire.NET.Spa.SpaProperty.ToString()
+PipeWire.NET.Spa.SpaProperty.Value : SpaValue
+PipeWire.NET.Spa.SpaRectangle
+PipeWire.NET.Spa.SpaRectangle..ctor(UInt32, UInt32)
+PipeWire.NET.Spa.SpaRectangle.Deconstruct(UInt32&, UInt32&)
+PipeWire.NET.Spa.SpaRectangle.Equals(Object)
+PipeWire.NET.Spa.SpaRectangle.Equals(SpaRectangle)
+PipeWire.NET.Spa.SpaRectangle.Equals(SpaValue)
+PipeWire.NET.Spa.SpaRectangle.GetHashCode()
+PipeWire.NET.Spa.SpaRectangle.Height : UInt32
+PipeWire.NET.Spa.SpaRectangle.ToString()
+PipeWire.NET.Spa.SpaRectangle.Type : SpaType
+PipeWire.NET.Spa.SpaRectangle.Width : UInt32
+PipeWire.NET.Spa.SpaSequence
+PipeWire.NET.Spa.SpaSequence..ctor(UInt32, ImmutableArray<SpaControl>)
+PipeWire.NET.Spa.SpaSequence.Controls : ImmutableArray<SpaControl>
+PipeWire.NET.Spa.SpaSequence.Deconstruct(UInt32&, ImmutableArray`1&)
+PipeWire.NET.Spa.SpaSequence.Equals(Object)
+PipeWire.NET.Spa.SpaSequence.Equals(SpaSequence)
+PipeWire.NET.Spa.SpaSequence.Equals(SpaValue)
+PipeWire.NET.Spa.SpaSequence.GetHashCode()
+PipeWire.NET.Spa.SpaSequence.ToString()
+PipeWire.NET.Spa.SpaSequence.Type : SpaType
+PipeWire.NET.Spa.SpaSequence.Unit : UInt32
+PipeWire.NET.Spa.SpaString
+PipeWire.NET.Spa.SpaString..ctor(String)
+PipeWire.NET.Spa.SpaString.Deconstruct(String&)
+PipeWire.NET.Spa.SpaString.Equals(Object)
+PipeWire.NET.Spa.SpaString.Equals(SpaString)
+PipeWire.NET.Spa.SpaString.Equals(SpaValue)
+PipeWire.NET.Spa.SpaString.GetHashCode()
+PipeWire.NET.Spa.SpaString.ToString()
+PipeWire.NET.Spa.SpaString.Type : SpaType
+PipeWire.NET.Spa.SpaString.Value : String
+PipeWire.NET.Spa.SpaStruct
+PipeWire.NET.Spa.SpaStruct..ctor(ImmutableArray<SpaValue>)
+PipeWire.NET.Spa.SpaStruct.Deconstruct(ImmutableArray`1&)
+PipeWire.NET.Spa.SpaStruct.Equals(Object)
+PipeWire.NET.Spa.SpaStruct.Equals(SpaStruct)
+PipeWire.NET.Spa.SpaStruct.Equals(SpaValue)
+PipeWire.NET.Spa.SpaStruct.Fields : ImmutableArray<SpaValue>
+PipeWire.NET.Spa.SpaStruct.GetHashCode()
+PipeWire.NET.Spa.SpaStruct.ToString()
+PipeWire.NET.Spa.SpaStruct.Type : SpaType
+PipeWire.NET.Spa.SpaType
+PipeWire.NET.Spa.SpaType.Array = SpaType
+PipeWire.NET.Spa.SpaType.Bitmap = SpaType
+PipeWire.NET.Spa.SpaType.Bool = SpaType
+PipeWire.NET.Spa.SpaType.Bytes = SpaType
+PipeWire.NET.Spa.SpaType.Choice = SpaType
+PipeWire.NET.Spa.SpaType.CommandDevice = SpaType
+PipeWire.NET.Spa.SpaType.CommandNode = SpaType
+PipeWire.NET.Spa.SpaType.CommandStart = SpaType
+PipeWire.NET.Spa.SpaType.Double = SpaType
+PipeWire.NET.Spa.SpaType.EventDevice = SpaType
+PipeWire.NET.Spa.SpaType.EventNode = SpaType
+PipeWire.NET.Spa.SpaType.EventStart = SpaType
+PipeWire.NET.Spa.SpaType.Fd = SpaType
+PipeWire.NET.Spa.SpaType.Float = SpaType
+PipeWire.NET.Spa.SpaType.Fraction = SpaType
+PipeWire.NET.Spa.SpaType.Id = SpaType
+PipeWire.NET.Spa.SpaType.Int = SpaType
+PipeWire.NET.Spa.SpaType.Long = SpaType
+PipeWire.NET.Spa.SpaType.None = SpaType
+PipeWire.NET.Spa.SpaType.Object = SpaType
+PipeWire.NET.Spa.SpaType.ObjectFormat = SpaType
+PipeWire.NET.Spa.SpaType.ObjectParamBuffers = SpaType
+PipeWire.NET.Spa.SpaType.ObjectParamDict = SpaType
+PipeWire.NET.Spa.SpaType.ObjectParamIo = SpaType
+PipeWire.NET.Spa.SpaType.ObjectParamLatency = SpaType
+PipeWire.NET.Spa.SpaType.ObjectParamMeta = SpaType
+PipeWire.NET.Spa.SpaType.ObjectParamPortConfig = SpaType
+PipeWire.NET.Spa.SpaType.ObjectParamProcessLatency = SpaType
+PipeWire.NET.Spa.SpaType.ObjectParamProfile = SpaType
+PipeWire.NET.Spa.SpaType.ObjectParamRoute = SpaType
+PipeWire.NET.Spa.SpaType.ObjectParamTag = SpaType
+PipeWire.NET.Spa.SpaType.ObjectPeerParam = SpaType
+PipeWire.NET.Spa.SpaType.ObjectProfiler = SpaType
+PipeWire.NET.Spa.SpaType.ObjectPropInfo = SpaType
+PipeWire.NET.Spa.SpaType.ObjectProps = SpaType
+PipeWire.NET.Spa.SpaType.ObjectStart = SpaType
+PipeWire.NET.Spa.SpaType.Pod = SpaType
+PipeWire.NET.Spa.SpaType.Pointer = SpaType
+PipeWire.NET.Spa.SpaType.PointerBuffer = SpaType
+PipeWire.NET.Spa.SpaType.PointerDict = SpaType
+PipeWire.NET.Spa.SpaType.PointerMeta = SpaType
+PipeWire.NET.Spa.SpaType.PointerStart = SpaType
+PipeWire.NET.Spa.SpaType.Rectangle = SpaType
+PipeWire.NET.Spa.SpaType.Sequence = SpaType
+PipeWire.NET.Spa.SpaType.Start = SpaType
+PipeWire.NET.Spa.SpaType.String = SpaType
+PipeWire.NET.Spa.SpaType.Struct = SpaType
+PipeWire.NET.Spa.SpaType.VendorOther = SpaType
+PipeWire.NET.Spa.SpaType.VendorPipeWire = SpaType
+PipeWire.NET.Spa.SpaType.value__ = UInt32
+PipeWire.NET.Spa.SpaUnknown
+PipeWire.NET.Spa.SpaUnknown..ctor(SpaType, ImmutableArray<Byte>)
+PipeWire.NET.Spa.SpaUnknown.Body : ImmutableArray<Byte>
+PipeWire.NET.Spa.SpaUnknown.Deconstruct(SpaType&, ImmutableArray`1&)
+PipeWire.NET.Spa.SpaUnknown.Equals(Object)
+PipeWire.NET.Spa.SpaUnknown.Equals(SpaUnknown)
+PipeWire.NET.Spa.SpaUnknown.Equals(SpaValue)
+PipeWire.NET.Spa.SpaUnknown.GetHashCode()
+PipeWire.NET.Spa.SpaUnknown.ToString()
+PipeWire.NET.Spa.SpaUnknown.Type : SpaType
+PipeWire.NET.Spa.SpaUnknown.UnknownType : SpaType
+PipeWire.NET.Spa.SpaValue
+PipeWire.NET.Spa.SpaValue.Equals(Object)
+PipeWire.NET.Spa.SpaValue.Equals(SpaValue)
+PipeWire.NET.Spa.SpaValue.GetHashCode()
+PipeWire.NET.Spa.SpaValue.ToString()
+PipeWire.NET.Spa.SpaValue.Type : SpaType
+PipeWire.NET.Spa.SpaVideoChromaSite
+PipeWire.NET.Spa.SpaVideoChromaSite.AltLine = SpaVideoChromaSite
+PipeWire.NET.Spa.SpaVideoChromaSite.Cosited = SpaVideoChromaSite
+PipeWire.NET.Spa.SpaVideoChromaSite.Dv = SpaVideoChromaSite
+PipeWire.NET.Spa.SpaVideoChromaSite.HCosited = SpaVideoChromaSite
+PipeWire.NET.Spa.SpaVideoChromaSite.Jpeg = SpaVideoChromaSite
+PipeWire.NET.Spa.SpaVideoChromaSite.Mpeg2 = SpaVideoChromaSite
+PipeWire.NET.Spa.SpaVideoChromaSite.None = SpaVideoChromaSite
+PipeWire.NET.Spa.SpaVideoChromaSite.Unknown = SpaVideoChromaSite
+PipeWire.NET.Spa.SpaVideoChromaSite.VCosited = SpaVideoChromaSite
+PipeWire.NET.Spa.SpaVideoChromaSite.value__ = UInt32
+PipeWire.NET.Spa.SpaVideoColorMatrix
+PipeWire.NET.Spa.SpaVideoColorMatrix.Bt2020 = SpaVideoColorMatrix
+PipeWire.NET.Spa.SpaVideoColorMatrix.Bt601 = SpaVideoColorMatrix
+PipeWire.NET.Spa.SpaVideoColorMatrix.Bt709 = SpaVideoColorMatrix
+PipeWire.NET.Spa.SpaVideoColorMatrix.Fcc = SpaVideoColorMatrix
+PipeWire.NET.Spa.SpaVideoColorMatrix.Rgb = SpaVideoColorMatrix
+PipeWire.NET.Spa.SpaVideoColorMatrix.Smpte240M = SpaVideoColorMatrix
+PipeWire.NET.Spa.SpaVideoColorMatrix.Unknown = SpaVideoColorMatrix
+PipeWire.NET.Spa.SpaVideoColorMatrix.value__ = UInt32
+PipeWire.NET.Spa.SpaVideoColorPrimaries
+PipeWire.NET.Spa.SpaVideoColorPrimaries.Adobergb = SpaVideoColorPrimaries
+PipeWire.NET.Spa.SpaVideoColorPrimaries.Bt2020 = SpaVideoColorPrimaries
+PipeWire.NET.Spa.SpaVideoColorPrimaries.Bt470Bg = SpaVideoColorPrimaries
+PipeWire.NET.Spa.SpaVideoColorPrimaries.Bt470M = SpaVideoColorPrimaries
+PipeWire.NET.Spa.SpaVideoColorPrimaries.Bt709 = SpaVideoColorPrimaries
+PipeWire.NET.Spa.SpaVideoColorPrimaries.Ebu3213 = SpaVideoColorPrimaries
+PipeWire.NET.Spa.SpaVideoColorPrimaries.Film = SpaVideoColorPrimaries
+PipeWire.NET.Spa.SpaVideoColorPrimaries.Smpte170M = SpaVideoColorPrimaries
+PipeWire.NET.Spa.SpaVideoColorPrimaries.Smpte240M = SpaVideoColorPrimaries
+PipeWire.NET.Spa.SpaVideoColorPrimaries.Smpteeg432 = SpaVideoColorPrimaries
+PipeWire.NET.Spa.SpaVideoColorPrimaries.Smpterp431 = SpaVideoColorPrimaries
+PipeWire.NET.Spa.SpaVideoColorPrimaries.Smptest428 = SpaVideoColorPrimaries
+PipeWire.NET.Spa.SpaVideoColorPrimaries.Unknown = SpaVideoColorPrimaries
+PipeWire.NET.Spa.SpaVideoColorPrimaries.value__ = UInt32
+PipeWire.NET.Spa.SpaVideoColorRange
+PipeWire.NET.Spa.SpaVideoColorRange.Full = SpaVideoColorRange
+PipeWire.NET.Spa.SpaVideoColorRange.Limited = SpaVideoColorRange
+PipeWire.NET.Spa.SpaVideoColorRange.Unknown = SpaVideoColorRange
+PipeWire.NET.Spa.SpaVideoColorRange.value__ = UInt32
+PipeWire.NET.Spa.SpaVideoFlags
+PipeWire.NET.Spa.SpaVideoFlags.Modifier = SpaVideoFlags
+PipeWire.NET.Spa.SpaVideoFlags.ModifierFixationRequired = SpaVideoFlags
+PipeWire.NET.Spa.SpaVideoFlags.None = SpaVideoFlags
+PipeWire.NET.Spa.SpaVideoFlags.PremultipliedAlpha = SpaVideoFlags
+PipeWire.NET.Spa.SpaVideoFlags.VariableFps = SpaVideoFlags
+PipeWire.NET.Spa.SpaVideoFlags.value__ = UInt32
+PipeWire.NET.Spa.SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.A420 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.A420_10Be = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.A420_10Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.A422_10Be = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.A422_10Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.A444_10Be = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.A444_10Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Abgr = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Abgr210Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Argb = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Argb210Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Argb64 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Ayuv = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Ayuv64 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Bgr = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Bgr15 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Bgr16 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Bgra = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Bgra102Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Bgrx = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Bgrx102Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.DspF32 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Encoded = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Gbr = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Gbr10Be = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Gbr10Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Gbr12Be = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Gbr12Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Gbra = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Gbra10Be = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Gbra10Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Gbra12Be = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Gbra12Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Gray16Be = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Gray16Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Gray8 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.I420 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.I420_10Be = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.I420_10Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.I420_12Be = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.I420_12Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.I422_10Be = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.I422_10Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.I422_12Be = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.I422_12Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Iyu1 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Iyu2 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Nv12 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Nv12_64Z32 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Nv16 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Nv21 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Nv24 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Nv61 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.P010_10Be = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.P010_10Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.R210 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Rgb = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Rgb15 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Rgb16 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Rgb8P = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Rgba = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Rgba102Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.RgbaF16 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.RgbaF32 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Rgbx = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Rgbx102Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Unknown = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Uyvp = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Uyvy = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.V210 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.V216 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.V308 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Vyuy = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.XBgr = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.XBgr210Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.XRgb = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.XRgb210Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Y41B = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Y42B = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Y444 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Y444_10Be = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Y444_10Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Y444_12Be = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Y444_12Le = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Yuv9 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Yuy2 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Yv12 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Yvu9 = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.Yvyu = SpaVideoFormat
+PipeWire.NET.Spa.SpaVideoFormat.value__ = UInt32
+PipeWire.NET.Spa.SpaVideoInterlaceMode
+PipeWire.NET.Spa.SpaVideoInterlaceMode.Fields = SpaVideoInterlaceMode
+PipeWire.NET.Spa.SpaVideoInterlaceMode.Interleaved = SpaVideoInterlaceMode
+PipeWire.NET.Spa.SpaVideoInterlaceMode.Mixed = SpaVideoInterlaceMode
+PipeWire.NET.Spa.SpaVideoInterlaceMode.Progressive = SpaVideoInterlaceMode
+PipeWire.NET.Spa.SpaVideoInterlaceMode.value__ = UInt32
+PipeWire.NET.Spa.SpaVideoMultiviewFlags
+PipeWire.NET.Spa.SpaVideoMultiviewFlags.HalfAspect = SpaVideoMultiviewFlags
+PipeWire.NET.Spa.SpaVideoMultiviewFlags.LeftFlipped = SpaVideoMultiviewFlags
+PipeWire.NET.Spa.SpaVideoMultiviewFlags.LeftFlopped = SpaVideoMultiviewFlags
+PipeWire.NET.Spa.SpaVideoMultiviewFlags.MixedMono = SpaVideoMultiviewFlags
+PipeWire.NET.Spa.SpaVideoMultiviewFlags.None = SpaVideoMultiviewFlags
+PipeWire.NET.Spa.SpaVideoMultiviewFlags.RightFlipped = SpaVideoMultiviewFlags
+PipeWire.NET.Spa.SpaVideoMultiviewFlags.RightFlopped = SpaVideoMultiviewFlags
+PipeWire.NET.Spa.SpaVideoMultiviewFlags.RightViewFirst = SpaVideoMultiviewFlags
+PipeWire.NET.Spa.SpaVideoMultiviewFlags.value__ = UInt32
+PipeWire.NET.Spa.SpaVideoMultiviewMode
+PipeWire.NET.Spa.SpaVideoMultiviewMode.Checkerboard = SpaVideoMultiviewMode
+PipeWire.NET.Spa.SpaVideoMultiviewMode.ColumnInterleaved = SpaVideoMultiviewMode
+PipeWire.NET.Spa.SpaVideoMultiviewMode.FrameByFrame = SpaVideoMultiviewMode
+PipeWire.NET.Spa.SpaVideoMultiviewMode.Left = SpaVideoMultiviewMode
+PipeWire.NET.Spa.SpaVideoMultiviewMode.Mono = SpaVideoMultiviewMode
+PipeWire.NET.Spa.SpaVideoMultiviewMode.MultiviewFrameByFrame = SpaVideoMultiviewMode
+PipeWire.NET.Spa.SpaVideoMultiviewMode.None = SpaVideoMultiviewMode
+PipeWire.NET.Spa.SpaVideoMultiviewMode.Right = SpaVideoMultiviewMode
+PipeWire.NET.Spa.SpaVideoMultiviewMode.RowInterleaved = SpaVideoMultiviewMode
+PipeWire.NET.Spa.SpaVideoMultiviewMode.Separated = SpaVideoMultiviewMode
+PipeWire.NET.Spa.SpaVideoMultiviewMode.SideBySide = SpaVideoMultiviewMode
+PipeWire.NET.Spa.SpaVideoMultiviewMode.SideBySideQuincunx = SpaVideoMultiviewMode
+PipeWire.NET.Spa.SpaVideoMultiviewMode.TopBottom = SpaVideoMultiviewMode
+PipeWire.NET.Spa.SpaVideoMultiviewMode.value__ = Int32
+PipeWire.NET.Spa.SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Adobergb = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.AribStdB67 = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Bt2020_10 = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Bt2020_12 = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Bt601 = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Bt709 = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Gamma10 = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Gamma18 = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Gamma20 = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Gamma22 = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Gamma28 = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Log100 = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Log316 = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Smpte2084 = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Smpte240M = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Srgb = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.Unknown = SpaVideoTransferFunction
+PipeWire.NET.Spa.SpaVideoTransferFunction.value__ = UInt32
