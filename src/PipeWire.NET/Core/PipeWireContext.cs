@@ -58,12 +58,37 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
         LoggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
+        _shutdownToken = _shutdown.Token;
         InitializeNative(name);
+    }
+
+    /// <summary>Runs <c>pw_init</c> exactly once for the process.</summary>
+    /// <remarks>
+    /// <para>
+    /// <c>pw_init</c> is reference counted and paired with <c>pw_deinit</c>, which at zero unloads
+    /// the SPA plugin handles and zeroes the global support struct. Calling it per context without
+    /// the matching release leaves the count at the number of contexts ever created.
+    /// </para>
+    /// <para>
+    /// Initialising once and never releasing is the other half of that trade, and the safer half.
+    /// The alternative is a <c>pw_deinit</c> on the last dispose, which would tear the plugin
+    /// registry down under any handle whose finalizer has not run yet, and under any other library
+    /// in the process that is also using PipeWire. What is kept is the plugin registry and the log,
+    /// which an application still talking to PipeWire would hold anyway.
+    /// </para>
+    /// </remarks>
+    private static readonly Lazy<bool> ProcessInit = new(
+        InitOnce, LazyThreadSafetyMode.ExecutionAndPublication);
+
+    private static unsafe bool InitOnce()
+    {
+        Native.pw_init(null, null);
+        return true;
     }
 
     private unsafe void InitializeNative(string name)
     {
-        Native.pw_init(null, null);
+        _ = ProcessInit.Value;
 
         pw_thread_loop* loop;
         ReadOnlySpan<byte> nameUtf8 = Encoding.UTF8.GetBytes(name + '\0');
@@ -71,7 +96,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
             loop = Native.pw_thread_loop_new((sbyte*)n, null);
 
         if (loop is null)
-            throw new InvalidOperationException("pw_thread_loop_new failed.");
+            throw new PipeWireException("pw_thread_loop_new", -12);     // ENOMEM
 
         _loopHandle = new PipeWireLoopHandle(loop);
 
@@ -84,7 +109,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         {
             _loopHandle.Dispose();
             _loopHandle = null;
-            throw new InvalidOperationException("pw_context_new failed.");
+            throw new PipeWireException("pw_context_new", -12);         // ENOMEM
         }
 
         _contextHandle = new PipeWireContextHandle(context, _loopHandle);
@@ -105,6 +130,12 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         // both seeing _started false would both call pw_thread_loop_start; the second fails because
         // the loop is already running, and its error path then stops the loop the first is in the
         // middle of connecting on.
+        //
+        // This section takes the loop lock while holding the gate, and TryLock takes them the other
+        // way round, so the order is only safe because nothing can be holding the loop lock here:
+        // every caller of TryLock needs the core, and the core is not published until StartNative
+        // has released the loop lock. Attaching a listener or publishing a handle earlier than that
+        // re-arms the inversion.
         lock (_disposeGate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
@@ -121,7 +152,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     {
         pw_thread_loop* loop = LoopHandle;
         if (Native.pw_thread_loop_start(loop) < 0)
-            throw new InvalidOperationException("pw_thread_loop_start failed.");
+            throw new PipeWireException("pw_thread_loop_start", -11);   // EAGAIN
 
         // The loop thread is live from here, but _started is only set once this returns and disposal
         // gates pw_thread_loop_stop on it - so a throw below would strand the thread.
@@ -141,9 +172,10 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
             }
 
             if (core is null)
-                throw new InvalidOperationException(
-                    "pw_context_connect failed. Ensure the PipeWire daemon is running " +
-                    "(pipewire.service / wireplumber.service).");
+                throw new PipeWireException(
+                    "pw_context_connect", -2,   // ENOENT
+                    objectId: null,
+                    "ensure the PipeWire daemon is running (pipewire.service / wireplumber.service)");
 
             _coreHandle = new PipeWireCoreHandle(core, _loopHandle!, _contextHandle!);
         }
@@ -162,8 +194,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     {
         // Through the same gate as TryLock rather than a bare check. Testing _disposed and then
         // taking the lock is two steps, and disposal between them leaves the loop handle already
-        // null - which surfaced as a NullReferenceException out of what should have been a clean
-        // ObjectDisposedException.
+        // null.
         if (!TryLock(out LoopLock scope))
             throw new ObjectDisposedException(nameof(PipeWireContext));
 
@@ -225,7 +256,15 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     }
 
     /// <summary>Cancelled when the context is disposed.</summary>
-    internal CancellationToken Shutdown => _shutdown.Token;
+    /// <remarks>
+    /// Read from the cached copy. A <see cref="CancellationTokenSource"/> throws
+    /// <see cref="ObjectDisposedException"/> from its <c>Token</c> property once disposed, so a
+    /// round trip racing teardown would get that instead of the clean cancellation this exists to
+    /// deliver. A token outlives its source and stays observable.
+    /// </remarks>
+    internal CancellationToken Shutdown => _shutdownToken;
+
+    private readonly CancellationToken _shutdownToken;
 
     /// <summary>
     /// True once the context has been disposed and its loop destroyed.
@@ -296,7 +335,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
 
     /// <summary>The loop's owning handle, for objects whose lifetime must not outlive it.</summary>
     internal PipeWireLoopHandle LoopOwner =>
-        _loopHandle ?? throw new InvalidOperationException("The context has no loop.");
+        _loopHandle ?? throw new ObjectDisposedException(nameof(PipeWireContext));
 
     /// <inheritdoc/>
     /// <summary>Tears down synchronously. Disposal here does no I/O.</summary>
@@ -316,6 +355,19 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
 
     private void DisposeCore()
     {
+        // Checked before anything is marked or released. Stopping the loop joins its thread, so
+        // asking for it from inside a callback is the thread waiting for itself: the process stops
+        // with nothing in the log and no timeout to break it. There is no way to satisfy the
+        // request, and refusing after the disposed flag was set would leave a context that is
+        // neither usable nor torn down, so this happens first and changes nothing.
+        if (IsOnLoopThread && _started)
+        {
+            throw new InvalidOperationException(
+                "A PipeWire context cannot be disposed from its own loop thread: stopping the loop "
+                + "joins that thread, so it would wait for itself. Dispose from the thread that "
+                + "created it, or hand the disposal to another thread from the callback.");
+        }
+
         lock (_disposeGate)
         {
             if (_disposed) return;
@@ -332,7 +384,12 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
 
     private unsafe void DisposeNative()
     {
-        // Stopping the loop joins its thread, so no callback can be in flight afterwards.
+        // Stopping the loop joins its thread, so no callback can be in flight afterwards. That is
+        // also why this cannot be done from the loop thread: the join would be the thread waiting
+        // for itself, which hangs with nothing in the log to say why. There is no version of this
+        // that works, because the caller is asking a thread to stop while standing on it, so it is
+        // reported rather than deferred: deferring would return from Dispose with the loop still
+        // running and no way for the caller to learn when it stopped.
         if (_loopHandle is not null && _started)
             Native.pw_thread_loop_stop(_loopHandle.Loop);
 

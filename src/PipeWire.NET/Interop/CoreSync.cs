@@ -26,11 +26,32 @@ internal sealed class CoreSync : IDisposable
     private PipeWireLoopHandle? _loop;
     private bool _loopReferenced;
     private GCHandle _self;
-    private int _seq;
 
-    // The request this round-trip is reporting on, or null when it is only a barrier.
-    private int? _watchedSeq;
-    private bool _disposed;
+    // Both are written by the thread that starts the round trip and read by the loop thread in the
+    // callbacks. The native loop mutex orders them in practice, but the .NET memory model knows
+    // nothing about it, so the accesses say so themselves.
+    private volatile int _seq;
+
+    // The request this round-trip is reporting on, or NoWatchedSequence when there is no sequence
+    // to correlate against.
+    private volatile int _watchedSeq = NoWatchedSequence;
+
+    // Whether this round-trip issued a request at all. A barrier issues none, so no error on the
+    // core stream belongs to it: the stream carries every request this connection has in flight,
+    // and a barrier that failed on another one would turn somebody else's refusal into its own.
+    private volatile bool _carriesRequest;
+
+    // Claimed with an interlocked exchange: AwaitAsync disposes in its finally and the failure path
+    // in RoundTripAsync disposes too, and the two can meet.
+    private int _disposed;
+
+    /// <summary>No request sequence to correlate errors against.</summary>
+    /// <remarks>
+    /// A sentinel rather than a nullable, because the field is read from a native callback and
+    /// <c>volatile</c> does not apply to <c>int?</c>. Zero is a real sequence number, so it cannot
+    /// serve; -1 is not, because a sequence is masked out of a non-negative result code.
+    /// </remarks>
+    private const int NoWatchedSequence = -1;
 
     private CoreSync(PipeWireContext ctx) => _ctx = ctx;
 
@@ -47,7 +68,12 @@ internal sealed class CoreSync : IDisposable
     /// can miss it altogether - and the caller then sees a refused operation report success.
     /// </remarks>
     /// <param name="ctx">The context whose core is round-tripped.</param>
-    /// <param name="request">Issues the request; returns the interface method's own result code.</param>
+    /// <param name="request">
+    /// Issues the request; returns the interface method's own result code. Runs under the loop lock,
+    /// which is what makes it race-free against the reply, so it must be one native call and
+    /// nothing else - anything that blocks, waits on the loop, or disposes something stops the loop
+    /// thread from ever delivering the answer this call is waiting for.
+    /// </param>
     /// <param name="cancellationToken">Abandons the wait.</param>
     internal static Task RoundTripAsync(
         PipeWireContext ctx, Func<int> request, CancellationToken cancellationToken)
@@ -75,7 +101,13 @@ internal sealed class CoreSync : IDisposable
     /// </remarks>
     internal static Task RoundTripAsync(PipeWireContext ctx, int? watchedSeq, CancellationToken cancellationToken)
     {
-        var sync = new CoreSync(ctx) { _watchedSeq = watchedSeq };
+        var sync = new CoreSync(ctx)
+        {
+            _watchedSeq = watchedSeq ?? NoWatchedSequence,
+
+            // A sequence was handed in, so a request exists even though this call did not issue it.
+            _carriesRequest = watchedSeq is not null,
+        };
         try
         {
             sync.Start();
@@ -96,6 +128,12 @@ internal sealed class CoreSync : IDisposable
         _loop = _ctx.LoopOwner;
         _loop.DangerousAddRef(ref _loopReferenced);
 
+        // Strong, unlike the listener handles on the long-lived graph objects, and deliberately
+        // so. This object lives exactly as long as one round trip, and while that is in flight the
+        // GCHandle can be the only thing referencing it: a caller that awaits the task without
+        // keeping the object holds nothing else. A weak handle would let it be collected before the
+        // reply arrives, and the callback would find a dead target and never complete the waiter.
+        // The handle is freed on the completion path, which always runs.
         _self = GCHandle.Alloc(this, GCHandleType.Normal);
         _events = (pw_core_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_core_events));
         _events->version = Native.PW_VERSION_CORE_EVENTS;
@@ -134,6 +172,8 @@ internal sealed class CoreSync : IDisposable
             int added = Native.pw_core_add_listener(_ctx.CoreHandle, _hook, _events, (void*)GCHandle.ToIntPtr(_self));
             if (added < 0)
                 throw new PipeWireException("pw_core_add_listener", added);
+
+            _carriesRequest = true;
 
             int rc = request();
             if (rc < 0)
@@ -174,37 +214,66 @@ internal sealed class CoreSync : IDisposable
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnError(void* data, uint id, int seq, int res, sbyte* message)
     {
-        if (data is null) return;
-        if (GCHandle.FromIntPtr((nint)data).Target is not CoreSync self) return;
-        // Compared with the async bit masked off at both ends: the value handed to us came from a
-        // request's return code, and what arrives here carries the tag.
-        if (self._watchedSeq is not int watched ||
-            Native.SPA_RESULT_ASYNC_SEQ(seq) != Native.SPA_RESULT_ASYNC_SEQ(watched))
+        // Contained whole. Decoding the daemon's message is a read through a pointer this process
+        // did not allocate, and an exception escaping a native frame aborts rather than unwinding.
+        try
         {
-            return;
+            if (data is null) return;
+            if (GCHandle.FromIntPtr((nint)data).Target is not CoreSync self) return;
+
+            // A barrier owns no request, so nothing on this stream is its to report.
+            if (!self._carriesRequest) return;
+
+            int watched = self._watchedSeq;
+            if (watched != NoWatchedSequence)
+            {
+                // Compared with the async bit masked off at both ends: the value handed to us came
+                // from a request's return code, and what arrives here carries the tag. An error on
+                // the core itself is not correlated by sequence at all and is fatal to the
+                // connection, so the round trip must fail on it rather than wait for a done that is
+                // no longer coming.
+                if (id != Native.PW_ID_CORE
+                    && Native.SPA_RESULT_ASYNC_SEQ(seq) != Native.SPA_RESULT_ASYNC_SEQ(watched))
+                {
+                    return;
+                }
+            }
+
+            // A request that completed synchronously - destroying a global, updating permissions -
+            // returns 0 rather than an async sequence, so there is nothing to match on and every
+            // error in this window is taken as its own. Two such requests overlapping on one
+            // connection can cross-attribute; reporting the wrong operation beats the alternative,
+            // which is a refused operation returning success.
+            string text = DaemonText.String(message) ?? $"code {res}";
+
+            self._done.TrySetException(new PipeWireException("request", res, id, text));
         }
-
-        string text = message is null
-            ? $"code {res}"
-            : System.Text.Encoding.UTF8.GetString(
-                MemoryMarshal.CreateReadOnlySpanFromNullTerminated((byte*)message));
-
-        self._done.TrySetException(new PipeWireException("request", res, id, text));
+        catch (Exception)
+        {
+            // Deliberately not logged: there is no instance to log through if the lookup is what
+            // failed, and this frame cannot let anything escape.
+        }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnDone(void* data, uint id, int seq)
     {
-        if (data is null) return;
-        if (GCHandle.FromIntPtr((nint)data).Target is CoreSync self &&
-            id == Native.PW_ID_CORE && seq == self._seq)
-            self._done.TrySetResult();
+        try
+        {
+            if (data is null) return;
+            if (GCHandle.FromIntPtr((nint)data).Target is CoreSync self &&
+                id == Native.PW_ID_CORE && seq == self._seq)
+                self._done.TrySetResult();
+        }
+        catch (Exception)
+        {
+            // Deliberately not logged: as above.
+        }
     }
 
     public unsafe void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
         // Detached through this object's own loop reference rather than the context's lock. A
         // disposed context refuses its lock while the native core is still alive and still holding

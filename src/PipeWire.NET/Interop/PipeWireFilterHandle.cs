@@ -62,10 +62,16 @@ internal sealed unsafe class PipeWireFilterHandle : SafeHandle
         _self = self;
     }
 
+    /// <summary>Whether the listener's memory has been handed over for this handle to free.</summary>
+    /// <remarks>
+    /// Creation allocates the blocks before the handover, so a failure in between leaves them with
+    /// no owner. The caller needs to know which side is responsible before it releases.
+    /// </remarks>
+    internal bool OwnsListener => _events is not null || _hook is not null || _self.IsAllocated;
+
     /// <inheritdoc/>
     public override bool IsInvalid => handle == IntPtr.Zero;
 
-    /// <summary>The underlying filter.</summary>
     internal pw_filter* Filter => (pw_filter*)handle;
 
     /// <inheritdoc/>

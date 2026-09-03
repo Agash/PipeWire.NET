@@ -65,7 +65,6 @@ internal sealed unsafe class PipeWireStreamHandle : SafeHandle
     /// <inheritdoc/>
     public override bool IsInvalid => handle == IntPtr.Zero;
 
-    /// <summary>The underlying stream.</summary>
     internal pw_stream* Stream => (pw_stream*)handle;
 
     /// <inheritdoc/>

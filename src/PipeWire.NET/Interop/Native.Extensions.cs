@@ -120,9 +120,11 @@ public static unsafe partial class Native
     public const uint PW_VERSION_FACTORY_EVENTS   = 0;
     public const uint PW_VERSION_GLOBAL_EVENTS    = 0;
     public const uint PW_VERSION_LINK             = 3;
+    public const uint PW_VERSION_LINK_EVENTS      = 0;
     public const uint PW_VERSION_MODULE           = 3;
     public const uint PW_VERSION_NODE             = 3;
     public const uint PW_VERSION_PORT             = 3;
+    public const uint PW_VERSION_PORT_EVENTS      = 0;
     public const uint PW_VERSION_PROXY_EVENTS     = 1;
     public const uint PW_VERSION_STREAM_EVENTS    = 2;
     public const uint PW_VERSION_FILTER_EVENTS    = 1;
@@ -191,7 +193,7 @@ public static unsafe partial class Native
     {
         GetInterface(core, out pw_core_methods* methods, out void* data);
         if (methods is null || methods->get_registry is null)
-            throw new InvalidOperationException("pw_core has no get_registry method (interface VTBL is null).");
+            throw new PipeWireException("pw_core_get_registry", -38);   // ENOSYS
         return methods->get_registry(data, version, userDataSize);
     }
 
@@ -233,7 +235,7 @@ public static unsafe partial class Native
     {
         GetInterface(core, out pw_core_methods* methods, out void* data);
         if (methods is null || methods->create_object is null)
-            throw new InvalidOperationException("pw_core has no create_object method (interface VTBL is null).");
+            throw new PipeWireException("pw_core_create_object", -38);  // ENOSYS
         return (pw_proxy*)methods->create_object(data, factoryName, type, version, props, userDataSize);
     }
 
@@ -385,6 +387,70 @@ public static unsafe partial class Native
         if (methods is null || methods->subscribe_params is null)
             return -1;
         return methods->subscribe_params(data, ids, nIds);
+    }
+
+    // - Logging -
+
+    /// <summary>
+    /// Sets how much PipeWire's own library logging says.
+    /// </summary>
+    /// <remarks>
+    /// Hand-declared rather than generated: the log headers are not traversed, and adding them to
+    /// pull in one exported function with a trivial signature would drag the whole spa_log surface
+    /// into the committed bindings.
+    /// </remarks>
+    [System.Runtime.InteropServices.LibraryImport("libpipewire-0.3")]
+    [System.Runtime.InteropServices.UnmanagedCallConv(
+        CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    public static partial void pw_log_set_level(int level);
+
+    // - Port -
+
+    /// <summary>Attaches a listener to a port proxy.</summary>
+    public static int pw_port_add_listener(
+        pw_port* port, spa_hook* listener, pw_port_events* events, void* data)
+    {
+        GetInterface(port, out pw_port_methods* methods, out void* userData);
+        if (methods is null || methods->add_listener is null)
+            return -1;
+        return methods->add_listener(userData, listener, events, data);
+    }
+
+    /// <summary>Asks a port for a parameter. The answers arrive on the param event.</summary>
+    public static int pw_port_enum_params(
+        pw_port* port, int seq, uint id, uint start, uint num, spa_pod* filter)
+    {
+        GetInterface(port, out pw_port_methods* methods, out void* userData);
+        if (methods is null || methods->enum_params is null)
+            return -1;
+        return methods->enum_params(userData, seq, id, start, num, filter);
+    }
+
+    /// <summary>Asks a port to report the named parameters whenever they change.</summary>
+    public static int pw_port_subscribe_params(pw_port* port, uint* ids, uint count)
+    {
+        GetInterface(port, out pw_port_methods* methods, out void* userData);
+        if (methods is null || methods->subscribe_params is null)
+            return -1;
+        return methods->subscribe_params(userData, ids, count);
+    }
+
+    // - Link -
+
+    /// <summary>
+    /// Attaches a listener to a link proxy.
+    /// </summary>
+    /// <remarks>
+    /// The header declares this inline over the interface vtable rather than exporting it, so it is
+    /// dispatched here the same way the node, device and client listeners are.
+    /// </remarks>
+    public static int pw_link_add_listener(
+        pw_link* link, spa_hook* listener, pw_link_events* events, void* data)
+    {
+        GetInterface(link, out pw_link_methods* methods, out void* userData);
+        if (methods is null || methods->add_listener is null)
+            return -1;
+        return methods->add_listener(userData, listener, events, data);
     }
 
     // - Client -

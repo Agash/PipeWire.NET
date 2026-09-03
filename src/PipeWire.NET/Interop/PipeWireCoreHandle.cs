@@ -57,7 +57,6 @@ internal sealed unsafe class PipeWireCoreHandle : SafeHandle
     /// <inheritdoc/>
     public override bool IsInvalid => handle == IntPtr.Zero;
 
-    /// <summary>The underlying connection.</summary>
     internal pw_core* Core => (pw_core*)handle;
 
     /// <inheritdoc/>

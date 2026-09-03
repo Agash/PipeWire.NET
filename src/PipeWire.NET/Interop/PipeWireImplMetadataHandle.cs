@@ -32,7 +32,6 @@ internal sealed unsafe class PipeWireImplMetadataHandle : SafeHandle
     /// <inheritdoc/>
     public override bool IsInvalid => handle == IntPtr.Zero;
 
-    /// <summary>The implementation.</summary>
     internal pw_impl_metadata* Metadata => (pw_impl_metadata*)handle;
 
     /// <summary>

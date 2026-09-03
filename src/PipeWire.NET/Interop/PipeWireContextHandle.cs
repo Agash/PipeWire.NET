@@ -40,7 +40,6 @@ internal sealed unsafe class PipeWireContextHandle : SafeHandle
     /// <inheritdoc/>
     public override bool IsInvalid => handle == IntPtr.Zero;
 
-    /// <summary>The underlying context.</summary>
     internal pw_context* Context => (pw_context*)handle;
 
     /// <inheritdoc/>
