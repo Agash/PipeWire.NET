@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct spa_callbacks
+internal unsafe partial struct spa_callbacks
 {
     [NativeTypeName("const void *")]
     public void* funcs;

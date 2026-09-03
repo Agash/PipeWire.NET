@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct spa_handle
+internal unsafe partial struct spa_handle
 {
     [NativeTypeName("uint32_t")]
     public uint version;

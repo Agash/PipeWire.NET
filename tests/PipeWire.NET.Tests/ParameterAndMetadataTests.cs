@@ -122,8 +122,7 @@ public sealed class ParameterAndMetadataTests
             ImmutableArray<SpaObject> info = await control.EnumeratePropertyInfoAsync(cts.Token);
             Assert.IsTrue(info.Length > 0, "a sink must describe the properties it supports");
 
-            // Each entry says which property it describes. Volume and mute must be among them, or
-            // the volume test above would be writing something the node never advertised.
+            // Each entry says which property it describes.
             uint[] described = [.. info.Select(o => o[(uint)SpaPropInfo.Id])
                                        .OfType<SpaId>()
                                        .Select(id => id.Value)];
@@ -153,9 +152,8 @@ public sealed class ParameterAndMetadataTests
             await control.ReadyAsync(cts.Token);
 
             // A node has no profiles - that is a device parameter - and PipeWire answers an
-            // unsupported parameter with an error rather than an empty result. Pinned because it
-            // shapes the API: the honest way to ask is to check what the object advertises first,
-            // which is what CanRead exists for.
+            // unsupported parameter with an error rather than an empty result. Check what the
+            // object advertises first, which is what CanRead exists for.
             Assert.IsFalse(control.CanRead(SpaParamType.EnumProfile),
                 "a node must not advertise a device parameter");
 
@@ -208,8 +206,7 @@ public sealed class ParameterAndMetadataTests
             ImmutableArray<SpaObject> profiles = await control.EnumerateProfilesAsync(cts.Token);
             Assert.IsTrue(profiles.Length > 0, "an ALSA card must offer at least one profile");
 
-            // Every profile names itself, which is what a profile switcher shows. Reading it back is
-            // also the proof that the whole enum_params exchange decoded correctly.
+            // Every profile names itself, which is what a profile switcher shows.
             foreach (SpaObject profile in profiles)
             {
                 Assert.IsInstanceOfType<SpaInt>(profile[(uint)SpaParamProfile.Index],
@@ -253,11 +250,9 @@ public sealed class ParameterAndMetadataTests
                 Assert.AreEqual(PipeWireMetadataStore.SubjectCore, sink.Subject,
                     "a session-wide default is about the daemon, not about one object");
 
-                // And it names a node that is actually in the graph - when the session is coherent.
-                // Whether the session manager's default points at a live node is the session
-                // manager's business, not this library's: a session whose ALSA device is held by
-                // something else keeps a default naming a node it then fails to create. Reading the
-                // name correctly is what is under test here, and that is asserted above.
+                // And it names a node that is actually in the graph when the session is coherent.
+                // A session whose ALSA device is held by something else keeps a default naming a
+                // node it then fails to create.
                 if (!registry.Current.Nodes.Any(n => n.NodeName == sink.NameValue))
                 {
                     Assert.Inconclusive(
@@ -441,8 +436,7 @@ public sealed class ParameterAndMetadataTests
     /// gone and every test that runs afterwards fails to connect.
     /// </para>
     /// <para>
-    /// It stays in the tree because the day the daemon is fixed this is the test that says so, and
-    /// it carries its own category so a suite run never reaches it by accident. Run it deliberately,
+    /// It carries its own category so a suite run never reaches it by accident. Run it deliberately,
     /// alone, against a session nothing else is using:
     /// <c>--filter "TestCategory=KillsTheDaemon"</c>.
     /// </para>

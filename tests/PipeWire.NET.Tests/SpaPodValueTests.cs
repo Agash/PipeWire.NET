@@ -167,8 +167,7 @@ public sealed class SpaPodValueTests
     [TestMethod]
     public void APodNestedBeyondTheDepthLimit_IsRefusedRatherThanOverflowingTheStack()
     {
-        // A stack overflow cannot be caught, so the limit is the only defence. Build a chain of
-        // structs deeper than it allows.
+        // A stack overflow cannot be caught, so the limit is the only defence.
         SpaValue nested = new SpaInt(1);
         for (int i = 0; i < SpaPod.MaxDepth + 4; i++)
             nested = new SpaStruct([nested]);
@@ -193,7 +192,6 @@ public sealed class SpaPodValueTests
         CollectionAssert.AreEqual(new byte[] { 0x34, 0x12, 0, 0 }, unknown.Body.ToArray(),
             "the bytes are kept so the value can be written back unchanged");
 
-        // And writing it back reproduces the original.
         CollectionAssert.AreEqual(pod, SpaPod.ToBytes(unknown));
     }
 

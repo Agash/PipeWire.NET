@@ -244,8 +244,7 @@ public sealed class MultiClientHarmonyTests
                 if (string.Equals(e.Key, key, StringComparison.Ordinal)) seenByB.Enqueue(e.Value);
             };
 
-            // Our client writes; the other one must see it. This is the direction a write-suppression
-            // bug breaks in the obvious way.
+            // Our client writes; the other one must see it.
             await sa.SetAsync(key, "from-a", "Spa:String", PipeWireMetadataStore.SubjectCore, cts.Token);
             if (!await EventuallyAsync(() => Task.FromResult(sb.Get(key) == "from-a"),
                     TimeSpan.FromSeconds(10), cts.Token))
@@ -314,8 +313,6 @@ public sealed class MultiClientHarmonyTests
         PwTools.Require();
         using var cts = new CancellationTokenSource(Budget);
 
-        // A streaming setup in miniature: an external producer, this library inserted as a DSP, a
-        // second instance of this library watching, and the command-line tools wiring it together.
         // Every part is a separate client of the daemon.
         await using Client dsp = await ConnectAsync("pwnet-chain-dsp", cts.Token);
         await using Client observer = await ConnectAsync("pwnet-chain-observer", cts.Token);
@@ -391,7 +388,6 @@ public sealed class MultiClientHarmonyTests
             $"producer id={producer.NodeId} published {srcPorts.Length} output port(s) and filter "
             + $"id={filterNodeId} {dspPorts.Length} input port(s); both need two");
 
-        // Linked by id through pw-link, so the links are made by a process that is not this library.
         for (int i = 0; i < 2; i++)
         {
             await PwTools.LinkAsync(
@@ -400,7 +396,7 @@ public sealed class MultiClientHarmonyTests
                 cts.Token);
         }
 
-        // Now the whole chain is live: samples have to actually flow through the managed callback.
+        // Samples have to actually flow through the managed callback.
         Assert.IsTrue(
             await EventuallyAsync(() => Task.FromResult(Interlocked.Read(ref cycles) > 20),
                 TimeSpan.FromSeconds(25), cts.Token),

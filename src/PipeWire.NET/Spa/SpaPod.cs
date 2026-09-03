@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace PipeWire.NET.Spa;
@@ -20,13 +21,12 @@ namespace PipeWire.NET.Spa;
 /// internal reader and builder directly and never allocates a tree.
 /// </para>
 /// <para>
-/// A note on byte order, because this file and the internal reader spell it differently. Pods are
-/// native-endian: the protocol is a unix socket between processes on one machine, and PipeWire
-/// swaps nothing anywhere - checked against its own connection.c and pod headers, which memcpy
-/// structs and read fields directly. The little-endian spelling here is therefore not a conversion
-/// but a statement of what the bytes are on every platform PipeWire runs on, and it agrees with the
-/// reader's native reads there. If this ever has to work on a big-endian host, this file is the
-/// half that is wrong and the reader is the half that is right.
+/// A note on byte order. Pods are native-endian: the protocol is a unix socket between processes
+/// on one machine, and PipeWire swaps nothing anywhere - checked against its own connection.c
+/// and pod headers, which memcpy structs and read fields directly. Every integer access here
+/// therefore goes through <see cref="MemoryMarshal"/> reads and writes, which are native-endian
+/// by construction, rather than spelling out an order. On today's little-endian targets the
+/// bytes are identical either way; on a big-endian host this is the half that stays right.
 /// </para>
 /// </remarks>
 public static class SpaPod
@@ -102,8 +102,8 @@ public static class SpaPod
         if (depth > MaxDepth || pod.Length < 8)
             return false;
 
-        uint size = BinaryPrimitives.ReadUInt32LittleEndian(pod);
-        var type = (SpaType)BinaryPrimitives.ReadUInt32LittleEndian(pod[4..]);
+        uint size = MemoryMarshal.Read<uint>(pod);
+        var type = (SpaType)MemoryMarshal.Read<uint>(pod[4..]);
 
         // The declared size is the daemon's word against the buffer we actually hold.
         if (size > (uint)(pod.Length - 8))
@@ -135,32 +135,32 @@ public static class SpaPod
 
             case SpaType.Bool:
                 if (body.Length < 4) return false;
-                value = new SpaBool(BinaryPrimitives.ReadInt32LittleEndian(body) != 0);
+                value = new SpaBool(MemoryMarshal.Read<int>(body) != 0);
                 return true;
 
             case SpaType.Id:
                 if (body.Length < 4) return false;
-                value = new SpaId(BinaryPrimitives.ReadUInt32LittleEndian(body));
+                value = new SpaId(MemoryMarshal.Read<uint>(body));
                 return true;
 
             case SpaType.Int:
                 if (body.Length < 4) return false;
-                value = new SpaInt(BinaryPrimitives.ReadInt32LittleEndian(body));
+                value = new SpaInt(MemoryMarshal.Read<int>(body));
                 return true;
 
             case SpaType.Long:
                 if (body.Length < 8) return false;
-                value = new SpaLong(BinaryPrimitives.ReadInt64LittleEndian(body));
+                value = new SpaLong(MemoryMarshal.Read<long>(body));
                 return true;
 
             case SpaType.Float:
                 if (body.Length < 4) return false;
-                value = new SpaFloat(BinaryPrimitives.ReadSingleLittleEndian(body));
+                value = new SpaFloat(MemoryMarshal.Read<float>(body));
                 return true;
 
             case SpaType.Double:
                 if (body.Length < 8) return false;
-                value = new SpaDouble(BinaryPrimitives.ReadDoubleLittleEndian(body));
+                value = new SpaDouble(MemoryMarshal.Read<double>(body));
                 return true;
 
             case SpaType.String:
@@ -181,15 +181,15 @@ public static class SpaPod
             case SpaType.Rectangle:
                 if (body.Length < 8) return false;
                 value = new SpaRectangle(
-                    BinaryPrimitives.ReadUInt32LittleEndian(body),
-                    BinaryPrimitives.ReadUInt32LittleEndian(body[4..]));
+                    MemoryMarshal.Read<uint>(body),
+                    MemoryMarshal.Read<uint>(body[4..]));
                 return true;
 
             case SpaType.Fraction:
                 if (body.Length < 8) return false;
                 value = new SpaFraction(
-                    BinaryPrimitives.ReadUInt32LittleEndian(body),
-                    BinaryPrimitives.ReadUInt32LittleEndian(body[4..]));
+                    MemoryMarshal.Read<uint>(body),
+                    MemoryMarshal.Read<uint>(body[4..]));
                 return true;
 
             case SpaType.Bitmap:
@@ -198,17 +198,17 @@ public static class SpaPod
 
             case SpaType.Fd:
                 if (body.Length < 8) return false;
-                value = new SpaFd(BinaryPrimitives.ReadInt64LittleEndian(body));
+                value = new SpaFd(MemoryMarshal.Read<long>(body));
                 return true;
 
             case SpaType.Pointer:
             {
                 // [uint32 type][uint32 padding][pointer], the pointer being native-word sized.
                 if (body.Length < 8 + IntPtr.Size) return false;
-                var pointerType = (SpaType)BinaryPrimitives.ReadUInt32LittleEndian(body);
+                var pointerType = (SpaType)MemoryMarshal.Read<uint>(body);
                 ulong address = IntPtr.Size == 8
-                    ? BinaryPrimitives.ReadUInt64LittleEndian(body[8..])
-                    : BinaryPrimitives.ReadUInt32LittleEndian(body[8..]);
+                    ? MemoryMarshal.Read<ulong>(body[8..])
+                    : MemoryMarshal.Read<uint>(body[8..]);
                 value = new SpaPointer(pointerType, address);
                 return true;
             }
@@ -249,8 +249,8 @@ public static class SpaPod
         value = null;
         if (body.Length < 8) return false;
 
-        uint childSize = BinaryPrimitives.ReadUInt32LittleEndian(body);
-        var childType = (SpaType)BinaryPrimitives.ReadUInt32LittleEndian(body[4..]);
+        uint childSize = MemoryMarshal.Read<uint>(body);
+        var childType = (SpaType)MemoryMarshal.Read<uint>(body[4..]);
         ReadOnlySpan<byte> items = body[8..];
 
         // A zero child size with a non-empty body would loop forever; an empty array is legal.
@@ -329,15 +329,15 @@ public static class SpaPod
         value = null;
         if (body.Length < 8) return false;
 
-        var objectType = (SpaType)BinaryPrimitives.ReadUInt32LittleEndian(body);
-        var objectId = (SpaParamType)BinaryPrimitives.ReadUInt32LittleEndian(body[4..]);
+        var objectType = (SpaType)MemoryMarshal.Read<uint>(body);
+        var objectId = (SpaParamType)MemoryMarshal.Read<uint>(body[4..]);
 
         var properties = ImmutableArray.CreateBuilder<SpaProperty>();
         int offset = 8;
         while (offset + 16 <= body.Length)
         {
-            uint key = BinaryPrimitives.ReadUInt32LittleEndian(body[offset..]);
-            uint flags = BinaryPrimitives.ReadUInt32LittleEndian(body[(offset + 4)..]);
+            uint key = MemoryMarshal.Read<uint>(body[offset..]);
+            uint flags = MemoryMarshal.Read<uint>(body[(offset + 4)..]);
 
             if (!TryParseValue(body[(offset + 8)..], depth + 1, out SpaValue? propertyValue, out int consumed)
                 || propertyValue is null || consumed <= 0)
@@ -363,9 +363,9 @@ public static class SpaPod
         value = null;
         if (body.Length < 16) return false;
 
-        var kind = (SpaChoiceType)BinaryPrimitives.ReadUInt32LittleEndian(body);
-        uint childSize = BinaryPrimitives.ReadUInt32LittleEndian(body[8..]);
-        var childType = (SpaType)BinaryPrimitives.ReadUInt32LittleEndian(body[12..]);
+        var kind = (SpaChoiceType)MemoryMarshal.Read<uint>(body);
+        uint childSize = MemoryMarshal.Read<uint>(body[8..]);
+        var childType = (SpaType)MemoryMarshal.Read<uint>(body[12..]);
         ReadOnlySpan<byte> items = body[16..];
 
         if (childSize == 0)
@@ -407,14 +407,14 @@ public static class SpaPod
         value = null;
         if (body.Length < 8) return false;
 
-        uint unit = BinaryPrimitives.ReadUInt32LittleEndian(body);
+        uint unit = MemoryMarshal.Read<uint>(body);
         var controls = ImmutableArray.CreateBuilder<SpaControl>();
 
         int offset = 8;
         while (offset + 16 <= body.Length)
         {
-            uint controlOffset = BinaryPrimitives.ReadUInt32LittleEndian(body[offset..]);
-            uint controlType = BinaryPrimitives.ReadUInt32LittleEndian(body[(offset + 4)..]);
+            uint controlOffset = MemoryMarshal.Read<uint>(body[offset..]);
+            uint controlType = MemoryMarshal.Read<uint>(body[(offset + 4)..]);
 
             if (!TryParseValue(body[(offset + 8)..], depth + 1, out SpaValue? controlValue, out int consumed)
                 || controlValue is null || consumed <= 0)
@@ -510,8 +510,8 @@ public static class SpaPod
     private static void WriteValue(SpaValue value, Span<byte> destination)
     {
         int size = BodySize(value);
-        BinaryPrimitives.WriteUInt32LittleEndian(destination, (uint)size);
-        BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], (uint)value.Type);
+        MemoryMarshal.Write<uint>(destination, (uint)size);
+        MemoryMarshal.Write<uint>(destination[4..], (uint)value.Type);
         WriteBody(value, destination.Slice(8, size));
     }
 
@@ -523,27 +523,27 @@ public static class SpaPod
                 break;
 
             case SpaBool b:
-                BinaryPrimitives.WriteInt32LittleEndian(body, b.Value ? 1 : 0);
+                MemoryMarshal.Write<int>(body, b.Value ? 1 : 0);
                 break;
 
             case SpaId id:
-                BinaryPrimitives.WriteUInt32LittleEndian(body, id.Value);
+                MemoryMarshal.Write<uint>(body, id.Value);
                 break;
 
             case SpaInt i:
-                BinaryPrimitives.WriteInt32LittleEndian(body, i.Value);
+                MemoryMarshal.Write<int>(body, i.Value);
                 break;
 
             case SpaLong l:
-                BinaryPrimitives.WriteInt64LittleEndian(body, l.Value);
+                MemoryMarshal.Write<long>(body, l.Value);
                 break;
 
             case SpaFloat f:
-                BinaryPrimitives.WriteSingleLittleEndian(body, f.Value);
+                MemoryMarshal.Write<float>(body, f.Value);
                 break;
 
             case SpaDouble d:
-                BinaryPrimitives.WriteDoubleLittleEndian(body, d.Value);
+                MemoryMarshal.Write<double>(body, d.Value);
                 break;
 
             case SpaString s:
@@ -560,32 +560,32 @@ public static class SpaPod
                 break;
 
             case SpaRectangle r:
-                BinaryPrimitives.WriteUInt32LittleEndian(body, r.Width);
-                BinaryPrimitives.WriteUInt32LittleEndian(body[4..], r.Height);
+                MemoryMarshal.Write<uint>(body, r.Width);
+                MemoryMarshal.Write<uint>(body[4..], r.Height);
                 break;
 
             case SpaFraction f:
-                BinaryPrimitives.WriteUInt32LittleEndian(body, f.Numerator);
-                BinaryPrimitives.WriteUInt32LittleEndian(body[4..], f.Denominator);
+                MemoryMarshal.Write<uint>(body, f.Numerator);
+                MemoryMarshal.Write<uint>(body[4..], f.Denominator);
                 break;
 
             case SpaFd fd:
-                BinaryPrimitives.WriteInt64LittleEndian(body, fd.Value);
+                MemoryMarshal.Write<long>(body, fd.Value);
                 break;
 
             case SpaPointer p:
-                BinaryPrimitives.WriteUInt32LittleEndian(body, (uint)p.PointerType);
+                MemoryMarshal.Write<uint>(body, (uint)p.PointerType);
                 if (IntPtr.Size == 8)
-                    BinaryPrimitives.WriteUInt64LittleEndian(body[8..], p.Address);
+                    MemoryMarshal.Write<ulong>(body[8..], p.Address);
                 else
-                    BinaryPrimitives.WriteUInt32LittleEndian(body[8..], (uint)p.Address);
+                    MemoryMarshal.Write<uint>(body[8..], (uint)p.Address);
                 break;
 
             case SpaArray a:
             {
                 int childSize = ChildSize(a.ChildType, a.Items);
-                BinaryPrimitives.WriteUInt32LittleEndian(body, (uint)childSize);
-                BinaryPrimitives.WriteUInt32LittleEndian(body[4..], (uint)a.ChildType);
+                MemoryMarshal.Write<uint>(body, (uint)childSize);
+                MemoryMarshal.Write<uint>(body[4..], (uint)a.ChildType);
                 WriteChildren(a.Items, childSize, body[8..]);
                 break;
             }
@@ -593,10 +593,10 @@ public static class SpaPod
             case SpaChoice c:
             {
                 int childSize = ChildSize(c.ChildType, c.Alternatives);
-                BinaryPrimitives.WriteUInt32LittleEndian(body, (uint)c.Kind);
-                BinaryPrimitives.WriteUInt32LittleEndian(body[4..], 0); // flags
-                BinaryPrimitives.WriteUInt32LittleEndian(body[8..], (uint)childSize);
-                BinaryPrimitives.WriteUInt32LittleEndian(body[12..], (uint)c.ChildType);
+                MemoryMarshal.Write<uint>(body, (uint)c.Kind);
+                MemoryMarshal.Write<uint>(body[4..], 0); // flags
+                MemoryMarshal.Write<uint>(body[8..], (uint)childSize);
+                MemoryMarshal.Write<uint>(body[12..], (uint)c.ChildType);
                 WriteChildren(c.Alternatives, childSize, body[16..]);
                 break;
             }
@@ -615,13 +615,13 @@ public static class SpaPod
 
             case SpaObject o:
             {
-                BinaryPrimitives.WriteUInt32LittleEndian(body, (uint)o.ObjectType);
-                BinaryPrimitives.WriteUInt32LittleEndian(body[4..], (uint)o.ObjectId);
+                MemoryMarshal.Write<uint>(body, (uint)o.ObjectType);
+                MemoryMarshal.Write<uint>(body[4..], (uint)o.ObjectId);
                 int offset = 8;
                 foreach (SpaProperty property in o.Properties)
                 {
-                    BinaryPrimitives.WriteUInt32LittleEndian(body[offset..], property.Key.Value);
-                    BinaryPrimitives.WriteUInt32LittleEndian(body[(offset + 4)..], property.Flags);
+                    MemoryMarshal.Write<uint>(body[offset..], property.Key.Value);
+                    MemoryMarshal.Write<uint>(body[(offset + 4)..], property.Flags);
                     WriteValue(property.Value, body[(offset + 8)..]);
                     offset += 8 + Pad(8 + BodySize(property.Value));
                 }
@@ -631,13 +631,13 @@ public static class SpaPod
 
             case SpaSequence s:
             {
-                BinaryPrimitives.WriteUInt32LittleEndian(body, s.Unit);
-                BinaryPrimitives.WriteUInt32LittleEndian(body[4..], 0); // pad
+                MemoryMarshal.Write<uint>(body, s.Unit);
+                MemoryMarshal.Write<uint>(body[4..], 0); // pad
                 int offset = 8;
                 foreach (SpaControl control in s.Controls)
                 {
-                    BinaryPrimitives.WriteUInt32LittleEndian(body[offset..], control.Offset);
-                    BinaryPrimitives.WriteUInt32LittleEndian(body[(offset + 4)..], control.Type);
+                    MemoryMarshal.Write<uint>(body[offset..], control.Offset);
+                    MemoryMarshal.Write<uint>(body[(offset + 4)..], control.Type);
                     WriteValue(control.Value, body[(offset + 8)..]);
                     offset += 8 + Pad(8 + BodySize(control.Value));
                 }

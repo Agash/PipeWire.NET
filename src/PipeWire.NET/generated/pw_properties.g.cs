@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct pw_properties
+internal partial struct pw_properties
 {
     [NativeTypeName("struct spa_dict")]
     public spa_dict dict;

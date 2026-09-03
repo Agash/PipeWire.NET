@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -81,18 +82,7 @@ public sealed partial class PipeWireProfilerReader : IDisposable, IAsyncDisposab
 
         try
         {
-            // Checked before the cast. A size near uint.MaxValue casts to a negative length, and
-            // the span constructor is the one place that would not tell us so.
-            if (pod->size > int.MaxValue - 8)
-            {
-                self.LogUnparsedReport(int.MaxValue);
-                return;
-            }
-
-            int size = 8 + (int)pod->size;
-            var bytes = new ReadOnlySpan<byte>(pod, size);
-
-            if (SpaPod.TryParse(bytes, out SpaValue? value) && value is SpaObject report)
+            if (TryParseReport(pod, out SpaObject? report, out int size))
                 self.Raise(report);
             else
                 self.LogUnparsedReport(size);
@@ -103,6 +93,45 @@ public sealed partial class PipeWireProfilerReader : IDisposable, IAsyncDisposab
             // unwinding into a catch.
             self.LogProfileDispatchFailed(ex);
         }
+    }
+
+    /// <summary>Reads one profiler report off a native pod.</summary>
+    /// <param name="pod">The pod the daemon handed the callback.</param>
+    /// <param name="report">The report, when this returns true.</param>
+    /// <param name="size">The pod's total size, for diagnostics when this returns false.</param>
+    /// <returns>Whether <paramref name="pod"/> parsed as an object pod.</returns>
+    /// <remarks>
+    /// Split from the callback so hostile pods are testable without a daemon: the size in the
+    /// header is the daemon's word, and a wrong one must refuse rather than span.
+    /// </remarks>
+    internal static unsafe bool TryParseReport(
+        spa_pod* pod,
+        [NotNullWhen(true)] out SpaObject? report,
+        out int size)
+    {
+        report = null;
+        size = 0;
+
+        if (pod is null) return false;
+
+        // Checked before the cast. A size near uint.MaxValue casts to a negative length, and
+        // the span constructor is the one place that would not tell us so.
+        if (pod->size > int.MaxValue - 8)
+        {
+            size = int.MaxValue;
+            return false;
+        }
+
+        size = 8 + (int)pod->size;
+        var bytes = new ReadOnlySpan<byte>(pod, size);
+
+        if (SpaPod.TryParse(bytes, out SpaValue? value) && value is SpaObject parsed)
+        {
+            report = parsed;
+            return true;
+        }
+
+        return false;
     }
 
     private void Raise(SpaObject report)

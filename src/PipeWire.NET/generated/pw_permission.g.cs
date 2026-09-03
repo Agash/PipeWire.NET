@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct pw_permission
+internal partial struct pw_permission
 {
     [NativeTypeName("uint32_t")]
     public uint id;

@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_pod_prop
+internal partial struct spa_pod_prop
 {
     [NativeTypeName("uint32_t")]
     public uint key;

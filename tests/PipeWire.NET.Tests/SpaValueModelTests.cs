@@ -6,8 +6,7 @@ using PipeWire.NET.Spa;
 namespace PipeWire.NET.Tests;
 
 /// <summary>
-/// The value model itself: equality, the typed key and id wrappers, and the pod types that the
-/// round-trip tests do not reach because no daemon sends them.
+/// Equality, typed key and id wrappers, and pod types no daemon sends.
 /// </summary>
 [TestClass]
 [SupportedOSPlatform("linux")]
@@ -72,7 +71,7 @@ public sealed class SpaValueModelTests
 
         // Equivalent items, different declared child type: the type is part of what the pod means.
         // Each array carries children of its own declared type, because a union cannot express
-        // anything else - see ChildTypeAndItemsMustAgree below.
+        // anything else.
         Assert.AreNotEqual(
             new SpaArray(SpaType.Int, [new SpaInt(1)]),
             new SpaArray(SpaType.Id, [new SpaId(1)]));

@@ -11,10 +11,8 @@ namespace PipeWire.NET.Tests;
 /// Our view of the session, checked against PipeWire's own tools.
 /// </summary>
 /// <remarks>
-/// These answer a different question from the rest of the suite. Everywhere else the library is
-/// asked whether it agrees with itself; here it is asked whether it agrees with independent
-/// implementations of the same protocol - pw-dump for structure, wpctl for the session manager's
-/// policy, pw-cat for a native media client, pw-mon for event ordering.
+/// Checked against independent implementations of the same protocol - pw-dump for structure,
+/// wpctl for policy, pw-cat for a native client, pw-mon for event ordering.
 /// </remarks>
 [TestClass]
 [TestCategory("Integration")]
@@ -121,10 +119,9 @@ public sealed class ToolOracleTests
     /// <para>
     /// "Reach", not "already contains". The registry is fed asynchronously, so an object created
     /// while the dump was being produced can be in the dump and not yet in a snapshot taken after
-    /// it. Clients are where this shows: every other test in the run connects and disconnects, so
-    /// there are always several in flight. An id is therefore given time to arrive, and one that
-    /// still has not is checked against a fresh dump before it counts as missing, because an object
-    /// that has since gone away is never going to arrive and is not a defect either.
+    /// it. An id is therefore given time to arrive, and one that still has not is checked against
+    /// a fresh dump before it counts as missing, because an object that has since gone away is
+    /// never going to arrive and is not a defect either.
     /// </para>
     /// </remarks>
     private static async Task AssertWeSeeAllAsync(
@@ -169,6 +166,7 @@ public sealed class ToolOracleTests
         {
             PipeWireNode node = await registry.CreateVirtualNode("WpctlOracle")
                 .WithName(Unique("pwnet_wpctl")).ExecuteAsync(cts.Token);
+            string nodeName = node.NodeName!;
 
             await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
             await control.ReadyAsync(cts.Token);
@@ -180,7 +178,6 @@ public sealed class ToolOracleTests
             // wpctl's scale is cubic; PipeWire stores linear amplitude. Setting 0.42 through wpctl
             // lands 0.42^3 in channelVolumes, and the two agreeing on that is the point.
             const float Asked = 0.42f;
-            float expected = Asked * Asked * Asked;
             string id = node.NodeId.ToString(CultureInfo.InvariantCulture);
             (int exit, _, string stderr) = await wpctl.RunAsync(
                 ["set-volume", id, Asked.ToString(CultureInfo.InvariantCulture)], cts.Token);
@@ -188,18 +185,58 @@ public sealed class ToolOracleTests
             if (exit != 0)
                 Assert.Inconclusive($"wpctl cannot set this node's volume on this session: {stderr}");
 
+            // What the session actually holds now, in wpctl's own cubic scale, rather than what
+            // was asked: the session manager may overwrite the write on its way through, and
+            // asserting intent rather than state would race its policy.
+            float cubic = await ReadWpctlVolumeAsync(wpctl, id, cts.Token);
+            float expected = cubic * cubic * cubic;
+
             bool sawIt = await EventuallyAsync(async () =>
             {
                 ImmutableArray<float> volumes = await control.GetChannelVolumesAsync(cts.Token);
                 return !volumes.IsDefaultOrEmpty && volumes.All(v => Math.Abs(v - expected) < 0.005f);
             }, TimeSpan.FromSeconds(15), cts.Token);
 
+            if (!sawIt)
+            {
+                // Ids are reused under churn: if this id no longer names our node, wpctl and this
+                // test talked to different objects and there is nothing to compare.
+                PwDump dump = await PwDump.CaptureAsync(cts.Token);
+                string? owner = dump.OfKind("Node").FirstOrDefault(e => e.Id == node.NodeId)
+                    ?.Prop("node.name");
+                if (!string.Equals(owner, nodeName, StringComparison.Ordinal))
+                    Assert.Inconclusive($"node id {node.NodeId} changed hands mid-test (now '{owner}')");
+            }
+
             Assert.IsTrue(sawIt,
-                $"wpctl set {Asked} (expecting {expected} linear) and we report "
+                $"wpctl reports {cubic} (expecting {expected} linear) and we report "
                 + $"[{string.Join(",", await control.GetChannelVolumesAsync(cts.Token))}]");
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
+    }
+
+    private static async Task<float> ReadWpctlVolumeAsync(
+        CliTool wpctl, string id, CancellationToken cancellationToken)
+    {
+        (int exit, string stdout, string stderr) = await wpctl.RunAsync(
+            ["get-volume", id], cancellationToken, TimeSpan.FromSeconds(10));
+
+        if (exit != 0)
+            Assert.Inconclusive($"wpctl cannot read this node's volume on this session: {stderr}");
+
+        // "Volume: 0.42", with " [MUTED]" after it when muted.
+        System.Text.RegularExpressions.Match match =
+            System.Text.RegularExpressions.Regex.Match(stdout, @"Volume:\s*([0-9.]+)");
+        float cubic = 0f;
+        bool parsed = match.Success && float.TryParse(match.Groups[1].Value,
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out cubic);
+        if (!parsed)
+            Assert.Inconclusive($"wpctl reported a volume this cannot parse: {stdout}");
+
+        return cubic;
     }
 
     [TestMethod]

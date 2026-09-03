@@ -115,6 +115,12 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
     /// </remarks>
     public IReadOnlyCollection<PipeWireMetadataEntry> Entries => [.. _entries.Values];
 
+    private static void ThrowIfContainsNul(string? text, string paramName)
+    {
+        if (text is not null && text.Contains('\0'))
+            throw new ArgumentException("metadata fields cannot contain NUL bytes.", paramName);
+    }
+
     /// <summary>The value of one entry, or <see langword="null"/> if the store has no such entry.</summary>
     /// <param name="key">The entry key, such as <c>default.audio.sink</c>.</param>
     /// <param name="subject">Which object the entry is about; <see cref="SubjectCore"/> for the daemon.</param>
@@ -149,6 +155,7 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="key"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">A field contains an embedded NUL byte.</exception>
     /// <exception cref="InvalidOperationException">The daemon refused the write.</exception>
     public async Task SetAsync(
         string key,
@@ -158,6 +165,9 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(key);
+        ThrowIfContainsNul(key, nameof(key));
+        ThrowIfContainsNul(value, nameof(value));
+        ThrowIfContainsNul(type, nameof(type));
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -353,10 +363,13 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
     /// low-latency application reaches for and the setting most likely to make someone else glitch.
     /// Release it when finished.
     /// <para>
-    /// <b>A value the daemon rejects is accepted and ignored.</b> Outside
-    /// <see cref="ClockMinQuantum"/> to <see cref="ClockMaxQuantum"/> the write succeeds, the daemon
-    /// logs at info level and nothing changes (<c>pipewire/settings.c:178-187</c>) - there is no
-    /// error to surface. Read <see cref="ClockForcedQuantum"/> back to find out whether it took.
+    /// <b>Nothing here is validated for you, and usually not by the daemon either.</b> The range
+    /// check against <see cref="ClockMinQuantum"/> and <see cref="ClockMaxQuantum"/> only runs when
+    /// the session enables <c>settings.check-quantum</c>, which is off by default
+    /// (<c>pipewire/settings.c:178-187</c>): with it off any value is applied as written, and with
+    /// it on an out-of-range value is dropped with an info-level log and no error. Either way the
+    /// write reports success, so read <see cref="ClockForcedQuantum"/> back to find out what
+    /// actually took.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="samples"/> is negative.</exception>
@@ -372,8 +385,9 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
     /// <param name="cancellationToken">Abandons the wait.</param>
     /// <remarks>
     /// <inheritdoc cref="SetForcedQuantumAsync" path="/remarks/para"/>
-    /// The rate is checked against the daemon's allowed-rates list rather than a range
-    /// (<c>pipewire/settings.c:171-177</c>); read <see cref="ClockForcedRate"/> back to confirm.
+    /// The rate is checked against the daemon's allowed-rates list rather than a range, and that
+    /// check is likewise gated on <c>settings.check-rate</c> (<c>pipewire/settings.c:171-177</c>);
+    /// read <see cref="ClockForcedRate"/> back to confirm.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="hz"/> is negative.</exception>
     public Task SetForcedRateAsync(int hz, CancellationToken cancellationToken = default)
@@ -513,12 +527,6 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
             // SPA_ID_INVALID means every subject, not a subject numbered 0xFFFFFFFF. Comparing it
             // to a stored subject matches nothing, so a store-wide clear would drop no entries at
             // all and the cache would keep reporting values the server no longer has.
-            //
-            // Defensive: whether the daemon uses this form for a clear is not something the test
-            // box can show, because a served store cannot yet be bound by another client and
-            // clearing the session's own store would take the machine's audio routing with it. If
-            // the daemon never sends it the branch is dead, and if it does this is the difference
-            // between an empty cache and a stale one.
             bool everySubject = subject == Native.SPA_ID_INVALID;
 
             // Reported one entry at a time. A subject-wide clear changes the store exactly as an

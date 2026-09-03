@@ -62,7 +62,11 @@ public sealed class RoutingAndSettingsTests
             Assert.IsNotNull(seen, "the node this test made is not in pw-dump's graph");
             Assert.AreEqual(sinkName, seen!.Prop("target.object"),
                 "target.object did not reach the daemon");
-            Assert.AreEqual("false", seen.Prop("node.autoconnect"),
+            // Compared case-insensitively because the daemon stores this one as a JSON boolean
+            // rather than a string, and the pw-dump oracle renders that through
+            // JsonElement.ToString(), which spells it "False". What is under test is that the key
+            // arrived and means false, not how the oracle prints it.
+            Assert.AreEqual("false", seen.Prop("node.autoconnect")?.ToLowerInvariant(),
                 "node.autoconnect did not reach the daemon");
 
             // Deprecated since 0.3.64. Sending both leaves which one wins to the session manager.
@@ -193,6 +197,47 @@ public sealed class RoutingAndSettingsTests
     }
 
     [TestMethod]
+    public async Task PinningTheRateAndReleasingIt_LeavesTheGraphAsItWasFound()
+    {
+        // Pin to the rate already running, so the graph never hears a change, then release.
+        // Affects every client on the machine while pinned, so it is released again immediately.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        await using var ctx = new PipeWireContext("pwnet-rate", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+        await using var registry = new PipeWireRegistry(ctx);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+
+        PipeWireMetadataStore? settings = registry.BindMetadataStore("settings");
+        if (settings is null)
+            Assert.Inconclusive("this session has no settings store.");
+
+        await using (settings)
+        {
+            await settings!.ReadyAsync(cts.Token);
+
+            if ((settings.ClockForcedRate ?? 0) != 0)
+                Assert.Inconclusive("this session already pins its rate.");
+
+            int? rate = settings.ClockRate;
+            if (rate is null or <= 0)
+                Assert.Inconclusive("this session reports no clock rate to pin.");
+
+            try
+            {
+                await settings.SetForcedRateAsync(rate.Value, cts.Token);
+                Assert.AreEqual(rate, settings.ClockForcedRate, "the rate did not take");
+            }
+            finally
+            {
+                await settings.SetForcedRateAsync(0, CancellationToken.None);
+            }
+
+            Assert.AreEqual(0, settings.ClockForcedRate, "the rate was left pinned");
+        }
+    }
+
+    [TestMethod]
     public async Task AQuantumTheDaemonRejects_IsAcceptedAndIgnoredRatherThanRefused()
     {
         RequireLinux();
@@ -215,19 +260,30 @@ public sealed class RoutingAndSettingsTests
 
             int max = settings.ClockMaxQuantum ?? 8192;
 
-            // The behaviour the accessor's remarks warn about, pinned as a test so it cannot change
-            // quietly: out of range, the write succeeds and the daemon logs at info. There is no
-            // error to surface, which is why reading it back is the only way to know.
+            // The behaviour the accessor's remarks warn about, pinned so it cannot change quietly.
+            // Which way it goes depends on the session: the daemon range-checks only when
+            // settings.check-quantum is on, and it is off by default. Either way the write reports
+            // success, so reading it back is the only way to know what happened - which is the
+            // point being pinned here.
+            bool checks = string.Equals(settings.Get("settings.check-quantum"), "true",
+                StringComparison.OrdinalIgnoreCase);
+            int absurd = max * 100;
+
             try
             {
-                await settings.SetForcedQuantumAsync(max * 100, cts.Token);
-                Assert.AreEqual(0, settings.ClockForcedQuantum,
-                    "an out-of-range quantum was applied, so the daemon's check has changed");
+                await settings.SetForcedQuantumAsync(absurd, cts.Token);
+
+                Assert.AreEqual(checks ? 0 : absurd, settings.ClockForcedQuantum,
+                    checks
+                        ? "check-quantum is on, so an out-of-range quantum should have been dropped"
+                        : "check-quantum is off, so the value should have been applied as written");
             }
             finally
             {
                 await settings.SetForcedQuantumAsync(0, CancellationToken.None);
             }
+
+            Assert.AreEqual(0, settings.ClockForcedQuantum, "the quantum was left pinned");
         }
     }
 

@@ -285,8 +285,8 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
     /// </summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
     /// <remarks>
-    /// The honest way to build a mixer. Writing a property a node does not have is silently dropped,
-    /// so this is what says whether a volume slider should be shown at all.
+    /// Writing a property a node does not have is silently dropped,
+    /// so this says whether a volume slider should be shown.
     /// </remarks>
     public Task<ImmutableArray<SpaObject>> EnumeratePropertyInfoAsync(
         CancellationToken cancellationToken = default) =>
@@ -306,8 +306,9 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
         return values.ToImmutable();
     }
 
-    private protected override unsafe int EnumParamsNative(void* proxy, int seq, uint id, uint start, uint num) =>
-        Native.pw_node_enum_params((pw_node*)proxy, seq, id, start, num, null);
+    private protected override unsafe int EnumParamsNative(
+        void* proxy, int seq, uint id, uint start, uint num, spa_pod* filter) =>
+        Native.pw_node_enum_params((pw_node*)proxy, seq, id, start, num, filter);
 
     private protected override unsafe int SetParamNative(void* proxy, uint id, uint flags, spa_pod* param) =>
         Native.pw_node_set_param((pw_node*)proxy, id, flags, param);
@@ -347,6 +348,57 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
             // Deliberately not logged: the instance the logger belongs to is what failed to resolve,
             // and there is nothing else to report it through from inside a native callback.
         }
+    }
+
+    // ------------------------------------------------------------------ port configuration
+
+    /// <summary>The port layouts this node offers, as opposed to the one it is using.</summary>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <remarks>
+    /// Empty on a node that is not an adapter. Only the adapter implements this parameter, so a
+    /// plain node reports nothing rather than failing.
+    /// </remarks>
+    public async Task<ImmutableArray<PipeWirePortConfig>> EnumeratePortConfigsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        ImmutableArray<SpaObject> raw = await EnumerateParametersAsync(
+            SpaParamType.EnumPortConfig, cancellationToken).ConfigureAwait(false);
+
+        var configs = ImmutableArray.CreateBuilder<PipeWirePortConfig>(raw.Length);
+        foreach (SpaObject param in raw)
+        {
+            if (PipeWirePortConfig.From(param) is { } config) configs.Add(config);
+        }
+
+        return configs.ToImmutable();
+    }
+
+    /// <summary>The port layout this node is currently using.</summary>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    public async Task<PipeWirePortConfig?> GetPortConfigAsync(
+        CancellationToken cancellationToken = default) =>
+        PipeWirePortConfig.From(
+            await GetParameterAsync(SpaParamType.PortConfig, cancellationToken).ConfigureAwait(false));
+
+    /// <summary>Reconfigures the node's ports.</summary>
+    /// <param name="config">The layout to apply.</param>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <remarks>
+    /// <b>This destroys the node's ports and creates new ones.</b> Every port id the caller holds is
+    /// stale afterwards, and every link through those ports is gone; the graph reports the removals
+    /// and additions as it would for any other change. Re-read the ports rather than assuming the
+    /// ids survived.
+    /// <para>
+    /// Only the adapter implements it. A node that is not one refuses with ENOTSUP, which arrives as
+    /// a <see cref="PipeWireException"/> carrying -95.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="config"/> is null.</exception>
+    public Task SetPortConfigAsync(
+        PipeWirePortConfig config, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        return SetParameterAsync(SpaParamType.PortConfig, config.ToParameter(), cancellationToken);
     }
 
     // ------------------------------------------------------------------ latency and tags

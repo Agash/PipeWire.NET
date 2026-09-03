@@ -42,6 +42,66 @@ public sealed class GraphCreationOptionsTests
         throw new InvalidOperationException("the snapshot stream ended before the condition held");
     }
 
+    private static string Unique(string prefix) =>
+        $"{prefix}_{Environment.ProcessId}_{Random.Shared.Next():x}";
+
+    [TestMethod]
+    public async Task TargetingANamelessNode_IsRefusedBeforeTheDaemon()
+    {
+        // target.object names a node; without a name there is nothing to send, and an empty
+        // target is not an error the daemon reports but a node that silently never links.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-targetguard", cts.Token);
+
+        await using (context)
+        await using (registry)
+        {
+            var nameless = new PipeWireNode(0x7FFF0000, null, null, null);
+
+            Assert.ThrowsExactly<ArgumentException>(
+                () => registry.CreateVirtualNode("Targeted").WithTarget(nameless));
+        }
+    }
+
+    [TestMethod]
+    public async Task ANodeThatStaysWithItsTarget_CarriesDontReconnect()
+    {
+        // What is verifiable from here is that the key reaches the daemon: whether the node
+        // is actually destroyed when its target goes is the session manager's policy (it only
+        // applies to linked nodes it manages), not a promise this library can keep by itself.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-stay", cts.Token);
+
+        await using (context)
+        await using (registry)
+        {
+            PipeWireNode target = await registry.CreateVirtualNode("StayTarget")
+                .WithName(Unique("pwnet_stay_target")).ExecuteAsync(cts.Token);
+
+            PipeWireNode node = await registry.CreateVirtualNode("Staying")
+                .WithName(Unique("pwnet_stay")).WithTarget(target).WithStayWithTheTarget()
+                .ExecuteAsync(cts.Token);
+
+            try
+            {
+                PwDump dump = await PwDump.CaptureAsync(cts.Token);
+                PwDump.Entry? seen = dump.OfKind("Node")
+                    .FirstOrDefault(e => e.Id == node.NodeId);
+
+                Assert.IsNotNull(seen, "the node this test made is not in pw-dump's graph");
+                Assert.AreEqual("true", seen!.Prop("node.dont-reconnect")?.ToLowerInvariant(),
+                    "node.dont-reconnect did not reach the daemon");
+            }
+            finally
+            {
+                await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
+                await registry.DestroyGlobalAsync(target.NodeId, cts.Token);
+            }
+        }
+    }
+
     [TestMethod]
     public async Task DescribingANode_DoesNotCreateItUntilExecuted()
     {
@@ -439,6 +499,36 @@ public sealed class GraphCreationOptionsTests
 
         Assert.ThrowsExactly<ArgumentException>(() => creation.WithProperty("", "v"));
         Assert.ThrowsExactly<ArgumentNullException>(() => creation.WithProperty("k", null!));
+        }
+    }
+
+    [TestMethod]
+    public async Task LingeringIds_ListsWhatWasLeftBehindUntilDestroyed()
+    {
+        // Leaving lingering objects behind is not a leak, but forgetting them is: the listing is
+        // what a later session destroys explicitly instead of rediscovering ids by name.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-linger-list", cts.Token);
+
+        await using (context)
+        await using (registry)
+        {
+            PipeWireNode node = await registry.CreateVirtualNode("Listed")
+                .WithName(Unique("pwnet_linger_listed"))
+                .WithLinger()
+                .ExecuteAsync(cts.Token);
+
+            Assert.IsTrue(registry.LingeringIds.Contains(node.NodeId),
+                "a node created lingering must be listed until destroyed");
+
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
+
+            PipeWireGraphSnapshot gone = await WaitForAsync(
+                registry, g => g.GetNode(node.NodeId) is null, cts.Token);
+            Assert.IsNotNull(gone);
+            Assert.IsFalse(registry.LingeringIds.Contains(node.NodeId),
+                "a destroyed node must leave the listing with its removal");
         }
     }
 

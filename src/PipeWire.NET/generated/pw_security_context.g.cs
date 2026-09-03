@@ -11,6 +11,6 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct pw_security_context
+internal partial struct pw_security_context
 {
 }

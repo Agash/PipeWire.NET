@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_process_latency_info
+internal partial struct spa_process_latency_info
 {
     public float quantum;
 

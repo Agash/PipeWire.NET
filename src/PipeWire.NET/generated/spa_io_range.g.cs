@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_io_range
+internal partial struct spa_io_range
 {
     [NativeTypeName("uint64_t")]
     public ulong offset;

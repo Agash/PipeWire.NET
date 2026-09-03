@@ -57,7 +57,7 @@ public sealed class RegistryRobustnessTests
         await using (context)
         await using (registry)
         {
-            // Every event, all throwing. If any of them escapes, this process is gone.
+            // If any of them escapes, this process is gone.
             var raised = new Dictionary<string, int>
             {
                 ["NodeAdded"] = 0, ["PortAdded"] = 0, ["LinkAdded"] = 0,
@@ -79,7 +79,6 @@ public sealed class RegistryRobustnessTests
             registry.LinkRemoved += _ => Bang("LinkRemoved");
             registry.GraphChanged += (_, _) => Bang("GraphChanged");
 
-            // Exercise the full lifecycle so every one of those handlers gets its turn.
             PipeWireNode a = await registry.CreateVirtualNodeAsync("HA", "pwnet_hostile_a", cts.Token);
             PipeWireNode b = await registry.CreateVirtualNodeAsync("HB", "pwnet_hostile_b", cts.Token);
 
@@ -102,7 +101,6 @@ public sealed class RegistryRobustnessTests
                 g => g.GetNode(a.NodeId) is null && g.GetNode(b.NodeId) is null && g.GetLink(link.LinkId) is null,
                 cts.Token);
 
-            // Surviving proves the boundary holds. These prove the loop kept delivering.
             lock (raised)
             {
                 foreach ((string which, int count) in raised)
@@ -157,10 +155,8 @@ public sealed class RegistryRobustnessTests
             registry.GraphChanged += (_, _) => throw new InvalidOperationException("hostile");
             registry.GraphChanged += (_, _) => Interlocked.Increment(ref good);
 
-            // Recorded rather than counted, and filtered afterwards. The session is shared, so
-            // every other class creating a node delivers four more port events to this subscriber;
-            // an exact total would be measuring the rest of the suite. Filtering inside the handler
-            // is no good either, because the ports can be announced before the id is known here.
+            // Filtering inside the handler is no good because ports can be announced before the id
+            // is known here; filter afterwards.
             var seenPorts = new System.Collections.Concurrent.ConcurrentBag<uint>();
             registry.PortAdded += _ => throw new InvalidOperationException("hostile");
             registry.PortAdded += port => seenPorts.Add(port.NodeId);

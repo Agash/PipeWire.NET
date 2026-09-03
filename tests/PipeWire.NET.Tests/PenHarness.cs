@@ -81,32 +81,48 @@ public sealed class PenHarness
     public async Task Churn()
     {
         using CancellationTokenSource cts = Budget();
-        try { await ChurnAsync(cts.Token); } catch (OperationCanceledException) { }
+        long binds = 0, reads = 0;
+        try { (binds, reads) = await ChurnAsync(cts.Token); } catch (OperationCanceledException) { }
+
+        // Asserted here rather than inside the scenario: a budget expiring mid-iteration
+        // otherwise skips the report and the check together, and the run passes having
+        // tested nothing.
+        Assert.IsTrue(binds > 0, "the churn scenario bound nothing; it never reached the graph");
+        Assert.IsTrue(reads > 0, "the churn scenario read no parameters from any node");
     }
 
     [TestMethod]
     public async Task BindAll()
     {
         using CancellationTokenSource cts = Budget();
-        try { await BindAllAsync(cts.Token); } catch (OperationCanceledException) { }
+        long held = 0, ok = 0;
+        try { (held, ok) = await BindAllAsync(cts.Token); } catch (OperationCanceledException) { }
+
+        Assert.IsTrue(held > 0, "nothing in the graph could be bound");
+        Assert.IsTrue(ok > 0, "every read against every held binding failed");
     }
 
     [TestMethod]
     public async Task Meta()
     {
         using CancellationTokenSource cts = Budget();
-        try { await MetaAsync(cts.Token); } catch (OperationCanceledException) { }
+        long writes = 0;
+        try { writes = await MetaAsync(cts.Token); } catch (OperationCanceledException) { }
+
+        Assert.IsTrue(writes > 0, "the metadata scenario wrote nothing; it never reached the store");
     }
 
     [TestMethod]
     public async Task Contexts()
     {
         using CancellationTokenSource cts = Budget();
-        try { await ContextsAsync(cts.Token); } catch (OperationCanceledException) { }
+        long made = 0;
+        try { made = await ContextsAsync(cts.Token); } catch (OperationCanceledException) { }
+
+        Assert.IsTrue(made > 0, "no context completed a full open-and-close cycle");
     }
 
-    // Enumerate params of every node continuously while the outside world creates and destroys them.
-    private static async Task ChurnAsync(CancellationToken ct)
+    private static async Task<(long Binds, long Reads)> ChurnAsync(CancellationToken ct)
     {
         await using var ctx = new PipeWireContext("pen-churn");
         await ctx.StartAsync(ct);
@@ -114,35 +130,41 @@ public sealed class PenHarness
         await reg.WaitForInitialEnumerationAsync(ct);
 
         long reads = 0, errors = 0, binds = 0;
-        while (!ct.IsCancellationRequested)
+        try
         {
-            foreach (PipeWireNode node in reg.Current.Nodes)
+            while (!ct.IsCancellationRequested)
             {
-                if (ct.IsCancellationRequested) break;
-                PipeWireNodeControl? control = null;
-                try
+                foreach (PipeWireNode node in reg.Current.Nodes)
                 {
-                    control = reg.BindNode(node.NodeId);
-                    binds++;
-                    await control.EnumerateParametersAsync(SpaParamType.Props, ct);
-                    reads++;
+                    if (ct.IsCancellationRequested) break;
+                    PipeWireNodeControl? control = null;
+                    try
+                    {
+                        control = reg.BindNode(node.NodeId);
+                        binds++;
+                        await control.EnumerateParametersAsync(SpaParamType.Props, ct);
+                        reads++;
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception ex) { errors++; if (errors < 6) Report($"PEN churn: {ex.GetType().Name}: {ex.Message}"); }
+                    finally { if (control is not null) await control.DisposeAsync(); }
                 }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception ex) { errors++; if (errors < 6) Report($"PEN churn: {ex.GetType().Name}: {ex.Message}"); }
-                finally { if (control is not null) await control.DisposeAsync(); }
             }
         }
-        Report($"PEN churn: binds={binds} reads={reads} errors={errors}");
-
-        // The counters are the finding, but a run where nothing happened at all is not a passing
-        // run - it is a scenario that never reached the daemon and reported zero as though that
-        // were a result.
-        Assert.IsTrue(binds > 0, "the churn scenario bound nothing; it never reached the graph");
-        Assert.IsTrue(reads > 0, "the churn scenario read no parameters from any node");
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The budget expiring mid-iteration is the normal end of a soak, not a failure.
+            // Without this the counters built over the whole run are lost and the caller
+            // asserts against zeros.
+        }
+        finally
+        {
+            Report($"PEN churn: binds={binds} reads={reads} errors={errors}");
+        }
+        return (binds, reads);
     }
 
-    // Bind everything, hold it, and keep reading while the graph changes underneath.
-    private static async Task BindAllAsync(CancellationToken ct)
+    private static async Task<(long Held, long Reads)> BindAllAsync(CancellationToken ct)
     {
         await using var ctx = new PipeWireContext("pen-bindall");
         await ctx.StartAsync(ct);
@@ -157,25 +179,33 @@ public sealed class PenHarness
         Report($"PEN bindall: holding {held.Count} bindings");
 
         long ok = 0, gone = 0;
-        while (!ct.IsCancellationRequested)
+        try
         {
-            foreach (PipeWireNodeControl c in held)
+            while (!ct.IsCancellationRequested)
             {
-                if (ct.IsCancellationRequested) break;
-                try { await c.GetVolumeAsync(ct); ok++; }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception) { gone++; }
+                foreach (PipeWireNodeControl c in held)
+                {
+                    if (ct.IsCancellationRequested) break;
+                    try { await c.GetVolumeAsync(ct); ok++; }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception) { gone++; }
+                }
             }
         }
-        foreach (PipeWireNodeControl c in held) await c.DisposeAsync();
-        Report($"PEN bindall: reads={ok} failed={gone}");
-
-        Assert.IsTrue(held.Count > 0, "nothing in the graph could be bound");
-        Assert.IsTrue(ok > 0, "every read against every held binding failed");
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Budget expiry is the normal end; keep the counters for the caller.
+        }
+        finally
+        {
+            foreach (PipeWireNodeControl c in held) await c.DisposeAsync();
+            Report($"PEN bindall: reads={ok} failed={gone}");
+        }
+        return (held.Count, ok);
     }
 
     // Hammer the metadata store from managed code while pw-metadata hammers it from outside.
-    private static async Task MetaAsync(CancellationToken ct)
+    private static async Task<long> MetaAsync(CancellationToken ct)
     {
         await using var ctx = new PipeWireContext("pen-meta");
         await ctx.StartAsync(ct);
@@ -183,7 +213,7 @@ public sealed class PenHarness
         await reg.WaitForInitialEnumerationAsync(ct);
 
         PipeWireMetadataStore? store = reg.BindMetadataStore("default");
-        if (store is null) { Report("PEN meta: no default store"); return; }
+        if (store is null) { Report("PEN meta: no default store"); return 0; }
 
         await using (store)
         {
@@ -192,50 +222,69 @@ public sealed class PenHarness
             store.EntryChanged += (_, _) => Interlocked.Increment(ref events);
 
             string key = $"pen.meta.{Environment.ProcessId}";
-            while (!ct.IsCancellationRequested)
+            try
             {
-                try
+                while (!ct.IsCancellationRequested)
                 {
-                    await store.SetAsync(key, $"v{writes}", cancellationToken: ct);
-                    if (store.Get(key) != $"v{writes}")
-                        Report($"PEN meta: READ-AFTER-WRITE MISMATCH at {writes}");
-                    writes++;
+                    try
+                    {
+                        await store.SetAsync(key, $"v{writes}", cancellationToken: ct);
+                        if (store.Get(key) != $"v{writes}")
+                            Report($"PEN meta: READ-AFTER-WRITE MISMATCH at {writes}");
+                        writes++;
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception ex) { Report($"PEN meta: {ex.GetType().Name}"); break; }
                 }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception ex) { Report($"PEN meta: {ex.GetType().Name}"); break; }
             }
-            try { await store.SetAsync(key, null, cancellationToken: CancellationToken.None); } catch { }
-            Report($"PEN meta: writes={writes} events={Interlocked.Read(ref events)}");
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // Budget expiry is the normal end; keep the count for the caller.
+            }
+            finally
+            {
+                try { await store.SetAsync(key, null, cancellationToken: CancellationToken.None); } catch { }
+                Report($"PEN meta: writes={writes} events={Interlocked.Read(ref events)}");
+            }
+            return writes;
         }
     }
 
     // Many contexts opening and closing at once, to exhaust descriptors and races in startup.
-    private static async Task ContextsAsync(CancellationToken ct)
+    private static async Task<long> ContextsAsync(CancellationToken ct)
     {
         long made = 0;
-        while (!ct.IsCancellationRequested)
+        try
         {
-            Task[] wave =
-            [
-                .. Enumerable.Range(0, 12).Select(i => Task.Run(async () =>
-                {
-                    var c = new PipeWireContext($"pen-ctx-{i}");
-                    try
+            while (!ct.IsCancellationRequested)
+            {
+                Task[] wave =
+                [
+                    .. Enumerable.Range(0, 12).Select(i => Task.Run(async () =>
                     {
-                        await c.StartAsync(ct);
-                        var r = new PipeWireRegistry(c);
-                        await r.WaitForInitialEnumerationAsync(ct);
-                        await r.DisposeAsync();
-                    }
-                    catch (OperationCanceledException) { }
-                    catch (Exception ex) { Report($"PEN ctx: {ex.GetType().Name}: {ex.Message}"); }
-                    finally { await c.DisposeAsync(); Interlocked.Increment(ref made); }
-                }, ct)),
-            ];
-            try { await Task.WhenAll(wave); } catch (OperationCanceledException) { }
+                        var c = new PipeWireContext($"pen-ctx-{i}");
+                        try
+                        {
+                            await c.StartAsync(ct);
+                            var r = new PipeWireRegistry(c);
+                            await r.WaitForInitialEnumerationAsync(ct);
+                            await r.DisposeAsync();
+                            // Only a full cycle counts. Incrementing in a finally would count
+                            // attempts that never reached the graph as successes.
+                            Interlocked.Increment(ref made);
+                        }
+                        catch (OperationCanceledException) { }
+                        catch (Exception ex) { Report($"PEN ctx: {ex.GetType().Name}: {ex.Message}"); }
+                        finally { await c.DisposeAsync(); }
+                    }, ct)),
+                ];
+                try { await Task.WhenAll(wave); } catch (OperationCanceledException) { }
+            }
         }
-        Report($"PEN contexts: opened/closed {made}");
-
-        Assert.IsTrue(made > 0, "no context completed a full open-and-close cycle");
+        finally
+        {
+            Report($"PEN contexts: opened/closed {Interlocked.Read(ref made)}");
+        }
+        return Interlocked.Read(ref made);
     }
 }

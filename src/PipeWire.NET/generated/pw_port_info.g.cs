@@ -13,7 +13,7 @@ using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct pw_port_info
+internal unsafe partial struct pw_port_info
 {
     [NativeTypeName("uint32_t")]
     public uint id;

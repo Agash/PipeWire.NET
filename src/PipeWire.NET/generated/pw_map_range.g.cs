@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct pw_map_range
+internal partial struct pw_map_range
 {
     [NativeTypeName("uint32_t")]
     public uint start;

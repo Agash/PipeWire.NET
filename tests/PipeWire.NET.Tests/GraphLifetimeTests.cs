@@ -1,6 +1,8 @@
+using System.Collections.Immutable;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
+using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Tests;
 
@@ -189,6 +191,29 @@ public sealed class GraphLifetimeTests
     }
 
     [TestMethod]
+    public async Task DisposingTheRegistry_EndsAnOpenWatch()
+    {
+        // The watch has no cancellation token of its own here, so disposal is the only thing
+        // that can end it. Without the Finish hook the consumer would wait on the channel
+        // for ever, holding the test host with it.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-watchend", cts.Token);
+
+        await using (context)
+        {
+            await using var watcher = registry.WatchAsync().GetAsyncEnumerator();
+
+            Assert.IsTrue(await watcher.MoveNextAsync(), "the watch yielded nothing at all");
+
+            registry.Dispose();
+
+            Assert.IsFalse(await watcher.MoveNextAsync(), "the watch survived the registry");
+            await watcher.DisposeAsync();
+        }
+    }
+
+    [TestMethod]
     public async Task ACreatedNodeCarriesUsablePermissions()
     {
         RequireLinux();
@@ -212,5 +237,163 @@ public sealed class GraphLifetimeTests
                 Assert.IsTrue(port.Permissions.HasFlag(PipeWirePermissions.Read),
                     $"port {port.PortId} came back unreadable");
         }
+    }
+
+    [TestMethod]
+    public async Task EverythingBuiltDeliberatelyLeftBehind_CanStillBeTornDown()
+    {
+        // The cleanup proof: lingering objects survive their creator by design, so only
+        // explicit destruction removes them. This builds a mess out of every hosted kind -
+        // lingering nodes and a link, a served device, a served store with a key in it -
+        // tears each one down through its own API, and then requires the graph to be free
+        // of all of them. Anything left behind is a disposal path that does not work.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-cleanup", cts.Token);
+
+        string tag = $"pwnet_cleanup_{Environment.ProcessId}_{Random.Shared.Next():x}";
+
+        await using (context)
+        await using (registry)
+        {
+            PipeWireNode a = await registry.CreateVirtualNode("Cleanup A")
+                .WithName(tag + "_a").WithLinger().ExecuteAsync(cts.Token);
+            PipeWireNode b = await registry.CreateVirtualNode("Cleanup B")
+                .WithName(tag + "_b").WithLinger().ExecuteAsync(cts.Token);
+
+            PipeWirePort output = await WaitForPortAsync(registry, a.NodeId, PipeWirePortDirection.Out, cts.Token);
+            PipeWirePort input = await WaitForPortAsync(registry, b.NodeId, PipeWirePortDirection.In, cts.Token);
+            PipeWireLink link = await registry.CreateLink(output, input).WithLinger().ExecuteAsync(cts.Token);
+
+            using PipeWireDeviceProvider device = PipeWireDeviceProvider.Create(
+                context, tag + "_device", "A device this test withdraws");
+            using PipeWireMetadataProvider served = PipeWireMetadataProvider.Create(context, tag + "_meta");
+
+            // Bound from a second connection, which is what stores are for: binding a store
+            // this same connection serves wedges the session, so no test does that here.
+            await using var reader = new PipeWireContext("pwnet-cleanup-read", ConsoleTestLoggerFactory.Instance);
+            await reader.StartAsync(cts.Token);
+            await using var readerRegistry = new PipeWireRegistry(reader);
+            await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
+
+            PipeWireMetadataStore? store = null;
+            long appearUntil = Environment.TickCount64 + 20_000;
+            while (store is null && Environment.TickCount64 < appearUntil)
+            {
+                await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
+                store = readerRegistry.BindMetadataStore(tag + "_meta");
+                if (store is null)
+                    await Task.Delay(TimeSpan.FromMilliseconds(100), cts.Token);
+            }
+
+            if (store is null)
+                Assert.Inconclusive("the served store never appeared in the graph.");
+
+            await using (store)
+            {
+                await store!.ReadyAsync(cts.Token);
+                await store.SetAsync(tag + ".k", "v", cancellationToken: cts.Token);
+
+                // Sanity: everything built is visible before anything is torn down.
+                PipeWireGraphSnapshot built = registry.Current;
+                Assert.IsNotNull(built.GetNode(a.NodeId));
+                Assert.IsNotNull(built.GetNode(b.NodeId));
+                Assert.IsNotNull(built.GetLink(link.LinkId));
+                Assert.IsNotNull(built.Devices.FirstOrDefault(d => d.DeviceName == tag + "_device"));
+                Assert.AreEqual("v", store.Get(tag + ".k"));
+
+                // Tear down through each kind's own API, in dependency order.
+                await store.SetAsync(tag + ".k", null, cancellationToken: cts.Token);
+                await registry.DestroyGlobalAsync(link.LinkId, cts.Token);
+                await registry.DestroyGlobalAsync(a.NodeId, cts.Token);
+                await registry.DestroyGlobalAsync(b.NodeId, cts.Token);
+            }
+
+            device.Dispose();
+            served.Dispose();
+
+            // Removals propagate asynchronously; settle, then require absence rather than
+            // waiting on it for ever. Time-boxed rather than attempt-counted: on a slow
+            // session each round trip costs real time, and a fixed number of rounds then
+            // expires the budget instead of reaching the assertions below. The link is
+            // matched by its endpoints rather than its id: ids are reused under churn, so a
+            // resolved id alone proves nothing about our link.
+            long settleUntil = Environment.TickCount64 + 30_000;
+            while (Environment.TickCount64 < settleUntil)
+            {
+                await registry.WaitForInitialEnumerationAsync(cts.Token);
+                PipeWireGraphSnapshot seen = registry.Current;
+                if (!LeftoversPresent(seen, tag)
+                    && !seen.Links.Any(l =>
+                        l.LinkOutputPort == output.PortId && l.LinkInputPort == input.PortId))
+                {
+                    break;
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(100), cts.Token);
+            }
+
+            PipeWireGraphSnapshot final = registry.Current;
+            Assert.IsFalse(LeftoversPresent(final, tag), DescribeLeftovers(final, tag));
+            Assert.IsFalse(final.Links.Any(l =>
+                l.LinkOutputPort == output.PortId && l.LinkInputPort == input.PortId),
+                "a link through our ports survived their nodes");
+            Assert.IsTrue(final.Nodes.Length > 0, "the session stopped answering");
+        }
+    }
+
+    private static async Task<PipeWirePort> WaitForPortAsync(
+        PipeWireRegistry registry, uint nodeId, PipeWirePortDirection direction, CancellationToken cancellationToken)
+    {
+        // Ports arrive after their node, on the daemon's own schedule, which under load is
+        // seconds, not milliseconds. Bounded by the caller's budget rather than an attempt
+        // count: giving up after N fast rounds mistakes a slow session for a broken node.
+        // A timeout here fails naming the node and direction, rather than surfacing as a
+        // bare cancellation from somewhere inside the wait.
+        try
+        {
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                PipeWirePort? port = registry.Current.GetPortsForNode(nodeId)
+                    .FirstOrDefault(p => p.PortDirection == direction);
+                if (port is not null)
+                    return port;
+
+                await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+                await registry.WaitForInitialEnumerationAsync(cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Assert.Fail($"node {nodeId} never grew a {direction} port within the budget");
+            throw;
+        }
+    }
+
+    private static bool LeftoversPresent(PipeWireGraphSnapshot graph, string tag) =>
+        graph.Nodes.Any(n => n.NodeName is not null && n.NodeName.Contains(tag, StringComparison.Ordinal))
+        || graph.Devices.Any(d => d.DeviceName is not null && d.DeviceName.Contains(tag, StringComparison.Ordinal))
+        || graph.Objects.Any(o =>
+            o is PipeWireMetadataObject metadata
+            && metadata.MetadataName is not null
+            && metadata.MetadataName.Contains(tag, StringComparison.Ordinal));
+
+    private static string DescribeLeftovers(PipeWireGraphSnapshot graph, string tag)
+    {
+        var left = new List<string>();
+        foreach (PipeWireNode n in graph.Nodes)
+            if (n.NodeName is not null && n.NodeName.Contains(tag, StringComparison.Ordinal))
+                left.Add($"node {n.NodeId} '{n.NodeName}'");
+        foreach (PipeWireDevice d in graph.Devices)
+            if (d.DeviceName is not null && d.DeviceName.Contains(tag, StringComparison.Ordinal))
+                left.Add($"device {d.Id} '{d.DeviceName}'");
+        foreach (IPipeWireObject o in graph.Objects)
+            if (o is PipeWireMetadataObject metadata
+                && metadata.MetadataName is not null
+                && metadata.MetadataName.Contains(tag, StringComparison.Ordinal))
+                left.Add($"metadata {o.Id} '{metadata.MetadataName}'");
+        return $"the graph still holds ours: {string.Join(", ", left)}";
     }
 }

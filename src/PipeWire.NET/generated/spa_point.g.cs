@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_point
+internal partial struct spa_point
 {
     [NativeTypeName("int32_t")]
     public int x;

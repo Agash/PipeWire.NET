@@ -172,8 +172,8 @@ public sealed class LatencyAndTagTests
     [TestMethod]
     public void ATagInfoWithNoLeadingCount_IsStillReadAsPairs()
     {
-        // Defensive rather than speculative: the struct's first field is the count in every pod the
-        // daemon sends, and reading pairs from index 0 when it is absent costs one type check.
+        // The struct's first field is the count in every pod the daemon sends, and reading pairs
+        // from index 0 when it is absent costs one type check.
         var noCount = new SpaObject(SpaType.ObjectParamTag, SpaParamType.Tag,
         [
             new SpaProperty((uint)SpaParamTag.Info, 0, new SpaStruct(
@@ -185,5 +185,69 @@ public sealed class LatencyAndTagTests
         Assert.IsNotNull(read);
         Assert.HasCount(1, read!.Info);
         Assert.AreEqual("k", read.Info[0].Key);
+    }
+
+    // ------------------------------------------------------------------ live session
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    public async Task ALiveAdapterNode_AnswersLatencyAndTagQueries()
+    {
+        // What an adapter node actually does with these parameters, which is less than its
+        // parameter table suggests: process latency reads back nothing, tags are not listed at
+        // all, and writes are the follower's business (a null sink refuses them). What is under
+        // test is this library's half: reads surface as null, refusals as errors carrying the
+        // daemon's code, and neither hangs the round-trip.
+        if (!OperatingSystem.IsLinux())
+            Assert.Inconclusive("PipeWire is a Linux daemon.");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
+
+        await using var ctx = new PipeWireContext("pwnet-latency-live", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+        await using var registry = new PipeWireRegistry(ctx);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+
+        PipeWireNode node = await registry.CreateVirtualNode("LatencyLive")
+            .WithName($"pwnet_lat_{Environment.ProcessId}_{Random.Shared.Next():x}")
+            .ExecuteAsync(cts.Token);
+
+        await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+        await control.ReadyAsync(cts.Token);
+
+        Assert.IsNull(
+            await control.GetProcessLatencyAsync(cts.Token),
+            "the adapter reported a process latency it was never given");
+
+        // Tags may or may not be announced yet: the adapter publishes its parameters in
+        // stages after binding, so absence reads as a refusal when unannounced and as empty
+        // when announced. Either is the adapter having no tags, and both must complete.
+        ImmutableArray<PipeWireTag> tags;
+        try
+        {
+            tags = await control.GetTagsAsync(cts.Token);
+        }
+        catch (PipeWireException ex) when (ex.Result == -2)
+        {
+            tags = [];
+        }
+
+        Console.Error.WriteLine($"tags: {tags.Length}");
+
+        PipeWireException latencyRefused = await Assert.ThrowsExactlyAsync<PipeWireException>(
+            () => control.SetProcessLatencyAsync(new PipeWireProcessLatency(Quantum: 128f), cts.Token));
+        Assert.IsTrue(latencyRefused.Result < 0, "a refusal must carry the daemon's code");
+        Console.Error.WriteLine($"process latency write refused: {latencyRefused.Message}");
+
+        PipeWireException tagRefused = await Assert.ThrowsExactlyAsync<PipeWireException>(
+            () => control.SetTagAsync(
+                new PipeWireTag(SpaDirection.Output,
+                    ImmutableArray.Create(new KeyValuePair<string, string>("pwnet", "live"))),
+                cts.Token));
+        Assert.IsTrue(tagRefused.Result < 0, "a refusal must carry the daemon's code");
+        Console.Error.WriteLine($"tag write refused: {tagRefused.Message}");
+
+        await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
     }
 }

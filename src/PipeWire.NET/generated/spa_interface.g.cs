@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct spa_interface
+internal unsafe partial struct spa_interface
 {
     [NativeTypeName("const char *")]
     public sbyte* type;

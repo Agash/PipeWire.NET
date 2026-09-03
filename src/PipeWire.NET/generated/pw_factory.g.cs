@@ -11,6 +11,6 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct pw_factory
+internal partial struct pw_factory
 {
 }

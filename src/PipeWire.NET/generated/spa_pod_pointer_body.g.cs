@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct spa_pod_pointer_body
+internal unsafe partial struct spa_pod_pointer_body
 {
     [NativeTypeName("uint32_t")]
     public uint type;

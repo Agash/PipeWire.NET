@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 using PipeWire.NET.Interop;
@@ -39,16 +40,16 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
     /// <summary>Wildcard node id - let PipeWire auto-select a source.</summary>
     public const uint AnyNode = Native.PW_ID_ANY;
 
-    /// <summary>Signature for <see cref="FrameReady"/>.</summary>
+    /// <summary>Handles a frame on the loop thread. Do not cache the frame.</summary>
     public delegate void FrameReadyHandler(PipeWireVideoCapture sender, VideoFrame frame);
 
-    /// <summary>Signature for <see cref="StateChanged"/>.</summary>
+    /// <summary>Handles a connection state change on the loop thread.</summary>
     public delegate void StateChangedHandler(PipeWireVideoCapture sender, PipeWireStreamState oldState, PipeWireStreamState newState);
 
     /// <summary>Raised on the loop thread when a frame is ready. Do not cache the frame.</summary>
     public event FrameReadyHandler? FrameReady;
 
-    /// <summary>Raised when the connection state changes.</summary>
+    /// <summary>Raised on the loop thread when the connection state changes.</summary>
     public event StateChangedHandler? StateChanged;
 
     private readonly PipeWireContext _ctx;
@@ -76,8 +77,12 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
     // apply to. We do NOT retain the offered modifier list: fixation re-offers the producer's preferred
     // returned modifier (carried as the scalar _fmt.Modifier), which is always within our offered set.
     private bool _modifiersOffered;
+    private bool _explicitSyncRequested;
     private PixelFormat _modifierFormat;
     private bool _modifierFixated;
+
+    /// <summary>Cleared by a consumer promising to signal the release point.</summary>
+    private const uint SyncUnscheduledRelease = 1u << 0;
 
     /// <summary>
     /// The DRM format modifier negotiated for delivered dmabuf frames, or
@@ -97,10 +102,19 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
     }
 
     /// <summary>Connects to a discovered source.</summary>
-    public void Connect(PipeWireNode source, ReadOnlySpan<PixelFormat> preferredFormats = default)
+    /// <param name="source">The node to capture from.</param>
+    /// <param name="preferredFormats">Preferred pixel formats in priority order.</param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait for the loop lock. The connect request itself is issued
+    /// synchronously once that is held, so there is nothing to recall after it.
+    /// </param>
+    public void Connect(
+        PipeWireNode source,
+        ReadOnlySpan<PixelFormat> preferredFormats = default,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
-        Connect(source.NodeId, preferredFormats);
+        Connect(source.NodeId, preferredFormats, cancellationToken: cancellationToken);
     }
 
     /// <summary>Connects to a source by node id (default: auto-select).</summary>
@@ -128,6 +142,17 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
     /// GPU-importable set). When non-empty, <paramref name="preferredFormats"/> must name exactly one
     /// format. The library auto-fixates to the producer's preferred modifier from this set.
     /// </param>
+    /// <param name="requestExplicitSync">
+    /// Ask the producer for <c>SPA_META_SyncTimeline</c>, so frames carry acquire and release points
+    /// instead of relying on implicit fences. Only meaningful alongside
+    /// <paramref name="modifiers"/>, and only worth asking for if the consumer is going to wait on
+    /// <see cref="VideoFrame.SyncTimeline"/>: a producer that agrees to explicit sync stops
+    /// attaching implicit fences, so ignoring the points races the GPU still writing the frame.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait for the loop lock. The connect request itself is issued
+    /// synchronously once that is held, so there is nothing to recall after it.
+    /// </param>
     public unsafe void Connect(uint targetNodeId = AnyNode,
         ReadOnlySpan<PixelFormat> preferredFormats = default,
         string? targetObjectName = null,
@@ -135,7 +160,9 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
         bool stayWithTheSource = false,
         int preferredWidth = 1920,
         int preferredHeight = 1080,
-        int preferredFrameRate = 30)
+        int preferredFrameRate = 30,
+        bool requestExplicitSync = false,
+        CancellationToken cancellationToken = default)
     {
         if (_core is not null) throw new InvalidOperationException("Already connected.");
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(preferredWidth);
@@ -147,6 +174,7 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
                 nameof(preferredFormats));
 
         _modifiersOffered = !modifiers.IsEmpty;
+        _explicitSyncRequested = requestExplicitSync && !modifiers.IsEmpty;
         _modifierFormat = preferredFormats.Length == 1 ? preferredFormats[0] : default;
         _modifierFixated = false;
 
@@ -180,7 +208,8 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
             PipeWireStreamFlags.Autoconnect | PipeWireStreamFlags.MapBuffers
                 | (stayWithTheSource ? PipeWireStreamFlags.DontReconnect : 0),
             pod[..len],
-            fallback[..fallbackLen]);
+            fallback[..fallbackLen],
+            cancellationToken);
             _core = core;
         }
         catch
@@ -274,9 +303,54 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
             mediaClockNs: clock.MediaClockNs,
             delayNs: clock.DelayNs,
             modifier: fdBacked ? fmt.Modifier : DrmFormatModifier.Invalid,
-            planes: planes[..planeCount]);
+            planes: planes[..planeCount],
+            syncTimeline: SpaFormatPod.TryFindSyncTimeline(spaBuf, out SpaFormatPod.SyncTimeline t)
+                ? new VideoSyncTimeline(t.Flags, t.AcquirePoint, t.ReleasePoint)
+                : null);
+
+        // Explicit sync, when the producer negotiated it: wait for the acquire point before the
+        // app reads a byte, and promise-then-signal the release point once the handler returns.
+        // Present-driven, not flag-driven: no timeline meta means implicit fences still apply and
+        // nothing here runs. Both block the loop thread (the wait) or touch shared buffer memory
+        // (the flag clear), which is why streams carrying timelines want a dedicated context: a
+        // peer that never signals stalls every stream on a shared one.
+        int releaseFd = -1;
+        if (frame.SyncTimeline is { } timeline
+            && SpaFormatPod.TryFindSyncDataFds(spaBuf, out int acquireFd, out int foundReleaseFd)
+            && acquireFd >= 0 && foundReleaseFd >= 0)
+        {
+            if (timeline.AcquirePoint != 0)
+                Descriptors.WaitEventfd(acquireFd);
+
+            if (timeline.ReleasePoint != 0)
+                releaseFd = foundReleaseFd;
+        }
 
         FrameReady?.Invoke(this, frame);
+
+        if (releaseFd >= 0)
+        {
+            // Promise first, signal second: clearing UNSCHEDULED_RELEASE tells the producer a
+            // signal is coming, and the write is the signal. Reversed, the producer could observe
+            // the signal with the flag still set and conclude nothing was promised.
+            ClearSyncUnscheduled(spaBuf);
+            Descriptors.SignalEventfd(releaseFd);
+        }
+    }
+
+    /// <summary>Clears the unscheduled-release flag in a buffer's timeline meta, if present.</summary>
+    private static unsafe void ClearSyncUnscheduled(spa_buffer* sb)
+    {
+        if (sb is null || sb->metas is null) return;
+
+        uint count = Math.Min(sb->n_metas, 64u);
+        for (uint i = 0; i < count; i++)
+        {
+            spa_meta* m = &sb->metas[i];
+            if (m->type != (uint)SpaMetaType.SyncTimeline || m->data is null) continue;
+            if (m->size < (uint)sizeof(spa_meta_sync_timeline)) continue;
+            ((spa_meta_sync_timeline*)m->data)->flags &= ~SyncUnscheduledRelease;
+        }
     }
 
     private void OnState(PipeWireStreamState oldState, PipeWireStreamState newState) =>
@@ -338,15 +412,29 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
         Span<byte> meta = stackalloc byte[64];
         int ml = SpaFormatPod.WriteHeaderMetaParam(meta);
 
+        // A second Meta object rather than a field in the first: each ParamMeta names one meta type,
+        // so asking for two is two objects.
+        Span<byte> syncMeta = stackalloc byte[64];
+        int sml = _explicitSyncRequested ? SpaFormatPod.WriteSyncTimelineMetaParam(syncMeta) : 0;
+
         int stride = SpaFormatPod.VideoStride(fmt.Format, fmt.Width);
         int size = SpaFormatPod.VideoImageSize(fmt.Format, fmt.Width, fmt.Height);
-        if (size <= 0) { core.RequestParamsFromCallback(meta[..ml]); return; }   // geometry not known yet
+        if (size <= 0)
+        {
+            // Geometry not known yet.
+            if (sml > 0) core.RequestParamsFromCallback(meta[..ml], syncMeta[..sml]);
+            else core.RequestParamsFromCallback(meta[..ml]);
+            return;
+        }
 
         // Block count = number of planes. A planar format (I420=3, NV12=2) is carried as one spa_data
         // block per plane for BOTH host memory (one MemFd per plane) and DMA-BUF (one fd per plane) -
         // gst's pipewiresink splits the planes either way. Declaring a single block for a multi-plane
         // format makes the daemon reject buffer allocation ("alloc buffers: Invalid argument"); packed
         // formats are a single block. Offer host memory and DMA-BUF so a GPU producer can go zero-copy.
+        // With explicit sync requested, two more blocks ride along for the acquire and release
+        // timeline descriptors, mirroring the producer: a pool shaped any other way cannot carry
+        // the points this consumer waits on and signals.
         int blocks = SpaFormatPod.VideoPlaneCount(fmt.Format);
 
         // As a consumer we do not dictate the block size: SPA_PARAM_BUFFERS_size is per block, and
@@ -355,10 +443,14 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
         int blockSize = SpaFormatPod.VideoBlockSize(fmt.Format, fmt.Width, fmt.Height);
         Span<byte> buffers = stackalloc byte[256];
         int bl = SpaFormatPod.WriteVideoBuffersParam(
-            buffers, blockSize, stride, SpaFormatPod.VideoCaptureDataTypeMask, blocks, sizeIsAnyOf: true);
+            buffers, blockSize, stride, SpaFormatPod.VideoCaptureDataTypeMask, blocks,
+            sizeIsAnyOf: true,
+            syncDataBlocks: _explicitSyncRequested ? SpaFormatPod.SyncTimelineDataBlocks : 0);
 
         LogRequestedBuffers(blocks, blockSize, stride, SpaFormatPod.VideoCaptureDataTypeMask);
-        core.RequestParamsFromCallback(buffers[..bl], meta[..ml]);
+
+        if (sml > 0) core.RequestParamsFromCallback(buffers[..bl], meta[..ml], syncMeta[..sml]);
+        else core.RequestParamsFromCallback(buffers[..bl], meta[..ml]);
     }
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "negotiated format {Format} {Width}x{Height} modifier=0x{Modifier:x} needsFixation={NeedsFixation}")]
@@ -372,4 +464,62 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "the daemon refused the modifier fixation ({Result}); it will be retried on the next negotiation")]
     private partial void LogFixationRefused(int result);
+
+    /// <summary>Waits until the stream is negotiated and running.</summary>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <remarks>
+    /// <c>Connect</c> issues a request; the daemon then negotiates a format over several round
+    /// trips, and only then does the stream start. Without this a caller has to subscribe to
+    /// <c>StateChanged</c> and drive its own completion, which is the same code every time.
+    /// <para>
+    /// Cancelling abandons the wait, not the stream: the connection stays up and keeps negotiating,
+    /// because there is nothing to recall. Dispose it to stop it.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">Not connected yet.</exception>
+    /// <exception cref="PipeWireException">The stream reached its error state instead.</exception>
+    public Task WaitForStreamingAsync(CancellationToken cancellationToken = default)
+    {
+        PipeWireStreamCore core = _core
+            ?? throw new InvalidOperationException("Connect before waiting for the stream to start.");
+
+        return core.WaitForStreamingAsync(cancellationToken);
+    }
+
+    /// <summary>Every control this stream exposes, as the daemon last reported them.</summary>
+    /// <remarks>
+    /// Empty until the stream is connected and the daemon has reported them, which happens during
+    /// negotiation. A snapshot: the daemon re-reports a control whenever one of its values changes.
+    /// </remarks>
+    public ImmutableArray<PipeWireStreamControl> Controls =>
+        _core?.Controls ?? [];
+
+    /// <summary>One control by SPA property id, or null when the stream has not reported it.</summary>
+    public PipeWireStreamControl? GetControl(uint id) => _core?.GetControl(id);
+
+    /// <summary>Sets a control's values.</summary>
+    /// <param name="id">The SPA property id, as carried by <see cref="PipeWireStreamControl.Id"/>.</param>
+    /// <param name="values">
+    /// One value for a scalar control, or one per channel. More than
+    /// <see cref="PipeWireStreamControl.MaximumValues"/> is the daemon's to refuse, not this
+    /// library's to guess at.
+    /// </param>
+    /// <param name="cancellationToken">Abandons the wait for the loop lock.</param>
+    /// <remarks>
+    /// Sent as a <c>Props</c> object. The daemon applies it when it next runs the node, so this
+    /// returning does not mean the value is in effect; read it back from <see cref="Controls"/> if
+    /// that matters.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">Not connected yet.</exception>
+    /// <exception cref="ArgumentException"><paramref name="values"/> is empty.</exception>
+    public void SetControl(uint id, ReadOnlySpan<float> values, CancellationToken cancellationToken = default)
+    {
+        if (values.IsEmpty)
+            throw new ArgumentException("a control needs at least one value.", nameof(values));
+
+        PipeWireStreamCore core = _core
+            ?? throw new InvalidOperationException("Connect before setting a control.");
+
+        core.SetControl(id, values, cancellationToken);
+    }
 }

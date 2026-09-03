@@ -31,10 +31,12 @@ internal sealed record PwDump(IReadOnlyList<PwDump.Entry> Entries)
     public Entry? ById(uint id) => Entries.FirstOrDefault(e => e.Id == id);
 
     /// <summary>Runs pw-dump and parses it.</summary>
-    public static async Task<PwDump> CaptureAsync(CancellationToken cancellationToken)
+    public static async Task<PwDump> CaptureAsync(
+        CancellationToken cancellationToken, TimeSpan? timeout = null)
     {
         CliTool tool = CliTool.Require("pw-dump");
-        (int exit, string stdout, string stderr) = await tool.RunAsync([], cancellationToken);
+        (int exit, string stdout, string stderr) = await tool.RunAsync(
+            [], cancellationToken, timeout ?? TimeSpan.FromSeconds(5));
 
         if (exit != 0)
             throw new InvalidOperationException($"pw-dump exited {exit}: {stderr}");

@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct pw_loop
+internal unsafe partial struct pw_loop
 {
     [NativeTypeName("struct spa_system *")]
     public spa_system* system;

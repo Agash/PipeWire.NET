@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct spa_poll_event
+internal unsafe partial struct spa_poll_event
 {
     [NativeTypeName("uint32_t")]
     public uint events;

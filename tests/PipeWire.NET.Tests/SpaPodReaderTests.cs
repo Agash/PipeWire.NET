@@ -148,7 +148,6 @@ public sealed class SpaPodReaderTests
     [TestMethod]
     public void APodHeaderPromisingMoreBodyThanExists_IsRejected()
     {
-        // Header says 64 bytes of body, buffer holds 8.
         var pod = new byte[16];
         BitConverter.TryWriteBytes(pod.AsSpan(0, 4), 64u);
         BitConverter.TryWriteBytes(pod.AsSpan(4, 4), (uint)SpaType.Object);
@@ -228,7 +227,6 @@ public sealed class SpaPodReaderTests
     {
         byte[] full = BuildObjectBody((key: 1u, flags: 0u, value: IntPod(42)));
 
-        // Cut the buffer at every point inside the property and confirm none of them overrun.
         for (int cut = 8; cut < full.Length; cut++)
         {
             var reader = new SpaPodReader(full.AsSpan(0, cut).ToArray());

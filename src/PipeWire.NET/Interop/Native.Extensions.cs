@@ -3,7 +3,7 @@
 // Why this file lives outside generated/: generate/generate.sh wipes the
 // generated/ directory on each regeneration. Anything we hand-write must live
 // elsewhere. We keep the same `PipeWire.NET.Generated` namespace and the same
-// `static partial class Native` so consumers see these symbols seamlessly
+// `static partial class Native` so the rest of this assembly sees these symbols seamlessly
 // alongside generated declarations (e.g. `Native.PW_VERSION_STREAM_EVENTS`).
 //
 // Contents:
@@ -21,7 +21,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public static unsafe partial class Native
+internal static unsafe partial class Native
 {
     // - Property keys (pipewire/keys.h) -
     // These are #define string macros; ClangSharp can't emit them without
@@ -30,117 +30,117 @@ public static unsafe partial class Native
     // carry a note naming the version that introduced them.
 
     /// <summary><c>factory.name</c> - name of a factory to use for node creation.</summary>
-    public const string PW_KEY_FACTORY_NAME   = "factory.name";
+    internal const string PW_KEY_FACTORY_NAME   = "factory.name";
     /// <summary><c>media.class</c> - node media class (e.g. "Video/Source").</summary>
-    public const string PW_KEY_MEDIA_CLASS    = "media.class";
+    internal const string PW_KEY_MEDIA_CLASS    = "media.class";
     /// <summary><c>media.type</c> - "Video" / "Audio".</summary>
-    public const string PW_KEY_MEDIA_TYPE     = "media.type";
+    internal const string PW_KEY_MEDIA_TYPE     = "media.type";
     /// <summary><c>media.category</c> - "Capture" / "Playback" / "Duplex".</summary>
-    public const string PW_KEY_MEDIA_CATEGORY = "media.category";
+    internal const string PW_KEY_MEDIA_CATEGORY = "media.category";
     /// <summary><c>media.role</c> - "Camera" / "Music" / "Screen" / ...</summary>
-    public const string PW_KEY_MEDIA_ROLE     = "media.role";
+    internal const string PW_KEY_MEDIA_ROLE     = "media.role";
     /// <summary><c>node.id</c> - node identifier.</summary>
-    public const string PW_KEY_NODE_ID        = "node.id";
+    internal const string PW_KEY_NODE_ID        = "node.id";
     /// <summary><c>node.name</c> - stable node name.</summary>
-    public const string PW_KEY_NODE_NAME      = "node.name";
+    internal const string PW_KEY_NODE_NAME      = "node.name";
     /// <summary><c>node.description</c> - human-readable node name.</summary>
-    public const string PW_KEY_NODE_DESCRIPTION = "node.description";
+    internal const string PW_KEY_NODE_DESCRIPTION = "node.description";
     /// <summary><c>node.nick</c> - short display name.</summary>
-    public const string PW_KEY_NODE_NICK      = "node.nick";
+    internal const string PW_KEY_NODE_NICK      = "node.nick";
     /// <summary><c>port.name</c> - stable port name.</summary>
-    public const string PW_KEY_PORT_NAME      = "port.name";
+    internal const string PW_KEY_PORT_NAME      = "port.name";
     /// <summary><c>port.direction</c> - port direction.</summary>
-    public const string PW_KEY_PORT_DIRECTION = "port.direction";
+    internal const string PW_KEY_PORT_DIRECTION = "port.direction";
     /// <summary><c>port.monitor</c> - if this is a monitor port.</summary>
-    public const string PW_KEY_PORT_MONITOR   = "port.monitor";
+    internal const string PW_KEY_PORT_MONITOR   = "port.monitor";
     /// <summary><c>port.exclusive</c> - link this port only once. Since PipeWire 1.6.0.</summary>
-    public const string PW_KEY_PORT_EXCLUSIVE = "port.exclusive";
+    internal const string PW_KEY_PORT_EXCLUSIVE = "port.exclusive";
     /// <summary><c>link.input.node</c> - the node a link feeds into.</summary>
-    public const string PW_KEY_LINK_INPUT_NODE  = "link.input.node";
+    internal const string PW_KEY_LINK_INPUT_NODE  = "link.input.node";
     /// <summary><c>link.input.port</c> - the port a link feeds into.</summary>
-    public const string PW_KEY_LINK_INPUT_PORT  = "link.input.port";
+    internal const string PW_KEY_LINK_INPUT_PORT  = "link.input.port";
     /// <summary><c>link.output.node</c> - the node a link starts from.</summary>
-    public const string PW_KEY_LINK_OUTPUT_NODE = "link.output.node";
+    internal const string PW_KEY_LINK_OUTPUT_NODE = "link.output.node";
     /// <summary><c>link.output.port</c> - the port a link starts from.</summary>
-    public const string PW_KEY_LINK_OUTPUT_PORT = "link.output.port";
+    internal const string PW_KEY_LINK_OUTPUT_PORT = "link.output.port";
     /// <summary><c>object.linger</c> - keep the object alive after this client disconnects.</summary>
-    public const string PW_KEY_OBJECT_LINGER    = "object.linger";
+    internal const string PW_KEY_OBJECT_LINGER    = "object.linger";
     /// <summary><c>link.passive</c> - the link does not keep its endpoints active when idle.</summary>
-    public const string PW_KEY_LINK_PASSIVE     = "link.passive";
+    internal const string PW_KEY_LINK_PASSIVE     = "link.passive";
     /// <summary><c>target.object</c> - bind a stream to a specific node by serial/name.</summary>
-    public const string PW_KEY_TARGET_OBJECT  = "target.object";
+    internal const string PW_KEY_TARGET_OBJECT  = "target.object";
 
     // - SPA property keys (spa/param/audio/raw.h, spa/support/plugin.h) -
     // Distinct namespace from PW_KEY_*: these have no pipewire/keys.h equivalent.
 
     /// <summary><c>audio.position</c> - channel layout, e.g. "[ FL FR ]".</summary>
-    public const string SPA_KEY_AUDIO_POSITION = "audio.position";
+    internal const string SPA_KEY_AUDIO_POSITION = "audio.position";
 
     // - Interface type ids -
 
-    public const string PW_TYPE_INFO_INTERFACE_BASE = "PipeWire:Interface:";
-    public const string PW_TYPE_INTERFACE_NODE = PW_TYPE_INFO_INTERFACE_BASE + "Node";
-    public const string PW_TYPE_INTERFACE_PORT = PW_TYPE_INFO_INTERFACE_BASE + "Port";
-    public const string PW_TYPE_INTERFACE_LINK = PW_TYPE_INFO_INTERFACE_BASE + "Link";
-    public const string PW_TYPE_INTERFACE_DEVICE = PW_TYPE_INFO_INTERFACE_BASE + "Device";
-    public const string PW_TYPE_INTERFACE_CLIENT = PW_TYPE_INFO_INTERFACE_BASE + "Client";
-    public const string PW_TYPE_INTERFACE_FACTORY = PW_TYPE_INFO_INTERFACE_BASE + "Factory";
-    public const string PW_TYPE_INTERFACE_MODULE = PW_TYPE_INFO_INTERFACE_BASE + "Module";
-    public const string PW_TYPE_INTERFACE_METADATA = PW_TYPE_INFO_INTERFACE_BASE + "Metadata";
-    public const string PW_TYPE_INTERFACE_PROFILER = PW_TYPE_INFO_INTERFACE_BASE + "Profiler";
-    public const string PW_TYPE_INTERFACE_SECURITY_CONTEXT = PW_TYPE_INFO_INTERFACE_BASE + "SecurityContext";
+    internal const string PW_TYPE_INFO_INTERFACE_BASE = "PipeWire:Interface:";
+    internal const string PW_TYPE_INTERFACE_NODE = PW_TYPE_INFO_INTERFACE_BASE + "Node";
+    internal const string PW_TYPE_INTERFACE_PORT = PW_TYPE_INFO_INTERFACE_BASE + "Port";
+    internal const string PW_TYPE_INTERFACE_LINK = PW_TYPE_INFO_INTERFACE_BASE + "Link";
+    internal const string PW_TYPE_INTERFACE_DEVICE = PW_TYPE_INFO_INTERFACE_BASE + "Device";
+    internal const string PW_TYPE_INTERFACE_CLIENT = PW_TYPE_INFO_INTERFACE_BASE + "Client";
+    internal const string PW_TYPE_INTERFACE_FACTORY = PW_TYPE_INFO_INTERFACE_BASE + "Factory";
+    internal const string PW_TYPE_INTERFACE_MODULE = PW_TYPE_INFO_INTERFACE_BASE + "Module";
+    internal const string PW_TYPE_INTERFACE_METADATA = PW_TYPE_INFO_INTERFACE_BASE + "Metadata";
+    internal const string PW_TYPE_INTERFACE_PROFILER = PW_TYPE_INFO_INTERFACE_BASE + "Profiler";
+    internal const string PW_TYPE_INTERFACE_SECURITY_CONTEXT = PW_TYPE_INFO_INTERFACE_BASE + "SecurityContext";
 
     // - Sentinel ids -
 
     /// <summary>Wildcard node id - passed to pw_stream_connect to let the daemon auto-select.</summary>
-    public const uint PW_ID_ANY  = 0xFFFFFFFFu;
+    internal const uint PW_ID_ANY  = 0xFFFFFFFFu;
 
     /// <summary>The well-known id of the PipeWire core object.</summary>
-    public const uint PW_ID_CORE = 0u;
+    internal const uint PW_ID_CORE = 0u;
 
     /// <summary>Placeholder ID for when a proxy id could not be fetched.</summary>
-    public const uint SPA_ID_INVALID = 0xffffffffu;
+    internal const uint SPA_ID_INVALID = 0xffffffffu;
 
     // - Interface versions (struct pw_*_methods.version / pw_*_events.version) -
 
-    public const uint PW_VERSION_CLIENT          = 3;
-    public const uint PW_VERSION_CLIENT_EVENTS   = 0;
-    public const uint PW_VERSION_CLIENT_METHODS  = 0;
-    public const uint PW_VERSION_CONTEXT_EVENTS  = 1;
-    public const uint PW_VERSION_CONTROL_EVENTS  = 0;
-    public const uint PW_VERSION_CORE            = 4;
-    public const uint PW_VERSION_CORE_EVENTS     = 1;
-    public const uint PW_VERSION_CORE_METHODS    = 0;
-    public const uint PW_VERSION_REGISTRY         = 3;
-    public const uint PW_VERSION_REGISTRY_EVENTS  = 0;
-    public const uint PW_VERSION_REGISTRY_METHODS = 0;
-    public const uint PW_VERSION_DEVICE           = 3;
-    public const uint PW_VERSION_DEVICE_EVENTS    = 0;
-    public const uint PW_VERSION_FACTORY          = 3;
-    public const uint PW_VERSION_FACTORY_EVENTS   = 0;
-    public const uint PW_VERSION_GLOBAL_EVENTS    = 0;
-    public const uint PW_VERSION_LINK             = 3;
-    public const uint PW_VERSION_LINK_EVENTS      = 0;
-    public const uint PW_VERSION_MODULE           = 3;
-    public const uint PW_VERSION_NODE             = 3;
-    public const uint PW_VERSION_PORT             = 3;
-    public const uint PW_VERSION_PORT_EVENTS      = 0;
-    public const uint PW_VERSION_PROXY_EVENTS     = 1;
-    public const uint PW_VERSION_STREAM_EVENTS    = 2;
-    public const uint PW_VERSION_FILTER_EVENTS    = 1;
-    public const uint PW_VERSION_NODE_EVENTS      = 0;
-    public const uint PW_VERSION_NODE_METHODS     = 0;
-    public const uint PW_VERSION_DEVICE_METHODS   = 0;
-    public const uint PW_VERSION_CLIENT_METHODS2  = 0;
-    public const uint PW_VERSION_METADATA         = 3;
-    public const uint PW_VERSION_IMPL_METADATA_EVENTS = 0;
-    public const uint PW_VERSION_PROFILER         = 3;
-    public const uint PW_VERSION_PROFILER_EVENTS  = 0;
-    public const uint PW_VERSION_SECURITY_CONTEXT = 3;
-    public const uint PW_VERSION_METADATA_EVENTS  = 0;
-    public const uint PW_VERSION_METADATA_METHODS = 0;
-    public const uint PW_VERSION_DATA_LOOP_EVENTS = 0;
-    public const uint PW_VERSION_MAIN_LOOP_EVENTS = 0;
+    internal const uint PW_VERSION_CLIENT          = 3;
+    internal const uint PW_VERSION_CLIENT_EVENTS   = 0;
+    internal const uint PW_VERSION_CLIENT_METHODS  = 0;
+    internal const uint PW_VERSION_CONTEXT_EVENTS  = 1;
+    internal const uint PW_VERSION_CONTROL_EVENTS  = 0;
+    internal const uint PW_VERSION_CORE            = 4;
+    internal const uint PW_VERSION_CORE_EVENTS     = 1;
+    internal const uint PW_VERSION_CORE_METHODS    = 0;
+    internal const uint PW_VERSION_REGISTRY         = 3;
+    internal const uint PW_VERSION_REGISTRY_EVENTS  = 0;
+    internal const uint PW_VERSION_REGISTRY_METHODS = 0;
+    internal const uint PW_VERSION_DEVICE           = 3;
+    internal const uint PW_VERSION_DEVICE_EVENTS    = 0;
+    internal const uint PW_VERSION_FACTORY          = 3;
+    internal const uint PW_VERSION_FACTORY_EVENTS   = 0;
+    internal const uint PW_VERSION_GLOBAL_EVENTS    = 0;
+    internal const uint PW_VERSION_LINK             = 3;
+    internal const uint PW_VERSION_LINK_EVENTS      = 0;
+    internal const uint PW_VERSION_MODULE           = 3;
+    internal const uint PW_VERSION_NODE             = 3;
+    internal const uint PW_VERSION_PORT             = 3;
+    internal const uint PW_VERSION_PORT_EVENTS      = 0;
+    internal const uint PW_VERSION_PROXY_EVENTS     = 1;
+    internal const uint PW_VERSION_STREAM_EVENTS    = 2;
+    internal const uint PW_VERSION_FILTER_EVENTS    = 1;
+    internal const uint PW_VERSION_NODE_EVENTS      = 0;
+    internal const uint PW_VERSION_NODE_METHODS     = 0;
+    internal const uint PW_VERSION_DEVICE_METHODS   = 0;
+    internal const uint PW_VERSION_CLIENT_METHODS2  = 0;
+    internal const uint PW_VERSION_METADATA         = 3;
+    internal const uint PW_VERSION_IMPL_METADATA_EVENTS = 0;
+    internal const uint PW_VERSION_PROFILER         = 3;
+    internal const uint PW_VERSION_PROFILER_EVENTS  = 0;
+    internal const uint PW_VERSION_SECURITY_CONTEXT = 3;
+    internal const uint PW_VERSION_METADATA_EVENTS  = 0;
+    internal const uint PW_VERSION_METADATA_METHODS = 0;
+    internal const uint PW_VERSION_DATA_LOOP_EVENTS = 0;
+    internal const uint PW_VERSION_MAIN_LOOP_EVENTS = 0;
 
     // - SPA interface dispatch -
     // The PipeWire C API exposes many methods as macros that dispatch through
@@ -153,7 +153,7 @@ public static unsafe partial class Native
     /// <param name="obj">The PipeWire object (pw_core*, pw_registry*, etc.).</param>
     /// <param name="methods">[out] The typed methods VTBL.</param>
     /// <param name="userData">[out] User-data pointer to pass as the first arg of each method call.</param>
-    public static void GetInterface<TMethods>(
+    internal static void GetInterface<TMethods>(
         void* obj,
         out TMethods* methods,
         out void* userData) where TMethods : unmanaged
@@ -173,23 +173,23 @@ public static unsafe partial class Native
     /// asynchronous request - a queued call returns neither. The outcome arrives on the core's
     /// <c>done</c> or <c>error</c> event carrying the same sequence number.
     /// </remarks>
-    public const int SPA_ASYNC_BIT = 1 << 30;
+    internal const int SPA_ASYNC_BIT = 1 << 30;
 
     /// <summary>Mask selecting the sequence number out of an async result.</summary>
-    public const int SPA_ASYNC_SEQ_MASK = SPA_ASYNC_BIT - 1;
+    internal const int SPA_ASYNC_SEQ_MASK = SPA_ASYNC_BIT - 1;
 
     /// <summary>True when a result is a queued request rather than a completed one.</summary>
-    public static bool SPA_RESULT_IS_ASYNC(int result) =>
+    internal static bool SPA_RESULT_IS_ASYNC(int result) =>
         (result & ~SPA_ASYNC_SEQ_MASK) == SPA_ASYNC_BIT;
 
     /// <summary>The sequence number carried by an async result.</summary>
-    public static int SPA_RESULT_ASYNC_SEQ(int result) => result & SPA_ASYNC_SEQ_MASK;
+    internal static int SPA_RESULT_ASYNC_SEQ(int result) => result & SPA_ASYNC_SEQ_MASK;
 
     /// <summary>
     /// Calls <c>pw_core_methods.get_registry</c> via SPA interface dispatch.
     /// Equivalent to the C macro <c>pw_core_get_registry()</c>.
     /// </summary>
-    public static pw_registry* pw_core_get_registry(pw_core* core, uint version, nuint userDataSize)
+    internal static pw_registry* pw_core_get_registry(pw_core* core, uint version, nuint userDataSize)
     {
         GetInterface(core, out pw_core_methods* methods, out void* data);
         if (methods is null || methods->get_registry is null)
@@ -201,7 +201,7 @@ public static unsafe partial class Native
     /// Calls <c>pw_registry_methods.add_listener</c> via SPA interface dispatch.
     /// Equivalent to the C macro <c>pw_registry_add_listener()</c>.
     /// </summary>
-    public static int pw_registry_add_listener(
+    internal static int pw_registry_add_listener(
         pw_registry* registry,
         spa_hook* listener,
         pw_registry_events* events,
@@ -217,7 +217,7 @@ public static unsafe partial class Native
     /// Calls <c>pw_proxy_methods.destroy</c> equivalent - pw_proxy_destroy IS exported,
     /// so this just forwards. Kept here for symmetry with the dispatch helpers above.
     /// </summary>
-    public static void pw_registry_destroy(pw_registry* registry) =>
+    internal static void pw_registry_destroy(pw_registry* registry) =>
         pw_proxy_destroy((pw_proxy*)registry);
 
     /// <summary>
@@ -225,7 +225,7 @@ public static unsafe partial class Native
     /// Equivalent to the C macro <c>pw_core_create_object()</c>.
     /// </summary>
     /// <returns>The new object's proxy, or <see langword="null"/> if the daemon refused it.</returns>
-    public static pw_proxy* pw_core_create_object(
+    internal static pw_proxy* pw_core_create_object(
         pw_core* core,
         sbyte* factoryName,
         sbyte* type,
@@ -245,7 +245,7 @@ public static unsafe partial class Native
     /// objects we created with <see cref="pw_proxy_destroy"/> instead.
     /// </summary>
     /// <returns>0 on success, or a negative errno.</returns>
-    public static int pw_registry_destroy_global(pw_registry* registry, uint id)
+    internal static int pw_registry_destroy_global(pw_registry* registry, uint id)
     {
         GetInterface(registry, out pw_registry_methods* methods, out void* data);
         if (methods is null || methods->destroy is null)
@@ -258,7 +258,7 @@ public static unsafe partial class Native
     /// <c>done</c> event carrying the same sequence number once it has processed everything
     /// requested before this point.
     /// </summary>
-    public static int pw_core_sync(pw_core* core, uint id, int seq)
+    internal static int pw_core_sync(pw_core* core, uint id, int seq)
     {
         GetInterface(core, out pw_core_methods* methods, out void* data);
         if (methods is null || methods->sync is null)
@@ -270,7 +270,7 @@ public static unsafe partial class Native
     /// Calls <c>pw_core_methods.add_listener</c> via SPA interface dispatch.
     /// Equivalent to the C macro <c>pw_core_add_listener()</c>.
     /// </summary>
-    public static int pw_core_add_listener(
+    internal static int pw_core_add_listener(
         pw_core* core,
         spa_hook* listener,
         pw_core_events* events,
@@ -293,7 +293,7 @@ public static unsafe partial class Native
     /// destroyed exactly once.
     /// </remarks>
     /// <returns>The proxy, or <see langword="null"/> if the daemon refused.</returns>
-    public static pw_proxy* pw_registry_bind(
+    internal static pw_proxy* pw_registry_bind(
         pw_registry* registry, uint id, sbyte* type, uint version, nuint userDataSize)
     {
         GetInterface(registry, out pw_registry_methods* methods, out void* data);
@@ -304,7 +304,7 @@ public static unsafe partial class Native
 
     // - Node -
 
-    public static int pw_node_add_listener(
+    internal static int pw_node_add_listener(
         pw_node* node, spa_hook* listener, pw_node_events* events, void* data)
     {
         GetInterface(node, out pw_node_methods* methods, out void* userData);
@@ -322,7 +322,7 @@ public static unsafe partial class Native
     /// the core afterwards: events are ordered, so the sync's <c>done</c> cannot arrive before every
     /// <c>param</c> the request produced.
     /// </remarks>
-    public static int pw_node_enum_params(
+    internal static int pw_node_enum_params(
         pw_node* node, int seq, uint id, uint start, uint num, spa_pod* filter)
     {
         GetInterface(node, out pw_node_methods* methods, out void* data);
@@ -331,7 +331,7 @@ public static unsafe partial class Native
         return methods->enum_params(data, seq, id, start, num, filter);
     }
 
-    public static int pw_node_set_param(pw_node* node, uint id, uint flags, spa_pod* param)
+    internal static int pw_node_set_param(pw_node* node, uint id, uint flags, spa_pod* param)
     {
         GetInterface(node, out pw_node_methods* methods, out void* data);
         if (methods is null || methods->set_param is null)
@@ -343,7 +343,7 @@ public static unsafe partial class Native
     /// Asks the daemon to push a <c>param</c> event whenever one of these parameters changes,
     /// instead of only when asked.
     /// </summary>
-    public static int pw_node_subscribe_params(pw_node* node, uint* ids, uint nIds)
+    internal static int pw_node_subscribe_params(pw_node* node, uint* ids, uint nIds)
     {
         GetInterface(node, out pw_node_methods* methods, out void* data);
         if (methods is null || methods->subscribe_params is null)
@@ -353,7 +353,7 @@ public static unsafe partial class Native
 
     // - Device -
 
-    public static int pw_device_add_listener(
+    internal static int pw_device_add_listener(
         pw_device* device, spa_hook* listener, pw_device_events* events, void* data)
     {
         GetInterface(device, out pw_device_methods* methods, out void* userData);
@@ -363,7 +363,7 @@ public static unsafe partial class Native
     }
 
     /// <inheritdoc cref="pw_node_enum_params"/>
-    public static int pw_device_enum_params(
+    internal static int pw_device_enum_params(
         pw_device* device, int seq, uint id, uint start, uint num, spa_pod* filter)
     {
         GetInterface(device, out pw_device_methods* methods, out void* data);
@@ -372,7 +372,7 @@ public static unsafe partial class Native
         return methods->enum_params(data, seq, id, start, num, filter);
     }
 
-    public static int pw_device_set_param(pw_device* device, uint id, uint flags, spa_pod* param)
+    internal static int pw_device_set_param(pw_device* device, uint id, uint flags, spa_pod* param)
     {
         GetInterface(device, out pw_device_methods* methods, out void* data);
         if (methods is null || methods->set_param is null)
@@ -381,7 +381,7 @@ public static unsafe partial class Native
     }
 
     /// <inheritdoc cref="pw_node_subscribe_params"/>
-    public static int pw_device_subscribe_params(pw_device* device, uint* ids, uint nIds)
+    internal static int pw_device_subscribe_params(pw_device* device, uint* ids, uint nIds)
     {
         GetInterface(device, out pw_device_methods* methods, out void* data);
         if (methods is null || methods->subscribe_params is null)
@@ -402,12 +402,12 @@ public static unsafe partial class Native
     [System.Runtime.InteropServices.LibraryImport("libpipewire-0.3")]
     [System.Runtime.InteropServices.UnmanagedCallConv(
         CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    public static partial void pw_log_set_level(int level);
+    internal static partial void pw_log_set_level(int level);
 
     // - Port -
 
     /// <summary>Attaches a listener to a port proxy.</summary>
-    public static int pw_port_add_listener(
+    internal static int pw_port_add_listener(
         pw_port* port, spa_hook* listener, pw_port_events* events, void* data)
     {
         GetInterface(port, out pw_port_methods* methods, out void* userData);
@@ -417,7 +417,7 @@ public static unsafe partial class Native
     }
 
     /// <summary>Asks a port for a parameter. The answers arrive on the param event.</summary>
-    public static int pw_port_enum_params(
+    internal static int pw_port_enum_params(
         pw_port* port, int seq, uint id, uint start, uint num, spa_pod* filter)
     {
         GetInterface(port, out pw_port_methods* methods, out void* userData);
@@ -427,7 +427,7 @@ public static unsafe partial class Native
     }
 
     /// <summary>Asks a port to report the named parameters whenever they change.</summary>
-    public static int pw_port_subscribe_params(pw_port* port, uint* ids, uint count)
+    internal static int pw_port_subscribe_params(pw_port* port, uint* ids, uint count)
     {
         GetInterface(port, out pw_port_methods* methods, out void* userData);
         if (methods is null || methods->subscribe_params is null)
@@ -444,7 +444,7 @@ public static unsafe partial class Native
     /// The header declares this inline over the interface vtable rather than exporting it, so it is
     /// dispatched here the same way the node, device and client listeners are.
     /// </remarks>
-    public static int pw_link_add_listener(
+    internal static int pw_link_add_listener(
         pw_link* link, spa_hook* listener, pw_link_events* events, void* data)
     {
         GetInterface(link, out pw_link_methods* methods, out void* userData);
@@ -455,7 +455,7 @@ public static unsafe partial class Native
 
     // - Client -
 
-    public static int pw_client_add_listener(
+    internal static int pw_client_add_listener(
         pw_client* client, spa_hook* listener, pw_client_events* events, void* data)
     {
         GetInterface(client, out pw_client_methods* methods, out void* userData);
@@ -473,7 +473,7 @@ public static unsafe partial class Native
     /// ordinary application. Permissions are absolute, not a delta: an object listed with fewer
     /// bits than it had loses the difference.
     /// </remarks>
-    public static int pw_client_update_permissions(
+    internal static int pw_client_update_permissions(
         pw_client* client, uint nPermissions, pw_permission* permissions)
     {
         GetInterface(client, out pw_client_methods* methods, out void* data);
@@ -483,7 +483,7 @@ public static unsafe partial class Native
     }
 
     /// <summary>Asks for a range of a client's permissions, answered on the <c>permissions</c> event.</summary>
-    public static int pw_client_get_permissions(pw_client* client, uint index, uint num)
+    internal static int pw_client_get_permissions(pw_client* client, uint index, uint num)
     {
         GetInterface(client, out pw_client_methods* methods, out void* data);
         if (methods is null || methods->get_permissions is null)
@@ -491,7 +491,7 @@ public static unsafe partial class Native
         return methods->get_permissions(data, index, num);
     }
 
-    public static int pw_client_update_properties(pw_client* client, spa_dict* props)
+    internal static int pw_client_update_properties(pw_client* client, spa_dict* props)
     {
         GetInterface(client, out pw_client_methods* methods, out void* data);
         if (methods is null || methods->update_properties is null)
@@ -502,7 +502,7 @@ public static unsafe partial class Native
     // - Metadata -
 
     /// <summary>Attaches a listener to a profiler, whose only event is the profiling pod.</summary>
-    public static int pw_profiler_add_listener(
+    internal static int pw_profiler_add_listener(
         void* profiler, spa_hook* listener, pw_profiler_events* events, void* data)
     {
         GetInterface(profiler, out pw_profiler_methods* methods, out void* userData);
@@ -520,7 +520,7 @@ public static unsafe partial class Native
     /// daemon watches to know the sandbox is gone. Anything connecting through that socket gets the
     /// permissions described by the properties, not the creator's.
     /// </remarks>
-    public static int pw_security_context_create(
+    internal static int pw_security_context_create(
         void* context, int listenFd, int closeFd, spa_dict* props)
     {
         GetInterface(context, out pw_security_context_methods* methods, out void* userData);
@@ -529,7 +529,7 @@ public static unsafe partial class Native
         return methods->create(userData, listenFd, closeFd, props);
     }
 
-    public static int pw_metadata_add_listener(
+    internal static int pw_metadata_add_listener(
         pw_metadata* metadata, spa_hook* listener, pw_metadata_events* events, void* data)
     {
         GetInterface(metadata, out pw_metadata_methods* methods, out void* userData);
@@ -546,7 +546,7 @@ public static unsafe partial class Native
     /// machinery the parameter interfaces do. The subject is the id the entry is about, and
     /// <see cref="PW_ID_CORE"/> is the subject for daemon-wide settings such as the default sink.
     /// </remarks>
-    public static int pw_metadata_set_property(
+    internal static int pw_metadata_set_property(
         pw_metadata* metadata, uint subject, sbyte* key, sbyte* type, sbyte* value)
     {
         GetInterface(metadata, out pw_metadata_methods* methods, out void* data);
@@ -556,7 +556,7 @@ public static unsafe partial class Native
     }
 
     /// <summary>Removes every entry in a metadata store.</summary>
-    public static int pw_metadata_clear(pw_metadata* metadata)
+    internal static int pw_metadata_clear(pw_metadata* metadata)
     {
         GetInterface(metadata, out pw_metadata_methods* methods, out void* data);
         if (methods is null || methods->clear is null)
@@ -572,7 +572,7 @@ public static unsafe partial class Native
     /// Must run under the thread-loop lock: it edits a list the loop thread walks while dispatching.
     /// The caller still owns the hook's memory - PipeWire never allocated it and will not free it.
     /// </remarks>
-    public static void spa_hook_remove(spa_hook* hook)
+    internal static void spa_hook_remove(spa_hook* hook)
     {
         if (hook is null) return;
 

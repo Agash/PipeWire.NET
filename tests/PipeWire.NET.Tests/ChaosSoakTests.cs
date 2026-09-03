@@ -347,12 +347,23 @@ public sealed class ChaosSoakTests
             Assert.IsTrue(faults.IsEmpty,
                 $"{faults.Count} actor faults, first: {(faults.TryPeek(out string? f) ? f : string.Empty)}");
 
-            // Everything this test made, gone, so the census compares like with like.
-            foreach (uint id in created)
+            // Everything this test made, gone, so the census compares like with like. One barrier
+            // for the batch - and only for what is still alive: the maker destroys as it goes, so
+            // nearly every id collected above is already dead, and re-sending destroys for all of
+            // them would flood the daemon with refusals. The name guard matters because ids
+            // recycle: one of ours may already name another test's node, which is not ours to
+            // destroy.
+            var createdIds = new HashSet<uint>(created);
+            var live = new HashSet<uint>();
+            foreach (PipeWireNode n in a.Current.Nodes)
             {
-                try { await a.DestroyGlobalAsync(id, cts.Token); }
-                catch (PipeWireException) { /* already gone, which is the point of the soak */ }
+                if (n.NodeName is not null
+                    && n.NodeName.StartsWith("pwnet_soak", StringComparison.Ordinal)
+                    && createdIds.Contains(n.NodeId))
+                    live.Add(n.NodeId);
             }
+
+            await a.DestroyGlobalsAsync(live, cts.Token);
 
             await a.WaitForInitialEnumerationAsync(cts.Token);
             Assert.IsTrue(a.Current.Nodes.Length > 0, "the graph is empty, so the session did not survive");
@@ -426,19 +437,27 @@ public sealed class ChaosSoakTests
                     .WithName(Unique("pwnet_soak")).ExecuteAsync(ct);
                 created.Add(node.NodeId);
 
-                await using (PipeWireNodeControl control = registry.BindNode(node.NodeId))
+                // ENOENT anywhere in here is the object having gone already, and under a soak
+                // against a live session manager that is legitimate: WirePlumber destroys nodes
+                // it cannot activate, and a virtual node it has decided against is reaped whenever
+                // it gets around to it, including between the bind above and the writes below.
+                // Narrowed to that code deliberately - a refusal (EACCES) or a protocol error is
+                // still a fault, and swallowing every PipeWireException here would hide both.
+                // The id is already in `created`, so the cleanup accounting is unaffected.
+                try
                 {
-                    await control.ReadyAsync(ct);
-                    for (int i = 0; i < 5 && !ct.IsCancellationRequested; i++)
-                        await control.SetVolumeAsync(0.1f * (i + 1), ct);
+                    await using (PipeWireNodeControl control = registry.BindNode(node.NodeId))
+                    {
+                        await control.ReadyAsync(ct);
+                        for (int i = 0; i < 5 && !ct.IsCancellationRequested; i++)
+                            await control.SetVolumeAsync(0.1f * (i + 1), ct);
+                    }
                 }
+                catch (PipeWireException e) when (e.Result == -2) { }
 
-                // ENOENT is the object having gone already, and under a soak against a live
-                // session manager that is legitimate: WirePlumber destroys nodes it cannot
-                // activate, and a virtual node it has decided against is reaped before this gets
-                // to it. Narrowed to that code deliberately - a refusal (EACCES) or a protocol
-                // error is still a fault, and swallowing every PipeWireException here would hide
-                // both. The id is already in `created`, so the cleanup accounting is unaffected.
+                // ENOENT is the object having gone already (see above); the destroy below keeps
+                // its own tolerance rather than sharing the block's, because a create that never
+                // finished binding must still be withdrawn.
                 try { await registry.DestroyGlobalAsync(node.NodeId, ct); }
                 catch (PipeWireException e) when (e.Result == -2) { }
             }

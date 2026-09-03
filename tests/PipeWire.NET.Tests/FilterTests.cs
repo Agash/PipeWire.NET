@@ -83,6 +83,10 @@ public sealed class FilterTests
         await filter.ConnectAsync(cancellationToken: cts.Token);
         uint nodeId = await filter.WaitForNodeIdAsync(cts.Token);
 
+        // The node id the daemon assigned, read back through the loop lock. Null before this
+        // point is "not yet", not an error.
+        Assert.AreEqual(nodeId, filter.NodeId);
+
         // The registry has to see it as an ordinary node, because that is what it is to everything
         // else in the graph.
         ImmutableArray<PipeWirePort> ports = [];
@@ -211,6 +215,45 @@ public sealed class FilterTests
     }
 
     [TestMethod]
+    public async Task AFilterPortOfADisposedFilter_RefusesReadsRatherThanReadingFreedMemory()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext("pwnet-filter-disposed", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+
+        PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_filter_disposed");
+        PipeWireFilterPort port = filter.AddAudioPort(PipeWirePortDirection.Out, "output_FL");
+        await filter.DisposeAsync();
+
+        // The port data belongs to the filter and dies with it. Reading it afterwards would be a
+        // use-after-free; the contract is ObjectDisposedException before any native call.
+        Assert.ThrowsExactly<ObjectDisposedException>(() => port.GetSamples(64));
+    }
+
+    [TestMethod]
+    public async Task AMidiPort_RefusesAudioReadsRatherThanAliasingSequences()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext("pwnet-filter-midi", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+
+        await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_filter_midi");
+        PipeWireFilterPort midi = filter.AddMidiPort(PipeWirePortDirection.In, "midi-in");
+        PipeWireFilterPort control = filter.AddControlPort(PipeWirePortDirection.Out, "control-out");
+
+        // A sequence buffer reinterpreted as floats is garbage with a valid-looking type. Refusal
+        // is the contract until sequences get a typed accessor of their own.
+        Assert.AreEqual(PipeWireDspFormat.Midi, midi.Format);
+        Assert.AreEqual(PipeWireDspFormat.Control, control.Format);
+        Assert.ThrowsExactly<InvalidOperationException>(() => midi.GetSamples(64));
+        Assert.ThrowsExactly<InvalidOperationException>(() => control.GetSamples(64));
+    }
+
+    [TestMethod]
     public async Task DisposingTheContextBeforeTheFilter_IsSafe()
     {
         RequireLinux();
@@ -227,5 +270,93 @@ public sealed class FilterTests
         // which holds the loop, so none of them can be gone while the filter is alive.
         await ctx.DisposeAsync();
         await filter.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task AMidiAndAControlPort_JoinTheGraphBesideAudio()
+    {
+        // MIDI and control ports are not audio ports with a different name,
+        // they declare DSP formats the graph links by.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext("pwnet-filter-ports", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+        await using var registry = new PipeWireRegistry(ctx);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+
+        await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_filter_ports");
+        filter.AddAudioPort(PipeWirePortDirection.Out, "output_FL");
+        PipeWireFilterPort midi = filter.AddMidiPort(PipeWirePortDirection.In, "midi_in");
+        PipeWireFilterPort control = filter.AddControlPort(PipeWirePortDirection.In, "control_in");
+        PipeWireFilterPort extra = filter.AddPort(
+            PipeWirePortDirection.Out, "midi_out", PipeWireDspFormat.Midi,
+            new Dictionary<string, string> { ["port.alias"] = "pwnet_midi_out" });
+
+        Assert.AreEqual(4, filter.Ports.Count);
+        Assert.AreEqual("midi_in", midi.Name);
+        Assert.AreEqual("control_in", control.Name);
+        Assert.AreEqual("midi_out", extra.Name);
+
+        // Neither an input nor an output, and no such DSP format: both are caller mistakes the
+        // daemon must never see.
+        Assert.ThrowsExactly<ArgumentException>(
+            () => filter.AddPort((PipeWirePortDirection)999, "bad", PipeWireDspFormat.Midi));
+        Assert.ThrowsExactly<ArgumentException>(
+            () => filter.AddPort(PipeWirePortDirection.In, "bad", (PipeWireDspFormat)999));
+
+        await filter.ConnectAsync(cancellationToken: cts.Token);
+        await filter.WaitForNodeIdAsync(cts.Token);
+
+        // On a live filter these reach the daemon instead of the guards above. Not driving
+        // anything (nothing is linked), so triggering is a no-op cycle request and deactivating
+        // is restored before leaving.
+        Assert.IsFalse(filter.IsDriving);
+        filter.TriggerProcess();
+        filter.SetActive(false);
+        filter.SetActive(true);
+    }
+
+    [TestMethod]
+    public async Task AnUnconnectedFilter_ReportsItsStateHonestly()
+    {
+        // Every guard on the filter answers from local state: nothing here reaches the daemon,
+        // so a filter that was never connected must still refuse work rather than crashing in it.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext("pwnet-filter-state", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+
+        await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_filter_state");
+
+        Assert.IsNull(filter.NodeId, "a filter that never connected has no node");
+        Assert.AreEqual(PipeWireFilterState.Unconnected, filter.State);
+        Assert.IsFalse(filter.IsDriving, "a filter that never connected drives nothing");
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => filter.TriggerProcess());
+        Assert.ThrowsExactly<InvalidOperationException>(() => filter.SetActive(true));
+
+        await filter.DisposeAsync();
+
+        // State answers from local handles and degrades to unconnected; the rest refuse a
+        // disposed object outright.
+        Assert.AreEqual(PipeWireFilterState.Unconnected, filter.State);
+        Assert.ThrowsExactly<ObjectDisposedException>(() => _ = filter.IsDriving);
+        Assert.ThrowsExactly<ObjectDisposedException>(() => filter.TriggerProcess());
+        Assert.ThrowsExactly<ObjectDisposedException>(() => filter.SetActive(true));
+    }
+
+    [TestMethod]
+    public async Task CreatingAFilterOnAnUnstartedContext_IsRefused()
+    {
+        // Connecting is what fails, not creating: without a core there is nothing to build on.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext("pwnet-filter-cold", ConsoleTestLoggerFactory.Instance);
+
+        Assert.ThrowsExactly<InvalidOperationException>(
+            () => PipeWireFilter.Create(ctx, "pwnet_filter_cold"));
     }
 }

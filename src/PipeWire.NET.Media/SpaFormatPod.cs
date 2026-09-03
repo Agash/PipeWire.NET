@@ -25,7 +25,95 @@ internal static class SpaFormatPod
         return b.GetPod().Length;
     }
 
+    /// <summary>
+    /// Writes a ParamMeta object requesting <c>SPA_META_SyncTimeline</c>, so a DMA-BUF producer can
+    /// hand over explicit acquire and release points instead of relying on implicit fences.
+    /// </summary>
+    /// <remarks>
+    /// Opt-in and separate from the header request, because asking for it changes the buffer layout:
+    /// a buffer carrying this meta comes with two extra descriptors, one per timeline
+    /// (<c>spa/buffer/meta.h:190-192</c>). A consumer that asks for it and then ignores the points
+    /// is worse off than one that never asked, because the producer stops adding implicit fences.
+    /// </remarks>
+    internal static unsafe int WriteSyncTimelineMetaParam(Span<byte> buf)
+    {
+        var b = new SpaPodBuilder(buf);
+        b.PushObject(SpaType.ObjectParamMeta, SpaParamType.Meta);
+        b.AddId(SpaParamMeta.Type, SpaMetaType.SyncTimeline);
+        b.AddInt(SpaParamMeta.Size, sizeof(spa_meta_sync_timeline));
+        return b.GetPod().Length;
+    }
+
+    /// <summary>Reads a buffer's sync timeline, if it carries one.</summary>
+    /// <remarks>
+    /// Only present when the meta was requested and the producer agreed. The points are timeline
+    /// values, not descriptors: the descriptors they refer to are the two extra entries in the
+    /// buffer's data array, and they belong to the pool for the handler's duration like every other
+    /// borrowed descriptor.
+    /// </remarks>
+    internal static unsafe bool TryFindSyncTimeline(spa_buffer* buf, out SyncTimeline timeline)
+    {
+        timeline = default;
+        if (buf is null || buf->metas is null) return false;
+
+        uint wanted = (uint)SpaMetaType.SyncTimeline;
+        uint count = Math.Min(buf->n_metas, MaxMetasWalked);
+
+        for (uint i = 0; i < count; i++)
+        {
+            spa_meta* m = &buf->metas[i];
+            if (m->type != wanted || m->data is null) continue;
+            if (m->size < (uint)sizeof(spa_meta_sync_timeline)) continue;
+
+            spa_meta_sync_timeline* t = (spa_meta_sync_timeline*)m->data;
+            timeline = new SyncTimeline(t->flags, t->acquire_point, t->release_point);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>A buffer's explicit synchronisation points.</summary>
+    /// <param name="Flags">Producer flags, as reported.</param>
+    /// <param name="AcquirePoint">The timeline point at which the data may be read.</param>
+    /// <param name="ReleasePoint">
+    /// The timeline point the consumer signals when it is finished with the data.
+    /// </param>
+    internal readonly record struct SyncTimeline(uint Flags, ulong AcquirePoint, ulong ReleasePoint);
+
+    /// <summary>Finds the acquire and release timeline descriptors of a buffer, in order.</summary>
+    /// <remarks>
+    /// Located by data type, not by position: the sync blocks ride past however many plane blocks
+    /// the format negotiated, and only their <c>SyncObj</c> type marks them. Both must be present
+    /// and usable, or the buffer cannot take part in explicit sync.
+    /// </remarks>
+    internal static unsafe bool TryFindSyncDataFds(spa_buffer* buf, out int acquireFd, out int releaseFd)
+    {
+        acquireFd = -1;
+        releaseFd = -1;
+        if (buf is null || buf->datas is null) return false;
+
+        // Bounded for the same reason every other pool walk is: the count belongs to the pool.
+        uint count = Math.Min(buf->n_datas, 128u);
+        uint found = 0;
+        for (uint i = 0; i < count; i++)
+        {
+            if (buf->datas[i].type != (uint)SpaDataType.SyncObj) continue;
+            long fd = (long)buf->datas[i].fd;
+            if (fd < 0 || fd > int.MaxValue) return false;
+            if (found == 0) acquireFd = (int)fd; else releaseFd = (int)fd;
+            if (++found == 2) return true;
+        }
+
+        acquireFd = -1;
+        releaseFd = -1;
+        return false;
+    }
+
     // - Param: buffer requirements (declares accepted data types incl. DMA-BUF) -
+
+    /// <summary>Extra data blocks for explicit-sync timeline descriptors: acquire, then release.</summary>
+    internal const int SyncTimelineDataBlocks = 2;
 
     /// <summary>
     /// Writes a ParamBuffers object advertising the accepted buffer data types and count.
@@ -49,15 +137,22 @@ internal static class SpaFormatPod
     /// A fixed value risks refusal when the producer lays its planes out differently. PipeWire's own
     /// <c>gstpipewiresrc</c> offers a range for the same reason.
     /// </param>
+    /// <param name="syncDataBlocks">
+    /// Extra data blocks for explicit-sync timeline descriptors, appended after the plane blocks.
+    /// Two for the acquire and release timelines (<c>spa/buffer/meta.h:186-192</c>), which also
+    /// requires the <c>SyncTimeline</c> metaType below: without it the pool has nowhere to carry
+    /// the points the descriptors order.
+    /// </param>
     internal static int WriteVideoBuffersParam(
-        Span<byte> buf, int size, int stride, int dataTypes, int blocks = 1, bool sizeIsAnyOf = false)
+        Span<byte> buf, int size, int stride, int dataTypes, int blocks = 1, bool sizeIsAnyOf = false,
+        int syncDataBlocks = 0)
     {
         var b = new SpaPodBuilder(buf);
         b.PushObject(SpaType.ObjectParamBuffers, SpaParamType.Buffers);
         b.AddChoiceRangeInt(SpaParamBuffers.Buffers, 8, 2, 16);
         // Blocks = number of planes (one spa_data block per plane). A packed format / host buffer is
         // a single block; planar needs one block per plane so each plane gets its own fd.
-        b.AddInt(SpaParamBuffers.Blocks, blocks);
+        b.AddInt(SpaParamBuffers.Blocks, blocks + syncDataBlocks);
 
         if (sizeIsAnyOf)
             b.AddChoiceRangeInt(SpaParamBuffers.Size, size, 1, int.MaxValue);
@@ -66,6 +161,14 @@ internal static class SpaFormatPod
 
         b.AddInt(SpaParamBuffers.Stride, stride);
         b.AddChoiceFlagsInt(SpaParamBuffers.DataType, dataTypes);
+
+        // Mandatory, not advisory: a peer that cannot carry timeline metadata must refuse rather
+        // than silently accept buffers whose ordering guarantees it cannot keep, which would read
+        // as GPU corruption rather than a failed negotiation.
+        if (syncDataBlocks > 0)
+            b.AddInt(SpaParamBuffers.MetaType, 1 << (int)SpaMetaType.SyncTimeline,
+                SpaPodPropFlag.Mandatory);
+
         return b.GetPod().Length;
     }
 

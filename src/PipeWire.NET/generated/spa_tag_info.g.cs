@@ -13,7 +13,7 @@ using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct spa_tag_info
+internal unsafe partial struct spa_tag_info
 {
     [NativeTypeName("enum spa_direction")]
     public SpaDirection direction;

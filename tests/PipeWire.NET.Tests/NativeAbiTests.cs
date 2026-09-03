@@ -146,8 +146,7 @@ public sealed unsafe class NativeAbiTests
     [TestMethod]
     public void SpaPodHeader_IsTwoUnsignedIntsInSizeThenType()
     {
-        // The whole parser assumes this: eight bytes of header, size first. It is also what every
-        // hand-built pod in the test suite writes.
+        // The whole parser assumes this: eight bytes of header, size first.
         Assert.AreEqual(8, sizeof(spa_pod));
         Assert.AreEqual(0, (int)Marshal.OffsetOf<spa_pod>(nameof(spa_pod.size)));
         Assert.AreEqual(4, (int)Marshal.OffsetOf<spa_pod>(nameof(spa_pod.type)));

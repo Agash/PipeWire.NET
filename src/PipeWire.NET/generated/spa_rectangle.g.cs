@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_rectangle
+internal partial struct spa_rectangle
 {
     [NativeTypeName("uint32_t")]
     public uint width;

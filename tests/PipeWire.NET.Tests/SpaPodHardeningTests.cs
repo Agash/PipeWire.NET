@@ -304,8 +304,7 @@ public sealed class SpaPodHardeningTests
     [TestMethod]
     public void AnIdReadAsAWronglySizedEnum_NamesBothTypesRatherThanTheReinterpret()
     {
-        // The key side has always checked this; the id side reached BitCast and threw a
-        // NotSupportedException naming neither type.
+        // The id side reached BitCast and threw a NotSupportedException naming neither type.
         Assert.ThrowsExactly<ArgumentException>(() => _ = SpaIdValue.FromRaw(1).As<ByteWide>());
     }
 

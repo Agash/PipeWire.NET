@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_meta_control
+internal partial struct spa_meta_control
 {
     [NativeTypeName("struct spa_pod_sequence")]
     public spa_pod_sequence sequence;

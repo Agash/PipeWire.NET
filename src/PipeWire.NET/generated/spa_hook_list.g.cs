@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_hook_list
+internal partial struct spa_hook_list
 {
     [NativeTypeName("struct spa_list")]
     public spa_list list;

@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_region
+internal partial struct spa_region
 {
     [NativeTypeName("struct spa_point")]
     public spa_point position;

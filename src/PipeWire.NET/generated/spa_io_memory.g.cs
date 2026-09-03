@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct spa_io_memory
+internal unsafe partial struct spa_io_memory
 {
     [NativeTypeName("int32_t")]
     public int status;

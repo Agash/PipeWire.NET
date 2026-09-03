@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_io_latency
+internal partial struct spa_io_latency
 {
     [NativeTypeName("struct spa_fraction")]
     public spa_fraction rate;

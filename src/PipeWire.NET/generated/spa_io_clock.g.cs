@@ -13,7 +13,7 @@ using System.Runtime.CompilerServices;
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_io_clock
+internal partial struct spa_io_clock
 {
     [NativeTypeName("uint32_t")]
     public uint flags;

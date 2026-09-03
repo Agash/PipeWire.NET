@@ -146,8 +146,7 @@ public sealed class MetadataProtocolTests
 
                 provider.Clear();
 
-                // Waits for the clear to arrive rather than assuming a barrier orders the server's
-                // hop, for the reason CrossProcessOrderingTests pins.
+                // Waits for the clear to arrive rather than assuming a barrier orders the server's hop.
                 for (int attempt = 0; attempt < 80 && consumer.Get("a") is not null; attempt++)
                     await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
 
@@ -228,8 +227,8 @@ public sealed class MetadataProtocolTests
         await using (ctx)
         await using (registry)
         {
-            // Our own store, not the session manager's: clearing that would take the session's
-            // default sink with it and leave the machine's audio unrouted for every other test.
+            // Our own store, not the session manager's: clearing that would leave the machine's
+            // audio unrouted.
             await using PipeWireMetadataProvider provider =
                 PipeWireMetadataProvider.Create(ctx, Unique("pwnet-clear-store"));
 

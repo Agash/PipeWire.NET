@@ -125,8 +125,9 @@ public sealed partial class PipeWirePortControl : PipeWireParameterObject
         return tags.ToImmutable();
     }
 
-    private protected override unsafe int EnumParamsNative(void* proxy, int seq, uint id, uint start, uint num) =>
-        Native.pw_port_enum_params((pw_port*)proxy, seq, id, start, num, null);
+    private protected override unsafe int EnumParamsNative(
+        void* proxy, int seq, uint id, uint start, uint num, spa_pod* filter) =>
+        Native.pw_port_enum_params((pw_port*)proxy, seq, id, start, num, filter);
 
     /// <remarks>
     /// ENOTSUP, not a call. <c>pw_port_methods</c> has no <c>set_param</c>: a port's format is

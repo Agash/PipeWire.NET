@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_fraction
+internal partial struct spa_fraction
 {
     [NativeTypeName("uint32_t")]
     public uint num;

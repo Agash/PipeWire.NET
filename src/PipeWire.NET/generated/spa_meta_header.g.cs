@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_meta_header
+internal partial struct spa_meta_header
 {
     [NativeTypeName("uint32_t")]
     public uint flags;

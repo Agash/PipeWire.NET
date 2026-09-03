@@ -181,8 +181,9 @@ public sealed partial class PipeWireDeviceControl : PipeWireParameterObject
             cancellationToken);
     }
 
-    private protected override unsafe int EnumParamsNative(void* proxy, int seq, uint id, uint start, uint num) =>
-        Native.pw_device_enum_params((pw_device*)proxy, seq, id, start, num, null);
+    private protected override unsafe int EnumParamsNative(
+        void* proxy, int seq, uint id, uint start, uint num, spa_pod* filter) =>
+        Native.pw_device_enum_params((pw_device*)proxy, seq, id, start, num, filter);
 
     private protected override unsafe int SetParamNative(void* proxy, uint id, uint flags, spa_pod* param) =>
         Native.pw_device_set_param((pw_device*)proxy, id, flags, param);

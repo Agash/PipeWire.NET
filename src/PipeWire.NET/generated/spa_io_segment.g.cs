@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_io_segment
+internal partial struct spa_io_segment
 {
     [NativeTypeName("uint32_t")]
     public uint version;

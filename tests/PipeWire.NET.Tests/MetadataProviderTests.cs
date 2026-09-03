@@ -29,6 +29,25 @@ public sealed class MetadataProviderTests
     private static string Unique() => $"pwnet-own-{Environment.ProcessId}-{Random.Shared.Next():x}";
 
     [TestMethod]
+    public async Task AKeyWithAnEmbeddedNul_IsRefusedBeforeItCanDesyncTheStore()
+    {
+        // Native strings end at the first NUL while the managed cache keys on the whole string.
+        // Writing one would file an entry here the daemon records under a truncated key, and the
+        // two would never reconcile - so the write is refused rather than half-applied.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext("pwnet-provider-nul", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+
+        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique());
+
+        Assert.ThrowsExactly<ArgumentException>(() => provider.Set("a\0b", "v"));
+        Assert.ThrowsExactly<ArgumentException>(() => provider.Set("k", "a\0b"));
+        Assert.ThrowsExactly<ArgumentException>(() => provider.Set("k", "v", "a\0b"));
+    }
+
+    [TestMethod]
     public async Task AStoreWeServe_LeavesTheSessionResponsive()
     {
         RequireLinux();
@@ -132,5 +151,116 @@ public sealed class MetadataProviderTests
 
         provider.Clear();
         Assert.AreEqual(0, provider.Entries.Count);
+    }
+
+    [TestMethod]
+    public async Task AUnexportedStore_StaysInsideThisProcess()
+    {
+        // Exporting is what publishes the global; without it the store works locally and
+        // nothing else ever sees it. Disposing then using it is refused like any other use
+        // after disposal.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext("pwnet-provider-local", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+        await using var registry = new PipeWireRegistry(ctx);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+
+        string name = Unique();
+        using PipeWireMetadataProvider provider =
+            PipeWireMetadataProvider.Create(ctx, name, export: false);
+
+        provider.Set("k", "v");
+        Assert.AreEqual("v", provider.Get("k"));
+
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+        Assert.IsNull(
+            registry.Current.Objects.FirstOrDefault(o =>
+                o is PipeWireMetadataObject metadata && metadata.MetadataName == name),
+            "an unexported store is visible in the graph");
+
+        provider.Dispose();
+        Assert.ThrowsExactly<ObjectDisposedException>(() => provider.Set("k", "v"));
+    }
+
+    [TestMethod]
+    public async Task ClearingAStoreWeServeThroughItsBinding_EmptiesIt()
+    {
+        // The consumer is a second connection, which is what a store is for: serving and
+        // consuming over one connection wedges the session, so no test does that here.
+        // Clearing the session's shared store would take every client's defaults with it, so
+        // the store cleared here is one this same test serves instead.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext("pwnet-provider-clearbind", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+        await using var registry = new PipeWireRegistry(ctx);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+
+        string name = Unique();
+        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, name);
+
+        await using var reader = new PipeWireContext("pwnet-provider-clearread", ConsoleTestLoggerFactory.Instance);
+        await reader.StartAsync(cts.Token);
+        await using var readerRegistry = new PipeWireRegistry(reader);
+        await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
+
+        PipeWireMetadataStore? store = null;
+        long appearUntil = Environment.TickCount64 + 20_000;
+        while (store is null && Environment.TickCount64 < appearUntil)
+        {
+            await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
+            store = readerRegistry.BindMetadataStore(name);
+            if (store is null)
+                await Task.Delay(TimeSpan.FromMilliseconds(100), cts.Token);
+        }
+
+        if (store is null)
+            Assert.Inconclusive("the served store never appeared in the graph.");
+
+        await using (store)
+        {
+            await store!.ReadyAsync(cts.Token);
+            await store.SetAsync("k", "v", cancellationToken: cts.Token);
+            Assert.AreEqual("v", store.Get("k"));
+            await WaitForProviderValueAsync(provider, "k", "v", cts.Token);
+
+            // Per-key removals travel as property events and land; the bulk clear below does
+            // not reach the implementation at all (the daemon answers it from its own state),
+            // so the two are asserted separately on purpose.
+            await store.SetAsync("j", "w", cancellationToken: cts.Token);
+            await WaitForProviderValueAsync(provider, "j", "w", cts.Token);
+            await store.SetAsync("j", null, cancellationToken: cts.Token);
+            await WaitForProviderValueAsync(provider, "j", null, cts.Token);
+
+            await store.ClearAsync(cts.Token);
+
+            Assert.IsNull(store.Get("k"), "the store still holds entries after a clear");
+        }
+    }
+
+    /// <summary>
+    /// Waits until the serving process holds an expected value for a key.
+    /// </summary>
+    /// <remarks>
+    /// The writer's round-trip proves the daemon processed the write, not that the forward to
+    /// this implementation has been dispatched yet, so reading immediately is a race the test
+    /// would sometimes lose. A value that never arrives is still a failure, just a slower one.
+    /// </remarks>
+    private static async Task WaitForProviderValueAsync(
+        PipeWireMetadataProvider provider, string key, string? expected, CancellationToken cancellationToken)
+    {
+        for (int attempt = 0; attempt < 150; attempt++)
+        {
+            if (provider.Get(key) == expected)
+                return;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+        }
+
+        Assert.AreEqual(expected, provider.Get(key),
+            $"the serving process never held '{expected ?? "<null>"}` for '{key}'");
     }
 }

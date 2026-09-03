@@ -91,7 +91,14 @@ public sealed class DeviceAndMetadataWriteTests
         foreach (PipeWireDevice card in registry.Current.Devices
                      .Where(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal)))
         {
-            PipeWireDeviceControl control = registry.BindDevice(card.Id);
+            // The snapshot is a moment, and on a session whose ALSA devices are being destroyed and
+            // recreated the card can be gone before this binds it. BindDevice reports that as an
+            // ArgumentException naming the id, which is indistinguishable here from being handed
+            // nonsense, so the only thing to do is try the next card.
+            PipeWireDeviceControl control;
+            try { control = registry.BindDevice(card.Id); }
+            catch (ArgumentException) { continue; }
+
             try
             {
                 await control.ReadyAsync(cancellationToken);
@@ -436,6 +443,10 @@ public sealed class DeviceAndMetadataWriteTests
             if (candidates.Length == 0)
                 Assert.Inconclusive("this card offers no other available profile to switch to.");
 
+            // Whether the card survived, so the restore below knows if there is anything to
+            // restore to. Like the route test, this treats a withdrawn card as the session's
+            // instability rather than a halfway-applied write.
+            bool cardGone = false;
             try
             {
                 // Switching a profile is the most destructive thing this library can do to a graph:
@@ -453,17 +464,39 @@ public sealed class DeviceAndMetadataWriteTests
                 Assert.IsTrue((await control.EnumerateProfilesAsync(cts.Token)).Length > 0);
                 await control.GetActiveRoutesAsync(cts.Token);
             }
+            catch (PipeWireException ex)
+            {
+                cardGone = await CardGoneAsync(registry, control.Id, cts.Token);
+                if (!cardGone) throw;
+                Assert.Inconclusive($"the card left the graph mid-test: {ex.Message}");
+            }
             finally
             {
                 // Put the machine back however the test ended. Leaving someone's sound card on a
                 // different profile is not an acceptable side effect of running a test suite.
-                await control.SetProfileAsync(originalIndex, CancellationToken.None);
-                await registry.WaitForInitialEnumerationAsync(CancellationToken.None);
+                // When the card is gone there is nothing to put back; the body's own outcome,
+                // pass or fail, stands.
+                if (!cardGone)
+                {
+                    try
+                    {
+                        await control.SetProfileAsync(originalIndex, CancellationToken.None);
+                        await registry.WaitForInitialEnumerationAsync(CancellationToken.None);
+                    }
+                    catch (PipeWireException)
+                    {
+                        cardGone = await CardGoneAsync(registry, control.Id, CancellationToken.None);
+                        if (!cardGone) throw;
+                    }
+                }
             }
 
-            SpaObject? restored = await control.GetProfileAsync(cts.Token);
-            Assert.AreEqual(originalIndex, ((SpaInt)restored![SpaParamProfile.Index]!).Value,
-                "the original profile must have been restored");
+            if (!cardGone)
+            {
+                SpaObject? restored = await control.GetProfileAsync(cts.Token);
+                Assert.AreEqual(originalIndex, ((SpaInt)restored![SpaParamProfile.Index]!).Value,
+                    "the original profile must have been restored");
+            }
         }
     }
 
@@ -500,6 +533,11 @@ public sealed class DeviceAndMetadataWriteTests
             float[] restore = [.. original.Items.OfType<SpaFloat>().Select(f => f.Value)];
             Assert.IsTrue(restore.Length > 0);
 
+            // Whether the card survived the test, so the restore below knows if there is
+            // anything to restore to. On a session whose ALSA devices flap, the card can be
+            // withdrawn between binding and writing; that is the session's instability, and it
+            // reads here as a refusal from a dead proxy rather than as a halfway-applied write.
+            bool cardGone = false;
             try
             {
                 // A distinctive value, so reading it back cannot accidentally match what was there.
@@ -517,11 +555,38 @@ public sealed class DeviceAndMetadataWriteTests
                 float first = ((SpaFloat)readBack.Items[0]).Value;
                 Assert.AreEqual(0.37f, first, 0.02f, "the hardware volume did not take");
             }
+            catch (PipeWireException ex)
+            {
+                cardGone = await CardGoneAsync(registry, control.Id, cts.Token);
+                if (!cardGone) throw;
+                Assert.Inconclusive($"the card left the graph mid-test: {ex.Message}");
+            }
             finally
             {
-                await control.SetRouteVolumeAsync(
-                    index, device, restore, originalMute, save: false, CancellationToken.None);
+                // When the card is gone there is nothing to put back; the body's own outcome,
+                // pass or fail, stands.
+                if (!cardGone)
+                {
+                    try
+                    {
+                        await control.SetRouteVolumeAsync(
+                            index, device, restore, originalMute, save: false, CancellationToken.None);
+                    }
+                    catch (PipeWireException)
+                    {
+                        cardGone = await CardGoneAsync(registry, control.Id, CancellationToken.None);
+                        if (!cardGone) throw;
+                    }
+                }
             }
         }
+    }
+
+    /// <summary>Whether a card is still in the graph, after giving the registry a beat to notice.</summary>
+    private static async Task<bool> CardGoneAsync(
+        PipeWireRegistry registry, uint cardId, CancellationToken cancellationToken)
+    {
+        await registry.WaitForInitialEnumerationAsync(cancellationToken);
+        return registry.Current.Devices.All(d => d.Id != cardId);
     }
 }

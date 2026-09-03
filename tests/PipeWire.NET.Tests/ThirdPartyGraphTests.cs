@@ -10,10 +10,9 @@ namespace PipeWire.NET.Tests;
 /// mutable by PipeWire's own tools, and changes those tools make must reach our snapshot.
 /// </summary>
 /// <remarks>
-/// Every other graph test has the library on both sides of the exchange, which proves only that it
-/// agrees with itself. Here <c>pw-link</c>, <c>pw-cli</c> and <c>pw-loopback</c> are separate
-/// processes with their own connections, so agreement has to be with PipeWire rather than with us.
-/// This is also the shape a patchbay runs in: something else is always editing the same graph.
+/// <c>pw-link</c>, <c>pw-cli</c> and <c>pw-loopback</c> are separate processes with their own
+/// connections, so agreement has to be with PipeWire rather than with us. This is also the shape
+/// a patchbay runs in: something else is always editing the same graph.
 /// </remarks>
 [TestClass]
 [TestCategory("Integration")]
@@ -130,7 +129,6 @@ public sealed class ThirdPartyGraphTests
             PipeWirePort input = ready.GetPortsForNode(b.NodeId, PipeWirePortDirection.In)
                                       .OrderBy(p => p.PortId).First();
 
-            // A user at a terminal, not us.
             await PwTools.LinkAsync($"pwnet_tp_ta:{output.PortName}", $"pwnet_tp_tb:{input.PortName}", cts.Token);
 
             PipeWireGraphSnapshot linked = await WaitForAsync(
@@ -164,7 +162,7 @@ public sealed class ThirdPartyGraphTests
             PipeWirePort input = ready.GetPortsForNode(b.NodeId, PipeWirePortDirection.In)
                                       .OrderBy(p => p.PortId).First();
 
-            // We create it, they tear it down - the patchbay case exactly.
+            // The patchbay case.
             PipeWireLink link = await reg.CreateLink(output, input).ExecuteAsync(cts.Token);
             await PwTools.DisconnectAsync(link.LinkId, cts.Token);
 
@@ -206,6 +204,28 @@ public sealed class ThirdPartyGraphTests
     // ---------------------------------------------------------------- third-party nodes
 
     [TestMethod]
+    public async Task AMidiNode_ReportsNoChannelMap()
+    {
+        // A node that carries no audio has no channel map: its Props either lack the key or it
+        // has no Props at all, and both spell the same empty answer rather than a failure.
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-tp-midimap", cts.Token);
+
+        await using (ctx)
+        await using (reg)
+        {
+            PipeWireNode? midi = reg.Current.Nodes.FirstOrDefault(
+                n => (n.MediaClass ?? "").StartsWith("Midi/", StringComparison.Ordinal));
+            if (midi is null)
+                Assert.Inconclusive("this session exposes no MIDI node to probe");
+
+            await using PipeWireNodeControl control = reg.BindNode(midi!.NodeId);
+            Assert.AreEqual(0, (await control.GetChannelMapAsync(cts.Token)).Length,
+                $"MIDI node {midi.NodeName} should not report audio channels");
+        }
+    }
+
+    [TestMethod]
     public async Task AThirdPartyNodeAppearsAndWeCanLinkToIt()
     {
         PwTools.Require();
@@ -218,14 +238,12 @@ public sealed class ThirdPartyGraphTests
             await using PwTools.Loopback loop = await PwTools.StartLoopbackAsync("pwnet_tp_loop", cts.Token);
 
             // pw-loopback publishes a pair: input.NAME (Stream/Input/Audio) and output.NAME
-            // (Stream/Output/Audio). Both are nodes we did not create, from a process that knows
-            // nothing about us.
+            // (Stream/Output/Audio).
             PipeWireGraphSnapshot graph = await WaitForAsync(
                 reg,
                 // Both directions, not just "has any port". A loopback's input node publishes its
-                // inputs first and its monitors a moment later, so waiting for one port lets the
-                // walk continue before the monitors exist - and the capability assertion below is
-                // about exactly those.
+                // inputs first and its monitors a moment later, so wait for both directions,
+                // not just any port.
                 g => g.Nodes.Any(n => n.NodeName == "input.pwnet_tp_loop"
                                       && g.GetPortsForNode(n.NodeId, PipeWirePortDirection.In).Any()
                                       && g.GetPortsForNode(n.NodeId, PipeWirePortDirection.Out).Any())
@@ -318,7 +336,6 @@ public sealed class ThirdPartyGraphTests
             PipeWirePort input = ready.GetPortsForNode(b.NodeId, PipeWirePortDirection.In)
                                       .OrderBy(p => p.PortId).First();
 
-            // Read the graph continuously while an outside process rewires it underneath.
             using var stop = new CancellationTokenSource();
             Exception? torn = null;
             long reads = 0;

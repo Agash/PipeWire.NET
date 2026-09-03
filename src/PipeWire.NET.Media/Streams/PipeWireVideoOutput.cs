@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 using PipeWire.NET.Interop;
@@ -13,7 +14,8 @@ namespace PipeWire.NET.Media.Streams;
 /// <item>Zero-copy dmabuf: call <see cref="ConnectDmaBuf"/> with the DRM modifiers your GPU can export.
 /// The library negotiates dmabuf buffers and asks you (via <see cref="AllocateDmaBuf"/>) to back each
 /// pool buffer with a dmabuf you own; you render into it and publish from <see cref="FillDmaBuf"/>. No
-/// pixel copy ever touches the CPU.</item>
+/// pixel copy ever touches the CPU. <see cref="ConnectDmaBufSync"/> adds explicit timeline
+/// synchronization on top of the same transport.</item>
 /// </list>
 /// </summary>
 /// <remarks>
@@ -27,7 +29,7 @@ namespace PipeWire.NET.Media.Streams;
 [SupportedOSPlatform("linux")]
 public sealed partial class PipeWireVideoOutput : IAsyncDisposable
 {
-    /// <summary>Signature for <see cref="FillFrame"/>. Return <see langword="true"/> to publish the frame.</summary>
+    /// <summary>Return <see langword="true"/> to publish the frame.</summary>
     public delegate bool FillFrameHandler(
         PipeWireVideoOutput sender, Span<byte> pixels, int stride, int width, int height, PixelFormat format);
 
@@ -46,6 +48,21 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     /// </summary>
     public delegate bool FillDmaBufHandler(PipeWireVideoOutput sender, int bufferIndex);
 
+    /// <summary>
+    /// Backs a pool buffer with an app-owned dmabuf plus explicit-sync timelines, for
+    /// <see cref="ConnectDmaBufSync"/>. Like <see cref="AllocateDmaBufHandler"/>, plus the two
+    /// timeline descriptors: set <paramref name="acquireFd"/> and <paramref name="releaseFd"/> to
+    /// the app's own timeline descriptors, or leave either at -1 for a library eventfd.
+    /// </summary>
+    /// <remarks>
+    /// An app descriptor is borrowed: it must stay valid until <see cref="ReleaseDmaBuf"/> for the
+    /// buffer, and the app closes it. A -1 becomes a library eventfd, closed automatically when
+    /// the buffer goes. Either way the descriptors order the buffer, they never carry pixels.
+    /// </remarks>
+    public delegate int AllocateDmaBufSyncHandler(
+        PipeWireVideoOutput sender, int bufferIndex, int width, int height, ulong modifier,
+        Span<VideoPlane> planes, out long acquireFd, out long releaseFd);
+
     /// <summary>Notifies the app that pool buffer <paramref name="bufferIndex"/>'s dmabuf can be released.</summary>
     public delegate void ReleaseDmaBufHandler(PipeWireVideoOutput sender, int bufferIndex);
 
@@ -58,10 +75,13 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     /// <summary>Invoked (dmabuf mode) to render and publish the current frame.</summary>
     public event FillDmaBufHandler? FillDmaBuf;
 
+    /// <summary>Invoked (explicit-sync mode) to back a pool buffer with a dmabuf and timelines.</summary>
+    public event AllocateDmaBufSyncHandler? AllocateDmaBufSync;
+
     /// <summary>Invoked (dmabuf mode) when a pool buffer's dmabuf can be released.</summary>
     public event ReleaseDmaBufHandler? ReleaseDmaBuf;
 
-    /// <summary>Raised when the connection state changes.</summary>
+    /// <summary>Raised on the loop thread when the connection state changes.</summary>
     public event Action<PipeWireVideoOutput, PipeWireStreamState, PipeWireStreamState>? StateChanged;
 
     private readonly PipeWireContext _ctx;
@@ -91,6 +111,41 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     private int _planeCount;
     private int _nextBufferIndex;
 
+    // Explicit-sync state. Armed by ConnectDmaBufSync; untouched otherwise, in which case the
+    // dmabuf path below behaves exactly as before.
+    private bool _explicitSync;
+    private ulong _syncSeq; // loop thread only: default points when the app stamps none
+    private PendingSyncPoints?[] _pendingSync = new PendingSyncPoints[MaxPoolBuffers];
+
+    /// <summary>Points the app stamped for a buffer's next publish, taken once.</summary>
+    private sealed class PendingSyncPoints(ulong acquire, ulong release)
+    {
+        public ulong Acquire { get; } = acquire;
+        public ulong Release { get; } = release;
+    }
+
+    // Per-buffer timeline descriptors and who closes them. Touched only on add, remove and
+    // dispose - never on the process path, which reads descriptors from the buffer itself - so an
+    // ordinary lock is correct here and never crosses into realtime work.
+    private readonly Lock _syncGate = new();
+    private readonly int[] _syncAcquireFds = ClosedFds();
+    private readonly int[] _syncReleaseFds = ClosedFds();
+    private readonly bool[] _syncAcquireOwned = new bool[MaxPoolBuffers];
+    private readonly bool[] _syncReleaseOwned = new bool[MaxPoolBuffers];
+
+    private static int[] ClosedFds()
+    {
+        var fds = new int[MaxPoolBuffers];
+        Array.Fill(fds, -1);
+        return fds;
+    }
+
+    /// <summary>Sync timeline descriptors per buffer: acquire first, release second.</summary>
+    private const int SyncDataBlocks = SpaFormatPod.SyncTimelineDataBlocks;
+
+    /// <summary>Set by the producer each cycle; cleared by a consumer promising release.</summary>
+    private const uint SyncUnscheduledRelease = 1u << 0;
+
     /// <summary>Bytes a format pod needs to carry that many DRM modifiers.</summary>
     /// <remarks>
     /// The fixed part is the media type, subtype, format, size and framerate properties with their
@@ -114,12 +169,27 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     /// later. Keyed by buffer index, because the pool's buffers do not have to share a layout - a
     /// per-buffer GPU allocation is free to differ in stride, and one table for all of them
     /// publishes every buffer with whichever was added last.
+    /// <para>
+    /// A fixed table, never a resizable collection: the process callback reads its slot with
+    /// acquire ordering and takes whatever is there or nothing, so no lock crosses into it and no
+    /// hash table is ever traversed while another thread publishes. Each slot holds a complete
+    /// array published once, never mutated afterwards - a reader racing a removal sees the old
+    /// layout or none, both safe, never a torn one. A removal therefore cannot strand an in-flight
+    /// process callback: the worst case publishes nothing for that cycle.
+    /// </para>
     /// </remarks>
-    private readonly Dictionary<int, (uint Offset, int Stride)[]> _planeLayout = [];
+    private readonly (uint Offset, int Stride)[]?[] _planeLayouts =
+        new (uint Offset, int Stride)[]?[MaxPoolBuffers];
+
+    /// <summary>Most buffers one stream pool ever holds; bounds the publication table above.</summary>
+    private const int MaxPoolBuffers = 64;
 
     // Indices freed by remove_buffer, for reuse. PipeWire tears buffers down and builds them again
     // on every renegotiation, so handing out a fresh index each time walks past the end of a
     // consumer's pool - which is sized for the buffer count, not the renegotiation count.
+    // Touched only by add_buffer and remove_buffer, which are both stream-event callbacks on the
+    // loop thread; the process callback never touches it (it reads the publication table above),
+    // so no lock crosses into the realtime path for index bookkeeping either.
     private readonly Stack<int> _freeBufferIndices = new();
 
     /// <param name="context">A started <see cref="PipeWireContext"/>.</param>
@@ -143,14 +213,39 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
         _logger = context.LoggerFactory.CreateLogger($"PipeWire.NET.{nodeName}");
     }
 
+    /// <summary>Any node - let the session manager choose where this stream is routed.</summary>
+    public const uint AnyNode = Native.PW_ID_ANY;
+
     /// <summary>Starts publishing host-memory frames and registers the node in the graph.</summary>
-    public unsafe void Connect()
+    /// <param name="targetNodeId">
+    /// The node to route into, or <see cref="AnyNode"/> to let the session manager decide.
+    /// </param>
+    /// <param name="targetObjectName">
+    /// Optional <c>target.object</c> - bind to a specific node by name or serial regardless of
+    /// the session manager's default-device routing.
+    /// </param>
+    /// <param name="autoConnect">
+    /// When true the session manager routes this stream automatically. Pass
+    /// <see langword="false"/> with an explicit target to publish the node and link it
+    /// deliberately, independent of session-manager policy: a targeted link does not need a
+    /// default device to exist. A test or a transport usually wants that; a camera app does not.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait for the loop lock. The connect request itself is issued
+    /// synchronously once that is held, so there is nothing to recall after it.
+    /// </param>
+    public unsafe void Connect(
+        uint targetNodeId = AnyNode,
+        string? targetObjectName = null,
+        bool autoConnect = true,
+        CancellationToken cancellationToken = default)
     {
         if (_core is not null) throw new InvalidOperationException("Already connected.");
 
         var props = new StreamProperties(StreamMediaType.Video, StreamCategory.Playback)
             .WithRole("Camera")
             .WithNodeName(_name);
+        if (targetObjectName is not null) props.WithTargetObject(targetObjectName);
 
         // OnPostFormatHostMem declares the buffer requirements once the format is set. This is mandatory for a
         // video producer: unlike audio (whose buffer size PipeWire derives from the graph clock), a video node
@@ -166,11 +261,15 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
         Span<byte> pod = stackalloc byte[512];
         int len = SpaFormatPod.WriteVideoFormat(pod,
             stackalloc[] { _format }, (uint)_width, (uint)_height, (uint)_frameRate, fixedSize: true);
+
+        PipeWireStreamFlags flags = PipeWireStreamFlags.MapBuffers;
+        if (autoConnect) flags |= PipeWireStreamFlags.Autoconnect;
+
         try
         {
-            core.Connect(SpaDirection.Output, Native.PW_ID_ANY,
-            PipeWireStreamFlags.Autoconnect | PipeWireStreamFlags.MapBuffers,
-            pod[..len]);
+            core.Connect(SpaDirection.Output, targetNodeId, flags,
+            pod[..len],
+            cancellationToken: cancellationToken);
             _core = core;
         }
         catch
@@ -207,11 +306,81 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     }
 
     /// <summary>
+    /// Starts publishing zero-copy dmabuf frames with explicit synchronization: every buffer
+    /// carries <c>SPA_META_SyncTimeline</c> points plus acquire and release timeline descriptors,
+    /// instead of relying on implicit fences.
+    /// </summary>
+    /// <param name="modifiers">
+    /// The DRM format modifiers this producer can export, in priority order.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait for the loop lock. The connect request itself is issued
+    /// synchronously once that is held, so there is nothing to recall after it.
+    /// </param>
+    /// <remarks>
+    /// <para>
+    /// Wire <see cref="AllocateDmaBufSync"/> to provide per-buffer timelines, or leave it unset
+    /// and back buffers with <see cref="AllocateDmaBuf"/> while the library raises eventfd
+    /// timelines for them. Either way stamp per-frame points with <see cref="StampSyncPoints"/>;
+    /// unstamped frames carry a running sequence instead.
+    /// </para>
+    /// <para>
+    /// A consumer that agrees stops attaching implicit fences, so a peer ignoring the points
+    /// races the GPU. Use a dedicated context: the release wait blocks the loop thread when a
+    /// consumer promised to signal and has not yet, which stalls every stream on a shared one.
+    /// </para>
+    /// </remarks>
+    public unsafe void ConnectDmaBufSync(
+        ReadOnlySpan<long> modifiers, CancellationToken cancellationToken = default)
+    {
+        _explicitSync = true;
+        try
+        {
+            ConnectDmaBuf(modifiers, cancellationToken);
+        }
+        catch
+        {
+            _explicitSync = false;
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Stamps the acquire and release points for a buffer's next published frame, from any thread.
+    /// </summary>
+    /// <param name="bufferIndex">The buffer, as handed to the fill and allocate handlers.</param>
+    /// <param name="acquirePoint">The timeline point at which the frame may be read.</param>
+    /// <param name="releasePoint">The point the consumer signals when it is done with it.</param>
+    /// <remarks>
+    /// Taken once, by the next publish of that buffer; a frame published without a stamp carries
+    /// the running sequence instead. Stamping from outside the fill handler is the point: an app
+    /// whose GPU work completes on its own queue stamps the point its submission will signal.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="bufferIndex"/> is not a pool buffer.</exception>
+    public void StampSyncPoints(int bufferIndex, ulong acquirePoint, ulong releasePoint)
+    {
+        if ((uint)bufferIndex >= (uint)MaxPoolBuffers)
+            throw new ArgumentOutOfRangeException(nameof(bufferIndex),
+                $"buffer indices run 0 to {MaxPoolBuffers - 1}.");
+
+        Volatile.Write(
+            ref _pendingSync[bufferIndex], new PendingSyncPoints(acquirePoint, releasePoint));
+    }
+
+    /// <summary>
     /// Starts publishing zero-copy dmabuf frames, offering the given DRM format modifiers (the set your
     /// GPU can export for the configured <see cref="PixelFormat"/>). Wire <see cref="AllocateDmaBuf"/>,
     /// <see cref="FillDmaBuf"/> and (optionally) <see cref="ReleaseDmaBuf"/> before calling.
     /// </summary>
-    public unsafe void ConnectDmaBuf(ReadOnlySpan<long> modifiers)
+    /// <param name="modifiers">
+    /// The DRM format modifiers this producer can export, in priority order.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait for the loop lock. The connect request itself is issued
+    /// synchronously once that is held, so there is nothing to recall after it.
+    /// </param>
+    public unsafe void ConnectDmaBuf(
+        ReadOnlySpan<long> modifiers, CancellationToken cancellationToken = default)
     {
         if (_core is not null) throw new InvalidOperationException("Already connected.");
         if (modifiers.IsEmpty) throw new ArgumentException("At least one DRM modifier must be offered.", nameof(modifiers));
@@ -255,7 +424,8 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
             // claiming the driver role stops frames reaching the consumer entirely.
             core.Connect(SpaDirection.Output, Native.PW_ID_ANY,
             PipeWireStreamFlags.Inactive | PipeWireStreamFlags.AllocBuffers,
-            pod[..len]);
+            pod[..len],
+            cancellationToken: cancellationToken);
             _core = core;
         }
         catch
@@ -299,7 +469,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     /// thread drives the cycle directly.
     /// </para>
     /// <para>
-    /// No-op before <see cref="Connect"/> or <see cref="ConnectDmaBuf"/>, and after disposal.
+    /// No-op before <see cref="Connect(uint, string?, bool, CancellationToken)"/> or <see cref="ConnectDmaBuf"/>, and after disposal.
     /// </para>
     /// </remarks>
     public void TriggerFrame() => _core?.TriggerProcess();
@@ -321,7 +491,37 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     }
 
     /// <inheritdoc/>
-    public ValueTask DisposeAsync() => _core?.DisposeAsync() ?? ValueTask.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        // Library eventfds first: the pool may go without remove_buffer for every buffer, in which
+        // case nothing else would close them. App descriptors are borrowed and stay the app's.
+        // Slots are cleared, so a late remove_buffer finds nothing to close twice. Under the loop
+        // lock when it can be taken, so no process callback is mid-use of a descriptor being
+        // closed; without it (teardown already past the point of callbacks) the sweep is safe
+        // because nothing is left to race it.
+        bool locked = _ctx.TryLock(out PipeWireContext.LoopLock scope);
+        try
+        {
+            lock (_syncGate)
+            {
+                for (int i = 0; i < MaxPoolBuffers; i++)
+                {
+                    if (_syncAcquireOwned[i]) Descriptors.CloseEventfd(_syncAcquireFds[i]);
+                    if (_syncReleaseOwned[i]) Descriptors.CloseEventfd(_syncReleaseFds[i]);
+                    _syncAcquireFds[i] = -1;
+                    _syncReleaseFds[i] = -1;
+                    _syncAcquireOwned[i] = false;
+                    _syncReleaseOwned[i] = false;
+                }
+            }
+        }
+        finally
+        {
+            if (locked) scope.Dispose();
+        }
+
+        return _core?.DisposeAsync() ?? ValueTask.CompletedTask;
+    }
 
     private unsafe void OnBuffer(spa_data* d, pw_buffer* buf, in PipeWireStreamCore.StreamClock clock)
     {
@@ -392,7 +592,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
         spa_buffer* sb = buf->buffer;
         if (sb is null) return;
         int index = (int)(nint)buf->user_data - 1; // we store index+1 so 0 means "unassigned"
-        if (index < 0) return;
+        if (index < 0 || (uint)index >= (uint)MaxPoolBuffers) return;
 
         // Cleared before the handler, for the same reason as the host-memory path: a throw must
         // publish nothing rather than republish the previous frame's sizes.
@@ -402,10 +602,57 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
             if (c is not null) c->size = 0;
         }
 
+        // Explicit sync, before the app renders: when the consumer cleared UNSCHEDULED_RELEASE it
+        // promised to signal the release point, so a nonzero one is waited for here, exactly like
+        // upstream's producer. A set flag means no promise - publish without waiting. This blocks
+        // the loop thread, which is why explicit-sync streams want a dedicated context.
+        spa_meta_sync_timeline* sync = _explicitSync ? FindSyncTimeline(sb) : null;
+        int waitAcquireFd = -1, waitReleaseFd = -1;
+        bool syncReady = sync is not null
+            && SpaFormatPod.TryFindSyncDataFds(sb, out waitAcquireFd, out waitReleaseFd)
+            && waitAcquireFd >= 0 && waitReleaseFd >= 0;
+        ulong acquirePoint, releasePoint;
+        PendingSyncPoints? stamped =
+            Interlocked.Exchange(ref _pendingSync[index], null);
+        if (stamped is not null)
+        {
+            acquirePoint = stamped.Acquire;
+            releasePoint = stamped.Release;
+        }
+        else
+        {
+            acquirePoint = releasePoint = ++_syncSeq;
+        }
+
+        // Explicit sync, before the app renders: the wait decision reads the meta's current
+        // state, left by the previous cycle and the consumer - not the points about to be
+        // stamped below. A nonzero release point with UNSCHEDULED_RELEASE cleared means the
+        // consumer promised to signal and hasn't yet, so rendering into the buffer would
+        // overwrite a frame still being read. A set flag (or a zero point, as on a fresh pool)
+        // means no promise: render without waiting. Upstream's producer reads it the same way.
+        if (syncReady && (*sync).release_point != 0
+            && (((*sync).flags & SyncUnscheduledRelease) == 0))
+            Descriptors.WaitEventfd(waitReleaseFd);
+
         bool publish = FillDmaBuf?.Invoke(this, index) ?? false;
+
+        if (syncReady)
+        {
+            // Fresh every cycle: the flag re-arms the promise protocol, the points are this
+            // frame's, and the acquire signal releases the consumer's wait. Stamped even for a
+            // declined frame - the timeline must keep moving, and an unsignalled acquire would
+            // wedge a consumer waiting on it.
+            (*sync).flags = SyncUnscheduledRelease;
+            (*sync).acquire_point = acquirePoint;
+            (*sync).release_point = releasePoint;
+            Descriptors.SignalEventfd(waitAcquireFd);
+        }
+
         if (!publish) return;
 
-        (uint Offset, int Stride)[]? layout = _planeLayout.GetValueOrDefault(index);
+        // Lock-free by construction: a whole array or nothing, so a removal racing this read
+        // degrades to an unpublished cycle rather than a torn layout.
+        (uint Offset, int Stride)[]? layout = Volatile.Read(ref _planeLayouts[index]);
         if (layout is null) return;
 
         for (uint i = 0; i < sb->n_datas; i++)
@@ -427,6 +674,23 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
         }
 
         WritePresentationTime(buf, in clock);
+    }
+
+    /// <summary>Finds the sync timeline meta of a pool buffer, when the peer agreed to carry one.</summary>
+    private static unsafe spa_meta_sync_timeline* FindSyncTimeline(spa_buffer* sb)
+    {
+        if (sb is null || sb->metas is null) return null;
+
+        uint count = Math.Min(sb->n_metas, 64u);
+        for (uint i = 0; i < count; i++)
+        {
+            spa_meta* m = &sb->metas[i];
+            if (m->type != (uint)SpaMetaType.SyncTimeline || m->data is null) continue;
+            if (m->size < (uint)sizeof(spa_meta_sync_timeline)) continue;
+            return (spa_meta_sync_timeline*)m->data;
+        }
+
+        return null;
     }
 
     private unsafe void OnFormat(spa_pod* param)
@@ -484,11 +748,23 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
         int size = SpaFormatPod.VideoBlockSize(negotiated.Format, negotiated.Width, negotiated.Height);
         Span<byte> buffers = stackalloc byte[256];
         int bl = SpaFormatPod.WriteVideoBuffersParam(buffers, size, stride,
-            dataTypes: 1 << (int)SpaDataType.DmaBuf, blocks: _planeCount);
+            dataTypes: 1 << (int)SpaDataType.DmaBuf, blocks: _planeCount,
+            syncDataBlocks: _explicitSync ? SyncDataBlocks : 0);
 
         Span<byte> meta = stackalloc byte[64];
         int ml = SpaFormatPod.WriteHeaderMetaParam(meta);
-        core.RequestParamsFromCallback(buffers[..bl], meta[..ml]);
+
+        // The timeline meta rides a second pod: like the header it only takes effect when the peer
+        // agrees, and the pool layout above already carries its two descriptors either way.
+        if (!_explicitSync)
+        {
+            core.RequestParamsFromCallback(buffers[..bl], meta[..ml]);
+            return;
+        }
+
+        Span<byte> syncMeta = stackalloc byte[64];
+        int sml = SpaFormatPod.WriteSyncTimelineMetaParam(syncMeta);
+        core.RequestParamsFromCallback(buffers[..bl], meta[..ml], syncMeta[..sml]);
     }
 
     // PipeWire allocated an (empty) buffer with _planeCount data blocks; back each block with one plane of
@@ -501,11 +777,28 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
 
         int index = _freeBufferIndices.Count > 0 ? _freeBufferIndices.Pop() : _nextBufferIndex++;
 
+        // Bounded before anything is allocated for it: the table above is fixed, and an index past
+        // it is a broken pool, not a bigger one. The buffer stays unbacked and PipeWire will not
+        // use it, the same outcome as every other refusal below.
+        if ((uint)index >= (uint)MaxPoolBuffers)
+        {
+            LogBufferIndexOutOfRange(index);
+            return;
+        }
+
         Span<VideoPlane> planes = stackalloc VideoPlane[MaxPlanes];
         int n;
+        long acquireFd = -1, releaseFd = -1;
         try
         {
-            n = AllocateDmaBuf?.Invoke(this, index, _width, _height, Format.Modifier, planes) ?? 0;
+            // The sync variant backs planes and timelines together; without it the planes come
+            // from the plain handler and any -1 below becomes a library eventfd further down.
+            if (_explicitSync && AllocateDmaBufSync is { } allocateSync)
+                n = allocateSync(
+                    this, index, _width, _height, Format.Modifier, planes,
+                    out acquireFd, out releaseFd);
+            else
+                n = AllocateDmaBuf?.Invoke(this, index, _width, _height, Format.Modifier, planes) ?? 0;
 
             // The handler's return value indexes the span above, and it is the application's
             // number rather than this library's. A larger one is a caller mistake, not a bigger
@@ -520,10 +813,22 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
             throw;
         }
 
+        // In explicit-sync mode the pool carries two extra datas past the planes, so the plane
+        // requirement counts planes, not datas - and a pool shaped any other way does not match
+        // the negotiated contract at all.
+        if (_explicitSync && sb->n_datas != (uint)_planeCount + SyncDataBlocks)
+        {
+            LogPartialAllocation(index, 0, sb->n_datas);
+            _freeBufferIndices.Push(index);
+            return; // buffer stays unbacked and PipeWire will not use it
+        }
+
+        uint planeTotal = _explicitSync ? (uint)_planeCount : sb->n_datas;
+
         // Every block or none. A partial answer leaves the tail spa_data with no fd, and the
         // consumer then imports a descriptor of -1 and fails inside its driver with nothing here to
         // name.
-        if (n <= 0 || (uint)n < sb->n_datas)
+        if (n <= 0 || (uint)n < planeTotal)
         {
             _freeBufferIndices.Push(index);
             if (n > 0) LogPartialAllocation(index, n, sb->n_datas);
@@ -535,10 +840,9 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
         // memory behind it.
         buf->user_data = (void*)(nint)(index + 1); // +1 so 0 distinguishes "unassigned"
 
-        var layout = new (uint Offset, int Stride)[sb->n_datas];
-        _planeLayout[index] = layout;
+        var layout = new (uint Offset, int Stride)[planeTotal];
 
-        for (uint i = 0; i < sb->n_datas; i++)
+        for (uint i = 0; i < planeTotal; i++)
         {
             VideoPlane p = planes[(int)i];
 
@@ -569,6 +873,92 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
 
             layout[i] = (p.Offset, p.Stride);
         }
+
+        // Sync timelines last: the planes above must already be valid, because a failure here
+        // unwinds the whole buffer and the planes with it.
+        if (_explicitSync && !AttachSyncTimelines(sb, index, ref acquireFd, ref releaseFd))
+        {
+            _freeBufferIndices.Push(index);
+            buf->user_data = null;
+            return;
+        }
+
+        // Published whole, after the last entry lands: a reader racing this sees the previous
+        // array or this complete one, never a half-filled one.
+        Volatile.Write(ref _planeLayouts[index], layout);
+    }
+
+    /// <summary>Attaches the acquire/release timeline descriptors to a backed buffer.</summary>
+    /// <remarks>
+    /// A -1 from the app becomes a library eventfd, closed automatically when the buffer goes;
+    /// anything else is borrowed and must stay valid until <see cref="ReleaseDmaBuf"/> for the
+    /// buffer, closed by the app. Either way the descriptors order the buffer, they never carry
+    /// pixels. False only when the descriptors cannot be provided, and the buffer is declined.
+    /// </remarks>
+    private unsafe bool AttachSyncTimelines(spa_buffer* sb, int index, ref long acquireFd, ref long releaseFd)
+    {
+        bool acquireOwned = false, releaseOwned = false;
+        try
+        {
+            if (acquireFd < 0) { acquireFd = Descriptors.CreateEventfd(); acquireOwned = true; }
+            if (releaseFd < 0) { releaseFd = Descriptors.CreateEventfd(); releaseOwned = true; }
+        }
+        catch (IOException ex)
+        {
+            LogSyncFdFailed(index, ex.Message);
+            if (acquireOwned) Descriptors.CloseEventfd((int)acquireFd);
+            return false;
+        }
+
+        // An eventfd is a small int; anything else did not come from this process's table.
+        if (!SyncFdUsable(acquireFd) || !SyncFdUsable(releaseFd))
+        {
+            LogInvalidSyncDescriptor(index, acquireFd, releaseFd);
+            if (acquireOwned) Descriptors.CloseEventfd((int)acquireFd);
+            if (releaseOwned) Descriptors.CloseEventfd((int)releaseFd);
+            return false;
+        }
+
+        spa_data* acquire = &sb->datas[_planeCount];
+        acquire->type = (uint)SpaDataType.SyncObj;
+        acquire->fd = (nint)acquireFd;
+        acquire->flags = 0;
+        acquire->data = null;
+        acquire->chunk = null;
+
+        spa_data* release = &sb->datas[_planeCount + 1];
+        release->type = (uint)SpaDataType.SyncObj;
+        release->fd = (nint)releaseFd;
+        release->flags = 0;
+        release->data = null;
+        release->chunk = null;
+
+        lock (_syncGate)
+        {
+            _syncAcquireFds[index] = (int)acquireFd;
+            _syncReleaseFds[index] = (int)releaseFd;
+            _syncAcquireOwned[index] = acquireOwned;
+            _syncReleaseOwned[index] = releaseOwned;
+        }
+
+        return true;
+    }
+
+    private static bool SyncFdUsable(long fd) => fd >= 0 && fd <= int.MaxValue;
+
+    /// <summary>Closes library-owned timeline descriptors for a buffer going away.</summary>
+    private void CloseSyncTimelines(int index)
+    {
+        lock (_syncGate)
+        {
+            if ((uint)index >= (uint)MaxPoolBuffers) return;
+            if (_syncAcquireOwned[index]) Descriptors.CloseEventfd(_syncAcquireFds[index]);
+            if (_syncReleaseOwned[index]) Descriptors.CloseEventfd(_syncReleaseFds[index]);
+            _syncAcquireFds[index] = -1;
+            _syncReleaseFds[index] = -1;
+            _syncAcquireOwned[index] = false;
+            _syncReleaseOwned[index] = false;
+        }
     }
 
     private unsafe void OnRemoveBuffer(pw_buffer* buf)
@@ -577,7 +967,16 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
         if (index < 0) return;
 
         ReleaseDmaBuf?.Invoke(this, index);
-        _planeLayout.Remove(index);
+
+        // App descriptors are borrowed and close here, by the app, inside its handler above;
+        // library eventfds close here too, so nothing outlives the buffer either way.
+        if (_explicitSync) CloseSyncTimelines(index);
+
+        // Withdrawn before the index is recycled: a process callback already past the read keeps
+        // the array it holds (safe - arrays are never mutated), and one arriving after sees none
+        // and publishes nothing for the cycle.
+        if ((uint)index < (uint)MaxPoolBuffers)
+            Volatile.Write(ref _planeLayouts[index], null);
 
         // Returned to the pool so the next add_buffer reuses it rather than growing past the
         // consumer's allocation on every renegotiation.
@@ -599,4 +998,71 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "buffer {Index} declined: plane {Plane} carries descriptor {Fd}")]
     private partial void LogInvalidPlaneDescriptor(int index, uint plane, long fd);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "buffer index {Index} is past the pool table; buffer stays unbacked")]
+    private partial void LogBufferIndexOutOfRange(int index);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "buffer {Index} declined: timeline descriptors unavailable ({Reason})")]
+    private partial void LogSyncFdFailed(int index, string reason);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "buffer {Index} declined: timeline descriptors {AcquireFd}/{ReleaseFd} are not usable")]
+    private partial void LogInvalidSyncDescriptor(int index, long acquireFd, long releaseFd);
+
+    /// <summary>Waits until the stream is negotiated and running.</summary>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <remarks>
+    /// <c>Connect</c> issues a request; the daemon then negotiates a format over several round
+    /// trips, and only then does the stream start. Without this a caller has to subscribe to
+    /// <c>StateChanged</c> and drive its own completion, which is the same code every time.
+    /// <para>
+    /// Cancelling abandons the wait, not the stream: the connection stays up and keeps negotiating,
+    /// because there is nothing to recall. Dispose it to stop it.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">Not connected yet.</exception>
+    /// <exception cref="PipeWireException">The stream reached its error state instead.</exception>
+    public Task WaitForStreamingAsync(CancellationToken cancellationToken = default)
+    {
+        PipeWireStreamCore core = _core
+            ?? throw new InvalidOperationException("Connect before waiting for the stream to start.");
+
+        return core.WaitForStreamingAsync(cancellationToken);
+    }
+
+    /// <summary>Every control this stream exposes, as the daemon last reported them.</summary>
+    /// <remarks>
+    /// Empty until the stream is connected and the daemon has reported them, which happens during
+    /// negotiation. A snapshot: the daemon re-reports a control whenever one of its values changes.
+    /// </remarks>
+    public ImmutableArray<PipeWireStreamControl> Controls =>
+        _core?.Controls ?? [];
+
+    /// <summary>One control by SPA property id, or null when the stream has not reported it.</summary>
+    public PipeWireStreamControl? GetControl(uint id) => _core?.GetControl(id);
+
+    /// <summary>Sets a control's values.</summary>
+    /// <param name="id">The SPA property id, as carried by <see cref="PipeWireStreamControl.Id"/>.</param>
+    /// <param name="values">
+    /// One value for a scalar control, or one per channel. More than
+    /// <see cref="PipeWireStreamControl.MaximumValues"/> is the daemon's to refuse, not this
+    /// library's to guess at.
+    /// </param>
+    /// <param name="cancellationToken">Abandons the wait for the loop lock.</param>
+    /// <remarks>
+    /// Sent as a <c>Props</c> object. The daemon applies it when it next runs the node, so this
+    /// returning does not mean the value is in effect; read it back from <see cref="Controls"/> if
+    /// that matters.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">Not connected yet.</exception>
+    /// <exception cref="ArgumentException"><paramref name="values"/> is empty.</exception>
+    public void SetControl(uint id, ReadOnlySpan<float> values, CancellationToken cancellationToken = default)
+    {
+        if (values.IsEmpty)
+            throw new ArgumentException("a control needs at least one value.", nameof(values));
+
+        PipeWireStreamCore core = _core
+            ?? throw new InvalidOperationException("Connect before setting a control.");
+
+        core.SetControl(id, values, cancellationToken);
+    }
 }

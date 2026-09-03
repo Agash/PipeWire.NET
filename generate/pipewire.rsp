@@ -13,6 +13,16 @@
 # mode). This list is therefore the explicit set of native surface we expose; add a
 # header here to expose more. Keep it in sync when bumping the PipeWire version.
 
+# - SPA types this library implements rather than only consumes -
+#
+# control.h declares spa_control_type and nothing else; device.h declares the spa_device interface
+# that PipeWireDeviceProvider implements. The device table is an ABI dispatch table where a field
+# in the wrong order is a call through a wrong pointer rather than a compile error.
+--traverse
+/usr/include/spa-0.2/spa/control/control.h
+--traverse
+/usr/include/spa-0.2/spa/monitor/device.h
+
 # - PipeWire public surface -
 --traverse
 /usr/include/pipewire-0.3/pipewire/pipewire.h
@@ -178,6 +188,8 @@ spa_audio_volume_ramp_scale=SpaAudioVolumeRampScale
 --remap-type
 spa_choice_type=SpaChoiceType
 --remap-type
+spa_control_type=SpaControlType
+--remap-type
 spa_data_type=SpaDataType
 --remap-type
 spa_direction=SpaDirection
@@ -274,6 +286,8 @@ SpaAudioVolumeRampScale=PipeWire.NET.Spa
 --with-namespace
 SpaChoiceType=PipeWire.NET.Spa
 --with-namespace
+SpaControlType=PipeWire.NET.Spa
+--with-namespace
 SpaDataType=PipeWire.NET.Spa
 --with-namespace
 SpaDirection=PipeWire.NET.Spa
@@ -346,6 +360,105 @@ SpaVideoMultiviewMode=PipeWire.NET.Spa
 --with-namespace
 SpaVideoTransferFunction=PipeWire.NET.Spa
 
+# Opted back out of the internal catch-all: the same types, for the same reason. A
+# caller that reads a format or a state reads these; everything else is plumbing.
+--without-access-specifier
+PipeWireFilterFlags
+--without-access-specifier
+PipeWireFilterPortFlags
+--without-access-specifier
+PipeWireFilterState
+--without-access-specifier
+PipeWireLinkState
+--without-access-specifier
+PipeWireNodeState
+--without-access-specifier
+PipeWireStreamFlags
+--without-access-specifier
+PipeWireStreamState
+--without-access-specifier
+SpaAudioChannel
+--without-access-specifier
+SpaAudioFormat
+--without-access-specifier
+SpaAudioVolumeRampScale
+--without-access-specifier
+SpaChoiceType
+--without-access-specifier
+SpaControlType
+--without-access-specifier
+SpaDataType
+--without-access-specifier
+SpaDirection
+--without-access-specifier
+SpaFormat
+--without-access-specifier
+SpaIoPositionState
+--without-access-specifier
+SpaIoType
+--without-access-specifier
+SpaMediaSubtype
+--without-access-specifier
+SpaMediaType
+--without-access-specifier
+SpaMetaType
+--without-access-specifier
+SpaMetaVideotransformValue
+--without-access-specifier
+SpaParamAvailability
+--without-access-specifier
+SpaParamBitorder
+--without-access-specifier
+SpaParamBuffers
+--without-access-specifier
+SpaParamIo
+--without-access-specifier
+SpaParamLatency
+--without-access-specifier
+SpaParamMeta
+--without-access-specifier
+SpaParamPortConfig
+--without-access-specifier
+SpaParamPortConfigMode
+--without-access-specifier
+SpaParamProcessLatency
+--without-access-specifier
+SpaParamProfile
+--without-access-specifier
+SpaParamRoute
+--without-access-specifier
+SpaParamTag
+--without-access-specifier
+SpaParamType
+--without-access-specifier
+SpaProfiler
+--without-access-specifier
+SpaProp
+--without-access-specifier
+SpaPropInfo
+--without-access-specifier
+SpaType
+--without-access-specifier
+SpaVideoChromaSite
+--without-access-specifier
+SpaVideoColorMatrix
+--without-access-specifier
+SpaVideoColorPrimaries
+--without-access-specifier
+SpaVideoColorRange
+--without-access-specifier
+SpaVideoFlags
+--without-access-specifier
+SpaVideoFormat
+--without-access-specifier
+SpaVideoInterlaceMode
+--without-access-specifier
+SpaVideoMultiviewFlags
+--without-access-specifier
+SpaVideoMultiviewMode
+--without-access-specifier
+SpaVideoTransferFunction
+
 # Members: drop the prefix the C name already spells out.
 --with-enum-member-strip
 PipeWireFilterFlags=prefix:PW_FILTER_FLAG_
@@ -373,6 +486,8 @@ SpaAudioFormat=prefix:SPA_AUDIO_FORMAT_
 SpaAudioVolumeRampScale=prefix:SPA_AUDIO_VOLUME_RAMP_
 --with-enum-member-strip
 SpaChoiceType=prefix:SPA_CHOICE_
+--with-enum-member-strip
+SpaControlType=prefix:SPA_CONTROL_
 --with-enum-member-strip
 SpaDataType=prefix:SPA_DATA_
 --with-enum-member-strip
@@ -891,6 +1006,10 @@ SPA_AUDIO_VOLUME_RAMP_INVALID=Invalid
 SPA_AUDIO_VOLUME_RAMP_LINEAR=Linear
 --remap
 SPA_AUDIO_VOLUME_RAMP_CUBIC=Cubic
+--remap
+SPA_CONTROL_OSC=Osc
+--remap
+SPA_CONTROL_UMP=Ump
 --remap
 SPA_DIRECTION_INPUT=Input
 --remap
@@ -1791,6 +1910,8 @@ SPA_VIDEO_TRANSFER_BT601=Bt601
 # Upstream marks these "not part of ABI" with a leading underscore: each is one past
 # the end of a range, never a value anything sends. Left out rather than shown to a
 # caller as though it were a choice.
+--exclude
+_SPA_CONTROL_LAST
 --exclude
 _SPA_DATA_LAST
 --exclude

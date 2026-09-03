@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct spa_dict_item
+internal unsafe partial struct spa_dict_item
 {
     [NativeTypeName("const char *")]
     public sbyte* key;

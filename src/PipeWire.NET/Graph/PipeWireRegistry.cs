@@ -65,6 +65,11 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     // rather than looked up afterwards, which would race anything removing it in between.
     private readonly ConcurrentDictionary<uint, PublishWaiters> _awaitingPublish = new();
 
+    // Owned ids whose objects were created to linger. Destroying those through their proxy only
+    // unbinds them - surviving proxy destruction is what linger means - so they have to go
+    // through the registry destroy path instead, like objects this client never owned.
+    private readonly ConcurrentDictionary<uint, byte> _lingering = new();
+
     /// <summary>Everyone waiting for one id's global to arrive.</summary>
     /// <remarks>
     /// A list rather than a single source. Ids are reused as objects come and go, so two callers can
@@ -268,6 +273,8 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// </remarks>
     private void ReleaseOwnedProxy(uint id)
     {
+        _lingering.TryRemove(id, out _);
+
         if (_ownedProxies.TryRemove(id, out PipeWireProxyHandle? proxy))
         {
             proxy.Dispose();
@@ -287,8 +294,29 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// </remarks>
     internal int OwnedProxyCount => _ownedProxies.Count;
 
+    /// <summary>
+    /// The ids this registry created lingering that have not been destroyed since, lowest first.
+    /// </summary>
+    /// <remarks>
+    /// A lingering object survives this registry (and its context) going away - that is what linger
+    /// means - so leaving some behind is not a leak, but forgetting them is. This lists what is
+    /// left behind, so a later session can destroy each one explicitly with
+    /// <see cref="DestroyGlobalAsync(uint, CancellationToken)"/> instead of rediscovering ids by
+    /// name. An id leaves the list when its object is destroyed or removed, or when the id is
+    /// reused by a non-lingering object.
+    /// </remarks>
+    public ImmutableArray<uint> LingeringIds
+    {
+        get
+        {
+            uint[] ids = _lingering.Keys.ToArray();
+            Array.Sort(ids);
+            return [.. ids];
+        }
+    }
+
     /// <summary>Files a freshly created proxy, or disposes it if its object is already gone.</summary>
-    private void TakeOwnership(uint id, PipeWireProxyHandle proxy)
+    private void TakeOwnership(uint id, PipeWireProxyHandle proxy, bool linger)
     {
         bool removedWhileCreating = _creating.TryRemove(id, out bool removed) && removed;
 
@@ -297,6 +325,13 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             proxy.Dispose();
             return;
         }
+
+        // Set or cleared unconditionally rather than only when lingering: ids are reused, so a
+        // flag left by an earlier object with this id would misroute this one's destruction.
+        if (linger)
+            _lingering[id] = 0;
+        else
+            _lingering.TryRemove(id, out _);
 
         _ownedProxies[id] = proxy;
     }
@@ -327,8 +362,14 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// object leave exactly once whichever order the daemon reports them in. The later events find
     /// the entries already gone and do nothing.
     /// </remarks>
-    private void CascadeRemove(uint nodeId)
+    // Collects rather than raises: the granular removals are announced only after Publish, so a
+    // handler inspecting Current already sees the snapshot the event describes. Raising first
+    // inverts that contract - the port or link is still indexed while its removal is announced.
+    private void CascadeRemove(uint nodeId, out List<uint> removedLinks, out List<uint> removedPorts)
     {
+        removedLinks = [];
+        removedPorts = [];
+
         foreach ((uint portId, PipeWirePort port) in _ports)
         {
             if (port.NodeId != nodeId) continue;
@@ -339,13 +380,13 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                 if (!_links.TryRemove(linkId, out _)) continue;
 
                 LogRemoved("link", linkId);
-                RaiseIsolated(LinkRemoved, linkId, nameof(LinkRemoved));
+                removedLinks.Add(linkId);
             }
 
             if (!_ports.TryRemove(portId, out _)) continue;
 
             LogRemoved("port", portId);
-            RaiseIsolated(PortRemoved, portId, nameof(PortRemoved));
+            removedPorts.Add(portId);
         }
     }
 
@@ -401,9 +442,14 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             throw new ObjectDisposedException(nameof(PipeWireRegistry));
         }
 
-        // Cancels this caller's wait and nobody else's.
+        // Cancels this caller's wait and nobody else's. The context shutdown also ends the wait
+        // by surfacing an error: a publish that depends on a stopped loop never arrives.
         using (cancellationToken.UnsafeRegister(
             static s => ((TaskCompletionSource<IPipeWireObject>)s!).TrySetCanceled(), waiter))
+        using (_ctx.Shutdown.UnsafeRegister(
+            static s => ((TaskCompletionSource<IPipeWireObject>)s!).TrySetException(
+                new ObjectDisposedException(nameof(PipeWireContext),
+                    "the context was disposed while an object publish was in flight.")), waiter))
         {
             try
             {
@@ -514,10 +560,19 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         {
             if (_disposed) yield break;
 
+            // A publish between subscribing above and this first yield lands in the channel AND is
+            // what Current now reads, so yielding both would deliver the same version twice. Track
+            // the version and skip anything already seen: the channel drops oldest when full, so a
+            // stale duplicate is the only disorder possible, never a gap filled from behind.
+            long lastYielded = Current.Version;
             yield return Current;
             await foreach (PipeWireGraphSnapshot snapshot in
                            channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (snapshot.Version <= lastYielded) continue;
+                lastYielded = snapshot.Version;
                 yield return snapshot;
+            }
         }
         finally
         {
@@ -700,7 +755,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         try
         {
             PipeWireNode node = await published!.WaitAsync(cancellationToken).ConfigureAwait(false);
-            TakeOwnership(id, proxy);
+            TakeOwnership(id, proxy, options.Linger);
             return node;
         }
         catch
@@ -814,7 +869,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         try
         {
             PipeWireLink link = await published!.WaitAsync(cancellationToken).ConfigureAwait(false);
-            TakeOwnership(id, proxy);
+            TakeOwnership(id, proxy, options.Linger);
             return link;
         }
         catch
@@ -871,8 +926,14 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // is the single destruction operation for it. Going through the registry instead leaves the
         // proxy alive until the daemon's global_remove arrives and disposes it, so a dispose racing
         // that window destroys it twice - which PipeWire aborts on.
-        if (_ownedProxies.TryRemove(id, out PipeWireProxyHandle? owned))
+        //
+        // Except a lingering one. Surviving proxy destruction is what linger means, so disposing
+        // its proxy unbinds it and reports success while the object lives on. Those go through
+        // the registry destroy below like objects this client never owned, and the filed proxy is
+        // left for the removal handler, exactly as if someone else had destroyed them.
+        if (_ownedProxies.TryGetValue(id, out PipeWireProxyHandle? owned) && !_lingering.ContainsKey(id))
         {
+            _ownedProxies.TryRemove(id, out _);
             owned.Dispose();
 
             // Still round-tripped. Destroying the proxy only queues the request, and this method's
@@ -889,6 +950,61 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // subscribing afterwards loses any refusal the daemon answered in between.
         return CoreSync.RoundTripAsync(
             _ctx, () => Native.pw_registry_destroy_global(RegistryHandle, id), cancellationToken);
+    }
+
+    /// <summary>
+    /// Asks the daemon to destroy many globals, with a single barrier for the whole batch.
+    /// </summary>
+    /// <remarks>
+    /// Best-effort per id: a refusal (already gone, no permission) is not reported - the barrier
+    /// only proves the daemon processed everything sent, and errors it cannot attribute to this
+    /// batch are ignored by design. Use <see cref="DestroyGlobalAsync(uint, CancellationToken)"/>
+    /// when one refusal must fail the call. This exists because tearing down thousands of objects
+    /// one barrier at a time turns cleanup into the longest phase of any churn-heavy workload;
+    /// the requests are identical, only the waiting is shared.
+    /// </remarks>
+    internal Task DestroyGlobalsAsync(IEnumerable<uint> ids, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // Issued synchronously, waited once below: the barrier observes everything sent, and the
+        // requests themselves never touch an await boundary with native pointers live.
+        IssueDestroys(ids, cancellationToken);
+        return CoreSync.RoundTripAsync(_ctx, cancellationToken);
+    }
+
+    private unsafe void IssueDestroys(IEnumerable<uint> ids, CancellationToken cancellationToken)
+    {
+        // One hold for the whole batch: everything below is synchronous, so no await crosses it
+        // and the loop thread is never waited on while holding its own lock.
+        using (_ctx.Lock())
+        {
+            pw_registry* registry = RegistryHandle;
+            var seen = new HashSet<uint>();
+
+            foreach (uint id in ids)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                ObjectDisposedException.ThrowIf(_disposed, this);
+
+                // The core is never a destroy target, and ids recycle: without dedupe one id
+                // could go out twice, the second answer landing on an object that is not ours.
+                if (id == Native.PW_ID_CORE || !seen.Add(id)) continue;
+
+                // Owned proxies go through their own destruction, exactly as the single path
+                // does (its lock is recursive on this thread); everything else is issued
+                // without watching for its answer.
+                if (_ownedProxies.TryRemove(id, out PipeWireProxyHandle? owned)
+                    && !_lingering.ContainsKey(id))
+                {
+                    owned.Dispose();
+                    continue;
+                }
+
+                _ = Native.pw_registry_destroy_global(registry, id);
+            }
+        }
     }
 
     /// <inheritdoc cref="RemoveLinkAsync(uint, CancellationToken)"/>
@@ -1422,9 +1538,13 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                 // null for a port the snapshot still lists - and the snapshot documents itself as
                 // internally consistent. They go with the node, and their own removals then find
                 // nothing left to do.
-                self.CascadeRemove(id);
+                self.CascadeRemove(id, out List<uint> removedLinks, out List<uint> removedPorts);
 
                 self.Publish();
+                foreach (uint linkId in removedLinks)
+                    self.RaiseIsolated(self.LinkRemoved, linkId, nameof(LinkRemoved));
+                foreach (uint portId in removedPorts)
+                    self.RaiseIsolated(self.PortRemoved, portId, nameof(PortRemoved));
                 self.RaiseIsolated(self.NodeRemoved, id, nameof(NodeRemoved));
                 self.RaiseGraphChanged();
             }

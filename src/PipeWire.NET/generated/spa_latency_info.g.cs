@@ -13,7 +13,7 @@ using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_latency_info
+internal partial struct spa_latency_info
 {
     [NativeTypeName("enum spa_direction")]
     public SpaDirection direction;

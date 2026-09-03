@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct pw_client_methods
+internal unsafe partial struct pw_client_methods
 {
     [NativeTypeName("uint32_t")]
     public uint version;

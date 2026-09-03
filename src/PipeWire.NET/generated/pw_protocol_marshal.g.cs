@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct pw_protocol_marshal
+internal unsafe partial struct pw_protocol_marshal
 {
     [NativeTypeName("const char *")]
     public sbyte* type;

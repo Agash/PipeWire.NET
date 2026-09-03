@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct spa_loop_methods
+internal unsafe partial struct spa_loop_methods
 {
     [NativeTypeName("uint32_t")]
     public uint version;

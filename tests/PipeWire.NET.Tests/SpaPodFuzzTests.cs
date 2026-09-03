@@ -25,7 +25,6 @@ namespace PipeWire.NET.Tests;
 [SupportedOSPlatform("linux")]
 public sealed class SpaPodFuzzTests
 {
-    /// <summary>Long enough to find something, short enough that nobody skips the suite over it.</summary>
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(10);
 
     private static readonly SpaType[] Types =
@@ -110,7 +109,6 @@ public sealed class SpaPodFuzzTests
     private static byte[] Nested(Random random, int depth) =>
         Framed(random, Types[random.Next(Types.Length)], Body(random, depth), honestSize: random.Next(4) != 0);
 
-    /// <summary>What the parser may never do, whatever it is handed.</summary>
     private static void MustNotMisbehave(byte[] pod, string origin)
     {
         try

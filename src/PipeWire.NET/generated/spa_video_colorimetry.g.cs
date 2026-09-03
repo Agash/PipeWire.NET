@@ -13,7 +13,7 @@ using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_video_colorimetry
+internal partial struct spa_video_colorimetry
 {
     [NativeTypeName("enum spa_video_color_range")]
     public SpaVideoColorRange range;

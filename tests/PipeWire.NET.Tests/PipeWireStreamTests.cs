@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PipeWire.NET.Graph;
 using PipeWire.NET.Interop;
 using PipeWire.NET.Spa;
 using PipeWire.NET.Media;
@@ -523,8 +524,18 @@ public sealed class NativeLibraryResolutionTests
         // virtual audio source, capture it back, and assert real buffers flow with
         // negotiated format. Exercises pw_stream_new/connect, format negotiation,
         // the process callback, and buffer dequeue/queue on both directions.
+        //
+        // The output is targeted at a virtual sink this test owns, not autoconnected: a
+        // session-manager default route needs a coherent session, and this test is about the
+        // streams, not about WirePlumber policy. The capture binds the source by name, which
+        // is equally explicit.
         await using var ctx = new PipeWireContext();
         await ctx.StartAsync();
+        await using var registry = new PipeWireRegistry(ctx);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+        PipeWireNode sink = await registry.CreateVirtualNodeAsync(
+            "RoundTripSink", "pwnet_roundtrip_sink", cts.Token);
 
         const int rate = 48000, channels = 2;
         await using var output = new PipeWireAudioOutput(ctx, "PipeWire.NET.Test.Source",
@@ -537,7 +548,7 @@ public sealed class NativeLibraryResolutionTests
             Interlocked.Increment(ref produced);
             return samples.Length;
         };
-        output.Connect();
+        output.Connect(targetObjectName: sink.NodeName, autoConnect: false);
 
         // AudioFrame is a ref struct and can't be a TResult - capture scalar facts.
         var captured = new TaskCompletionSource<(int Rate, int Channels)>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -551,6 +562,19 @@ public sealed class NativeLibraryResolutionTests
         Assert.IsTrue(produced > 0, "output stream should have been pulled for samples");
         Assert.AreEqual(channels, got.Channels);
         Assert.AreEqual(rate, got.Rate);
+
+        // Both streams are flowing here, so the streaming wait returns at once and the
+        // control lookup goes through on a live stream (an unknown id reports nothing).
+        using var live = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await output.WaitForStreamingAsync(live.Token);
+        await capture.WaitForStreamingAsync(live.Token);
+        Assert.IsNull(output.GetControl(0x7FFF_FFFF));
+        Assert.IsNull(capture.GetControl(0x7FFF_FFFF));
+
+        // A control write is fire-and-forget at the protocol level: the daemon applies or
+        // drops it, and either way the call itself must go through on a live stream.
+        output.SetControl(7, [0.5f]);
+        capture.SetControl(7, [0.5f, 0.25f]);
     }
 
     [TestMethod]
@@ -569,6 +593,11 @@ public sealed class NativeLibraryResolutionTests
 
         await using var ctx = new PipeWireContext();
         await ctx.StartAsync();
+        await using var registry = new PipeWireRegistry(ctx);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+        PipeWireNode sink = await registry.CreateVirtualNodeAsync(
+            "RoundTripVideoSink", "pwnet_roundtrip_vsink", cts.Token);
 
         await using var output = new PipeWireVideoOutput(ctx, "PipeWire.NET.Test.VideoSource",
             width: width, height: height, format: PixelFormat.Bgra, frameRate: 30);
@@ -580,7 +609,7 @@ public sealed class NativeLibraryResolutionTests
             Interlocked.Increment(ref produced);
             return true;
         };
-        output.Connect();
+        output.Connect(targetObjectName: sink.NodeName, autoConnect: false);
 
         // Copy enough captured bytes out of the ref-struct frame to verify content.
         var captured = new TaskCompletionSource<(int W, int H, PixelFormat Fmt, PipeWireBufferType Buf, byte[] Head)>(
@@ -604,9 +633,30 @@ public sealed class NativeLibraryResolutionTests
         Assert.AreEqual(PixelFormat.Bgra, got.Fmt);
         Assert.AreNotEqual(PipeWireBufferType.Unknown, got.Buf);
 
-        // The load-bearing assertion: every sampled byte equals the marker we produced.
         foreach (byte b in got.Head)
             Assert.AreEqual(marker, b, "captured pixel data must match the produced marker byte-for-byte");
+
+        // Both streams are flowing here, so the streaming wait returns at once and the
+        // control lookup goes through on a live stream (an unknown id reports nothing).
+        using var live = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await output.WaitForStreamingAsync(live.Token);
+        await capture.WaitForStreamingAsync(live.Token);
+        Assert.IsNull(output.GetControl(0x7FFF_FFFF));
+        Assert.IsNull(capture.GetControl(0x7FFF_FFFF));
+
+        // A control write is fire-and-forget at the protocol level: the daemon applies or
+        // drops it, and either way the call itself must go through on a live stream.
+        output.SetControl(7, [0.5f]);
+        capture.SetControl(7, [0.5f, 0.25f]);
+
+        // A stream no daemon told about controls reports none rather than failing, and an empty
+        // control write is refused before anything reaches the daemon. Waiting for the streaming
+        // state is deliberately not asserted here: WirePlumber may error the output after frames
+        // flowed (a stale "no target" arriving late), and that error is the daemon's business.
+        Assert.AreEqual(0, output.Controls.Length);
+
+        // Empty is a caller mistake, refused before anything reaches the daemon.
+        Assert.ThrowsExactly<ArgumentException>(() => output.SetControl(0, []));
     }
 
     [TestMethod]
@@ -655,5 +705,211 @@ public sealed class NativeLibraryResolutionTests
         CollectionAssert.AreEqual(pixel, firstPixel,
             "BGRA pixel including the 0x80 alpha byte must survive the round-trip");
         Assert.AreEqual(0x80, firstPixel[3], "alpha channel must be preserved (not forced opaque)");
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task DisposingAStreamFromItsOwnCallback_IsRefused()
+    {
+        // The callback's frame is still on the stack: destroying the stream underneath it would
+        // requeue a buffer onto freed memory once the handler returns.
+        const int rate = 48000, channels = 2;
+        await using var ctx = new PipeWireContext();
+        await ctx.StartAsync();
+
+        await using var output = new PipeWireAudioOutput(ctx, "PipeWire.NET.Test.Suicidal",
+            sampleRate: rate, channels: channels, format: AudioSampleFormat.F32Le);
+
+        var refused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        output.FillSamples += (_, samples, _, _, _) =>
+        {
+            try
+            {
+                // Not awaited: the guard refuses synchronously, before any teardown starts, so
+                // there is nothing to wait for when the rule holds.
+                _ = output.DisposeAsync().AsTask();
+            }
+            catch (InvalidOperationException)
+            {
+                refused.TrySetResult();
+            }
+
+            samples.Clear();
+            return samples.Length;
+        };
+        output.Connect();
+
+        var flowed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var capture = new PipeWireAudioCapture(ctx, "PipeWire.NET.Test.SuicidalSink");
+        capture.FrameReady += (_, _) => flowed.TrySetResult();
+        capture.Connect(sampleRate: rate, channels: channels, format: AudioSampleFormat.F32Le,
+            targetObjectName: "PipeWire.NET.Test.Suicidal");
+
+        await refused.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await flowed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task AThrowingStateChangedHandler_DoesNotStopTheStream()
+    {
+        // State transitions are reported, not load-bearing: a subscriber that throws is logged
+        // and the stream keeps flowing.
+        const int rate = 48000, channels = 2;
+        await using var ctx = new PipeWireContext();
+        await ctx.StartAsync();
+
+        await using var output = new PipeWireAudioOutput(ctx, "PipeWire.NET.Test.StateThrow",
+            sampleRate: rate, channels: channels, format: AudioSampleFormat.F32Le);
+        output.FillSamples += (_, samples, _, _, _) =>
+        {
+            samples.Clear();
+            return samples.Length;
+        };
+        output.StateChanged += (_, _, _) => throw new InvalidOperationException("deliberate");
+        output.Connect();
+
+        var flowed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var capture = new PipeWireAudioCapture(ctx, "PipeWire.NET.Test.StateThrowSink");
+        capture.FrameReady += (_, _) => flowed.TrySetResult();
+        capture.Connect(sampleRate: rate, channels: channels, format: AudioSampleFormat.F32Le,
+            targetObjectName: "PipeWire.NET.Test.StateThrow");
+
+        await flowed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+}
+
+[TestClass]
+public sealed class StreamGuardTests
+{
+    // Every guard on the stream wrappers answers from local state: none of these reach the
+    // daemon, so all of them are checked against streams that were never connected.
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task AnUnconnectedVideoCapture_RefusesWorkWithClearErrors()
+    {
+        await using var ctx = new PipeWireContext();
+        await ctx.StartAsync();
+
+        await using var capture = new PipeWireVideoCapture(ctx, "PipeWire.NET.Test.GuardVideo");
+        Assert.IsNull(capture.NodeId);
+        Assert.AreEqual(DrmFormatModifier.Invalid, capture.NegotiatedModifier);
+        Assert.AreEqual(0, capture.Controls.Length);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        Assert.ThrowsExactly<InvalidOperationException>(() => capture.WaitForStreamingAsync(cts.Token));
+        Assert.ThrowsExactly<ArgumentException>(() => capture.SetControl(0, []));
+        Assert.ThrowsExactly<ArgumentNullException>(() => capture.Connect(null!));
+        Assert.ThrowsExactly<ArgumentException>(() => capture.Connect(
+            modifiers: new long[] { 1 },
+            preferredFormats: new[] { PixelFormat.Bgra, PixelFormat.Rgba }));
+
+        // The source overload forwards to the id overload once the null check passes. It starts
+        // a real negotiation, so the node it targets is torn down again immediately after.
+        await using var registry = new PipeWireRegistry(ctx);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+        PipeWireNode node = await registry.CreateVirtualNodeAsync("GuardSrc", "pwnet_guard_src", cts.Token);
+        await using PipeWireNodeControl nodeControl = registry.BindNode(node.NodeId);
+        Assert.AreEqual(2, (await nodeControl.GetChannelMapAsync(cts.Token)).Length);
+        await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task AnUnconnectedAudioCapture_RefusesWorkWithClearErrors()
+    {
+        await using var ctx = new PipeWireContext();
+        await ctx.StartAsync();
+
+        await using var capture = new PipeWireAudioCapture(ctx, "PipeWire.NET.Test.GuardAudio");
+        Assert.IsNull(capture.NodeId);
+        Assert.AreEqual(0, capture.Controls.Length);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        Assert.ThrowsExactly<InvalidOperationException>(() => capture.WaitForStreamingAsync(cts.Token));
+        Assert.ThrowsExactly<ArgumentException>(() => capture.SetControl(0, []));
+        Assert.ThrowsExactly<ArgumentNullException>(() => capture.Connect(null!));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => capture.Connect(sampleRate: 0, channels: 2, format: AudioSampleFormat.F32Le));
+
+        await using var registry = new PipeWireRegistry(ctx);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+        PipeWireNode node = await registry.CreateVirtualNodeAsync("GuardAudioSrc", "pwnet_guard_asrc", cts.Token);
+        await using PipeWireNodeControl nodeControl = registry.BindNode(node.NodeId);
+        Assert.AreEqual(2, (await nodeControl.GetChannelMapAsync(cts.Token)).Length);
+        await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task AnUnconnectedVideoOutput_RefusesWorkWithClearErrors()
+    {
+        await using var ctx = new PipeWireContext();
+        await ctx.StartAsync();
+
+        await using var output = new PipeWireVideoOutput(ctx, "PipeWire.NET.Test.GuardVideoOut",
+            width: 320, height: 240, format: PixelFormat.Bgra, frameRate: 30);
+        Assert.AreEqual(0, output.Controls.Length);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        Assert.ThrowsExactly<InvalidOperationException>(() => output.WaitForStreamingAsync(cts.Token));
+        Assert.ThrowsExactly<ArgumentException>(() => output.SetControl(0, []));
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task AnUnconnectedAudioOutput_RefusesWorkWithClearErrors()
+    {
+        await using var ctx = new PipeWireContext();
+        await ctx.StartAsync();
+
+        await using var output = new PipeWireAudioOutput(ctx, "PipeWire.NET.Test.GuardAudioOut",
+            sampleRate: 48000, channels: 2, format: AudioSampleFormat.F32Le);
+        Assert.AreEqual(0, output.Controls.Length);
+        Assert.IsNull(output.GetControl(0));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        Assert.ThrowsExactly<InvalidOperationException>(() => output.WaitForStreamingAsync(cts.Token));
+        Assert.ThrowsExactly<ArgumentException>(() => output.SetControl(0, []));
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task ConnectingOnADisposedContext_IsRefusedAndLeavesNothingBehind()
+    {
+        // A connect whose loop is already gone must refuse rather than half-construct: the
+        // failure path disposes the core before assigning it, so the object reports itself
+        // unconnected and nothing leaks on either side.
+        await using var ctx = new PipeWireContext();
+        await ctx.StartAsync();
+        await ctx.DisposeAsync();
+
+        await using var output = new PipeWireAudioOutput(ctx, "PipeWire.NET.Test.RefusedSource",
+            sampleRate: 48000, channels: 2, format: AudioSampleFormat.F32Le);
+        Assert.ThrowsExactly<ObjectDisposedException>(() => output.Connect());
+        Assert.IsNull(output.NodeId);
+
+        await using var capture = new PipeWireAudioCapture(ctx, "PipeWire.NET.Test.RefusedSink");
+        Assert.ThrowsExactly<ObjectDisposedException>(() => capture.Connect());
+        Assert.IsNull(capture.NodeId);
+
+        await using var video = new PipeWireVideoOutput(ctx, "PipeWire.NET.Test.RefusedVideo",
+            width: 320, height: 240, format: PixelFormat.Bgra, frameRate: 30);
+        Assert.ThrowsExactly<ObjectDisposedException>(() => video.Connect());
+        Assert.IsNull(video.NodeId);
     }
 }

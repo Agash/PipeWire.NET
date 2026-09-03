@@ -8,11 +8,6 @@ namespace PipeWire.NET.Tests;
 /// The invariants the ownership chain and the publish pipeline are supposed to guarantee, tested as
 /// contracts rather than assumed from the design.
 /// </summary>
-/// <remarks>
-/// Ordinary functional tests do not reach these: they are about what happens when a callback, a
-/// disposal, a cancellation and a finalizer interleave, which is the state space this library is
-/// complicated enough to have.
-/// </remarks>
 [TestClass]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
@@ -55,7 +50,6 @@ public sealed class LifetimeInvariantTests
 
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        // Drive every path that publishes: node creation, port arrival, linking, unlinking, removal.
         PipeWireNode sink = await registry.CreateVirtualNode("Monotonic")
             .WithName("pwnet_monotonic_sink").ExecuteAsync(cts.Token);
         PipeWireNode source = await registry.CreateVirtualNode("MonotonicSrc")
@@ -130,14 +124,21 @@ public sealed class LifetimeInvariantTests
     public async Task DisposingTheContextConcurrentlyWithTeardown_DoesNotThrowOutOfDispose()
     {
         RequireLinux();
-        using var cts = new CancellationTokenSource(Budget);
+
+        // Its own budget: eight rounds need more than 20s.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
         // The window this targets: a teardown path checks the context is alive, then takes the loop
         // lock, and disposing between the two must not throw out of a Dispose.
         for (int round = 0; round < 8; round++)
         {
+            // Per-round token: a cancellation from a torn-down context propagates as an
+            // ObjectDisposedException once the in-flight creation hooks the shutdown token.
+            using var roundCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, roundCts.Token);
+
             var ctx = new PipeWireContext($"pwnet-teardown-{round}", ConsoleTestLoggerFactory.Instance);
-            await ctx.StartAsync(cts.Token);
+            await ctx.StartAsync(linkedCts.Token);
             var registry = new PipeWireRegistry(ctx);
 
             Task creating = Task.Run(async () =>
@@ -145,19 +146,57 @@ public sealed class LifetimeInvariantTests
                 try
                 {
                     PipeWireNode node = await registry.CreateVirtualNode($"Teardown{round}")
-                        .WithName($"pwnet_teardown_{round}").ExecuteAsync(cts.Token);
-                    await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
+                        .WithName($"pwnet_teardown_{round}").ExecuteAsync(linkedCts.Token);
+                    await registry.DestroyGlobalAsync(node.NodeId, linkedCts.Token);
                 }
                 catch (ObjectDisposedException) { }
                 catch (Exception e) when (e is InvalidOperationException or PipeWireException) { }
                 catch (OperationCanceledException) { }
-            }, cts.Token);
+            }, linkedCts.Token);
 
-            Task disposing = Task.Run(async () => await ctx.DisposeAsync(), cts.Token);
+            Task disposing = Task.Run(async () => await ctx.DisposeAsync(), linkedCts.Token);
 
             await Task.WhenAll(creating, disposing);
             await registry.DisposeAsync();
         }
+    }
+
+    [TestMethod]
+    public async Task DisposingTheContextWithACreationInFlight_FailsTheCreationFast()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        var ctx = new PipeWireContext("pwnet-disposing-inflight", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+        var registry = new PipeWireRegistry(ctx);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+
+        // No delay: the creation needs a full daemon round trip while disposal only needs to
+        // signal, so disposal wins and the shutdown hook surfaces ObjectDisposedException to the
+        // in-flight wait instead of leaving it parked on a stopped loop.
+        Task<PipeWireNode> creation = Task.Run(() => registry.CreateVirtualNode("Disposing")
+            .WithName("pwnet_disposing_inflight").ExecuteAsync(cts.Token));
+        await ctx.DisposeAsync();
+
+        await Assert.ThrowsExactlyAsync<ObjectDisposedException>(async () => await creation);
+        await registry.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task StartingADisposedContext_IsRefused()
+    {
+        // Disposal wins over a start that never happened: there is no loop thread to start and
+        // no connection to make, so the call fails at the gate rather than halfway through
+        // native setup.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        var ctx = new PipeWireContext("pwnet-deadstart", ConsoleTestLoggerFactory.Instance);
+        await ctx.DisposeAsync();
+
+        await Assert.ThrowsExactlyAsync<ObjectDisposedException>(
+            async () => await ctx.StartAsync(cts.Token));
     }
 
     [TestMethod]
@@ -200,9 +239,7 @@ public sealed class LifetimeInvariantTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
         // Callback state is freed by the handle after the native object is destroyed, and the loop
-        // lock serialises destruction against dispatch. That invariant is what makes disposal safe
-        // while callbacks are in flight; it is not obvious from either side alone, and it becomes
-        // load-bearing the moment a filter runs its process callback on the realtime thread.
+        // lock serialises destruction against dispatch.
         for (int round = 0; round < 8; round++)
         {
             await using var ctx = new PipeWireContext($"pwnet-cb-{round}", ConsoleTestLoggerFactory.Instance);

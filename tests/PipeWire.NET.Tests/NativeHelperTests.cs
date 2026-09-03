@@ -162,7 +162,6 @@ public sealed unsafe class NativeHelperTests
                 Assert.IsTrue(copy >= 0, "dup of a live descriptor failed");
                 Assert.AreNotEqual((int)fd, copy, "dup returned the descriptor it was given");
 
-                // Still usable after the original is gone, which is the whole point of taking one.
                 file.Dispose();
                 Assert.IsTrue(Fcntl(copy, FGetFd) >= 0, "the copy did not outlive the original");
             }
@@ -183,6 +182,39 @@ public sealed unsafe class NativeHelperTests
         // Host-memory frames carry -1, and a caller looping over planes should not have to
         // special-case them before asking.
         Assert.AreEqual(-1, new VideoPlane(-1, 0, 0, 0).DuplicateFd());
+    }
+
+    [TestMethod]
+    public void DuplicatingADescriptorOutsideIntRange_IsRefusedBeforeTheNarrowingCast()
+    {
+        // A value outside int range did not come from the kernel; truncating it would name a
+        // different file. No libc call happens on this path, so this runs everywhere.
+        Assert.ThrowsExactly<IOException>(() => Descriptors.Duplicate((long)int.MaxValue + 1));
+    }
+
+    [TestMethod]
+    public void DuplicatingAClosedDescriptor_ReportsTheKernelRefusal()
+    {
+        if (!OperatingSystem.IsLinux())
+            Assert.Inconclusive("dup is a libc call, and descriptors are a Linux concept here.");
+
+        string path = Path.Combine(Path.GetTempPath(), $"pwnet-dupdead-{Environment.ProcessId}");
+        File.WriteAllText(path, "x");
+
+        long fd;
+        using (SafeFileHandle file = File.OpenHandle(path))
+            fd = file.DangerousGetHandle();
+
+        // Closed when the handle above disposes, so dup fails EBADF rather than returning.
+        try
+        {
+            IOException thrown = Assert.ThrowsExactly<IOException>(() => Descriptors.Duplicate(fd));
+            StringAssert.Contains(thrown.Message, "dup of descriptor");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     private const int FGetFd = 1;

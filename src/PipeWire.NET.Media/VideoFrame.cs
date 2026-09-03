@@ -36,6 +36,9 @@ public readonly ref partial struct VideoFrame
     /// for a single-plane frame this carries the one plane and mirrors
     /// <paramref name="fd"/>/<paramref name="stride"/>. Empty for a host-memory frame.
     /// </param>
+    /// <param name="syncTimeline">
+    /// The frame's explicit synchronisation points, or null when it carries none.
+    /// </param>
     public VideoFrame(
         ReadOnlySpan<byte> data,
         int stride,
@@ -52,7 +55,8 @@ public readonly ref partial struct VideoFrame
         long mediaClockNs = -1,
         long delayNs = 0,
         ulong modifier = DrmFormatModifier.Invalid,
-        ReadOnlySpan<VideoPlane> planes = default)
+        ReadOnlySpan<VideoPlane> planes = default,
+        VideoSyncTimeline? syncTimeline = null)
     {
         Data               = data;
         Stride             = stride;
@@ -70,6 +74,7 @@ public readonly ref partial struct VideoFrame
         DelayNs            = delayNs;
         Modifier           = modifier;
         Planes             = planes;
+        SyncTimeline       = syncTimeline;
     }
 
     /// <summary>Raw pixel bytes. Empty for an unmapped DMA-BUF frame (use <see cref="Fd"/>).</summary>
@@ -160,26 +165,55 @@ public readonly ref partial struct VideoFrame
     /// </summary>
     public ReadOnlySpan<VideoPlane> Planes { get; }
 
+    /// <summary>The frame's explicit synchronisation points, or null when it carries none.</summary>
+    /// <remarks>
+    /// Present only when the consumer asked for <c>SPA_META_SyncTimeline</c> at connect time and the
+    /// producer agreed. When it is present the frame's contents are <b>not</b> ready on arrival: the
+    /// consumer must wait for <see cref="VideoSyncTimeline.AcquirePoint"/> on the acquire timeline
+    /// before reading, and signal <see cref="VideoSyncTimeline.ReleasePoint"/> when it is done.
+    /// <para>
+    /// Asking for it and then ignoring it is worse than never asking, because a producer that has
+    /// agreed to explicit sync stops attaching implicit fences: reading the pixels without waiting
+    /// then races the GPU still writing them.
+    /// </para>
+    /// </remarks>
+    public VideoSyncTimeline? SyncTimeline { get; }
+
     /// <summary>True when the frame is backed by a DMA-BUF or MemFd file descriptor.</summary>
     public bool IsFdBacked => Fd >= 0;
 
     /// <summary>Copies the frame so it can be kept past the handler that delivered it.</summary>
     /// <remarks>
     /// The one place the copy happens, rather than in each consumer that needs to queue, encode or
-    /// align frames. Descriptors are deliberately not carried: see <see cref="OwnedVideoFrame"/>.
+    /// align frames. Host-memory bytes are copied; descriptors are deliberately not carried: see
+    /// <see cref="OwnedVideoFrame"/>.
     /// </remarks>
-    public OwnedVideoFrame Clone() => new(
-        [.. Data],
-        Stride,
-        Width,
-        Height,
-        Format,
-        SequenceNumber,
-        Color,
-        PresentationTimeNs,
-        CaptureClockNs,
-        MediaClockNs,
-        DelayNs);
+    /// <exception cref="InvalidOperationException">
+    /// The frame is fd-backed (DMA-BUF/MemFd): its <see cref="Data"/> is empty and a byte copy
+    /// would keep nothing, so cloning refuses rather than returning an empty frame that reads as
+    /// valid. Duplicate what is kept on purpose instead: <see cref="DuplicateFd"/> for the first
+    /// plane's descriptor, <see cref="VideoPlane.DuplicateFd"/> per plane.
+    /// </exception>
+    public OwnedVideoFrame Clone()
+    {
+        if (IsFdBacked)
+            throw new InvalidOperationException(
+                "an fd-backed frame has no host bytes to copy; duplicate its descriptors instead "
+                + "(VideoFrame.DuplicateFd, VideoPlane.DuplicateFd).");
+
+        return new OwnedVideoFrame(
+            [.. Data],
+            Stride,
+            Width,
+            Height,
+            Format,
+            SequenceNumber,
+            Color,
+            PresentationTimeNs,
+            CaptureClockNs,
+            MediaClockNs,
+            DelayNs);
+    }
 
     /// <summary>A private copy of <see cref="Fd"/> that the caller owns and must close.</summary>
     /// <returns>A new descriptor, or -1 when this frame is not fd-backed.</returns>

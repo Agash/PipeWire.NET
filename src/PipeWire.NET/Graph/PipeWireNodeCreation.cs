@@ -48,7 +48,9 @@ public readonly struct PipeWireNodeCreation
     /// <remarks>
     /// Without this the daemon destroys the node when the connection that made it goes away, which
     /// is the right default for a stream but wrong for a routing setup meant to outlive the app.
-    /// A lingering object cannot be removed by disconnecting - destroy it explicitly.
+    /// A lingering object cannot be removed by disconnecting - not even by disposing the registry
+    /// or context that made it - destroy it explicitly. <see cref="PipeWireRegistry.LingeringIds"/>
+    /// lists what is left behind, so nothing has to be remembered by hand.
     /// </remarks>
     public PipeWireNodeCreation WithLinger() =>
         new(_registry, _description, _name, _options with { Linger = true });

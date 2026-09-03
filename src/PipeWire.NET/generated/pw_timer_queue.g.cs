@@ -11,6 +11,6 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct pw_timer_queue
+internal partial struct pw_timer_queue
 {
 }

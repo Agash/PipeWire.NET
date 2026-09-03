@@ -50,7 +50,6 @@ public sealed class HostileConditionsTests
         }
         catch (InvalidOperationException)
         {
-            // The expected answer.
         }
 
         // Either way the context must still be usable afterwards.
@@ -192,7 +191,6 @@ public sealed class HostileConditionsTests
         }
         catch (ArgumentException)
         {
-            // Rejecting an embedded NUL outright is the better answer.
         }
     }
 
@@ -265,8 +263,7 @@ public sealed class HostileConditionsTests
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-        // Create, note the id, destroy - then connect to the id we remember. A patchbay holding a
-        // stale id and acting on it is the everyday version of this.
+        // A patchbay holding a stale id and acting on it is the everyday version of this.
         PipeWireNode node = await reg.CreateVirtualNode("Gone")
                                      .WithName("pwnet_hc_gone").ExecuteAsync(cts.Token);
         uint staleId = node.NodeId;
@@ -342,8 +339,8 @@ public sealed class HostileConditionsTests
 
         // Every id this test creates, so what is asserted at the end is this test's residue rather
         // than the session's population. A session manager adds and removes its own nodes
-        // throughout - on a box whose ALSA probing is flapping, several - so comparing the total
-        // count against a baseline measures the session, not the library.
+        // throughout, so comparing the total count against a baseline measures the session,
+        // not the library.
         var mine = new ConcurrentBag<uint>();
 
         // Eight concurrent workers, each churning. The daemon reuses ids aggressively under this,
@@ -362,16 +359,42 @@ public sealed class HostileConditionsTests
 
         await Task.WhenAll(workers);
 
-        // Everything we made must be gone. By name and by id: the name catches one that outlived
-        // its destroy, and the id catches one whose properties never arrived, which the name check
-        // alone would not see.
+        // Everything we made must be gone. By name: the daemon reuses ids aggressively under
+        // churn, including for the session manager's own nodes, so a resolved id is only ours
+        // when its name says so. A present-but-nameless node is given a beat to gain its
+        // properties first, since that is the one shape the name check above cannot see.
         PipeWireGraphSnapshot end = await WaitForAsync(
             reg,
             g => !g.Nodes.Any(n => n.NodeName?.StartsWith("pwnet_hc_storm_", StringComparison.Ordinal) == true),
             cts.Token);
 
-        uint[] left = [.. mine.Where(id => end.GetNode(id) is not null)];
-        Assert.IsEmpty(left, $"the storm left {left.Length} of its own nodes in the graph: {string.Join(", ", left)}");
+        uint[] left = OursOrNameless(reg, mine);
+        for (int attempt = 0; attempt < 20 && left.Length > 0; attempt++)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cts.Token);
+            await reg.WaitForInitialEnumerationAsync(cts.Token);
+            left = OursOrNameless(reg, mine);
+        }
+
+        Assert.IsEmpty(left,
+            $"the storm left {left.Length} of its own nodes in the graph: {string.Join(", ", left)}");
+    }
+
+    /// <summary>Ids this test created that still resolve to one of its nodes, or to no name.</summary>
+    private static uint[] OursOrNameless(PipeWireRegistry registry, ConcurrentBag<uint> mine)
+    {
+        var left = new HashSet<uint>();
+        foreach (uint id in mine)
+        {
+            if (registry.Current.GetNode(id) is not { } node) continue;
+            if (node.NodeName is null
+                || node.NodeName.StartsWith("pwnet_hc_storm_", StringComparison.Ordinal))
+            {
+                left.Add(id);
+            }
+        }
+
+        return [.. left];
     }
 
     // ------------------------------------------------------------------ losing the daemon
@@ -441,8 +464,7 @@ public sealed class HostileConditionsTests
     /// </summary>
     /// <remarks>
     /// Matched on <c>pipewire.sec.pid</c> rather than a name: the daemon records the connecting
-    /// process, whereas <c>application.name</c> is whatever the client chose to claim and is empty
-    /// for several real clients on this machine.
+    /// process, whereas <c>application.name</c> is whatever the client chose to claim.
     /// </remarks>
     private static async Task<uint?> FindOurClientIdAsync(string appName, CancellationToken ct)
     {

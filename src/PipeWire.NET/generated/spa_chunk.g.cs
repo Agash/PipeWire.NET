@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_chunk
+internal partial struct spa_chunk
 {
     [NativeTypeName("uint32_t")]
     public uint offset;

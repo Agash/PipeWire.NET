@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct spa_source
+internal unsafe partial struct spa_source
 {
     [NativeTypeName("struct spa_loop *")]
     public spa_loop* loop;

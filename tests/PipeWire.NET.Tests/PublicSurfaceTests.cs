@@ -164,9 +164,8 @@ public sealed class PublicSurfaceTests
             }
 
             // Static access on one of our own types: PipeWireMediaFlow.Source. The pattern above
-            // needs a lowercase receiver, so it skipped these entirely, and a README naming an enum
-            // member that does not exist shipped that way. Only receivers that are themselves
-            // shipped types are checked, which leaves System.Threading and the like alone.
+            // needs a lowercase receiver, so it skipped these entirely. Only receivers that are
+            // themselves shipped types are checked, which leaves System.Threading and the like alone.
             foreach (System.Text.RegularExpressions.Match m in
                 System.Text.RegularExpressions.Regex.Matches(block, @"\b([A-Z][A-Za-z0-9_]*)\.([A-Z][A-Za-z0-9_]*)"))
             {
@@ -214,8 +213,7 @@ public sealed class PublicSurfaceTests
             foreach (Type type in assembly.GetExportedTypes())
             {
                 // Every bound-object type, identified by what makes it one: an internal static
-                // Bind and no public constructor. Naming them by suffix missed the ones that are
-                // not called Control, and an unreachable type is exactly the kind that gets missed.
+                // Bind and no public constructor.
                 if (type.GetConstructors(BindingFlags.Public | BindingFlags.Instance).Length > 0) continue;
                 if (type.GetMethod("Bind", BindingFlags.Static | BindingFlags.NonPublic) is null) continue;
 

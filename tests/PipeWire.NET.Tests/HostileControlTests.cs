@@ -12,8 +12,7 @@ namespace PipeWire.NET.Tests;
 /// </summary>
 /// <remarks>
 /// Every test here asserts the same underlying property - the library fails cleanly rather than
-/// hanging, corrupting, or aborting the process. A hang shows up as the budget expiring; an abort
-/// takes the whole run with it, which is its own signal.
+/// hanging, corrupting, or aborting the process.
 /// </remarks>
 [TestClass]
 [TestCategory("Integration")]
@@ -90,7 +89,7 @@ public sealed class HostileControlTests
             {
                 PipeWireNodeControl control = registry.BindNode(node.NodeId);
 
-                // Eight readers against one disposer. Every reader must end one way or another.
+                // Every reader must end one way or another.
                 Task[] readers =
                 [
                     .. Enumerable.Range(0, 8).Select(_ => Task.Run(async () =>
@@ -224,7 +223,6 @@ public sealed class HostileControlTests
                 catch (PipeWireException) { }
             }
 
-            // The connection survived and the node still answers.
             Assert.IsNotNull(await control.GetVolumeAsync(cts.Token));
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
@@ -263,11 +261,10 @@ public sealed class HostileControlTests
                 Assert.IsNotNull(read, $"the node stopped reporting a volume after being sent {extreme}");
             }
 
-            // Back to something sane, and it still takes. Read back on the same connection, so the
-            // daemon orders it against the write. What it does not exclude is the session manager
-            // writing its own value in between: it manages this node and does override volumes on
-            // nodes it manages, which is why this reads back rather than asserting the daemon kept
-            // the value indefinitely.
+            // Read back on the same connection, so the daemon orders it against the write. What it
+            // does not exclude is the session manager writing its own value in between: it manages
+            // this node and does override volumes on nodes it manages, which is why this reads back
+            // rather than asserting the daemon kept the value indefinitely.
             await control.SetVolumeAsync(0.5f, cts.Token);
             Assert.AreEqual(0.5f, (await control.GetVolumeAsync(cts.Token))!.Value, 0.001f);
 
@@ -307,7 +304,6 @@ public sealed class HostileControlTests
             Assert.AreEqual(2, (await control.GetChannelMapAsync(cts.Token)).Length,
                 "the channel map must still describe the node, not the last bad write");
 
-            // And writing the right count puts it back.
             await control.SetChannelVolumesAsync([0.3f, 0.7f], cts.Token);
             ImmutableArray<float> after = await control.GetChannelVolumesAsync(cts.Token);
             Assert.AreEqual(2, after.Length);
@@ -329,9 +325,8 @@ public sealed class HostileControlTests
             PipeWireGraphSnapshot graph = registry.Current;
             var bound = new List<IAsyncDisposable>();
 
-            // Every node, device and client the session has, bound simultaneously. Each is a native
-            // proxy and a listener, so this is the shape that would expose a leak or a shared-state
-            // mistake between bindings.
+            // Each is a native proxy and a listener, so this is the shape that would expose a leak
+            // or a shared-state mistake between bindings.
             foreach (PipeWireNode node in graph.Nodes)
             {
                 try { bound.Add(registry.BindNode(node.NodeId)); }
@@ -415,7 +410,6 @@ public sealed class HostileControlTests
             Assert.IsTrue(Volatile.Read(ref survivors) > 0,
                 "a handler after a throwing one was never reached");
 
-            // And the graph is unharmed.
             Assert.IsNotNull(await control.GetVolumeAsync(cts.Token));
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }

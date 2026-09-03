@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct spa_hook
+internal unsafe partial struct spa_hook
 {
     [NativeTypeName("struct spa_list")]
     public spa_list link;

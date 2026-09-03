@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_io_sequence
+internal partial struct spa_io_sequence
 {
     [NativeTypeName("struct spa_pod_sequence")]
     public spa_pod_sequence sequence;

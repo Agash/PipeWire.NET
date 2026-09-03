@@ -2,7 +2,6 @@ namespace PipeWire.NET.Media;
 
 /// <summary>
 /// Color metadata for a video frame, parsed from the negotiated SPA format.
-/// Needed for correct color reproduction and HDR / wide-gamut pipelines.
 /// </summary>
 /// <param name="Range">Quantization range (full vs limited).</param>
 /// <param name="Matrix">YUV-to-RGB matrix coefficients.</param>

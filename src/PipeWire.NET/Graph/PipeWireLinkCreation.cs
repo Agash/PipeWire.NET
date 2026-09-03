@@ -68,6 +68,7 @@ public readonly struct PipeWireLinkCreation
     /// This is what a patchbay wants: routing the user set up should survive closing the app. A
     /// lingering link cannot be removed by disconnecting - call
     /// <see cref="PipeWireRegistry.RemoveLinkAsync(PipeWireLink, CancellationToken)"/>.
+    /// <see cref="PipeWireRegistry.LingeringIds"/> lists what is left behind.
     /// </remarks>
     public PipeWireLinkCreation WithLinger() =>
         new(_registry, _output, _input, _options with { Linger = true });

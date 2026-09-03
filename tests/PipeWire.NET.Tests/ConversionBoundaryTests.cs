@@ -1,5 +1,7 @@
+using System.Collections.Immutable;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PipeWire.NET.Graph;
 using PipeWire.NET.Interop;
 using PipeWire.NET.Spa;
 using PipeWire.NET.Media;
@@ -350,5 +352,166 @@ public sealed class ConversionBoundaryTests
         spa_dict dict = b.Build();
         Assert.AreEqual(0u, dict.n_items);
         Assert.AreEqual(0u, dict.flags);
+    }
+
+    // ---------------------------------------------------------------- frame snapshots
+
+    [TestMethod]
+    public void AClonedVideoFrame_KeepsItsBytesAndMetadata()
+    {
+        byte[] pixels = [1, 2, 3, 4, 5, 6, 7, 8];
+        var frame = new VideoFrame(
+            pixels, stride: 4, width: 2, height: 2, format: PixelFormat.Bgra,
+            sequenceNumber: 9, presentationTimeNs: 100, captureClockNs: 200,
+            mediaClockNs: 300, delayNs: 5);
+
+        OwnedVideoFrame owned = frame.Clone();
+
+        CollectionAssert.AreEqual(pixels, owned.Pixels.ToArray());
+        Assert.AreEqual(4, owned.Stride);
+        Assert.AreEqual(2, owned.Width);
+        Assert.AreEqual(2, owned.Height);
+        Assert.AreEqual(PixelFormat.Bgra, owned.Format);
+        Assert.AreEqual(9ul, owned.SequenceNumber);
+        Assert.AreEqual(100L, owned.PresentationTimeNs);
+        Assert.AreEqual(200L, owned.CaptureClockNs);
+        Assert.AreEqual(300L, owned.MediaClockNs);
+        Assert.AreEqual(5L, owned.DelayNs);
+
+        // A copy, not a view: mutating the source afterwards must not move the snapshot.
+        pixels[0] = 99;
+        Assert.AreEqual(1, owned.Pixels[0]);
+    }
+
+    [TestMethod]
+    public void CloningAnFdBackedFrame_RefusesRatherThanKeepingNothing()
+    {
+        // A DMA-BUF frame has no host bytes: Data is empty and the descriptors die with the
+        // buffer. A byte copy would keep an empty frame that reads as valid, so Clone refuses
+        // and points at the descriptor duplication that actually keeps something.
+        var frame = new VideoFrame(
+            [], stride: 0, width: 2, height: 2, format: PixelFormat.Bgra,
+            sequenceNumber: 9, bufferType: PipeWireBufferType.DmaBuf, fd: 42);
+
+        // A ref struct cannot cross a lambda boundary, so the throw is asserted by hand.
+        try
+        {
+            frame.Clone();
+            Assert.Fail("cloning an fd-backed frame must refuse");
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    [TestMethod]
+    public void AClonedAudioChunk_KeepsItsSamplesAndMetadata()
+    {
+        byte[] samples = [10, 20, 30, 40];
+        var chunk = new AudioFrame(
+            samples, sampleRate: 48000, channels: 2, format: AudioSampleFormat.F32Le,
+            sequenceNumber: 4, presentationTimeNs: -1, captureClockNs: 700, delayNs: 2);
+
+        OwnedAudioFrame owned = chunk.Clone();
+
+        CollectionAssert.AreEqual(samples, owned.Samples.ToArray());
+        Assert.AreEqual(48000, owned.SampleRate);
+        Assert.AreEqual(2, owned.Channels);
+        Assert.AreEqual(AudioSampleFormat.F32Le, owned.Format);
+        Assert.AreEqual(4ul, owned.SequenceNumber);
+        Assert.IsNull(owned.PresentationTimeNs);
+        Assert.AreEqual(700L, owned.CaptureClockNs);
+        Assert.AreEqual(2L, owned.DelayNs);
+
+        samples[0] = 99;
+        Assert.AreEqual(10, owned.Samples[0]);
+    }
+
+    [TestMethod]
+    public void OwnedFrames_CompareByValue()
+    {
+        var first = new OwnedVideoFrame(
+            ImmutableArray.Create<byte>(1, 2), 2, 1, 1, PixelFormat.Rgba, 0,
+            default, null, null, null, 0);
+        var same = new OwnedVideoFrame(
+            ImmutableArray.Create<byte>(1, 2), 2, 1, 1, PixelFormat.Rgba, 0,
+            default, null, null, null, 0);
+        var different = new OwnedVideoFrame(
+            ImmutableArray.Create<byte>(1, 3), 2, 1, 1, PixelFormat.Rgba, 0,
+            default, null, null, null, 0);
+
+        Assert.AreEqual(first, same);
+        Assert.AreEqual(first.GetHashCode(), same.GetHashCode());
+        Assert.AreNotEqual(first, different);
+
+        var audio = new OwnedAudioFrame(
+            ImmutableArray.Create<byte>(1), 48000, 1, AudioSampleFormat.S16Le, 0,
+            null, null, null, 0);
+        var audioSame = new OwnedAudioFrame(
+            ImmutableArray.Create<byte>(1), 48000, 1, AudioSampleFormat.S16Le, 0,
+            null, null, null, 0);
+        Assert.AreEqual(audio, audioSame);
+        Assert.AreEqual(audio.GetHashCode(), audioSame.GetHashCode());
+    }
+
+    [TestMethod]
+    public void DuplicatingAHostMemoryFrame_ReportsNoDescriptor()
+    {
+        // No libc call on this path: a frame with no fd answers -1 without duplicating.
+        var frame = new VideoFrame(
+            [1, 2, 3, 4], stride: 4, width: 1, height: 1, format: PixelFormat.Bgra,
+            sequenceNumber: 0);
+        Assert.IsFalse(frame.IsFdBacked);
+        Assert.AreEqual(-1, frame.DuplicateFd());
+    }
+
+    [TestMethod]
+    public void ReadFloatArray_ReturnsEmptyWhenThePropertyIsAbsent()
+    {
+        // A node with no channel volumes has no array to read, which is not an error.
+        Assert.AreEqual(0, PipeWireNodeControl.ReadFloatArray(null, SpaProp.ChannelVolumes).Length);
+
+        var props = new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
+            [new SpaProperty(SpaProp.Volume, 0, new SpaFloat(0.5f))]);
+        Assert.AreEqual(0, PipeWireNodeControl.ReadFloatArray(props, SpaProp.ChannelVolumes).Length);
+
+        var withVolumes = new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
+            [new SpaProperty(SpaProp.ChannelVolumes, 0,
+                new SpaArray(SpaType.Float, [new SpaFloat(0.5f), new SpaFloat(0.25f)]))]);
+        CollectionAssert.AreEqual(
+            new[] { 0.5f, 0.25f },
+            PipeWireNodeControl.ReadFloatArray(withVolumes, SpaProp.ChannelVolumes).ToArray());
+    }
+
+    [TestMethod]
+    public void SyncBuffersParam_DeclaresSyncBlocksAndMandatoryMetaType()
+    {
+        // Explicit sync rides two extra data blocks plus a mandatory metaType: a peer that cannot
+        // carry timeline metadata must refuse rather than silently accept unordered buffers.
+        Span<byte> buf = stackalloc byte[256];
+        int len = SpaFormatPod.WriteVideoBuffersParam(buf, size: 1024, stride: 256,
+            dataTypes: 1 << (int)SpaDataType.DmaBuf, blocks: 1, syncDataBlocks: 2);
+
+        Assert.IsTrue(SpaPod.TryParse(buf[..len], out SpaValue? value));
+        var o = (SpaObject)value!;
+        Assert.AreEqual(3, ((SpaInt)o[(uint)SpaParamBuffers.Blocks]!).Value);
+
+        SpaProperty? metaType = o.Find((uint)SpaParamBuffers.MetaType);
+        Assert.IsNotNull(metaType, "the sync buffers param must carry a metaType");
+        Assert.AreNotEqual(0u, metaType.Flags & SpaPodPropFlag.Mandatory,
+            "the metaType must be mandatory, not advisory");
+        Assert.AreEqual(1 << (int)SpaMetaType.SyncTimeline, ((SpaInt)metaType.Value).Value);
+    }
+
+    [TestMethod]
+    public void SyncTimelineMetaParam_RoundTripsItsContract()
+    {
+        Span<byte> buf = stackalloc byte[64];
+        int len = SpaFormatPod.WriteSyncTimelineMetaParam(buf);
+
+        Assert.IsTrue(SpaPod.TryParse(buf[..len], out SpaValue? value));
+        var o = (SpaObject)value!;
+        Assert.AreEqual(SpaType.ObjectParamMeta, o.ObjectType);
+        Assert.AreEqual(SpaParamType.Meta, o.ObjectId);
     }
 }

@@ -199,8 +199,7 @@ public sealed class GraphStressTests
             Assert.AreSame(settle, finished,
                 "creations in flight did not settle within 10s of disposal; disposal is not failing them");
 
-            // Naming the acceptable failures rather than catching a broad set: anything else
-            // escaping here fails the test, which is the point of running it.
+            // Naming the acceptable failures rather than catching a broad set.
             foreach (Task<PipeWireNode> create in creates)
             {
                 try
@@ -360,7 +359,6 @@ public sealed class GraphStressTests
 
             Assert.AreEqual(portsAtCapture, held.Ports.Length, "a held snapshot must not change");
 
-            // Every port index entry must still resolve against the same snapshot.
             foreach (PipeWirePort port in held.Ports)
                 Assert.IsNotNull(held.GetPort(port.PortId), $"port {port.PortId} is in Ports but not the index");
 

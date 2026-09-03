@@ -267,10 +267,6 @@ public sealed class DmaBufLifetimeTests
         // told to change format, which nothing here can do. What it does pin is that a fresh
         // producer starts from zero and stays inside the pool, so an allocator keying a GPU surface
         // by index cannot carry one session's surface into the next.
-        //
-        // The renegotiation case is covered from the other side by
-        // ABufferPool_ReusesItsIndexesRatherThanGrowing, which asserts every index is
-        // returned before any is reissued.
         GbmAllocator gbm = RequireGbm();
         var buffers = new List<GbmAllocator.Buffer>();
 

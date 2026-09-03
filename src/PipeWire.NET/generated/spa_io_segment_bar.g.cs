@@ -13,7 +13,7 @@ using System.Runtime.CompilerServices;
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_io_segment_bar
+internal partial struct spa_io_segment_bar
 {
     [NativeTypeName("uint32_t")]
     public uint flags;

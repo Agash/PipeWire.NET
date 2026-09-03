@@ -137,30 +137,67 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
     /// it, finding its ports - needs the second.
     /// </remarks>
     /// <exception cref="InvalidOperationException">The filter is not connected.</exception>
-    public async Task<uint> WaitForNodeIdAsync(CancellationToken cancellationToken = default)
+    public Task<uint> WaitForNodeIdAsync(CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!_connected)
             throw new InvalidOperationException("the filter is not connected.");
 
-        while (true)
+        // Fast path: the id is often already there.
+        if (NodeId is { } ready) return Task.FromResult(ready);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Event-driven, not polled. The id arrives with the node's binding while state changes
+        // mark the progress around it, so every transition re-reads the live id rather than
+        // trusting any one event to carry it. Continuations run off the loop thread: completing
+        // inline would run a stranger's continuation with the native lock held.
+        var waiter = new TaskCompletionSource<uint>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Action<PipeWireFilter, PipeWireFilterState, PipeWireFilterState, string?>? handler = null;
+        handler = (_, _, _, _) =>
         {
-            if (NodeId is { } id) return id;
+            if (NodeId is { } id) waiter.TrySetResult(id);
+        };
 
-            cancellationToken.ThrowIfCancellationRequested();
+        CancellationTokenRegistration registration = cancellationToken.Register(
+            static s => ((TaskCompletionSource<uint>)s!).TrySetCanceled(), waiter);
 
-            // A round-trip rather than a delay: it returns as soon as the daemon has caught up,
-            // which is what actually assigns the id, instead of guessing at how long that takes.
-            await CoreSync.RoundTripAsync(_ctx, cancellationToken).ConfigureAwait(false);
+        StateChanged += handler;
+        _ = waiter.Task.ContinueWith(
+            _ =>
+            {
+                StateChanged -= handler;
+                registration.Dispose();
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
 
-            if (NodeId is { } assigned) return assigned;
-
-            // Paced. Each round trip already waits for the daemon to finish what it had queued, so
-            // there is no need to sleep on top of it - but a node id the daemon never assigns turns
-            // this into an unbounded loop against the socket, so the caller's token is the only
-            // thing that ends it and a tick between attempts keeps that cheap.
-            await Task.Delay(TimeSpan.FromMilliseconds(5), cancellationToken).ConfigureAwait(false);
+        // Re-check under subscription: the id may have arrived between the fast path and here.
+        if (NodeId is { } arrived)
+        {
+            waiter.TrySetResult(arrived);
+            return waiter.Task;
         }
+
+        // One barrier, not a loop. Events are ordered, so anything the daemon had already done -
+        // including assigning the id with no further state change to announce it - has been
+        // dispatched by the time this answers. The recheck then either finishes or waits for the
+        // next real transition; the caller's token is what ends a wait for an id that never comes.
+        _ = CoreSync.RoundTripAsync(_ctx, cancellationToken).ContinueWith(
+            t =>
+            {
+                if (t.IsFaulted)
+                    waiter.TrySetException(t.Exception?.InnerException
+                        ?? new InvalidOperationException("the node-id wait ended with its barrier."));
+                else if (NodeId is { } id)
+                    waiter.TrySetResult(id);
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+        return waiter.Task;
     }
 
     /// <summary>The filter's current state.</summary>
@@ -260,6 +297,67 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
         }
     }
 
+    /// <summary>Whether this filter is driving the graph.</summary>
+    /// <remarks>
+    /// True only for a filter connected with the driver flag and chosen by the daemon as the driver.
+    /// When it is, the graph does not run on its own clock: <see cref="TriggerProcess"/> is what
+    /// advances it, once per buffer, and nothing happens until it is called.
+    /// </remarks>
+    public unsafe bool IsDriving
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_handle is null || !_connected) return false;
+
+            using (_ctx.Lock())
+                return Native.pw_filter_is_driving(_handle.Filter);
+        }
+    }
+
+    /// <summary>Runs one iteration of the graph. Only meaningful while <see cref="IsDriving"/>.</summary>
+    /// <remarks>
+    /// A driving filter decides when the graph advances, so this is what produces a
+    /// <c>Process</c> callback. On a filter that is not driving the daemon schedules the graph and
+    /// this does nothing useful.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The filter is not connected.</exception>
+    /// <exception cref="PipeWireException">The daemon refused.</exception>
+    public unsafe void TriggerProcess()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_handle is null || !_connected)
+            throw new InvalidOperationException("connect the filter before triggering it.");
+
+        using (_ctx.Lock())
+        {
+            int rc = Native.pw_filter_trigger_process(_handle.Filter);
+            if (rc < 0) throw new PipeWireException("pw_filter_trigger_process", rc);
+        }
+    }
+
+    /// <summary>Starts or stops the filter processing without disconnecting it.</summary>
+    /// <param name="active">True to process, false to stop.</param>
+    /// <remarks>
+    /// The difference from disposal is that the ports, the links through them and the negotiated
+    /// format all survive: an inactive filter is still in the graph and can be started again. A
+    /// filter connected with the inactive flag needs this before it does anything.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The filter is not connected.</exception>
+    /// <exception cref="PipeWireException">The daemon refused.</exception>
+    public unsafe void SetActive(bool active)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_handle is null || !_connected)
+            throw new InvalidOperationException("connect the filter before activating it.");
+
+        using (_ctx.Lock())
+        {
+            int rc = Native.pw_filter_set_active(_handle.Filter, active);
+            if (rc < 0) throw new PipeWireException("pw_filter_set_active", rc);
+        }
+    }
+
     /// <summary>
     /// Adds a mono DSP audio port.
     /// </summary>
@@ -273,7 +371,55 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
     /// </remarks>
     /// <exception cref="ArgumentException"><paramref name="name"/> is null or empty.</exception>
     /// <exception cref="InvalidOperationException">The filter is already connected, or PipeWire refused.</exception>
-    public unsafe PipeWireFilterPort AddAudioPort(PipeWirePortDirection direction, string name)
+    public PipeWireFilterPort AddAudioPort(PipeWirePortDirection direction, string name) =>
+        AddPort(direction, name, PipeWireDspFormat.MonoAudio);
+
+    /// <summary>Adds a MIDI port.</summary>
+    /// <param name="direction">Whether the filter reads from it or writes to it.</param>
+    /// <param name="name">The port's name, as the graph shows it.</param>
+    /// <returns>The port, for reading or writing during processing.</returns>
+    /// <remarks>
+    /// A MIDI port carries a sequence of timed controls per buffer rather than samples, so
+    /// <see cref="PipeWireFilterPort.GetSamples"/> refuses it: sequences get a typed accessor of
+    /// their own when the sequence transport lands. Add every port before connecting.
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="name"/> is null or empty.</exception>
+    /// <exception cref="InvalidOperationException">The filter is already connected, or PipeWire refused.</exception>
+    public PipeWireFilterPort AddMidiPort(PipeWirePortDirection direction, string name) =>
+        AddPort(direction, name, PipeWireDspFormat.Midi);
+
+    /// <summary>Adds a control port.</summary>
+    /// <param name="direction">Whether the filter reads from it or writes to it.</param>
+    /// <param name="name">The port's name, as the graph shows it.</param>
+    /// <returns>The port, for reading or writing during processing.</returns>
+    /// <inheritdoc cref="AddMidiPort" path="/remarks"/>
+    /// <exception cref="ArgumentException"><paramref name="name"/> is null or empty.</exception>
+    /// <exception cref="InvalidOperationException">The filter is already connected, or PipeWire refused.</exception>
+    public PipeWireFilterPort AddControlPort(PipeWirePortDirection direction, string name) =>
+        AddPort(direction, name, PipeWireDspFormat.Control);
+
+    /// <summary>Adds a port carrying a named DSP format.</summary>
+    /// <param name="direction">Whether the filter reads from it or writes to it.</param>
+    /// <param name="name">The port's name, as the graph shows it.</param>
+    /// <param name="format">What the port carries.</param>
+    /// <param name="properties">
+    /// Extra port properties, or null. A caller's value wins over the defaults except for
+    /// <c>format.dsp</c> and <c>port.name</c>, which this method owns.
+    /// </param>
+    /// <returns>The port, for reading or writing during processing.</returns>
+    /// <remarks>
+    /// The general form. <c>format.dsp</c> is what decides a port's shape, and the graph's DSP links
+    /// only carry the three formats <see cref="PipeWireDspFormat"/> names: a port declaring anything
+    /// else is not linkable to the rest of the graph, which is why this takes an enum rather than a
+    /// string. Add every port before connecting.
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="name"/> is null or empty.</exception>
+    /// <exception cref="InvalidOperationException">The filter is already connected, or PipeWire refused.</exception>
+    public unsafe PipeWireFilterPort AddPort(
+        PipeWirePortDirection direction,
+        string name,
+        PipeWireDspFormat format,
+        IReadOnlyDictionary<string, string>? properties = null)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -286,27 +432,41 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
             PipeWirePortDirection.In => SpaDirection.Input,
             PipeWirePortDirection.Out => SpaDirection.Output,
             _ => throw new ArgumentException(
-                "a filter port carries audio, so it is an input or an output.", nameof(direction)),
+                "a filter port is an input or an output.", nameof(direction)),
         };
 
-        var properties = new Dictionary<string, string>(StringComparer.Ordinal)
+        string dsp = format switch
         {
-            ["format.dsp"] = "32 bit float mono audio",
-            ["port.name"] = name,
+            PipeWireDspFormat.MonoAudio => "32 bit float mono audio",
+            PipeWireDspFormat.Midi => "8 bit raw midi",
+            PipeWireDspFormat.Control => "8 bit raw control",
+            _ => throw new ArgumentException($"unknown DSP format {format}.", nameof(format)),
         };
+
+        var portProperties = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (properties is not null)
+        {
+            foreach (KeyValuePair<string, string> pair in properties)
+                portProperties[pair.Key] = pair.Value;
+        }
+
+        portProperties["format.dsp"] = dsp;
+        portProperties["port.name"] = name;
+
+        Dictionary<string, string> properties2 = portProperties;
 
         void* portData;
         using (_ctx.Lock())
         {
             portData = Native.pw_filter_add_port(
                 _handle!.Filter, spaDirection, PipeWireFilterPortFlags.MapBuffers,
-                0, BuildProperties(properties), null, 0);
+                0, BuildProperties(properties2), null, 0);
         }
 
         if (portData is null)
             throw new InvalidOperationException($"pw_filter_add_port failed for '{name}'.");
 
-        var port = new PipeWireFilterPort(this, portData, direction, name);
+        var port = new PipeWireFilterPort(this, portData, direction, name, format);
         _ports.Add(port);
         return port;
     }

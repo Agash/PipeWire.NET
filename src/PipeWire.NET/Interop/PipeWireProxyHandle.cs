@@ -76,7 +76,39 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
 
     internal pw_proxy* Proxy => (pw_proxy*)handle;
 
+    // Set by deterministic disposal before the base runs. The finalizer must never block on the
+    // loop mutex, so only a deterministic release destroys inline; an abandoned handle goes to
+    // the reaper, which owns every reference from there and waits whatever the loop needs.
+    private bool _deterministic;
+    private bool _enqueued;
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _deterministic = true;
+        base.Dispose(disposing);
+    }
+
     protected override bool ReleaseHandle()
+    {
+        if (!_deterministic && !_enqueued && NeedsLoop(out nint loop))
+        {
+            _enqueued = true;
+            NativeReaper.Enqueue(this, loop, ReleaseHandle);
+            return true;
+        }
+
+        return ReleaseCore();
+    }
+
+    private bool NeedsLoop(out nint loop)
+    {
+        loop = 0;
+        if (handle == IntPtr.Zero || !_loopReferenced || _loop.IsInvalid) return false;
+        loop = (nint)_loop.Loop;
+        return loop != 0;
+    }
+
+    private bool ReleaseCore()
     {
         var proxy = (pw_proxy*)handle;
         handle = IntPtr.Zero;

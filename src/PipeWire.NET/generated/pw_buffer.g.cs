@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct pw_buffer
+internal unsafe partial struct pw_buffer
 {
     [NativeTypeName("struct spa_buffer *")]
     public spa_buffer* buffer;

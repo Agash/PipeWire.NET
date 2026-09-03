@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct pw_stream_control
+internal unsafe partial struct pw_stream_control
 {
     [NativeTypeName("const char *")]
     public sbyte* name;

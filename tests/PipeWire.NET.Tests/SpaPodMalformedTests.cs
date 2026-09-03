@@ -277,6 +277,26 @@ public sealed class SpaPodMalformedTests
         }
     }
 
+    [TestMethod]
+    public void AnArrayOfStrings_RoundTripsThroughTheVariableChildPath()
+    {
+        // Strings have no fixed body size, so the writer sizes every child by the largest one
+        // rather than by the declared type.
+        var array = new SpaArray(SpaType.String, [new SpaString("a"), new SpaString("longer")]);
+        Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(array), out SpaValue? read));
+        Assert.AreEqual(array, read);
+    }
+
+    [TestMethod]
+    public void ATailShorterThanItsOwnDeclaredSize_IsRefusedRatherThanReadShort()
+    {
+        // Ten bytes clear the eight-byte header, so the size field is known, but an int needs
+        // twelve: neither the padded nor the unpadded extent fits, and there is no partial value.
+        byte[] full = SpaPod.ToBytes(new SpaInt(7));
+        Assert.IsTrue(SpaPod.TryParse(full, out _), "the intact pod must parse, or this proves nothing");
+        Assert.IsFalse(SpaPod.TryParse(full.AsSpan(0, 10), out _));
+    }
+
     /// <summary>An object holding one property whose value size is attacker-chosen.</summary>
     private static byte[] PropertyOfSize(uint valueSize)
     {

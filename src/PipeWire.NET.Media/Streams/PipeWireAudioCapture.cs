@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 using PipeWire.NET.Interop;
@@ -37,13 +38,13 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
     /// <summary>Wildcard node id - let PipeWire auto-select a source.</summary>
     public const uint AnyNode = Native.PW_ID_ANY;
 
-    /// <summary>Signature for <see cref="FrameReady"/>.</summary>
+    /// <summary>Handles an audio frame on the loop thread. Do not cache the frame.</summary>
     public delegate void FrameReadyHandler(PipeWireAudioCapture sender, AudioFrame frame);
 
     /// <summary>Raised on the loop thread when an audio chunk is available. Do not cache the frame.</summary>
     public event FrameReadyHandler? FrameReady;
 
-    /// <summary>Raised when the connection state changes.</summary>
+    /// <summary>Raised on the loop thread when the connection state changes.</summary>
     public event Action<PipeWireAudioCapture, PipeWireStreamState, PipeWireStreamState>? StateChanged;
 
     private readonly PipeWireContext _ctx;
@@ -73,15 +74,21 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
     /// daemon attach it to another one.
     /// </param>
     /// <exception cref="ArgumentNullException"><paramref name="source"/> is <see langword="null"/>.</exception>
+    /// <param name="cancellationToken">
+    /// Abandons the wait for the loop lock. The connect request itself is issued
+    /// synchronously once that is held, so there is nothing to recall after it.
+    /// </param>
     public void Connect(
         PipeWireNode source,
         int sampleRate = 48000,
         int channels = 2,
         AudioSampleFormat format = AudioSampleFormat.F32Le,
-        bool stayWithTheSource = false)
+        bool stayWithTheSource = false,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
-        Connect(source.NodeId, sampleRate, channels, format, stayWithTheSource: stayWithTheSource);
+        Connect(source.NodeId, sampleRate, channels, format,
+            stayWithTheSource: stayWithTheSource, cancellationToken: cancellationToken);
     }
 
     /// <summary>Connects to an audio source.</summary>
@@ -97,10 +104,15 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
     /// <see langword="true"/> to end the stream when its source goes away, rather than letting the
     /// daemon attach it to another one.
     /// </param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait for the loop lock. The connect request itself is issued
+    /// synchronously once that is held, so there is nothing to recall after it.
+    /// </param>
     public unsafe void Connect(uint targetNodeId = AnyNode,
         int sampleRate = 48000, int channels = 2, AudioSampleFormat format = AudioSampleFormat.F32Le,
         string? targetObjectName = null,
-        bool stayWithTheSource = false)
+        bool stayWithTheSource = false,
+        CancellationToken cancellationToken = default)
     {
         if (_core is not null) throw new InvalidOperationException("Already connected.");
         Volatile.Write(ref _fmtCell,
@@ -126,7 +138,8 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
             core.Connect(SpaDirection.Input, targetNodeId,
             PipeWireStreamFlags.Autoconnect | PipeWireStreamFlags.MapBuffers
                 | (stayWithTheSource ? PipeWireStreamFlags.DontReconnect : 0),
-            pod[..len]);
+            pod[..len],
+            cancellationToken: cancellationToken);
             _core = core;
         }
         catch
@@ -213,4 +226,62 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "negotiated audio format {Format} {SampleRate}Hz {Channels}ch")]
     private partial void LogNegotiatedFormat(AudioSampleFormat format, int sampleRate, int channels);
+
+    /// <summary>Waits until the stream is negotiated and running.</summary>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <remarks>
+    /// <c>Connect</c> issues a request; the daemon then negotiates a format over several round
+    /// trips, and only then does the stream start. Without this a caller has to subscribe to
+    /// <c>StateChanged</c> and drive its own completion, which is the same code every time.
+    /// <para>
+    /// Cancelling abandons the wait, not the stream: the connection stays up and keeps negotiating,
+    /// because there is nothing to recall. Dispose it to stop it.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">Not connected yet.</exception>
+    /// <exception cref="PipeWireException">The stream reached its error state instead.</exception>
+    public Task WaitForStreamingAsync(CancellationToken cancellationToken = default)
+    {
+        PipeWireStreamCore core = _core
+            ?? throw new InvalidOperationException("Connect before waiting for the stream to start.");
+
+        return core.WaitForStreamingAsync(cancellationToken);
+    }
+
+    /// <summary>Every control this stream exposes, as the daemon last reported them.</summary>
+    /// <remarks>
+    /// Empty until the stream is connected and the daemon has reported them, which happens during
+    /// negotiation. A snapshot: the daemon re-reports a control whenever one of its values changes.
+    /// </remarks>
+    public ImmutableArray<PipeWireStreamControl> Controls =>
+        _core?.Controls ?? [];
+
+    /// <summary>One control by SPA property id, or null when the stream has not reported it.</summary>
+    public PipeWireStreamControl? GetControl(uint id) => _core?.GetControl(id);
+
+    /// <summary>Sets a control's values.</summary>
+    /// <param name="id">The SPA property id, as carried by <see cref="PipeWireStreamControl.Id"/>.</param>
+    /// <param name="values">
+    /// One value for a scalar control, or one per channel. More than
+    /// <see cref="PipeWireStreamControl.MaximumValues"/> is the daemon's to refuse, not this
+    /// library's to guess at.
+    /// </param>
+    /// <param name="cancellationToken">Abandons the wait for the loop lock.</param>
+    /// <remarks>
+    /// Sent as a <c>Props</c> object. The daemon applies it when it next runs the node, so this
+    /// returning does not mean the value is in effect; read it back from <see cref="Controls"/> if
+    /// that matters.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">Not connected yet.</exception>
+    /// <exception cref="ArgumentException"><paramref name="values"/> is empty.</exception>
+    public void SetControl(uint id, ReadOnlySpan<float> values, CancellationToken cancellationToken = default)
+    {
+        if (values.IsEmpty)
+            throw new ArgumentException("a control needs at least one value.", nameof(values));
+
+        PipeWireStreamCore core = _core
+            ?? throw new InvalidOperationException("Connect before setting a control.");
+
+        core.SetControl(id, values, cancellationToken);
+    }
 }

@@ -13,7 +13,7 @@ using System.Runtime.CompilerServices;
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_io_async_buffers
+internal partial struct spa_io_async_buffers
 {
     [NativeTypeName("struct spa_io_buffers[2]")]
     public _buffers_e__FixedBuffer buffers;

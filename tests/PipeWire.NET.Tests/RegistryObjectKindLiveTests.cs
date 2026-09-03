@@ -94,8 +94,6 @@ public sealed class RegistryObjectKindLiveTests
         if (graph.Devices.Length == 0)
             Assert.Inconclusive("this session has no hardware devices to check against.");
 
-        // The point of modelling devices: a card in the graph should be reachable, named, and
-        // describable, because that is what a profile switcher shows.
         foreach (PipeWireDevice device in graph.Devices)
         {
             Assert.AreSame(device, graph.GetDevice(device.Id));

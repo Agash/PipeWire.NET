@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct pw_time
+internal partial struct pw_time
 {
     [NativeTypeName("int64_t")]
     public long now;

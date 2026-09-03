@@ -15,11 +15,7 @@ namespace PipeWire.NET.Tests;
 [SupportedOSPlatform("linux")]
 public static class SessionHygiene
 {
-    /// <summary>The prefixes every key this suite writes begins with.</summary>
-    /// <remarks>
-    /// More than one because the pen harness names its keys after itself rather than after the
-    /// suite, and those must be swept too or they accumulate in the default store.
-    /// </remarks>
+    /// <summary>The pen harness names its keys after itself rather than after the suite.</summary>
     private static readonly string[] TestKeyPrefixes = ["pwnet.", "pen."];
 
     private static bool IsOurs(string key)

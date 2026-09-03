@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_loop
+internal partial struct spa_loop
 {
     [NativeTypeName("struct spa_interface")]
     public spa_interface iface;

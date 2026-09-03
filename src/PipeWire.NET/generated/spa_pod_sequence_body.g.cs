@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_pod_sequence_body
+internal partial struct spa_pod_sequence_body
 {
     [NativeTypeName("uint32_t")]
     public uint unit;

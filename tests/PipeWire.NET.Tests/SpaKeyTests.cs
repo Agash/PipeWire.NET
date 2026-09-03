@@ -102,6 +102,13 @@ public sealed class SpaKeyTests
         Check<SpaVideoColorPrimaries>(SpaVideoColorPrimaries.Bt709, SpaVideoColorPrimaries.Bt709);
         Check<SpaVideoTransferFunction>(SpaVideoTransferFunction.Bt709, SpaVideoTransferFunction.Bt709);
         Check<SpaVideoInterlaceMode>(SpaVideoInterlaceMode.Progressive, SpaVideoInterlaceMode.Progressive);
+        Check<SpaVideoChromaSite>(SpaVideoChromaSite.Cosited, SpaVideoChromaSite.Cosited);
+        Check<SpaParamAvailability>(SpaParamAvailability.Yes, SpaParamAvailability.Yes);
+        Check<SpaParamPortConfigMode>(SpaParamPortConfigMode.Dsp, SpaParamPortConfigMode.Dsp);
+        Check<SpaParamBitorder>(SpaParamBitorder.Lsb, SpaParamBitorder.Lsb);
+        Check<SpaAudioVolumeRampScale>(SpaAudioVolumeRampScale.Cubic, SpaAudioVolumeRampScale.Cubic);
+        Check<SpaIoType>(SpaIoType.Clock, SpaIoType.Clock);
+        Check<SpaMetaVideotransformValue>(SpaMetaVideotransformValue.None, SpaMetaVideotransformValue.None);
 
         static void Check<TEnum>(SpaIdValue converted, TEnum original) where TEnum : unmanaged, Enum
         {

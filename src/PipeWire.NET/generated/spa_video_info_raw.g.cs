@@ -13,7 +13,7 @@ using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_video_info_raw
+internal partial struct spa_video_info_raw
 {
     [NativeTypeName("enum spa_video_format")]
     public SpaVideoFormat format;

@@ -26,9 +26,21 @@ namespace PipeWire.NET;
 [SupportedOSPlatform("linux")]
 public sealed class PipeWireContext : IDisposable, IAsyncDisposable
 {
-    // Serialises disposal against TryLock, so a teardown path cannot observe a live context and
-    // then find it disposed by the time it takes the loop lock.
-    private readonly Lock          _disposeGate = new();
+    // Lifecycle admission, in one order everywhere: the gate first, the native loop mutex
+    // second, never nested the other way. Admission under the gate hands
+    // out a lease; disposal marks stopping, releases the gate, waits the leases out, and only
+    // then tears the loop down. Teardown never runs while a scope is alive, and a scope's lease
+    // keeps teardown waiting, so a scope never outlives the loop it locked.
+    //
+    // A Lock scope held across Dispose is a contract violation, and the drain is what keeps that
+    // violation a hang at the call site rather than an unlock against a destroyed loop. Do not
+    // hold a scope across Dispose.
+    private enum LifecycleState { Created, Starting, Running, Stopping, Disposed }
+    private readonly Lock _lifecycle = new();
+    private volatile LifecycleState _state;
+    private int _activeLeases;
+    private readonly ManualResetEventSlim _startSettled = new(false);
+    private readonly ManualResetEventSlim _leasesDrained = new(true);
 
     // Fired when the context is disposed, so anything waiting on the daemon can be released. A
     // round-trip has no other way to end: its completion arrives as a "done" event on a loop that
@@ -38,6 +50,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     private PipeWireLoopHandle?    _loopHandle;
     private PipeWireContextHandle? _contextHandle;
     private PipeWireCoreHandle?   _coreHandle;
+    private readonly string _name;
     private volatile bool          _started;
     private volatile bool          _disposed;
 
@@ -57,6 +70,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     public PipeWireContext(string name = "PipeWire.NET", ILoggerFactory? loggerFactory = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
+        _name = name;
         LoggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
         _shutdownToken = _shutdown.Token;
         InitializeNative(name);
@@ -115,6 +129,24 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         _contextHandle = new PipeWireContextHandle(context, _loopHandle);
     }
 
+    // Under _lifecycle. Hands a lease to an operation entering, or refuses once stopping began.
+    // The count itself is interlocked: releases run outside the gate, so a plain increment can
+    // lose an update against a concurrent decrement and wedge the drain on a count that never
+    // reaches zero.
+    private bool Admit()
+    {
+        if (_state is LifecycleState.Stopping or LifecycleState.Disposed) return false;
+        Interlocked.Increment(ref _activeLeases);
+        _leasesDrained.Reset();
+        return true;
+    }
+
+    private void ReleaseLease()
+    {
+        if (Interlocked.Decrement(ref _activeLeases) == 0)
+            _leasesDrained.Set();
+    }
+
     /// <summary>
     /// Starts the loop thread and connects to the daemon. Idempotent.
     /// </summary>
@@ -126,24 +158,86 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Under the same gate as disposal, and for a sharper reason than idempotence. Two threads
-        // both seeing _started false would both call pw_thread_loop_start; the second fails because
-        // the loop is already running, and its error path then stops the loop the first is in the
-        // middle of connecting on.
-        //
-        // This section takes the loop lock while holding the gate, and TryLock takes them the other
-        // way round, so the order is only safe because nothing can be holding the loop lock here:
-        // every caller of TryLock needs the core, and the core is not published until StartNative
-        // has released the loop lock. Attaching a listener or publishing a handle earlier than that
-        // re-arms the inversion.
-        lock (_disposeGate)
+        // Under the same gate as disposal, and only for the state transition. Two threads both
+        // seeing Created would both call pw_thread_loop_start; the second fails because the loop
+        // is already running, and its error path then stops the loop the first is connecting on.
+        // The native lock is taken after the gate is released, never under it: TryLock admits
+        // the same way, so both orders agree and a scope held across this call cannot wedge it.
+        bool starter = false;
+        lock (_lifecycle)
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_started) return Task.CompletedTask;
-
-            StartNative();
-            _started = true;
+            ObjectDisposedException.ThrowIf(
+                _disposed || _state is LifecycleState.Stopping or LifecycleState.Disposed, this);
+            if (_state == LifecycleState.Running) return Task.CompletedTask;
+            if (_state == LifecycleState.Created)
+            {
+                _state = LifecycleState.Starting;
+                Admit();
+                starter = true;
+            }
         }
+
+        if (!starter)
+        {
+            // Another thread is connecting. Wait for its attempt to settle without holding the
+            // gate: disposal marks stopping and tears down, which this must observe rather than
+            // block. The event is one-way, so the state is always re-verified after it fires: a
+            // failed attempt falls back to Created, and the woken waiter becomes the starter.
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                _startSettled.Wait(cancellationToken);
+                lock (_lifecycle)
+                {
+                    if (_state == LifecycleState.Running) return Task.CompletedTask;
+                    if (_state is LifecycleState.Stopping or LifecycleState.Disposed)
+                        throw new ObjectDisposedException(nameof(PipeWireContext));
+                    if (_state == LifecycleState.Created && Admit())
+                    {
+                        _state = LifecycleState.Starting;
+                        starter = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        try
+        {
+            StartNative();
+        }
+        catch
+        {
+            lock (_lifecycle)
+            {
+                // Back to Created so a later start can retry: StartNative stops the loop thread
+                // it started, so nothing is left running. The settle event wakes any waiter,
+                // which re-verifies the state and takes over.
+                if (_state == LifecycleState.Starting) _state = LifecycleState.Created;
+            }
+            _startSettled.Set();
+            ReleaseLease();
+            throw;
+        }
+
+        bool stopping;
+        lock (_lifecycle)
+        {
+            stopping = _state is LifecycleState.Stopping or LifecycleState.Disposed;
+            if (!stopping)
+            {
+                _state = LifecycleState.Running;
+                _started = true;
+            }
+        }
+        _startSettled.Set();
+        ReleaseLease();
+
+        // Disposal began mid-connect and is waiting on this lease. It proceeds once every
+        // starter is out, so report rather than return success for a start that is being torn
+        // down underneath.
+        if (stopping)
+            throw new ObjectDisposedException(nameof(PipeWireContext));
 
         return Task.CompletedTask;
     }
@@ -164,7 +258,21 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
             Native.pw_thread_loop_lock(loop);
             try
             {
-                core = Native.pw_context_connect(_contextHandle!.Context, properties: null, user_data_size: 0);
+                // Named, so the daemon, session managers and tools see which application this
+                // connection belongs to. pw_properties_new_dict copies the dict, and the core
+                // takes the properties on success and frees them on failure, so nothing here
+                // is freed on either path.
+                Span<byte> scratch = stackalloc byte[512];
+                Span<spa_dict_item> items = stackalloc spa_dict_item[2];
+                var builder = new SpaDictBuilder(scratch, items);
+                builder.Add("application.name", _name);
+                spa_dict native = builder.Build();
+
+                pw_properties* props = Native.pw_properties_new_dict(&native);
+                if (props is null)
+                    throw new PipeWireException("pw_properties_new_dict", -12);   // ENOMEM
+
+                core = Native.pw_context_connect(_contextHandle!.Context, props, user_data_size: 0);
             }
             finally
             {
@@ -216,17 +324,20 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     {
         scope = default;
 
-        // The loop lock first, the gate second, and never the other way round. Callbacks run on the
-        // loop thread with the loop lock already held, and a callback is allowed to call back in -
-        // so a thread holding the gate while waiting for the loop lock would deadlock against a
-        // callback waiting for the gate.
+        // Admitting under the gate and locking after it is the one
+        // order used everywhere, so a callback holding the native lock and calling back in can
+        // never wedge against a thread holding the gate and waiting for that lock. The lease is
+        // what keeps disposal's teardown waiting, so the loop cannot be destroyed under a scope
+        // admitted here, and the recheck after locking observes a disposal that began in between
+        // without taking the gate while the native lock is held.
         PipeWireLoopHandle? loop = _loopHandle;
         if (loop is null) return false;
 
         // A reference, not a validity check. Testing the handle and then reading its pointer is two
         // steps, and disposal between them hands pw_thread_loop_lock a null pointer - which is a
         // segmentation fault, not an exception. The reference is what makes the loop outlive the
-        // lock that is about to be taken on it, and it is released when the scope closes.
+        // lock that is about to be taken on it, and the scope owns it from here: every exit below
+        // either hands it to the scope or releases it.
         bool referenced = false;
         try
         {
@@ -239,20 +350,27 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
 
         if (!referenced) return false;
 
-        var candidate = new LoopLock(loop);
-
-        lock (_disposeGate)
+        lock (_lifecycle)
         {
-            if (!_disposed)
+            if (!Admit())
             {
-                scope = candidate;
-                return true;
+                loop.DangerousRelease();
+                return false;
             }
         }
 
-        // Disposal won the race and teardown is about to run, so the lock is handed straight back.
-        candidate.Dispose();
-        return false;
+        var candidate = new LoopLock(this, loop);
+        if (_state is LifecycleState.Stopping or LifecycleState.Disposed)
+        {
+            // Disposal won the race and its teardown is waiting on this lease, so the lock is
+            // handed straight back. The scope's own dispose releases the lease exactly once;
+            // a second release here would drive the count negative and corrupt the drain.
+            candidate.Dispose();
+            return false;
+        }
+
+        scope = candidate;
+        return true;
     }
 
     /// <summary>Cancelled when the context is disposed.</summary>
@@ -368,18 +486,33 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
                 + "created it, or hand the disposal to another thread from the callback.");
         }
 
-        lock (_disposeGate)
+        lock (_lifecycle)
         {
             if (_disposed) return;
             _disposed = true;
+            _state = LifecycleState.Stopping;
         }
+
+        // Wakes any thread waiting on an in-flight start so it observes the stopping state.
+        _startSettled.Set();
 
         // Released before the loop is torn down, and outside the gate: the continuations run here,
         // and one of them taking the gate would deadlock against this method still holding it.
         _shutdown.Cancel();
 
+        // Wait out admitted operations before tearing the loop down. Every in-library scope is
+        // method-local and short, a round trip holds no scope while it waits, and the shutdown
+        // above releases every waiter - so this ends as soon as in-flight work does.
+        while (Volatile.Read(ref _activeLeases) > 0)
+            _leasesDrained.Wait();
+
         DisposeNative();
         _shutdown.Dispose();
+
+        lock (_lifecycle)
+        {
+            _state = LifecycleState.Disposed;
+        }
     }
 
     private unsafe void DisposeNative()
@@ -409,28 +542,61 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     /// <summary>
     /// RAII scope holding the PipeWire thread-loop lock. Created by <see cref="Lock"/>.
     /// </summary>
+    /// <remarks>
+    /// Copying shares the lease, so disposing twice - or disposing two copies of one scope -
+    /// unlocks and releases exactly once. A default scope holds nothing and disposes to nothing.
+    /// </remarks>
     public readonly unsafe ref struct LoopLock
     {
-        private readonly PipeWireLoopHandle? _handle;
-        private readonly pw_thread_loop* _loop;
+        private readonly LoopLease? _lease;
 
-        internal LoopLock(PipeWireLoopHandle handle)
+        internal LoopLock(PipeWireContext context, PipeWireLoopHandle handle)
         {
-            // Holds the reference its caller took, and the raw pointer beside it. Releasing reads
-            // neither the context nor the handle's field, both of which disposal may already have
-            // cleared - only the pointer captured here, which the reference keeps valid.
-            _handle = handle;
-            _loop = handle.Loop;
-            Native.pw_thread_loop_lock(_loop);
+            // The caller holds a reference for this scope; the lease owns it from here, and the
+            // raw pointer beside it. Releasing reads neither the context nor the handle's field,
+            // both of which disposal may already have cleared - only the pointer captured here,
+            // which the reference keeps valid.
+            _lease = new LoopLease(context, handle, handle.Loop);
+            Native.pw_thread_loop_lock(_lease.Loop);
         }
 
         /// <summary>Releases the loop lock, and the reference taken on the loop.</summary>
-        public void Dispose()
-        {
-            if (_loop is null) return;
+        public void Dispose() => _lease?.Release();
+    }
 
-            Native.pw_thread_loop_unlock(_loop);
-            _handle?.DangerousRelease();
+    /// <summary>One-shot native lock ownership shared by every copy of a <see cref="LoopLock"/>.</summary>
+    private sealed unsafe class LoopLease
+    {
+        private readonly PipeWireContext _context;
+        private readonly PipeWireLoopHandle _handle;
+        private readonly pw_thread_loop* _loop;
+        private int _released;
+
+        internal LoopLease(PipeWireContext context, PipeWireLoopHandle handle, pw_thread_loop* loop)
+        {
+            _context = context;
+            _handle = handle;
+            _loop = loop;
+        }
+
+        internal pw_thread_loop* Loop => _loop;
+
+        internal void Release()
+        {
+            // Exactly one unlock, one reference release and one lease release per acquisition,
+            // however many copies were made and however often Dispose runs. An unbalanced unlock
+            // corrupts the native mutex the loop - and every scope after it - depends on, and a
+            // missing lease release wedges disposal's drain: it waits for a scope that is gone.
+            if (Interlocked.Exchange(ref _released, 1) != 0) return;
+            try
+            {
+                Native.pw_thread_loop_unlock(_loop);
+                _handle.DangerousRelease();
+            }
+            finally
+            {
+                _context.ReleaseLease();
+            }
         }
     }
 }

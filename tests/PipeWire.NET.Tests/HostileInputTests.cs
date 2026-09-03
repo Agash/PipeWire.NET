@@ -209,6 +209,61 @@ public sealed unsafe class HostileInputTests
         }
     }
 
+    // - Profiler reports -
+
+    [TestMethod]
+    public void AWellFormedProfilerReport_ParsesToItsObject()
+    {
+        var expected = new SpaObject(SpaType.ObjectProfiler, SpaParamType.Props,
+            [new SpaProperty(1, 0, new SpaInt(7))]);
+        byte[] pod = SpaPod.ToBytes(expected);
+
+        fixed (byte* p = pod)
+        {
+            Assert.IsTrue(PipeWireProfilerReader.TryParseReport(
+                (spa_pod*)p, out SpaObject? report, out int size));
+            Assert.AreEqual(pod.Length, size);
+            Assert.AreEqual(expected, report);
+        }
+    }
+
+    [TestMethod]
+    public void AMalformedProfilerReport_IsRefusedRatherThanSpanned()
+    {
+        // Null names no size at all.
+        Assert.IsFalse(PipeWireProfilerReader.TryParseReport(null, out _, out int nullSize));
+        Assert.AreEqual(0, nullSize);
+
+        // An unknown pod type with a buffer-consistent size: well-framed but not a report.
+        // The size must fit the buffer it comes in, which the protocol layer guarantees for
+        // real traffic: this entry point trusts the message framing and only refuses the
+        // content, so a test that lies about the framing would overread by construction.
+        byte[] unknown = new byte[16];
+        BitConverter.TryWriteBytes(unknown.AsSpan(), 8u);
+        BitConverter.TryWriteBytes(unknown.AsSpan(4), 0xDEADBEEFu);
+        fixed (byte* u = unknown)
+            Assert.IsFalse(PipeWireProfilerReader.TryParseReport((spa_pod*)u, out _, out _));
+
+        // A size near uint.MaxValue must refuse before spanning: only the header is read.
+        byte[] huge = new byte[8];
+        BitConverter.TryWriteBytes(huge.AsSpan(), 0xFFFFFF00u);
+        BitConverter.TryWriteBytes(huge.AsSpan(4), (uint)SpaType.Object);
+        fixed (byte* h = huge)
+        {
+            Assert.IsFalse(
+                PipeWireProfilerReader.TryParseReport((spa_pod*)h, out _, out int size));
+            Assert.AreEqual(int.MaxValue, size);
+        }
+
+        // Well-formed but not a report.
+        byte[] integer = new byte[16];
+        BitConverter.TryWriteBytes(integer.AsSpan(), 4u);
+        BitConverter.TryWriteBytes(integer.AsSpan(4), (uint)SpaType.Int);
+        BitConverter.TryWriteBytes(integer.AsSpan(8), 42);
+        fixed (byte* i = integer)
+            Assert.IsFalse(PipeWireProfilerReader.TryParseReport((spa_pod*)i, out _, out _));
+    }
+
     // - Errors -
 
     [TestMethod]
@@ -227,25 +282,60 @@ public sealed unsafe class HostileInputTests
     public void TheCodesTheDaemonReturns_AreNamedInTheMessage()
     {
         // The number is what a caller branches on, but the message is read by a person, and the
-        // symbolic name is the half of it that says what went wrong.
+        // symbolic name is the half of it that says what went wrong. Every mapped code is named;
+        // anything else still reports the number rather than inventing a name for it.
         foreach ((int code, string name) in new[]
         {
-            (-1, "EPERM"), (-2, "ENOENT"), (-9, "EBADF"), (-12, "ENOMEM"), (-13, "EACCES"),
-            (-22, "EINVAL"), (-24, "EMFILE"), (-32, "EPIPE"), (-38, "ENOSYS"), (-75, "EOVERFLOW"),
-            (-95, "EOPNOTSUPP"), (-104, "ECONNRESET"), (-110, "ETIMEDOUT"),
+            (-1, "EPERM"), (-2, "ENOENT"), (-4, "EINTR"), (-5, "EIO"), (-9, "EBADF"),
+            (-11, "EAGAIN"), (-12, "ENOMEM"), (-13, "EACCES"), (-14, "EFAULT"), (-16, "EBUSY"),
+            (-17, "EEXIST"), (-19, "ENODEV"), (-22, "EINVAL"), (-24, "EMFILE"), (-25, "ENOTTY"),
+            (-28, "ENOSPC"), (-32, "EPIPE"), (-34, "ERANGE"), (-38, "ENOSYS"), (-39, "ENOTEMPTY"),
+            (-71, "EPROTO"), (-74, "EBADMSG"), (-75, "EOVERFLOW"), (-84, "EILSEQ"),
+            (-88, "ENOTSOCK"), (-90, "EMSGSIZE"), (-93, "EPROTONOSUPPORT"), (-95, "EOPNOTSUPP"),
+            (-98, "EADDRINUSE"), (-103, "ECONNABORTED"), (-104, "ECONNRESET"), (-105, "ENOBUFS"),
+            (-107, "ENOTCONN"), (-108, "ESHUTDOWN"), (-110, "ETIMEDOUT"), (-111, "ECONNREFUSED"),
+            (-125, "ECANCELED"),
         })
         {
             StringAssert.Contains(new PipeWireException("op", code).Message, name,
                 $"{code} is not named in the message");
         }
 
-        // An unmapped code still reports the number rather than inventing a name for it.
         string unmapped = new PipeWireException("op", -9999).Message;
         StringAssert.Contains(unmapped, "-9999");
         Assert.IsFalse(unmapped.Contains('(', StringComparison.Ordinal),
             "an unmapped code was given a symbolic name");
     }
 
+    [TestMethod]
+    public void TheMessageOnlyShapes_CarryNoCode()
+    {
+        // The standard exception shapes exist for throw sites with no daemon result to report.
+        // Zero then means no code was available, not success.
+        var bare = new PipeWireException();
+        Assert.AreEqual("unknown", bare.Operation);
+        Assert.AreEqual(0, bare.Result);
+
+        var noted = new PipeWireException("custom");
+        Assert.AreEqual("custom", noted.Message);
+        Assert.AreEqual(0, noted.Result);
+
+        var inner = new PipeWireException("custom", new InvalidOperationException());
+        Assert.IsInstanceOfType<InvalidOperationException>(inner.InnerException);
+    }
+
+    [TestMethod]
+    public void ThrowIfFailed_ThrowsOnlyOnFailure()
+    {
+        PipeWireException.ThrowIfFailed(0, "op");
+        PipeWireException.ThrowIfFailed(3, "op");
+
+        PipeWireException thrown = Assert.ThrowsExactly<PipeWireException>(
+            () => PipeWireException.ThrowIfFailed(-2, "op", 7));
+        Assert.AreEqual(-2, thrown.Result);
+        Assert.AreEqual("op", thrown.Operation);
+        Assert.AreEqual((uint)7, thrown.ObjectId);
+    }
     [TestMethod]
     public void BothRefusalCodes_ReadAsPermissionDenied()
     {
@@ -269,5 +359,54 @@ public sealed unsafe class HostileInputTests
         Assert.AreEqual("pw_context_connect", error.Operation);
         Assert.IsTrue(error.Message.Contains("ENOENT", StringComparison.Ordinal));
         Assert.IsTrue(error.Message.Contains("ensure the daemon is running", StringComparison.Ordinal));
+    }
+
+    // - Interface dispatch -
+
+    [TestMethod]
+    public void DispatchAgainstAnObjectWithNoMethods_RefusesRatherThanCrashing()
+    {
+        // Every dispatch wrapper reads the method table out of the object and must refuse when
+        // it is not there. A zeroed stand-in has no table at all, which is the most hostile
+        // shape: dereferencing it would be a null call through a function pointer.
+        spa_interface fake = default;
+        spa_interface* obj = &fake;
+
+        Assert.AreEqual(-1, Native.pw_registry_add_listener((pw_registry*)obj, null, null, null));
+        Assert.AreEqual(-1, Native.pw_registry_destroy_global((pw_registry*)obj, 0));
+        Assert.AreEqual(-1, Native.pw_core_sync((pw_core*)obj, 0, 0));
+        Assert.AreEqual(-1, Native.pw_core_add_listener((pw_core*)obj, null, null, null));
+        Assert.IsTrue(Native.pw_registry_bind((pw_registry*)obj, 0, null, 0, 0) is null);
+        Assert.AreEqual(-1, Native.pw_node_add_listener((pw_node*)obj, null, null, null));
+        Assert.AreEqual(-1, Native.pw_node_enum_params((pw_node*)obj, 0, 0, 0, 0, null));
+        Assert.AreEqual(-1, Native.pw_node_set_param((pw_node*)obj, 0, 0, null));
+        Assert.AreEqual(-1, Native.pw_node_subscribe_params((pw_node*)obj, null, 0));
+        Assert.AreEqual(-1, Native.pw_device_add_listener((pw_device*)obj, null, null, null));
+        Assert.AreEqual(-1, Native.pw_device_enum_params((pw_device*)obj, 0, 0, 0, 0, null));
+        Assert.AreEqual(-1, Native.pw_device_set_param((pw_device*)obj, 0, 0, null));
+        Assert.AreEqual(-1, Native.pw_device_subscribe_params((pw_device*)obj, null, 0));
+        Assert.AreEqual(-1, Native.pw_port_add_listener((pw_port*)obj, null, null, null));
+        Assert.AreEqual(-1, Native.pw_port_enum_params((pw_port*)obj, 0, 0, 0, 0, null));
+        Assert.AreEqual(-1, Native.pw_port_subscribe_params((pw_port*)obj, null, 0));
+        Assert.AreEqual(-1, Native.pw_link_add_listener((pw_link*)obj, null, null, null));
+        Assert.AreEqual(-1, Native.pw_client_update_permissions((pw_client*)obj, 0, null));
+        Assert.AreEqual(-1, Native.pw_client_get_permissions((pw_client*)obj, 0, 0));
+        Assert.AreEqual(-1, Native.pw_client_update_properties((pw_client*)obj, null));
+        Assert.AreEqual(-1, Native.pw_profiler_add_listener(obj, null, null, null));
+        Assert.AreEqual(-1, Native.pw_security_context_create(obj, 0, 0, null));
+        Assert.AreEqual(-1, Native.pw_metadata_add_listener((pw_metadata*)obj, null, null, null));
+        Assert.AreEqual(-1, Native.pw_metadata_set_property((pw_metadata*)obj, 0, null, null, null));
+        Assert.AreEqual(-1, Native.pw_metadata_clear((pw_metadata*)obj));
+
+        // Creating is not reportable as -1: there is no call to fail, so it throws ENOSYS.
+        PipeWireException refused = Assert.ThrowsExactly<PipeWireException>(
+            () => Native.pw_core_get_registry((pw_core*)obj, 0, 0));
+        Assert.AreEqual(-38, refused.Result);
+        refused = Assert.ThrowsExactly<PipeWireException>(
+            () => Native.pw_core_create_object((pw_core*)obj, null, null, 0, null, 0));
+        Assert.AreEqual(-38, refused.Result);
+
+        // Detaching nothing detaches nothing.
+        Native.spa_hook_remove(null);
     }
 }

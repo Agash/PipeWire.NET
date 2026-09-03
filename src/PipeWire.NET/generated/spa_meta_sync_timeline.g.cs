@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_meta_sync_timeline
+internal partial struct spa_meta_sync_timeline
 {
     [NativeTypeName("uint32_t")]
     public uint flags;

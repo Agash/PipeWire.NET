@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct pw_mempool
+internal unsafe partial struct pw_mempool
 {
     [NativeTypeName("struct pw_properties *")]
     public pw_properties* props;

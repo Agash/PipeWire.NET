@@ -7,6 +7,9 @@
     <RuntimeFrameworkVersion Condition="'$(TargetFramework)' == 'net10.0'">10.0.11</RuntimeFrameworkVersion>
     <RuntimeIdentifiers>linux-x64;linux-arm64</RuntimeIdentifiers>
     <IsPackable>false</IsPackable>
+    <!-- Same analyzer gate as the libraries: the sample must stay trim- and AOT-clean because
+         CI publishes it with PublishAot. -->
+    <IsAotCompatible>true</IsAotCompatible>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>PipeWire.NET.SampleConsole</RootNamespace>

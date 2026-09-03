@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_io_buffers
+internal partial struct spa_io_buffers
 {
     [NativeTypeName("int32_t")]
     public int status;

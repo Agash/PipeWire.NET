@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct pw_factory_methods
+internal unsafe partial struct pw_factory_methods
 {
     [NativeTypeName("uint32_t")]
     public uint version;

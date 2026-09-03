@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_pod_long
+internal partial struct spa_pod_long
 {
     [NativeTypeName("struct spa_pod")]
     public spa_pod pod;

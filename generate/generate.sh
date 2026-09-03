@@ -71,19 +71,24 @@ if [ -f "$PINNED_FILE" ]; then
   fi
 fi
 
-# The dotnet tool packaging does not bundle native libclang/libClangSharp; load them
-# from the NuGet runtime packages on the LD path. The matching tool version (21.1.8)
-# is needed; the .3 suffix on ClangSharpPInvokeGenerator only applies to the tool itself.
-LIBCLANG_NATIVE="$HOME/.nuget/packages/libclang.runtime.linux-x64/21.1.8/runtimes/linux-x64/native"
-CLANGSHARP_NATIVE="$HOME/.nuget/packages/libclangsharp.runtime.linux-x64/21.1.8/runtimes/linux-x64/native"
+# The dotnet tool packaging does not bundle native libclang/libClangSharp; load them from the NuGet
+# runtime packages on the LD path. The natives and the clang builtin-include directory must share a
+# major, and that major is what this pins: libclang handed another major's headers does not fail, it
+# parses less and exits 0, which writes a truncated contract. The tool itself is still published at
+# 21.1.8.x and loads whichever natives it is pointed at.
+LIBCLANG_VERSION=22.1.8
+CLANGSHARP_VERSION=22.1.8.2
+LIBCLANG_NATIVE="$HOME/.nuget/packages/libclang.runtime.linux-x64/$LIBCLANG_VERSION/runtimes/linux-x64/native"
+CLANGSHARP_NATIVE="$HOME/.nuget/packages/libclangsharp.runtime.linux-x64/$CLANGSHARP_VERSION/runtimes/linux-x64/native"
 
 if [ ! -f "$LIBCLANG_NATIVE/libclang.so" ] || [ ! -f "$CLANGSHARP_NATIVE/libClangSharp.so" ]; then
-  echo "ERROR: Native libclang / libClangSharp 21.1.8 not found at the expected NuGet cache paths."
+  echo "ERROR: Native libclang $LIBCLANG_VERSION / libClangSharp $CLANGSHARP_VERSION not found at"
+  echo "the expected NuGet cache paths."
   echo "Provision via:"
   echo "  mkdir /tmp/clangsharp-bootstrap && cd /tmp/clangsharp-bootstrap"
   echo "  dotnet new console -o dummy && cd dummy"
-  echo "  dotnet add package libclang.runtime.linux-x64        --version 21.1.8"
-  echo "  dotnet add package libClangSharp.runtime.linux-x64   --version 21.1.8"
+  echo "  dotnet add package libclang.runtime.linux-x64        --version $LIBCLANG_VERSION"
+  echo "  dotnet add package libClangSharp.runtime.linux-x64   --version $CLANGSHARP_VERSION"
   exit 1
 fi
 
@@ -91,11 +96,11 @@ export LD_LIBRARY_PATH="$LIBCLANG_NATIVE:$CLANGSHARP_NATIVE:${LD_LIBRARY_PATH:-}
 
 # Clang's resource directory holds its builtin headers (stdbool.h, stddef.h, ...). The generator
 # only locates it unaided when the matching LLVM release is installed system-wide, so name it.
-# The major must match the pinned libclang, and this is worth being strict about: libclang 21
+# The major must match the pinned libclang: libclang 21
 # handed clang 22's builtin headers does not fail. It parses less, ClangSharp emits fewer
 # declarations, and the run reports success - which produces a truncated naming block or a
 # truncated set of bindings that looks like a deliberate reduction in the diff.
-LIBCLANG_MAJOR=21
+LIBCLANG_MAJOR=22
 
 CLANG_INC=""
 for candidate in /usr/lib/llvm-$LIBCLANG_MAJOR/lib/clang/*/include                  /usr/lib/clang/$LIBCLANG_MAJOR*/include; do
@@ -106,7 +111,7 @@ if [ -z "$CLANG_INC" ]; then
   FOUND="$(ls -d /usr/lib/llvm-*/lib/clang/*/include /usr/lib/clang/*/include 2>/dev/null | tr '
 ' ' ')"
   echo "ERROR: no clang $LIBCLANG_MAJOR builtin include dir, and $LIBCLANG_MAJOR is the major the"
-  echo "pinned libclang (21.1.8) needs."
+  echo "pinned libclang ($LIBCLANG_VERSION) needs."
   if [ -n "$FOUND" ]; then
     echo "Present instead: $FOUND"
     echo "Using one of those parses fewer declarations and still exits 0, so it is refused rather"
@@ -158,7 +163,9 @@ if [ "$REFRESH_NAMES" = "1" ]; then
   # One line per type: "enum <native> <member> <member> ..." or "type <native>".
   for f in "$WORK"/discover/*.cs; do
     native=$(basename "$f" .cs)
-    if grep -q '^public enum ' "$f"; then
+    # Matches internal too: the ABI layer is emitted internal by --with-access-specifier, so a
+    # classifier looking only for "public enum" sees no enums at all and writes an empty block.
+    if grep -qE '^(public|internal) enum ' "$f"; then
       printf 'enum %s %s\n' "$native" "$(grep -oP '^    \K[A-Za-z_]\w*' "$f" | tr '\n' ' ')"
     else
       printf 'type %s\n' "$native"
@@ -462,6 +469,12 @@ for f in "$WORK"/*.cs; do
     blank && /^$/ { blank = 0; next }
     { blank = 0; print }
   ' "$f" > "$OUT/${base}.g.cs"
+
+  # --with-access-specifier sets the type's accessibility, not its members', so an internal class
+  # keeps public methods and every signature naming an internal struct is then a CS0050/CS0051.
+  # Their effective accessibility is already internal because the container bounds it, so this only
+  # makes the declaration say what is already true.
+  sed -i 's/^\(\s*\)public static extern /internal static extern /' "$OUT/${base}.g.cs"
 done
 
 printf '%s

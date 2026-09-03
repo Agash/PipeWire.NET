@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct spa_error_location
+internal unsafe partial struct spa_error_location
 {
     public int line;
 

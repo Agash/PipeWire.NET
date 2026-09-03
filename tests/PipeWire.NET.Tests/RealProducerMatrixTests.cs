@@ -13,9 +13,8 @@ namespace PipeWire.NET.Tests;
 /// large frames, and producers that stop mid-stream.
 /// </summary>
 /// <remarks>
-/// The existing GStreamer tests prove one representative pipeline works. These vary the negotiated
-/// format instead, because that is where the stride and buffer arithmetic lives, and a wrong answer
-/// there is silent - a torn or short frame rather than an exception.
+/// Vary the negotiated format, because that is where the stride and buffer arithmetic lives, and
+/// a wrong answer there is silent - a torn or short frame rather than an exception.
 /// </remarks>
 [TestClass]
 [TestCategory("Integration")]

@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_meta_bitmap
+internal partial struct spa_meta_bitmap
 {
     [NativeTypeName("uint32_t")]
     public uint format;

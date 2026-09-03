@@ -19,7 +19,6 @@ public sealed class SpaPodChoiceRoundTripTests
 {
     private delegate void BuildOne(ref SpaPodBuilder builder);
 
-    /// <summary>Builds a one-property object and returns that property as the parser sees it.</summary>
     private static SpaProperty RoundTrip(BuildOne build)
     {
         Span<byte> buffer = stackalloc byte[1024];

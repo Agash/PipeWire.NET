@@ -11,8 +11,7 @@ namespace PipeWire.NET.Tests;
 /// Everything here is a separate process holding its own connection to the daemon, which is the
 /// point: a graph the library created must be visible to, and mutable by, tools that know nothing
 /// about it. That is the difference between "our library agrees with itself" and "our library
-/// agrees with PipeWire". These ship with pipewire itself, so CI already has them wherever the
-/// daemon job runs.
+/// agrees with PipeWire". These ship with pipewire itself.
 /// </remarks>
 [SupportedOSPlatform("linux")]
 internal static class PwTools

@@ -60,6 +60,7 @@ internal ref struct SpaPodBuilder
 
     public void AddId(SpaKey key, SpaIdValue value)            { WritePropHeader(key); AddId(value); }
     public void AddInt(SpaKey key, int value)            { WritePropHeader(key); AddInt(value); }
+    public void AddInt(SpaKey key, int value, uint propFlags) { WritePropHeader(key, propFlags); AddInt(value); }
     public void AddLong(SpaKey key, long value)          { WritePropHeader(key); AddLong(value); }
     public void AddLong(SpaKey key, long value, uint propFlags) { WritePropHeader(key, propFlags); AddLong(value); }
     public void AddFraction(SpaKey key, uint n, uint d)  { WritePropHeader(key); WriteFraction(n, d); }
@@ -229,21 +230,89 @@ internal ref struct SpaPodBuilder
         WriteU32((uint)paramId);
     }
 
+    // - Sequence -
+
+    /// <summary>Opens a timed sequence. Close it with <see cref="Pop"/>.</summary>
+    /// <param name="unit">
+    /// What the control offsets are counted in. Zero means samples, which is what a stream sends.
+    /// </param>
+    /// <remarks>
+    /// The allocation-free counterpart to writing a <see cref="SpaSequence"/> through
+    /// <c>SpaPod.ToBytes</c>. It exists because the thing that fills a sequence is the process
+    /// callback: per-buffer MIDI and timed automation are written on the realtime thread, where
+    /// building a value tree and then serialising it is the wrong shape.
+    /// <para>
+    /// The body carries a <c>unit</c> and a <c>pad</c> word before the controls
+    /// (<c>spa/pod/pod.h:224-228</c>). The pad is written and is not optional: the first control
+    /// starts eight bytes into the body, and a reader that finds one at four reads its offset out
+    /// of the unit.
+    /// </para>
+    /// </remarks>
+    public void PushSequence(uint unit = 0)
+    {
+        Push(_pos);
+        WriteU32(0u);                // size placeholder - back-patched in Pop
+        WriteU32(SpaType.Sequence);
+        WriteU32(unit);
+        WriteU32(0u);                // pad
+    }
+
+    /// <summary>Writes a control header. The caller writes its value pod next.</summary>
+    /// <param name="offset">When it applies, in the sequence's unit.</param>
+    /// <param name="type">What the value means.</param>
+    /// <remarks>
+    /// Header then value, the same shape as a keyed property inside an object, so the existing value
+    /// writers serve both. Controls must be written in ascending offset order; nothing here enforces
+    /// it, because the check costs a comparison on the realtime path and the daemon reads them in
+    /// the order they appear either way.
+    /// </remarks>
+    public void AddControl(uint offset, SpaControlType type)
+    {
+        // spa_pod_control header: offset (uint32) + type (uint32), then the value pod.
+        WriteU32(offset);
+        WriteU32((uint)type);
+    }
+
+    /// <summary>Writes a whole control whose value is raw bytes: MIDI, UMP or OSC.</summary>
+    /// <param name="offset">When it applies, in the sequence's unit.</param>
+    /// <param name="type">What the bytes are.</param>
+    /// <param name="data">The payload.</param>
+    /// <remarks>
+    /// The three byte-valued control types are what a sequence usually carries, and writing one by
+    /// hand is a header, a pod header and a copy with the padding easy to get wrong.
+    /// </remarks>
+    public void AddControl(uint offset, SpaControlType type, scoped ReadOnlySpan<byte> data)
+    {
+        AddControl(offset, type);
+        AddBytes(data);
+    }
+
+    /// <summary>Writes a bare bytes pod.</summary>
+    public void AddBytes(scoped ReadOnlySpan<byte> data)
+    {
+        WriteU32((uint)data.Length);
+        WriteU32(SpaType.Bytes);
+        EnsureRoom(data.Length);
+        data.CopyTo(_buf.Slice(_pos, data.Length));
+        _pos += data.Length;
+        Align8();
+    }
+
     /// <summary>Closes the innermost open object, back-patching its size.</summary>
-    /// <exception cref="InvalidOperationException">No object is open.</exception>
+    /// <exception cref="InvalidOperationException">Nothing is open.</exception>
     public void Pop()
     {
         // Without this the index goes negative and back-patches a size at whatever sits before the
         // stack, which is silent corruption rather than a caller error.
         if (_depth == 0)
-            throw new InvalidOperationException("SpaPodBuilder: Pop with no open object.");
+            throw new InvalidOperationException("SpaPodBuilder: Pop with nothing open.");
 
         int start = _stack[--_depth];
         PatchSize(start);
         Align8();
     }
 
-    /// <summary>Closes any still-open object and returns the complete POD bytes.</summary>
+    /// <summary>Closes anything still open and returns the complete POD bytes.</summary>
     public ReadOnlySpan<byte> GetPod()
     {
         while (_depth > 0) Pop();

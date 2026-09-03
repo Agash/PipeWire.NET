@@ -14,7 +14,7 @@ using System.Runtime.CompilerServices;
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_audio_info_raw
+internal partial struct spa_audio_info_raw
 {
     [NativeTypeName("enum spa_audio_format")]
     public SpaAudioFormat format;

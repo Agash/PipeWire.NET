@@ -343,7 +343,6 @@ public sealed class MetadataReconcilerTests
     [TestMethod]
     public void AKeyWithARecordStillInTheWindow_StaysTracked()
     {
-        // The other side, so the drop above cannot pass by dropping everything.
         MetadataReconciler r = NewReconciler();
 
         Write(r, "A");

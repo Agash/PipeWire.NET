@@ -179,4 +179,143 @@ public sealed class ControlSurfaceTests
         Assert.IsFalse(ctx.TryLock(out _), "a disposed context must not hand out its loop lock");
         Assert.ThrowsExactly<ObjectDisposedException>(() => ctx.Lock().Dispose());
     }
+
+    [TestMethod]
+    public async Task ASubscribedVolumeChange_RaisesAnEventWhileConcurrentReadsAgree()
+    {
+        // Two things the ordinary read path never touches: the subscription set the daemon keeps
+        // per binding, and several enumerations sharing one answers table keyed by sequence.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-subscribe", cts.Token);
+        await using (ctx)
+        await using (registry)
+        {
+            PipeWireNode node = await registry.CreateVirtualNode("Subscribe")
+                .WithName($"pwnet_sub_{Environment.ProcessId}_{Random.Shared.Next():x}")
+                .ExecuteAsync(cts.Token);
+
+            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await control.ReadyAsync(cts.Token);
+
+            control.SubscribeParameters(SpaParamType.Props);
+            CollectionAssert.AreEqual(
+                new[] { SpaParamType.Props }, control.SubscribedParameters.ToArray());
+
+            var changed = new TaskCompletionSource<SpaObject>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            control.ParameterChanged += (_, value) =>
+            {
+                if (value.ObjectType == SpaType.ObjectProps)
+                    changed.TrySetResult(value);
+            };
+
+            // No writer is active, so every concurrent read must file under its own key and all
+            // must describe the same state.
+            Task<ImmutableArray<SpaObject>>[] reads =
+                Enumerable.Range(0, 8)
+                    .Select(_ => control.EnumerateParametersAsync(SpaParamType.Props, cts.Token))
+                    .ToArray();
+            ImmutableArray<SpaObject>[] results = await Task.WhenAll(reads);
+            foreach (ImmutableArray<SpaObject> result in results)
+                CollectionAssert.AreEqual(results[0].ToArray(), result.ToArray());
+
+            await control.SetVolumeAsync(0.5f, cts.Token);
+
+            SpaObject update = await changed.Task.WaitAsync(TimeSpan.FromSeconds(15), cts.Token);
+            Assert.AreEqual(0.5f, (update[SpaProp.Volume] as SpaFloat)?.Value);
+
+            control.UnsubscribeParameters();
+            Assert.AreEqual(0, control.SubscribedParameters.Length);
+
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
+        }
+    }
+
+    [TestMethod]
+    public async Task NodeParameterGuards_RefuseBadInputBeforeTheDaemon()
+    {
+        // Every argument guard on the node surface: none of these may reach the daemon, so all
+        // of them are checked against a node that is otherwise fully usable.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-nodeguards", cts.Token);
+        await using (ctx)
+        await using (registry)
+        {
+            PipeWireNode node = await registry.CreateVirtualNode("Guards")
+                .WithName($"pwnet_guards_{Environment.ProcessId}_{Random.Shared.Next():x}")
+                .ExecuteAsync(cts.Token);
+
+            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await control.ReadyAsync(cts.Token);
+
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => control.SetVolumeAsync(-1f));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => control.SetVolumeAsync(float.NaN));
+
+            await Assert.ThrowsExactlyAsync<ArgumentNullException>(
+                async () => await control.SetPortConfigAsync(null!, cts.Token));
+            await Assert.ThrowsExactlyAsync<ArgumentNullException>(
+                async () => await control.SetProcessLatencyAsync(null!, cts.Token));
+            await Assert.ThrowsExactlyAsync<ArgumentNullException>(
+                async () => await control.SetTagAsync(null!, cts.Token));
+
+            // Both channel-volume overloads reach the daemon: unchecked writes verbatim, checked
+            // writes against the map and the current volumes.
+            await control.SetChannelVolumesAsync(new float[] { 0.5f, 0.5f }, matchChannelMap: false, cts.Token);
+            await control.SetChannelVolumesAsync(new float[] { 0.5f, 0.5f }, matchChannelMap: true, cts.Token);
+
+            ImmutableArray<float> volumes = await control.GetChannelVolumesAsync(cts.Token);
+            CollectionAssert.AreEqual(new[] { 0.5f, 0.5f }, volumes.ToArray());
+
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
+        }
+    }
+
+    [TestMethod]
+    public async Task SyncDisposal_TearsDownWithoutAsync()
+    {
+        // Disposal here does no I/O, so the synchronous form must tear down exactly what the
+        // asynchronous one does.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        var ctx = new PipeWireContext("pwnet-syncdispose", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+        var registry = new PipeWireRegistry(ctx);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+
+        PipeWireMetadataStore? store = registry.BindMetadataStore("settings");
+        store?.Dispose();
+
+        registry.Dispose();
+        await ctx.DisposeAsync();
+
+        Assert.IsTrue(ctx.IsDisposed, "the context did not report itself disposed");
+    }
+
+    [TestMethod]
+    public async Task DefaultEndpointGuards_RefuseAnEmptyNameBeforeTheDaemon()
+    {
+        // A default stored by an empty name would drift onto whatever the daemon picks, so the
+        // empty case is refused here rather than written.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-defguards", cts.Token);
+        await using (ctx)
+        await using (registry)
+        {
+            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            if (store is null)
+                Assert.Inconclusive("no session manager, so no default store.");
+
+            await using (store)
+            {
+                await Assert.ThrowsExactlyAsync<ArgumentException>(
+                    async () => await store!.SetDefaultAudioSinkAsync("", cts.Token));
+                await Assert.ThrowsExactlyAsync<ArgumentException>(
+                    async () => await store!.SetDefaultAudioSourceAsync("", cts.Token));
+            }
+        }
+    }
 }

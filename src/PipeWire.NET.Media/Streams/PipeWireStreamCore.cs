@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -88,7 +89,20 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
     private PipeWireStreamHandle? _streamOwner;
 
-    /// <summary>The stream, read from the handle that owns it.</summary>
+    // Completed when the stream first reaches Streaming, or faulted when it reaches Error. Run
+    // asynchronously on purpose: the continuation must not run on the loop thread, where anything
+    // a caller does after awaiting would deadlock against the lock the callback holds.
+    // Controls the daemon has reported, newest report wins. A dictionary rather than a list: the
+    // daemon re-reports a control whenever one of its values changes, and appending would grow
+    // without bound on a stream whose volume is being moved.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<uint, PipeWireStreamControl>
+        _controls = new();
+
+    private readonly TaskCompletionSource _streaming =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private string? _lastError;
+
     private unsafe pw_stream* _stream => _streamOwner is null ? null : _streamOwner.Stream;
     private pw_stream_events* _events;
     // The spa_hook MUST live in unmanaged memory, not as a managed field: pw_stream_add_listener stores this
@@ -147,6 +161,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         _events->process       = &OnProcess;
         _events->state_changed = &OnStateChanged;
         _events->param_changed = &OnParamChanged;
+        _events->control_info  = &OnControlInfo;
         if (onAddBuffer is not null)    _events->add_buffer    = &OnAddBuffer;
         if (onRemoveBuffer is not null) _events->remove_buffer = &OnRemoveBuffer;
 
@@ -261,7 +276,6 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         }
     }
 
-    /// <inheritdoc/>
     private Exception? _lastProcessFault;
     private long _processFaults;
 
@@ -273,7 +287,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     internal (long Count, Exception? Last) ProcessFaults =>
         (Interlocked.Read(ref _processFaults), Volatile.Read(ref _lastProcessFault));
 
-    /// <summary>Tears the stream down. Disposal here is synchronous; the async form defers to it.</summary>
+    /// <summary>Disposal here is synchronous; the async form defers to it.</summary>
     public void Dispose() => DisposeCore();
 
     /// <inheritdoc/>
@@ -374,10 +388,12 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
                 // the product with 1e9 gets there far sooner: at 48 kHz the media clock drifts off
                 // the sample grid within a few days of continuous playback, which is exactly the
                 // kind of session this is meant to keep in sync. 128-bit intermediates cannot
-                // overflow for any rate a sound card has.
+                // overflow for any rate a sound card has. Ticks and rates are non-negative by
+                // construction, so the media product is unsigned; the delay below stays signed
+                // because negative latency compensation exists.
                 long num = t.rate.num, denom = t.rate.denom;     // seconds per tick = num/denom
                 long mediaNs = denom != 0
-                    ? (long)((Int128)(ulong)t.ticks * num * 1_000_000_000 / denom)
+                    ? (long)((UInt128)t.ticks * (UInt128)num * 1_000_000_000 / (UInt128)denom)
                     : -1;
                 long delayNs = denom != 0
                     ? (long)((Int128)(long)t.delay * num * 1_000_000_000 / denom)
@@ -458,15 +474,152 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         try
         {
             if (error is not null)
-                self.LogStreamError(DaemonText.String(error) ?? "(null)");
+            {
+                string reason = DaemonText.String(error) ?? "(null)";
+                self._lastError = reason;
+                self.LogStreamError(reason);
+            }
 
             self.LogStateChanged((PipeWireStreamState)(int)old, (PipeWireStreamState)(int)state);
+
+            self.SettleStreaming((PipeWireStreamState)(int)state);
 
             self._onState?.Invoke((PipeWireStreamState)(int)old, (PipeWireStreamState)(int)state);
         }
         catch (Exception ex)
         {
             self.LogStateHandlerThrew(ex);
+        }
+    }
+
+    /// <summary>Resolves the streaming completion once, on whichever terminal state arrives first.</summary>
+    /// <remarks>
+    /// Both calls are Try-: the daemon can report Error after Streaming, or the same state twice,
+    /// and a second attempt on a settled source throws rather than being ignored.
+    /// </remarks>
+    private void SettleStreaming(PipeWireStreamState state)
+    {
+        switch (state)
+        {
+            case PipeWireStreamState.Streaming:
+                _streaming.TrySetResult();
+                break;
+
+            case PipeWireStreamState.Error:
+                _streaming.TrySetException(new PipeWireException(
+                    $"stream '{_streamName}' failed to connect: {_lastError ?? "no reason reported"}"));
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    /// <summary>Waits until the stream is streaming, or throws if it fails or the wait is abandoned.</summary>
+    /// <remarks>
+    /// Negotiation is several round trips and the daemon drives it, so connecting is a request
+    /// rather than an outcome. Cancelling abandons the wait only: the stream stays connected and
+    /// keeps negotiating, because there is nothing to recall.
+    /// </remarks>
+    internal Task WaitForStreamingAsync(CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _streaming.Task.WaitAsync(cancellationToken);
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnControlInfo(void* data, uint id, pw_stream_control* control)
+    {
+        PipeWireStreamCore? self = FromData(data);
+        if (self is null) return;
+
+        // Contained in full: this reads a struct and a string the daemon owns, and it is a native
+        // frame where anything escaping aborts the process.
+        try
+        {
+            if (control is null)
+            {
+                self._controls.TryRemove(id, out _);
+                return;
+            }
+
+            // n_values is the daemon's word for how long the array is. Capped before a span is
+            // built over it, the same way every other length off the wire is.
+            uint count = control->n_values;
+            if (count > MaxControlValues) count = MaxControlValues;
+
+            var values = ImmutableArray.CreateBuilder<float>((int)count);
+            if (control->values is not null)
+            {
+                for (uint i = 0; i < count; i++) values.Add(control->values[i]);
+            }
+
+            self._controls[id] = new PipeWireStreamControl(
+                id,
+                DaemonText.String(control->name) ?? string.Empty,
+                control->def,
+                control->min,
+                control->max,
+                values.ToImmutable(),
+                control->max_values);
+        }
+        catch (Exception ex)
+        {
+            self.LogControlInfoThrew(ex);
+        }
+    }
+
+    /// <summary>
+    /// A ceiling on a control's value count, so a wrong <c>n_values</c> cannot walk off the array.
+    /// </summary>
+    /// <remarks>
+    /// A control carries one value or one per channel, and no channel map is anywhere near this
+    /// large. The number exists so a daemon reporting a count unrelated to its allocation is
+    /// truncated rather than read past.
+    /// </remarks>
+    private const uint MaxControlValues = 1024;
+
+    /// <summary>Every control the daemon has reported, by id.</summary>
+    internal ImmutableArray<PipeWireStreamControl> Controls => [.. _controls.Values];
+
+    /// <summary>One control by id, or null when the stream has not reported it.</summary>
+    internal PipeWireStreamControl? GetControl(uint id) =>
+        _controls.TryGetValue(id, out PipeWireStreamControl? control) ? control : null;
+
+    /// <summary>Sets a control's values.</summary>
+    /// <remarks>
+    /// Built as a <c>Props</c> object and sent through <c>pw_stream_set_param</c> rather than
+    /// through <c>pw_stream_set_control</c>. That function is variadic, which does not bind safely,
+    /// and it does nothing else: it builds exactly this object from its arguments and calls
+    /// <c>stream_set_param</c> with it (<c>pipewire/stream.c:2347-2404</c>). Going straight to the
+    /// pod skips the calling-convention hazard and loses nothing.
+    /// <para>
+    /// The container the daemon expects depends on the control: a single value goes as a bare Float
+    /// and several go as an Array of Float, which is the distinction its own builder makes.
+    /// </para>
+    /// </remarks>
+    internal void SetControl(uint id, ReadOnlySpan<float> values, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        SpaValue value = values.Length == 1
+            ? new SpaFloat(values[0])
+            : new SpaArray(SpaType.Float, [.. values.ToArray().Select(static v => (SpaValue)new SpaFloat(v))]);
+
+        byte[] pod = SpaPod.ToBytes(new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
+            [new SpaProperty(id, 0, value)]));
+
+        using (_ctx.Lock())
+        {
+            pw_stream* stream = _stream;
+            if (stream is null) throw new ObjectDisposedException(nameof(PipeWireStreamCore));
+
+            fixed (byte* p = pod)
+            {
+                int rc = Native.pw_stream_set_param(stream, (uint)SpaParamType.Props, (spa_pod*)p);
+                if (rc < 0) throw new PipeWireException("pw_stream_set_param", rc);
+            }
         }
     }
 
@@ -613,29 +766,33 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// <returns>
     /// The daemon's result, negative on failure, or <c>-EINVAL</c> when there was nothing to send.
     /// </returns>
-    internal int RequestParamsFromCallback(ReadOnlySpan<byte> pod0, ReadOnlySpan<byte> pod1 = default)
+    internal int RequestParamsFromCallback(
+        ReadOnlySpan<byte> pod0, ReadOnlySpan<byte> pod1 = default, ReadOnlySpan<byte> pod2 = default)
     {
         // An empty span fixes to a null pointer, and handing the daemon an array of one null pod
         // with a count of one is a dereference on its side, not ours. Snapshotted once for the same
         // reason OnProcess does: the field can be cleared by a disposal between the two reads.
         if (pod0.IsEmpty) return -22;
 
+        // A gap would put a null in the middle of the array, which is the same dereference one
+        // position along. Refused rather than compacted: a caller passing the third and not the
+        // second has miscounted, and silently sending two pods hides that.
+        if (pod1.IsEmpty && !pod2.IsEmpty) return -22;
+
         pw_stream* stream = _stream;
         if (_disposed || stream is null) return -22;
 
         fixed (byte* p0 = pod0)
         fixed (byte* p1 = pod1)
+        fixed (byte* p2 = pod2)
         {
-            if (pod1.IsEmpty)
-            {
-                spa_pod* one = (spa_pod*)p0;
-                return Native.pw_stream_update_params(stream, &one, 1);
-            }
+            spa_pod** arr = stackalloc spa_pod*[3];
+            int count = 0;
+            arr[count++] = (spa_pod*)p0;
+            if (!pod1.IsEmpty) arr[count++] = (spa_pod*)p1;
+            if (!pod2.IsEmpty) arr[count++] = (spa_pod*)p2;
 
-            spa_pod** arr = stackalloc spa_pod*[2];
-            arr[0] = (spa_pod*)p0;
-            arr[1] = (spa_pod*)p1;
-            return Native.pw_stream_update_params(stream, arr, 2);
+            return Native.pw_stream_update_params(stream, arr, (uint)count);
         }
     }
 
@@ -660,6 +817,10 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
     [LoggerMessage(Level = LogLevel.Error, Message = "a stream state handler threw")]
     private partial void LogStateHandlerThrew(Exception ex);
+
+    [LoggerMessage(EventId = 34990, Level = LogLevel.Error,
+        Message = "a control_info callback threw")]
+    private partial void LogControlInfoThrew(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "a format handler threw; negotiation continued with defaults")]
     private partial void LogFormatHandlerThrew(Exception ex);

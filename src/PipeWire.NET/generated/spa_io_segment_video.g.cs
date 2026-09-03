@@ -13,7 +13,7 @@ using System.Runtime.CompilerServices;
 
 namespace PipeWire.NET.Interop;
 
-public partial struct spa_io_segment_video
+internal partial struct spa_io_segment_video
 {
     [NativeTypeName("uint32_t")]
     public uint flags;

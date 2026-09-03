@@ -388,9 +388,7 @@ public sealed class GStreamerIntegrationTests
         long[] v;
         lock (pts) v = [.. pts];
 
-        // Real, non-zero timestamps actually arrived (proves the header-meta negotiation works).
         Assert.IsTrue(v[0] > 0, "presentation timestamps must be real (SPA_META_Header attached)");
-        // Strictly monotonic.
         for (int i = 1; i < v.Length; i++)
             Assert.IsTrue(v[i] > v[i - 1], "video PTS must increase monotonically");
         // Wall-clock paced: 30fps => ~33ms/frame. A counter or arbitrary value would not be.
@@ -506,13 +504,8 @@ public sealed class GStreamerIntegrationTests
         lock (vClk) v = [.. vClk];
         lock (aClk) a = [.. aClk];
 
-        // The two-provide-sink gst pipeline occasionally fails to start its video branch under daemon
-        // contention (a gst-launch dual-sink startup race, not a capture defect - the single-sink video
-        // tests above are reliable). That leaves nothing to compare, so report it as inconclusive rather
-        // than a false failure; the shared-clock assertion below still runs whenever the graph forms. The
-        // deterministic, contention-free coverage of the capture clock itself is AudioCapture_Exposes...
-        // and VideoPresentationTimestamps_...; this test specifically proves audio+video share ONE clock,
-        // which requires them in one driver group - only achievable via a single gst pipeline.
+        // Audio and video share one clock only when both legs are in one driver group, only
+        // achievable via a single gst pipeline; inconclusive when a leg never starts.
         if (v.Length == 0 || a.Length == 0)
         {
             Assert.Inconclusive(

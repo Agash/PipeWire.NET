@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct pw_node_info
+internal unsafe partial struct pw_node_info
 {
     [NativeTypeName("uint32_t")]
     public uint id;

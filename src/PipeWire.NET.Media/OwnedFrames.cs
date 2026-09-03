@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Media;
 
@@ -36,7 +37,45 @@ public sealed record OwnedVideoFrame(
     long? PresentationTimeNs,
     long? CaptureClockNs,
     long? MediaClockNs,
-    long DelayNs);
+    long DelayNs)
+{
+    // By content, not by array identity. A record compares its members with
+    // EqualityComparer{T}.Default, and for ImmutableArray{T} that compares the wrapped array by
+    // reference, so two snapshots of the same bytes would be unequal. A snapshot exists to be
+    // held and compared across an await, which is exactly where that is wrong.
+    /// <inheritdoc/>
+    public bool Equals(OwnedVideoFrame? other) =>
+        other is not null
+        && SpaValueEquality.SequenceEqual(Pixels, other.Pixels)
+        && Stride == other.Stride
+        && Width == other.Width
+        && Height == other.Height
+        && Format == other.Format
+        && SequenceNumber == other.SequenceNumber
+        && Color.Equals(other.Color)
+        && PresentationTimeNs == other.PresentationTimeNs
+        && CaptureClockNs == other.CaptureClockNs
+        && MediaClockNs == other.MediaClockNs
+        && DelayNs == other.DelayNs;
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(SpaValueEquality.Combine(Pixels));
+        hash.Add(Stride);
+        hash.Add(Width);
+        hash.Add(Height);
+        hash.Add(Format);
+        hash.Add(SequenceNumber);
+        hash.Add(Color);
+        hash.Add(PresentationTimeNs);
+        hash.Add(CaptureClockNs);
+        hash.Add(MediaClockNs);
+        hash.Add(DelayNs);
+        return hash.ToHashCode();
+    }
+}
 
 /// <summary>An audio chunk copied out of the stream's buffer, so it can outlive the handler.</summary>
 /// <inheritdoc cref="OwnedVideoFrame" path="/remarks"/>
@@ -58,4 +97,35 @@ public sealed record OwnedAudioFrame(
     long? PresentationTimeNs,
     long? CaptureClockNs,
     long? MediaClockNs,
-    long DelayNs);
+    long DelayNs)
+{
+    // By content, for the same reason as OwnedVideoFrame above.
+    /// <inheritdoc/>
+    public bool Equals(OwnedAudioFrame? other) =>
+        other is not null
+        && SpaValueEquality.SequenceEqual(Samples, other.Samples)
+        && SampleRate == other.SampleRate
+        && Channels == other.Channels
+        && Format == other.Format
+        && SequenceNumber == other.SequenceNumber
+        && PresentationTimeNs == other.PresentationTimeNs
+        && CaptureClockNs == other.CaptureClockNs
+        && MediaClockNs == other.MediaClockNs
+        && DelayNs == other.DelayNs;
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(SpaValueEquality.Combine(Samples));
+        hash.Add(SampleRate);
+        hash.Add(Channels);
+        hash.Add(Format);
+        hash.Add(SequenceNumber);
+        hash.Add(PresentationTimeNs);
+        hash.Add(CaptureClockNs);
+        hash.Add(MediaClockNs);
+        hash.Add(DelayNs);
+        return hash.ToHashCode();
+    }
+}

@@ -32,4 +32,7 @@ public static class SpaPodPropFlag
     /// supports, and the caller then fixates on one its GPU can import.
     /// </remarks>
     public const uint DontFixate = 1u << 4;
+
+    /// <summary>Drop the property when filtering, on both sides.</summary>
+    public const uint Drop = 1u << 5;
 }

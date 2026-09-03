@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public unsafe partial struct pw_protocol_client
+internal unsafe partial struct pw_protocol_client
 {
     [NativeTypeName("struct spa_list")]
     public spa_list link;

@@ -20,7 +20,7 @@ namespace PipeWire.NET.Graph;
 /// <para>
 /// Enumerating is a request/answer exchange, not a return value: the daemon replies with one
 /// <c>param</c> event per value and never says it has finished, so the end is found by round-tripping
-/// the core afterwards. That is what <see cref="EnumerateParametersAsync"/> hides.
+/// the core afterwards. That is what <see cref="EnumerateParametersAsync(SpaParamType, CancellationToken)"/> hides.
 /// </para>
 /// <para>
 /// Writing is asynchronous and unacknowledged. A parameter the object does not support is dropped
@@ -63,8 +63,7 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     /// </para>
     /// <para>
     /// Worth checking before enumerating. Asking for a parameter an object does not have is an
-    /// error the daemon reports, not an empty answer, so a caller that guesses gets an exception
-    /// rather than a shrug.
+    /// error the daemon reports, not an empty answer.
     /// </para>
     /// </remarks>
     public ImmutableArray<PipeWireParameterInfo> Parameters =>
@@ -139,7 +138,8 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     // be null even though the lock is held and a check just passed.
 
     /// <summary>Dispatches this interface's <c>enum_params</c>.</summary>
-    private protected abstract unsafe int EnumParamsNative(void* proxy, int seq, uint id, uint start, uint num);
+    private protected abstract unsafe int EnumParamsNative(
+        void* proxy, int seq, uint id, uint start, uint num, spa_pod* filter);
 
     /// <summary>Dispatches this interface's <c>set_param</c>.</summary>
     private protected abstract unsafe int SetParamNative(void* proxy, uint id, uint flags, spa_pod* param);
@@ -163,6 +163,54 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
 
+        return await EnumerateFilteredAsync(parameter, 0, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads every value of one parameter that matches a filter object.
+    /// </summary>
+    /// <param name="parameter">Which parameter to read, such as <see cref="SpaParamType.Profile"/>.</param>
+    /// <param name="filter">
+    /// An object whose scalar properties constrain the results: a candidate is reported only when
+    /// every scalar property here equals the candidate's property with the same key. Non-scalar
+    /// constraints (choices, ranges, nested objects) are not applied and leave the candidate in,
+    /// erring toward a superset the caller can narrow itself; a wrong reject would lose results.
+    /// </param>
+    /// <param name="cancellationToken">Abandons the wait; the request itself cannot be recalled.</param>
+    /// <returns>
+    /// The matching values, in the order the daemon sent them. Whether the daemon or this
+    /// library's own provider applies the filter depends on who serves the object; either way the
+    /// answer contains only matches.
+    /// </returns>
+    /// <remarks>
+    /// Values can arrive normalized: a daemon serving from its cache projects them through the
+    /// request filter, so a plain string may come back as a fixed single-default choice. Read
+    /// through choice defaults rather than asserting exact shapes.
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The binding has been disposed.</exception>
+    public Task<ImmutableArray<SpaObject>> EnumerateParametersAsync(
+        SpaParamType parameter, SpaObject filter, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(filter);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Serialized once and pinned for the synchronous issue below. The native call reads the
+        // filter while issuing the request and never afterwards, and the issue runs synchronously
+        // inside BeginEnumeration (the wait its task represents is what is asynchronous), so the
+        // pin only has to outlive this call, not the enumeration. This stays non-async so no
+        // pointer crosses an await boundary.
+        byte[] bytes = SpaPod.ToBytes(filter);
+        unsafe
+        {
+            fixed (byte* p = bytes)
+                return EnumerateFilteredAsync(parameter, (nint)p, cancellationToken);
+        }
+    }
+
+    private async Task<ImmutableArray<SpaObject>> EnumerateFilteredAsync(
+        SpaParamType parameter, nint filter, CancellationToken cancellationToken)
+    {
         // The sequence number the answers carry is not the one handed to enum_params. The protocol
         // replaces it with the connection's own message sequence and returns that, async-tagged, so
         // the collector can only be filed under what came back.
@@ -171,7 +219,8 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
         // param the request produced. Without the barrier there is nothing to wait on: the protocol
         // has no "that was the last one".
         int key = 0;
-        Task roundTrip = BeginEnumeration(parameter, k => key = k, cancellationToken);
+        Task roundTrip = BeginEnumeration(
+            parameter, filter, k => key = k, cancellationToken);
 
         try
         {
@@ -252,10 +301,17 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     }
 
     private unsafe Task BeginEnumeration(
-        SpaParamType parameter, Action<int> onKey, CancellationToken cancellationToken)
+        SpaParamType parameter, nint filter, Action<int> onKey, CancellationToken cancellationToken)
     {
         if (!Bound.TryUse(out BoundProxy.Use proxy))
             throw new ObjectDisposedException(nameof(PipeWireParameterObject));
+
+        // Every implementation of EnumParamsNative marshals to a remote proxy (pw_node/pw_device/
+        // pw_port over the daemon connection), and a marshalled enum_params always answers async
+        // with a sequence. A synchronous result can only come from calling a locally implemented
+        // object directly, which never passes through this path - so the bucket below is filed
+        // exactly when the request was actually queued, and no synchronous public path exists to
+        // demonstrate otherwise.
 
         // The request is issued synchronously inside the round-trip, so the reference only has to
         // outlive that call. A pointer cannot be captured, so it travels as an IntPtr.
@@ -265,7 +321,11 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
             return CoreSync.RoundTripAsync(_ctx, () =>
             {
                 // 0 to uint.MaxValue: every value the object has of this parameter.
-                int rc = EnumParamsNative((void*)obj, NextRequestTag(), (uint)parameter, 0, uint.MaxValue);
+                // The filter travels as an IntPtr because a pointer cannot be captured; it is only
+                // ever dereferenced here, synchronously, while the caller's pin is still held.
+                int rc = EnumParamsNative(
+                    (void*)obj, NextRequestTag(), (uint)parameter, 0, uint.MaxValue,
+                    (spa_pod*)filter);
 
                 // Filed while the loop lock is still held, so no param event for this request can
                 // have been dispatched yet - the loop thread dispatches them, and it is blocked on
@@ -283,19 +343,6 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
 
                 return rc;
             }, cancellationToken);
-        }
-    }
-
-    private unsafe int WriteParameter(SpaParamType parameter, ReadOnlySpan<byte> pod)
-    {
-        if (!Bound.TryUse(out BoundProxy.Use proxy))
-            throw new ObjectDisposedException(nameof(PipeWireParameterObject));
-
-        using (proxy)
-        using (_ctx.Lock())
-        {
-            fixed (byte* p = pod)
-                return SetParamNative(proxy.Object, (uint)parameter, 0, (spa_pod*)p);
         }
     }
 

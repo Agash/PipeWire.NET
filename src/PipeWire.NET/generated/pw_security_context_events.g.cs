@@ -11,7 +11,7 @@
 
 namespace PipeWire.NET.Interop;
 
-public partial struct pw_security_context_events
+internal partial struct pw_security_context_events
 {
     [NativeTypeName("uint32_t")]
     public uint version;

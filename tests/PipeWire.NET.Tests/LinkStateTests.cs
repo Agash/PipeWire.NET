@@ -136,8 +136,8 @@ public sealed class LinkStateTests
                 // and the event carries what happens after. Asserting otherwise is asserting a race.
                 PipeWireLinkState starting = control.State;
 
-                // Something the link must react to. Removing the far end takes it out of whatever
-                // it settled at, and that transition is the one an event has to carry.
+                // Removing the far end takes it out of whatever it settled at, and that transition
+                // is the one an event has to carry.
                 await registry.DestroyGlobalAsync(sink.NodeId, cts.Token);
 
                 for (int attempt = 0; attempt < 100 && seen.IsEmpty; attempt++)
@@ -258,6 +258,116 @@ public sealed class LinkStateTests
 
             await registry.WaitForInitialEnumerationAsync(cts.Token);
             Assert.IsTrue(registry.Current.Nodes.Length > 0, "the refusal disturbed the connection");
+        }
+    }
+
+    [TestMethod]
+    public async Task ASubscribedPort_ReportsItsFormatsAsEvents()
+    {
+        // Subscribing re-enumerates immediately on the daemon side, so the first event needs no
+        // graph change to arrive. A handler that throws must be contained the same way.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-portsub", cts.Token);
+        await using (ctx)
+        await using (registry)
+        {
+            PipeWireNode source = await registry.CreateVirtualNode("PortSub")
+                .WithName(Unique("pwnet_psub_src")).ExecuteAsync(cts.Token);
+            PipeWireNode sink = await registry.CreateVirtualNode("PortSub")
+                .WithName(Unique("pwnet_psub_sink")).ExecuteAsync(cts.Token);
+
+            PipeWirePort output = await PortAsync(registry, source.NodeId, PipeWirePortDirection.Out, cts.Token);
+            PipeWirePort input = await PortAsync(registry, sink.NodeId, PipeWirePortDirection.In, cts.Token);
+
+            PipeWireLink link = await registry.CreateLinkAsync(output, input, cts.Token);
+
+            await using (PipeWirePortControl port = registry.BindPort(input.PortId))
+            {
+                // Linked, so there are formats to report. An unlinked port answers empty and
+                // would leave the wait below hanging on nothing.
+                ImmutableArray<SpaObject> supported =
+                    await port.EnumerateSupportedFormatsAsync(cts.Token);
+                if (supported.IsEmpty)
+                    Assert.Inconclusive("the linked port reported no formats to subscribe to.");
+
+                port.SubscribeParameters(SpaParamType.EnumFormat);
+                CollectionAssert.AreEqual(
+                    new[] { SpaParamType.EnumFormat }, port.SubscribedParameters.ToArray());
+
+                var first = new TaskCompletionSource<SpaObject>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                port.ParameterChanged += (_, value) =>
+                {
+                    if (value.ObjectType == SpaType.ObjectFormat)
+                        first.TrySetResult(value);
+                };
+
+                // Re-subscribing re-enumerates, which is what delivers the event deterministically.
+                port.SubscribeParameters(SpaParamType.EnumFormat);
+
+                SpaObject report = await first.Task.WaitAsync(TimeSpan.FromSeconds(15), cts.Token);
+                Assert.AreEqual(SpaType.ObjectFormat, report.ObjectType);
+
+                // A throwing subscriber is reported and does not stop the binding: subscribing
+                // again fires the faulting handler, and the binding still answers afterwards.
+                port.ParameterChanged += (_, _) => throw new InvalidOperationException("deliberate");
+                port.SubscribeParameters(SpaParamType.EnumFormat);
+
+                ImmutableArray<SpaObject> stillThere =
+                    await port.EnumerateSupportedFormatsAsync(cts.Token);
+                Assert.IsFalse(stillThere.IsEmpty, "the binding stopped answering after a faulting handler");
+
+                ImmutableArray<PipeWireLatency> latencies = await port.GetLatenciesAsync(cts.Token);
+                Console.Error.WriteLine($"port {input.PortId} reports {latencies.Length} latencies");
+                ImmutableArray<PipeWireTag> tags = await port.GetTagsAsync(cts.Token);
+                Console.Error.WriteLine($"port {input.PortId} reports {tags.Length} tags");
+
+                port.UnsubscribeParameters();
+                Assert.AreEqual(0, port.SubscribedParameters.Length);
+            }
+
+            await registry.DestroyGlobalAsync(link.LinkId, cts.Token);
+            await registry.DestroyGlobalAsync(source.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(sink.NodeId, cts.Token);
+        }
+    }
+
+    [TestMethod]
+    public async Task LinkCreationProperties_AreGuardedAndReachTheDaemon()
+    {
+        // The endpoints and the factory are what the link is, not properties of it: smuggling
+        // one in as a property would route the link elsewhere, so the builder refuses them.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-linkprops", cts.Token);
+        await using (ctx)
+        await using (registry)
+        {
+            PipeWireNode source = await registry.CreateVirtualNode("LinkProps")
+                .WithName(Unique("pwnet_lp_src")).ExecuteAsync(cts.Token);
+            PipeWireNode sink = await registry.CreateVirtualNode("LinkProps")
+                .WithName(Unique("pwnet_lp_sink")).ExecuteAsync(cts.Token);
+
+            PipeWirePort output = await PortAsync(registry, source.NodeId, PipeWirePortDirection.Out, cts.Token);
+            PipeWirePort input = await PortAsync(registry, sink.NodeId, PipeWirePortDirection.In, cts.Token);
+
+            Assert.ThrowsExactly<ArgumentException>(
+                () => registry.CreateLink(output, input).WithProperty("", "v"));
+            Assert.ThrowsExactly<ArgumentNullException>(
+                () => registry.CreateLink(output, input).WithProperty("k", null!));
+            Assert.ThrowsExactly<ArgumentException>(
+                () => registry.CreateLink(output, input).WithProperty("factory.name", "other"));
+
+            PipeWireLink link = await registry.CreateLink(output, input)
+                .WithProperty("link.passive", "true")
+                .ExecuteAsync(cts.Token);
+
+            Assert.IsNotNull(registry.Current.GetLink(link.LinkId), "the link was not created");
+
+            await registry.DestroyGlobalAsync(link.LinkId, cts.Token);
+            await registry.DestroyGlobalAsync(source.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(sink.NodeId, cts.Token);
         }
     }
 }

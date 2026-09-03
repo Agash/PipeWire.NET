@@ -49,7 +49,6 @@ public sealed class NativeLifetimeTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        // Own several proxies, tear the context down first, then let the registry unwind afterwards.
         var ctx = new PipeWireContext("pwnet-nl-owned", ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
         var reg = new PipeWireRegistry(ctx);
@@ -84,9 +83,7 @@ public sealed class NativeLifetimeTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        // The harder version: nothing disposes the registry at all, so the proxy handles are
-        // released by finalization, long after the context and its core went away. This removes
-        // every ordering guarantee except the handle ref-count itself.
+        // No ordering guarantee remains except the handle ref-count.
         await CreateAndAbandonAsync(cts.Token);
 
         GC.Collect();
@@ -106,8 +103,7 @@ public sealed class NativeLifetimeTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        // Disposal is the orderly path and it is already covered. This is the one that says whether
-        // linger is a property of the object on the daemon or an artefact of how we shut down: the
+        // Linger is a property of the object on the daemon, not an artefact of shutdown: the
         // creator is abandoned to the finalizer, so the proxies are released with no ordering and
         // no chance for the library to say anything to the daemon first. If a finalizer took the
         // node with it, linger would be a promise the library breaks whenever a caller forgets a
@@ -183,12 +179,10 @@ public sealed class NativeLifetimeTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        // pw_init is called per context and pw_deinit is never called, which reads like an
-        // unbalanced refcount. The balancing call is not the fix it looks like: pw_deinit tears down
-        // process-global PipeWire state, and a library that does that when its last context closes
-        // breaks a host application, or another library in the same process, that is still using
-        // PipeWire. So the question is not whether the calls are balanced but whether repeating
-        // pw_init actually costs anything, which is measurable.
+        // pw_init is called per context and pw_deinit is never called. The balancing call is not
+        // the fix it looks like: pw_deinit tears down process-global PipeWire state, and a library
+        // that does that when its last context closes breaks a host application, or another library
+        // in the same process, that is still using PipeWire.
         for (int i = 0; i < 10; i++)
         {
             await using var warm = new PipeWireContext($"pwnet-init-warm-{i}", ConsoleTestLoggerFactory.Instance);
@@ -299,7 +293,6 @@ public sealed class NativeLifetimeTests
             await reg.CreateVirtualNode($"Abandoned {i}").WithName($"pwnet_nl_ab_{i}")
                      .ExecuteAsync(ct);
 
-        // Context goes; registry and its proxy handles are simply dropped.
         await ctx.DisposeAsync();
     }
 
@@ -361,7 +354,6 @@ public sealed class NativeLifetimeTests
         // the assertion in proxy.c and abort.
         await reg.DisposeAsync();
 
-        // The foreign node must still be there: it was never ours to destroy.
         Assert.IsTrue(await ForeignNodeStillPresentAsync("input.pwnet_nl_foreign", cts.Token),
             "disposing our registry destroyed a node belonging to another process");
     }
@@ -508,7 +500,7 @@ public sealed class NativeLifetimeTests
         await using var ctx = new PipeWireContext("pwnet-nl-immediate", ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
 
-        // Tighter still: create on the line after construction, before any global can have arrived.
+        // Create on the line after construction, before any global can have arrived.
         await using var reg = new PipeWireRegistry(ctx);
         PipeWireNode node = await reg.CreateVirtualNode("Immediate")
                                      .WithName("pwnet_nl_immediate").ExecuteAsync(cts.Token);

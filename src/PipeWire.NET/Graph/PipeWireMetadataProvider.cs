@@ -31,6 +31,12 @@ namespace PipeWire.NET.Graph;
 /// <c>module.metadata</c> is turned off.
 /// </para>
 /// <para>
+/// Writes and per-key removals from other clients arrive here; a bulk clear does not. The daemon
+/// answers a clear from its own state without forwarding it to the implementation, so after one
+/// this cache still lists entries the session no longer has. Entries read here are what this
+/// process wrote or was told about, not a live view of the daemon's.
+/// </para>
+/// <para>
 /// <b>Dispose it; do not let it fall out of scope.</b> The callbacks the daemon holds refer back
 /// here through a weak handle, so an instance the application drops is collected and simply stops
 /// delivering, with no error and no final state change. That is the deliberate half of the trade:
@@ -249,13 +255,29 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
         uint subject = PipeWireMetadataStore.SubjectCore)
     {
         ArgumentNullException.ThrowIfNull(key);
+        ThrowIfContainsNul(key, nameof(key));
+        ThrowIfContainsNul(value, nameof(value));
+        ThrowIfContainsNul(type, nameof(type));
         SetProperty(subject, key, type, value);
     }
 
-    /// <summary>The write itself. A null key is the store's clear form and is not offered publicly.</summary>
+    /// <summary>Refuses embedded NUL bytes, which would file different entries natively and managed.</summary>
+    /// <exception cref="ArgumentException">A field contains an embedded NUL byte.</exception>
+    private static void ThrowIfContainsNul(string? text, string paramName)
+    {
+        if (text is not null && text.Contains('\0'))
+            throw new ArgumentException("metadata fields cannot contain NUL bytes.", paramName);
+    }
+
     private void SetProperty(uint subject, string? key, string? type, string? value)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // Native strings end at the first NUL while the managed cache keys on the whole string, so
+        // an embedded NUL would file one entry here and another in the daemon and never reconcile.
+        ThrowIfContainsNul(key, nameof(key));
+        ThrowIfContainsNul(type, nameof(type));
+        ThrowIfContainsNul(value, nameof(value));
 
         ReadOnlySpan<byte> keyUtf8 = key is null ? default : Encoding.UTF8.GetBytes(key + '\0');
         ReadOnlySpan<byte> typeUtf8 = type is null ? default : Encoding.UTF8.GetBytes(type + '\0');
@@ -346,12 +368,6 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
             // SPA_ID_INVALID means every subject, not a subject numbered 0xFFFFFFFF. Comparing it
             // to a stored subject matches nothing, so a store-wide clear would drop no entries at
             // all and the cache would keep reporting values the server no longer has.
-            //
-            // Defensive: whether the daemon uses this form for a clear is not something the test
-            // box can show, because a served store cannot yet be bound by another client and
-            // clearing the session's own store would take the machine's audio routing with it. If
-            // the daemon never sends it the branch is dead, and if it does this is the difference
-            // between an empty cache and a stale one.
             bool everySubject = subject == Native.SPA_ID_INVALID;
 
             foreach ((uint Subject, string Key) existing in _entries.Keys)

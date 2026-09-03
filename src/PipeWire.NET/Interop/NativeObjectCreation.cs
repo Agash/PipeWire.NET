@@ -110,6 +110,7 @@ internal sealed class NativeObjectCreation : IDisposable
         try
         {
             using (cancellationToken.UnsafeRegister(static s => ((NativeObjectCreation)s!).Cancel(), this))
+            using (_ctx.Shutdown.UnsafeRegister(static s => ((NativeObjectCreation)s!).OnContextShutdown(), this))
             {
                 uint id = await _bound.Task.ConfigureAwait(false);
                 onBound?.Invoke(id);
@@ -130,6 +131,20 @@ internal sealed class NativeObjectCreation : IDisposable
         {
             Dispose();
         }
+    }
+
+    /// <summary>
+    /// Called when the owning context enters disposal. Surfaces an
+    /// <see cref="ObjectDisposedException"/> to whatever in-flight call is awaiting the
+    /// bound or sync task, instead of leaving it blocked forever on a loop that has already
+    /// been stopped.
+    /// </summary>
+    private void OnContextShutdown()
+    {
+        var ex = new ObjectDisposedException(nameof(PipeWireContext),
+            "the context was disposed while object creation was in flight.");
+        _bound.TrySetException(ex);
+        _synced.TrySetException(ex);
     }
 
     private unsafe void Start(ReadOnlySpan<byte> factoryName, ReadOnlySpan<byte> interfaceType,

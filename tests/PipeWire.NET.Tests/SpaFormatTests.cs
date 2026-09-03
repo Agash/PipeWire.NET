@@ -64,8 +64,7 @@ public sealed class SpaFormatTests
     public void AnUnknownSpaAudioFormat_IsReportedAsUnknownRatherThanGuessed()
     {
         // An unrecognised format must not read as a real one, or a consumer reads four-byte
-        // floats out of whatever was actually negotiated. The audio map behaves like the video
-        // map above.
+        // floats out of whatever was actually negotiated.
         Assert.AreEqual(AudioSampleFormat.Unknown, SpaFormatPod.FromSpaAudioFormat((SpaAudioFormat)0xDEADBEEF));
 
         // Two the daemon really does negotiate.
@@ -265,12 +264,39 @@ public sealed class SpaFormatTests
             SpaFormatPod.MapColorRange(SpaVideoColorRange.Full));
         Assert.AreEqual(VideoColorRange.Limited_16_235,
             SpaFormatPod.MapColorRange(SpaVideoColorRange.Limited));
-        Assert.AreEqual(VideoColorMatrix.Bt2020,
-            SpaFormatPod.MapColorMatrix(SpaVideoColorMatrix.Bt2020));
-        Assert.AreEqual(VideoTransferFunction.Srgb,
-            SpaFormatPod.MapTransfer(SpaVideoTransferFunction.Srgb));
-        Assert.AreEqual(VideoColorPrimaries.Bt709,
-            SpaFormatPod.MapPrimaries(SpaVideoColorPrimaries.Bt709));
+
+        // Every member is mapped or explicitly unknown: a quiet default here mistranslates
+        // colour, so the map is total by test rather than by inspection.
+        foreach ((SpaVideoColorMatrix spa, VideoColorMatrix expected) in new[]
+        {
+            (SpaVideoColorMatrix.Unknown, VideoColorMatrix.Unknown),
+            (SpaVideoColorMatrix.Rgb, VideoColorMatrix.Rgb),
+            (SpaVideoColorMatrix.Fcc, VideoColorMatrix.Unknown),
+            (SpaVideoColorMatrix.Bt709, VideoColorMatrix.Bt709),
+            (SpaVideoColorMatrix.Bt601, VideoColorMatrix.Bt601),
+            (SpaVideoColorMatrix.Smpte240M, VideoColorMatrix.Unknown),
+            (SpaVideoColorMatrix.Bt2020, VideoColorMatrix.Bt2020),
+        })
+            Assert.AreEqual(expected, SpaFormatPod.MapColorMatrix(spa), $"matrix {spa}");
+
+        foreach ((SpaVideoTransferFunction spa, VideoTransferFunction expected) in new[]
+        {
+            (SpaVideoTransferFunction.Unknown, VideoTransferFunction.Unknown),
+            (SpaVideoTransferFunction.Gamma22, VideoTransferFunction.Gamma22),
+            (SpaVideoTransferFunction.Bt709, VideoTransferFunction.Bt709),
+            (SpaVideoTransferFunction.Srgb, VideoTransferFunction.Srgb),
+            (SpaVideoTransferFunction.Bt2020_12, VideoTransferFunction.Bt2020_12),
+            (SpaVideoTransferFunction.Gamma10, VideoTransferFunction.Unknown),
+            (SpaVideoTransferFunction.Smpte2084, VideoTransferFunction.Unknown),
+        })
+            Assert.AreEqual(expected, SpaFormatPod.MapTransfer(spa), $"transfer {spa}");
+
+        foreach ((SpaVideoColorPrimaries spa, VideoColorPrimaries expected) in new[]
+        {
+            (SpaVideoColorPrimaries.Bt709, VideoColorPrimaries.Bt709),
+            (SpaVideoColorPrimaries.Bt2020, VideoColorPrimaries.Bt2020),
+        })
+            Assert.AreEqual(expected, SpaFormatPod.MapPrimaries(spa), $"primaries {spa}");
     }
 
     // ---------------------------------------------------------------- param writing
@@ -352,5 +378,157 @@ public sealed class SpaFormatTests
         var missing = supported.Where(f => !offered.Contains(f)).ToList();
         CollectionAssert.AreEqual(Array.Empty<PixelFormat>(), missing,
             $"these supported formats are not offered by default: {string.Join(", ", missing)}");
+    }
+
+    // ---------------------------------------------------------------- explicit sync and hostile formats
+
+    [TestMethod]
+    public void WriteSyncTimelineMetaParam_NamesTheTimeline()
+    {
+        // The opt-in half of explicit sync: without this param the producer never attaches the
+        // meta the reader looks for below.
+        Span<byte> buf = stackalloc byte[128];
+        int written = SpaFormatPod.WriteSyncTimelineMetaParam(buf);
+        Assert.IsTrue(written > 0);
+
+        Assert.IsTrue(SpaPod.TryParse(buf[..written], out SpaValue? value));
+        var obj = (SpaObject)value!;
+        Assert.AreEqual(SpaType.ObjectParamMeta, obj.ObjectType);
+        Assert.AreEqual(SpaParamType.Meta, obj.ObjectId);
+        Assert.AreEqual(
+            (uint)SpaMetaType.SyncTimeline, ((SpaId)obj[SpaParamMeta.Type]!).Value);
+    }
+
+    [TestMethod]
+    public unsafe void TryFindSyncTimeline_ReadsThePointsOffTheBuffer()
+    {
+        spa_meta_sync_timeline native = new()
+        {
+            flags = 1, acquire_point = 10, release_point = 20,
+        };
+        spa_meta meta = new()
+        {
+            type = (uint)SpaMetaType.SyncTimeline,
+            size = (uint)sizeof(spa_meta_sync_timeline),
+            data = &native,
+        };
+        spa_buffer buf = new() { n_metas = 1, metas = &meta };
+
+        Assert.IsTrue(SpaFormatPod.TryFindSyncTimeline(&buf, out SpaFormatPod.SyncTimeline found));
+        Assert.AreEqual(1u, found.Flags);
+        Assert.AreEqual(10ul, found.AcquirePoint);
+        Assert.AreEqual(20ul, found.ReleasePoint);
+    }
+
+    [TestMethod]
+    public unsafe void TryFindSyncTimeline_RefusesAnUndersizedTimeline()
+    {
+        // The right type with fewer bytes than the struct is a truncated meta, not a short one.
+        ulong point = 10;
+        spa_meta meta = new()
+        {
+            type = (uint)SpaMetaType.SyncTimeline,
+            size = 4,
+            data = &point,
+        };
+        spa_buffer buf = new() { n_metas = 1, metas = &meta };
+
+        Assert.IsFalse(SpaFormatPod.TryFindSyncTimeline(&buf, out _));
+    }
+
+    [TestMethod]
+    public unsafe void AVideoFormatPropertyOfTheWrongType_IsSkippedRatherThanAdopted()
+    {
+        // A producer may send a property whose type does not match its key. Reading it would
+        // adopt nonsense geometry; the previous negotiation is kept instead.
+        Span<byte> buf = stackalloc byte[256];
+        var b = new SpaPodBuilder(buf);
+        b.PushObject(SpaType.ObjectFormat, SpaParamType.Format);
+        b.AddInt(SpaFormat.VideoSize, 123);
+        b.AddId(SpaFormat.VideoFormat, SpaVideoFormat.Bgra);
+        ReadOnlySpan<byte> pod = b.GetPod();
+
+        var start = new SpaFormatPod.VideoFormatInfo(PixelFormat.Rgba, 640, 480, default);
+        SpaFormatPod.VideoFormatInfo parsed;
+        fixed (byte* p = pod)
+            parsed = SpaFormatPod.ParseVideoFormat((spa_pod*)p, start);
+
+        Assert.AreEqual(640, parsed.Width);
+        Assert.AreEqual(480, parsed.Height);
+        Assert.AreEqual(PixelFormat.Bgra, parsed.Format);
+    }
+
+    [TestMethod]
+    public unsafe void AnAudioFormatPropertyOfTheWrongType_IsSkippedRatherThanAdopted()
+    {
+        Span<byte> buf = stackalloc byte[256];
+        var b = new SpaPodBuilder(buf);
+        b.PushObject(SpaType.ObjectFormat, SpaParamType.Format);
+        b.AddInt(SpaFormat.AudioFormat, 123);
+        b.AddInt(SpaFormat.AudioRate, 48000);
+        ReadOnlySpan<byte> pod = b.GetPod();
+
+        var start = new SpaFormatPod.AudioFormatInfo(AudioSampleFormat.F32Le, 44100, 1);
+        SpaFormatPod.AudioFormatInfo parsed;
+        fixed (byte* p = pod)
+            parsed = SpaFormatPod.ParseAudioFormat((spa_pod*)p, start);
+
+        Assert.AreEqual(AudioSampleFormat.F32Le, parsed.Format);
+        Assert.AreEqual(48000, parsed.SampleRate);
+    }
+
+    // ---------------------------------------------------------------- explicit-sync fd lookup
+
+    [TestMethod]
+    public unsafe void TryFindSyncDataFds_ReadsAcquireAndRelease()
+    {
+        // Located by type, not position: the MemPtr plane in the middle must not shift the
+        // acquire/release pairing. Mirrors the producer layout: planes first, sync blocks last.
+        spa_data acquire = new() { type = (uint)SpaDataType.SyncObj, fd = 11 };
+        spa_data ignored = new() { type = (uint)SpaDataType.MemPtr, fd = 33 };
+        spa_data release = new() { type = (uint)SpaDataType.SyncObj, fd = 22 };
+        spa_data* three = stackalloc spa_data[3] { acquire, ignored, release };
+        spa_buffer buf = new() { n_datas = 3, datas = three };
+
+        Assert.IsTrue(SpaFormatPod.TryFindSyncDataFds(&buf, out int acquireFd, out int releaseFd));
+        Assert.AreEqual(11, acquireFd);
+        Assert.AreEqual(22, releaseFd);
+    }
+
+    [TestMethod]
+    public unsafe void TryFindSyncDataFds_ReturnsFalseWhenFewerThanTwoSyncObjs()
+    {
+        // One timeline is not a pair: the outs are reset so a caller cannot mistake a stale
+        // acquire for a usable handshake.
+        spa_data acquire = new() { type = (uint)SpaDataType.SyncObj, fd = 11 };
+        spa_data plane = new() { type = (uint)SpaDataType.MemPtr, fd = 33 };
+        spa_data* two = stackalloc spa_data[2] { acquire, plane };
+        spa_buffer buf = new() { n_datas = 2, datas = two };
+
+        Assert.IsFalse(SpaFormatPod.TryFindSyncDataFds(&buf, out int acquireFd, out int releaseFd));
+        Assert.AreEqual(-1, acquireFd);
+        Assert.AreEqual(-1, releaseFd);
+    }
+
+    [TestMethod]
+    public unsafe void TryFindSyncDataFds_ReturnsFalseOnNullBufferOrDatas()
+    {
+        // A buffer with nowhere to look is not explicit-sync, not a crash.
+        Assert.IsFalse(SpaFormatPod.TryFindSyncDataFds(null, out _, out _));
+
+        spa_buffer buf = new() { n_datas = 2, datas = null };
+        Assert.IsFalse(SpaFormatPod.TryFindSyncDataFds(&buf, out _, out _));
+    }
+
+    [TestMethod]
+    public unsafe void TryFindSyncDataFds_RejectsAnUnusableFd()
+    {
+        // A negative fd is a closed timeline, not acquire fd -1 with a second block following.
+        spa_data closed = new() { type = (uint)SpaDataType.SyncObj, fd = -1 };
+        spa_data release = new() { type = (uint)SpaDataType.SyncObj, fd = 22 };
+        spa_data* two = stackalloc spa_data[2] { closed, release };
+        spa_buffer buf = new() { n_datas = 2, datas = two };
+
+        Assert.IsFalse(SpaFormatPod.TryFindSyncDataFds(&buf, out _, out _));
     }
 }
