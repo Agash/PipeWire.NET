@@ -56,13 +56,13 @@ public sealed class LifetimeInvariantTests
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
         // Drive every path that publishes: node creation, port arrival, linking, unlinking, removal.
-        PipeWireNode sink = await registry.CreateVirtualStereoNode("Monotonic")
+        PipeWireNode sink = await registry.CreateVirtualNode("Monotonic")
             .WithName("pwnet_monotonic_sink").ExecuteAsync(cts.Token);
-        PipeWireNode source = await registry.CreateVirtualStereoNode("MonotonicSrc")
+        PipeWireNode source = await registry.CreateVirtualNode("MonotonicSrc")
             .WithName("pwnet_monotonic_src").ExecuteAsync(cts.Token);
 
-        await registry.RemoveObjectAsync(source.NodeId, cts.Token);
-        await registry.RemoveObjectAsync(sink.NodeId, cts.Token);
+        await registry.DestroyGlobalAsync(source.NodeId, cts.Token);
+        await registry.DestroyGlobalAsync(sink.NodeId, cts.Token);
 
         Assert.IsTrue(faults.Count == 0, string.Join("; ", faults));
         Assert.IsTrue(highest > 0, "nothing was published, so nothing was actually checked");
@@ -86,7 +86,7 @@ public sealed class LifetimeInvariantTests
             Task<PipeWireNode>[] creations =
             [
                 .. Enumerable.Range(0, 6).Select(i =>
-                    registry.CreateVirtualStereoNode($"Waiter{round}_{i}")
+                    registry.CreateVirtualNode($"Waiter{round}_{i}")
                             .WithName($"pwnet_waiter_{round}_{i}")
                             .ExecuteAsync(cts.Token)),
             ];
@@ -97,7 +97,7 @@ public sealed class LifetimeInvariantTests
             {
                 Assert.IsNotNull(registry.Current.GetNode(node.NodeId),
                     $"node {node.NodeId} was reported created but is not in the graph");
-                await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+                await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
             }
         }
     }
@@ -113,7 +113,7 @@ public sealed class LifetimeInvariantTests
         var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await registry.CreateVirtualStereoNode("Order")
+        PipeWireNode node = await registry.CreateVirtualNode("Order")
             .WithName("pwnet_order_sink").ExecuteAsync(cts.Token);
 
         PipeWireNodeControl control = registry.BindNode(node.NodeId);
@@ -133,7 +133,7 @@ public sealed class LifetimeInvariantTests
         using var cts = new CancellationTokenSource(Budget);
 
         // The window this targets: a teardown path checks the context is alive, then takes the loop
-        // lock. Disposing between the two used to throw ObjectDisposedException out of a Dispose.
+        // lock, and disposing between the two must not throw out of a Dispose.
         for (int round = 0; round < 8; round++)
         {
             var ctx = new PipeWireContext($"pwnet-teardown-{round}", ConsoleTestLoggerFactory.Instance);
@@ -144,12 +144,12 @@ public sealed class LifetimeInvariantTests
             {
                 try
                 {
-                    PipeWireNode node = await registry.CreateVirtualStereoNode($"Teardown{round}")
+                    PipeWireNode node = await registry.CreateVirtualNode($"Teardown{round}")
                         .WithName($"pwnet_teardown_{round}").ExecuteAsync(cts.Token);
-                    await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+                    await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
                 }
                 catch (ObjectDisposedException) { }
-                catch (InvalidOperationException) { }
+                catch (Exception e) when (e is InvalidOperationException or PipeWireException) { }
                 catch (OperationCanceledException) { }
             }, cts.Token);
 
@@ -171,7 +171,7 @@ public sealed class LifetimeInvariantTests
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await registry.CreateVirtualStereoNode("Finalize")
+        PipeWireNode node = await registry.CreateVirtualNode("Finalize")
             .WithName("pwnet_finalize_sink").ExecuteAsync(cts.Token);
 
         // Bound and dropped without disposing, which is what an application will eventually do by
@@ -184,7 +184,7 @@ public sealed class LifetimeInvariantTests
 
         // Still usable afterwards: the finalizer must not have taken anything shared with it.
         Assert.IsNotNull(registry.Current.GetNode(node.NodeId));
-        await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+        await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
     }
 
     private static void BindAndAbandon(PipeWireRegistry registry, uint nodeId)

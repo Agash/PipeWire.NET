@@ -1,5 +1,3 @@
-// A standalone pen-test harness: long-running, adversarial, and driven from outside by CLI tools.
-// Not a unit test - it is meant to be run against a session that other processes are churning.
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
@@ -12,15 +10,39 @@ namespace PipeWire.NET.Tests;
 /// processes are churning at the same time - not part of an ordinary run.
 /// </summary>
 /// <remarks>
-/// Excluded from the normal suite by its category. Each scenario runs until its budget expires and
-/// reports counters; a hang, an abort, or a read-after-write mismatch is the finding.
+/// <para>
+/// Each scenario runs until its budget expires and reports counters; a hang, an abort, or a
+/// read-after-write mismatch is the finding.
+/// </para>
+/// <para>
+/// Carries Integration and RequiresDaemon as well as its own category, which is not redundant:
+/// every filter in CI is written as an exclusion of Integration, so a class tagged only PenTest
+/// lands in the leg that runs without a daemon and fails on pw_context_connect.
+/// </para>
+/// <para>
+/// Every leg also excludes PenTest by name. These scenarios churn one shared session for seconds at
+/// a time - twelve contexts opening at once, metadata written in a tight loop - so anything sharing
+/// that session fails on this harness's traffic rather than on anything of its own. Run them
+/// deliberately: <c>--filter "TestCategory=PenTest"</c>, with <c>PWNET_PEN_SECONDS</c> to soak.
+/// </para>
 /// </remarks>
 [TestClass]
 [TestCategory("PenTest")]
+[TestCategory("Integration")]
+[TestCategory("RequiresDaemon")]
+[DoNotParallelize]
 [SupportedOSPlatform("linux")]
 public sealed class PenHarness
 {
     private static readonly object Gate = new();
+
+    /// <summary>Where the counters go, one line per scenario.</summary>
+    /// <remarks>
+    /// The path is resolved rather than hardcoded so the file lands wherever the host puts temporary
+    /// files, and the run is stamped so a reader can tell one append from the last.
+    /// </remarks>
+    internal static string ReportPath { get; } =
+        Path.Combine(Path.GetTempPath(), "pwnet-pen-report.txt");
 
     /// <summary>
     /// Reports to a file rather than the console: a test host captures stdout and only shows it for
@@ -28,8 +50,16 @@ public sealed class PenHarness
     /// </summary>
     private static void Report(string line)
     {
+        // UTC. A soak spanning a daylight-saving change otherwise writes an hour that goes
+        // backwards, and the file is read by whoever is diagnosing the run rather than by a person
+        // in the runner's timezone.
         lock (Gate)
-            File.AppendAllText("/tmp/pen-report.txt", $"{DateTime.Now:HH:mm:ss} {line}{Environment.NewLine}");
+        {
+            File.AppendAllText(
+                ReportPath,
+                $"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}Z pid={Environment.ProcessId} {line}"
+                + Environment.NewLine);
+        }
     }
 
     /// <summary>
@@ -103,6 +133,12 @@ public sealed class PenHarness
             }
         }
         Report($"PEN churn: binds={binds} reads={reads} errors={errors}");
+
+        // The counters are the finding, but a run where nothing happened at all is not a passing
+        // run - it is a scenario that never reached the daemon and reported zero as though that
+        // were a result.
+        Assert.IsTrue(binds > 0, "the churn scenario bound nothing; it never reached the graph");
+        Assert.IsTrue(reads > 0, "the churn scenario read no parameters from any node");
     }
 
     // Bind everything, hold it, and keep reading while the graph changes underneath.
@@ -133,6 +169,9 @@ public sealed class PenHarness
         }
         foreach (PipeWireNodeControl c in held) await c.DisposeAsync();
         Report($"PEN bindall: reads={ok} failed={gone}");
+
+        Assert.IsTrue(held.Count > 0, "nothing in the graph could be bound");
+        Assert.IsTrue(ok > 0, "every read against every held binding failed");
     }
 
     // Hammer the metadata store from managed code while pw-metadata hammers it from outside.
@@ -196,5 +235,7 @@ public sealed class PenHarness
             try { await Task.WhenAll(wave); } catch (OperationCanceledException) { }
         }
         Report($"PEN contexts: opened/closed {made}");
+
+        Assert.IsTrue(made > 0, "no context completed a full open-and-close cycle");
     }
 }

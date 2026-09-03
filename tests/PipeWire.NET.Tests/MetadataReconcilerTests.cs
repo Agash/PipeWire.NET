@@ -8,10 +8,8 @@ namespace PipeWire.NET.Tests;
 /// Every ordering of writes and echoes, without a daemon.
 /// </summary>
 /// <remarks>
-/// The orderings that break this are the ones a live session produces rarely and only under load,
-/// which is how each of its past defects reached a release: a stale echo overwriting a newer value,
-/// then a fix that suppressed other clients' changes instead. Driving it directly makes those
-/// orderings ordinary test cases.
+/// A live session produces the orderings that break this rarely and only under load.
+/// Driving it directly makes those orderings ordinary test cases.
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
@@ -21,15 +19,29 @@ public sealed class MetadataReconcilerTests
     private const string Key = "k";
     private const string Type = "Spa:String";
 
-    private long _now;
+    private readonly TestClock _clock = new();
 
     private MetadataReconciler NewReconciler(TimeSpan? window = null)
     {
-        _now = 0;
-        return new MetadataReconciler(window ?? TimeSpan.FromSeconds(5), () => _now);
+        _clock.Reset();
+        return new MetadataReconciler(window ?? TimeSpan.FromSeconds(5), _clock);
     }
 
-    private void Advance(TimeSpan by) => _now += (long)(System.Diagnostics.Stopwatch.Frequency * by.TotalSeconds);
+    private void Advance(TimeSpan by) => _clock.Advance(by);
+
+    /// <summary>A clock the test moves by hand, so the expiry window is exercised without waiting.</summary>
+    private sealed class TestClock : TimeProvider
+    {
+        private long _now;
+
+        public override long TimestampFrequency => 1_000_000;
+
+        public override long GetTimestamp() => _now;
+
+        public void Reset() => _now = 0;
+
+        public void Advance(TimeSpan by) => _now += (long)(TimestampFrequency * by.TotalSeconds);
+    }
 
     private static void Write(MetadataReconciler r, string? value) => r.NoteWrite(Subject, Key, Type, value);
 
@@ -136,10 +148,13 @@ public sealed class MetadataReconcilerTests
     public void ARecordOlderThanTheWindow_StopsSuppressing()
     {
         // The daemon coalesces echoes and produces none at all for a write of the value a key
-        // already holds, so records cannot rely on ever being acknowledged.
+        // already holds, so a record cannot rely on its echo ever arriving. It can rely on the
+        // acknowledgement, which the store's round trip gives it whether an echo follows or not,
+        // and that is what the window runs from.
         MetadataReconciler r = NewReconciler(TimeSpan.FromSeconds(5));
         Write(r, "A");
         Write(r, "B");
+        r.Settle(Subject, Key);
 
         Assert.IsFalse(Echo(r, "A"));
 
@@ -164,8 +179,7 @@ public sealed class MetadataReconcilerTests
     [TestMethod]
     public void WritingManyDistinctKeys_DoesNotGrowTheTrackedSetForEver()
     {
-        // One bucket per key was retained for the life of the process, so a patchbay writing
-        // generated keys grew without bound.
+        // Settled keys must not be retained, or a patchbay writing generated keys grows without bound.
         MetadataReconciler r = NewReconciler();
 
         for (int i = 0; i < 1000; i++)
@@ -249,5 +263,93 @@ public sealed class MetadataReconcilerTests
 
         Task.WaitAll(workers);
         Assert.IsTrue(faults.IsEmpty, faults.TryDequeue(out string? first) ? first : string.Empty);
+    }
+
+    [TestMethod]
+    public void AKeyWhoseRecordsHaveAllExpired_StopsBeingTracked()
+    {
+        // Expiry is the one path that empties a bucket without anyone asking for it, so it is the
+        // one that has to drop the bucket itself. Left behind, the dictionary holds an empty list
+        // for every key the store has ever written, for as long as the store lives.
+        MetadataReconciler r = NewReconciler();
+
+        Write(r, "A");
+        r.Settle(Subject, Key);
+        Assert.AreEqual(1, r.TrackedKeys);
+
+        Advance(TimeSpan.FromSeconds(6));
+
+        Assert.AreEqual(MetadataReconciler.EchoAction.ApplyAndRaise, Classify(r, "A"),
+            "an echo arriving after the window is somebody else's change");
+        Assert.AreEqual(0, r.TrackedKeys, "the emptied bucket was left in the dictionary");
+    }
+
+    [TestMethod]
+    public void AWriteTheDaemonHasNotAcknowledged_DoesNotExpire()
+    {
+        // The window measures how long an echo may take after the daemon has dealt with the write.
+        // Started at issue instead, a daemon slower than the window makes the client forget it
+        // wrote: the echo then reads as somebody else's change and puts the superseded value back.
+        MetadataReconciler r = NewReconciler();
+
+        Write(r, "A");
+        Advance(TimeSpan.FromSeconds(600));
+
+        Assert.AreEqual(MetadataReconciler.EchoAction.AlreadyKnown, Classify(r, "A"),
+            "an unacknowledged write was expired on elapsed time alone");
+        Assert.AreEqual(1, r.TrackedKeys);
+    }
+
+    [TestMethod]
+    public void TheWindowRunsFromAcknowledgement_NotFromIssue()
+    {
+        MetadataReconciler r = NewReconciler();
+
+        Write(r, "A");
+        Advance(TimeSpan.FromSeconds(600));
+        r.Settle(Subject, Key);
+
+        Advance(TimeSpan.FromSeconds(1));
+        Assert.AreEqual(MetadataReconciler.EchoAction.AlreadyKnown, Classify(r, "A"),
+            "the clock started before the acknowledgement");
+
+        Advance(TimeSpan.FromSeconds(6));
+        Assert.AreEqual(MetadataReconciler.EchoAction.ApplyAndRaise, Classify(r, "A"),
+            "the record never expired after its acknowledgement");
+    }
+
+    [TestMethod]
+    public void ASecondAcknowledgement_DoesNotRestartTheWindow()
+    {
+        // Settle is called per key, so a later write's round trip re-stamps the whole bucket unless
+        // the first acknowledgement wins. Extended each time, an old record never expires.
+        MetadataReconciler r = NewReconciler();
+
+        Write(r, "A");
+        r.Settle(Subject, Key);
+
+        Advance(TimeSpan.FromSeconds(4));
+        Write(r, "B");
+        r.Settle(Subject, Key);
+
+        Advance(TimeSpan.FromSeconds(2));
+
+        Assert.AreEqual(MetadataReconciler.EchoAction.ApplyAndRaise, Classify(r, "A"),
+            "A was acknowledged 6 seconds ago and the window is 5");
+        Assert.AreEqual(MetadataReconciler.EchoAction.AlreadyKnown, Classify(r, "B"),
+            "B was acknowledged 2 seconds ago and must still be recognised");
+    }
+
+    [TestMethod]
+    public void AKeyWithARecordStillInTheWindow_StaysTracked()
+    {
+        // The other side, so the drop above cannot pass by dropping everything.
+        MetadataReconciler r = NewReconciler();
+
+        Write(r, "A");
+        Advance(TimeSpan.FromSeconds(1));
+
+        Assert.AreEqual(MetadataReconciler.EchoAction.AlreadyKnown, Classify(r, "A"));
+        Assert.AreEqual(1, r.TrackedKeys);
     }
 }

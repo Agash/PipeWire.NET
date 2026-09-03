@@ -50,7 +50,7 @@ public sealed class DeviceAndMetadataWriteTests
             // A unique name: a session manager restores properties by node.name, so reusing one
             // would read back whatever a previous run left rather than what this one wrote.
             string name = $"pwnet_latency_{Environment.ProcessId}_{Random.Shared.Next():x}";
-            PipeWireNode node = await registry.CreateVirtualStereoNode("Latency")
+            PipeWireNode node = await registry.CreateVirtualNode("Latency")
                 .WithName(name).ExecuteAsync(cts.Token);
 
             await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
@@ -74,7 +74,7 @@ public sealed class DeviceAndMetadataWriteTests
             Assert.IsNull(await control.GetLatencyOffsetAsync(cts.Token),
                 "an unsupported property must not appear to have been set");
 
-            await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 
@@ -97,7 +97,7 @@ public sealed class DeviceAndMetadataWriteTests
                 await control.ReadyAsync(cancellationToken);
                 if (!(await control.GetActiveRoutesAsync(cancellationToken)).IsEmpty) return control;
             }
-            catch (InvalidOperationException)
+            catch (PipeWireException)
             {
                 // A card that will not answer is not the one we are looking for.
             }
@@ -133,9 +133,24 @@ public sealed class DeviceAndMetadataWriteTests
 
             // Selecting the route that is already selected: it exercises the write without changing
             // what the machine is doing, so it is safe to run against a real card.
-            await control.SetRouteAsync(index.Value, device.Value, cts.Token);
+            //
+            // ENOENT here is the card going away underneath the test, not a refusal: a session
+            // manager that cannot open a busy ALSA device destroys and recreates the device object,
+            // and a binding made before that is talking to a resource the daemon no longer has.
+            // Whether the card stays put is the session's business; what is under test is that
+            // re-selecting an active route is accepted.
+            ImmutableArray<SpaObject> after;
+            try
+            {
+                await control.SetRouteAsync(index.Value, device.Value, cts.Token);
+                after = await control.GetActiveRoutesAsync(cts.Token);
+            }
+            catch (PipeWireException e) when (e.Result == -2)
+            {
+                Assert.Inconclusive($"the card was destroyed while the test held it: {e.Message}");
+                return;
+            }
 
-            ImmutableArray<SpaObject> after = await control.GetActiveRoutesAsync(cts.Token);
             Assert.IsFalse(after.IsEmpty, "the card lost its active route");
             Assert.AreEqual(index.Value, ((SpaInt)after[0][SpaParamRoute.Index]!).Value,
                 "re-selecting the active route must leave it selected");
@@ -254,7 +269,7 @@ public sealed class DeviceAndMetadataWriteTests
                     await store.SetAsync(key, "hello", subject: PipeWireMetadataStore.SubjectCore,
                         cancellationToken: cts.Token);
                 }
-                catch (InvalidOperationException)
+                catch (PipeWireException)
                 {
                     Assert.Inconclusive("this client may not write metadata on this daemon.");
                 }
@@ -310,7 +325,7 @@ public sealed class DeviceAndMetadataWriteTests
                 {
                     await store.SetDefaultAudioSinkAsync(currentName!, cts.Token);
                 }
-                catch (InvalidOperationException)
+                catch (PipeWireException)
                 {
                     Assert.Inconclusive("this client may not write metadata on this daemon.");
                 }
@@ -349,7 +364,7 @@ public sealed class DeviceAndMetadataWriteTests
                     await store.SetAsync(key, $$"""{ "name": "{{awkward.Replace("\\", "\\\\").Replace("\"", "\\\"")}}" }""",
                         "Spa:String:JSON", PipeWireMetadataStore.SubjectCore, cts.Token);
                 }
-                catch (InvalidOperationException)
+                catch (PipeWireException)
                 {
                     Assert.Inconclusive("this client may not write metadata on this daemon.");
                 }
@@ -489,7 +504,8 @@ public sealed class DeviceAndMetadataWriteTests
             {
                 // A distinctive value, so reading it back cannot accidentally match what was there.
                 float[] test = [.. restore.Select(_ => 0.37f)];
-                await control.SetRouteVolumeAsync(index, device, test, originalMute, cts.Token);
+                await control.SetRouteVolumeAsync(
+                    index, device, test, originalMute, save: false, cts.Token);
 
                 ImmutableArray<SpaObject> after = await control.GetActiveRoutesAsync(cts.Token);
                 SpaObject? changed = after.FirstOrDefault(r =>
@@ -503,7 +519,8 @@ public sealed class DeviceAndMetadataWriteTests
             }
             finally
             {
-                await control.SetRouteVolumeAsync(index, device, restore, originalMute, CancellationToken.None);
+                await control.SetRouteVolumeAsync(
+                    index, device, restore, originalMute, save: false, CancellationToken.None);
             }
         }
     }

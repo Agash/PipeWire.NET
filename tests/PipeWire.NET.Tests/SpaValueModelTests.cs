@@ -46,20 +46,42 @@ public sealed class SpaValueModelTests
     }
 
     [TestMethod]
+    public void ChildTypeAndItemsMustAgree()
+    {
+        // The wire format stores these children bare, with one type and one size for all of them,
+        // so a mismatch is not something the format can express. Refused where it is written rather
+        // than at write time, where the value is truncated or padded to fit and the result is a
+        // wrong number rather than an error.
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new SpaArray(SpaType.Id, [new SpaInt(1)]));
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new SpaChoice(SpaChoiceType.Enum, SpaType.Long, [new SpaInt(1)]));
+
+        // An empty union declares a type and carries nothing, which is legal and is what a choice
+        // with no alternatives parses as.
+        _ = new SpaArray(SpaType.Id, []);
+        _ = new SpaChoice(SpaChoiceType.None, SpaType.Long, []);
+    }
+
+    [TestMethod]
     public void ValuesThatDifferInAnyPart_AreNotEqual()
     {
         Assert.AreNotEqual(new SpaBytes([1, 2]), new SpaBytes([1, 3]));
         Assert.AreNotEqual(new SpaBytes([1, 2]), new SpaBytes([1, 2, 3]));
         Assert.AreNotEqual(new SpaBitmap([1]), new SpaBitmap([2]));
 
-        // Same items, different declared child type: the type is part of what the pod means.
+        // Equivalent items, different declared child type: the type is part of what the pod means.
+        // Each array carries children of its own declared type, because a union cannot express
+        // anything else - see ChildTypeAndItemsMustAgree below.
         Assert.AreNotEqual(
             new SpaArray(SpaType.Int, [new SpaInt(1)]),
-            new SpaArray(SpaType.Id, [new SpaInt(1)]));
+            new SpaArray(SpaType.Id, [new SpaId(1)]));
 
+        // Same three values, different kind: the kind is what says how to read the positions, so
+        // these two describe different things and must not compare equal.
         Assert.AreNotEqual(
-            new SpaChoice(SpaChoiceType.Enum, SpaType.Int, [new SpaInt(1)]),
-            new SpaChoice(SpaChoiceType.Range, SpaType.Int, [new SpaInt(1)]));
+            new SpaChoice(SpaChoiceType.Enum, SpaType.Int, [new SpaInt(1), new SpaInt(0), new SpaInt(9)]),
+            new SpaChoice(SpaChoiceType.Range, SpaType.Int, [new SpaInt(1), new SpaInt(0), new SpaInt(9)]));
 
         Assert.AreNotEqual(
             new SpaObject(SpaType.ObjectProps, SpaParamType.Props, []),
@@ -253,5 +275,44 @@ public sealed class SpaValueModelTests
         Assert.AreEqual(new SpaFloat(0.5f), props[SpaProp.Volume]);
         Assert.AreEqual(SpaPodPropFlag.Readonly, props.Find(SpaProp.Mute)!.Flags);
         Assert.IsNull(props[SpaProp.LatencyOffsetNsec]);
+    }
+
+    // ------------------------------------------------------------------ choice arity
+
+    [TestMethod]
+    public void ARangeChoiceWithoutItsThreeValues_IsRefused()
+    {
+        // The kind is what says how to read the positions. A Range holding two entries is missing
+        // either its minimum or its maximum and there is nothing in the pod to say which, so the
+        // daemon reads whatever is at position 1 as the minimum.
+        ArgumentException e = Assert.ThrowsExactly<ArgumentException>(() =>
+            _ = new SpaChoice(SpaChoiceType.Range, SpaType.Int, [new SpaInt(1), new SpaInt(0)]));
+
+        StringAssert.Contains(e.Message, "exactly 3");
+    }
+
+    [TestMethod]
+    public void AStepChoiceWithoutItsFourValues_IsRefused() =>
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            _ = new SpaChoice(SpaChoiceType.Step, SpaType.Int,
+                [new SpaInt(1), new SpaInt(0), new SpaInt(9)]));
+
+    [TestMethod]
+    public void ANoneChoiceCarryingMoreThanOneValue_IsRefused() =>
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            _ = new SpaChoice(SpaChoiceType.None, SpaType.Int, [new SpaInt(1), new SpaInt(2)]));
+
+    [TestMethod]
+    public void TheChoicesWhoseArityIsNotFixed_TakeAnyCount()
+    {
+        // The other side of the check: Enum and Flags are lists, so a count rule would refuse pods
+        // the daemon sends. An empty choice is refused by the writers, not here.
+        _ = new SpaChoice(SpaChoiceType.Enum, SpaType.Int, [new SpaInt(1)]);
+        _ = new SpaChoice(SpaChoiceType.Enum, SpaType.Int, [new SpaInt(1), new SpaInt(2), new SpaInt(3)]);
+        _ = new SpaChoice(SpaChoiceType.Flags, SpaType.Int, [new SpaInt(1), new SpaInt(2)]);
+        _ = new SpaChoice(SpaChoiceType.None, SpaType.Int, [new SpaInt(1)]);
+        _ = new SpaChoice(SpaChoiceType.Range, SpaType.Int, [new SpaInt(5), new SpaInt(0), new SpaInt(9)]);
+        _ = new SpaChoice(SpaChoiceType.Step, SpaType.Int,
+            [new SpaInt(5), new SpaInt(0), new SpaInt(9), new SpaInt(1)]);
     }
 }

@@ -336,4 +336,69 @@ public sealed class SpaPodMalformedTests
         Assert.IsTrue(SpaPod.TryParse(pod, out SpaValue? value));
         Assert.AreEqual("abc", ((SpaString)value!).Value);
     }
+
+    [TestMethod]
+    public void AnObjectBodyEndingMidProperty_IsDeclinedRatherThanTruncated()
+    {
+        // The property loop stops as soon as fewer than a header remains, so a body cut short used
+        // to parse as a valid object missing its last property. Downstream that reads as a producer
+        // that simply did not offer it, which is indistinguishable from a real negotiation result.
+        Span<byte> buffer = stackalloc byte[256];
+        var builder = new SpaPodBuilder(buffer);
+
+        builder.PushObject(SpaType.ObjectFormat, SpaParamType.EnumFormat);
+        builder.AddId(SpaFormat.MediaType, SpaMediaType.Video);
+        builder.AddRectangle(SpaFormat.VideoSize, 1920, 1080);
+        builder.Pop();
+
+        byte[] whole = builder.GetPod().ToArray();
+        Assert.IsTrue(SpaPod.TryParse(whole, out _), "the intact pod must parse, or this proves nothing");
+
+        // Cut inside the trailing property, leaving too little for another header but more than
+        // nothing. The pod's own size field is corrected so only the truncation is under test.
+        for (int lost = 1; lost <= 15; lost++)
+        {
+            byte[] cut = whole[..^lost];
+            BitConverter.TryWriteBytes(cut.AsSpan(0, 4), (uint)(cut.Length - 8));
+
+            Assert.IsFalse(SpaPod.TryParse(cut, out _),
+                $"an object body {lost} byte(s) short parsed as though it were whole");
+        }
+    }
+
+    [TestMethod]
+    public void AMalformedChoiceDeclined_LeavesTheReaderWhereItFoundIt()
+    {
+        // The caller falls back to a plain typed read on the same reader when a choice is declined,
+        // so a decline that moved the position does not fail: it reads the wrong bytes as the
+        // value. Only the not-a-choice branch used to restore, so a malformed choice corrupted
+        // whatever was read next.
+        foreach (int truncateTo in (int[])[8, 12, 16, 20])
+        {
+            var body = new List<byte>();
+            body.AddRange(BitConverter.GetBytes(3u));            // choiceType (Enum)
+            body.AddRange(BitConverter.GetBytes(0u));            // flags
+            body.AddRange(BitConverter.GetBytes(8u));            // childSize
+            body.AddRange(BitConverter.GetBytes((uint)SpaType.Long));
+
+            // Header plus body, written directly: the point is a pod whose declared size is honest
+            // and whose bytes run out early.
+            var pod = new byte[8 + body.Count];
+            BitConverter.TryWriteBytes(pod.AsSpan(0, 4), (uint)body.Count);
+            BitConverter.TryWriteBytes(pod.AsSpan(4, 4), (uint)SpaType.Choice);
+            body.CopyTo(pod, 8);
+
+            byte[] cut = pod[..Math.Min(truncateTo, pod.Length)];
+
+            var reader = new SpaPodReader(cut);
+            Assert.IsFalse(reader.TryUnwrapChoice(out _),
+                $"a choice truncated to {truncateTo} bytes was accepted");
+
+            // The proof that the position came back: the same reader now reads the header it would
+            // have read had nothing been attempted.
+            var again = new SpaPodReader(cut);
+            Assert.AreEqual(again.TryUnwrapChoice(out _), reader.TryUnwrapChoice(out _),
+                $"a second attempt at {truncateTo} bytes behaved differently, so the position moved");
+        }
+    }
 }

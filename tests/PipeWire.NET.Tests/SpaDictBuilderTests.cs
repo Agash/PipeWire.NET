@@ -55,6 +55,50 @@ public sealed unsafe class SpaDictBuilderTests
     }
 
     [TestMethod]
+    public void AStringKey_IsEncodedIntoTheScratchLikeAnyOther()
+    {
+        // The overload exists so a caller with a string key does not have to encode it first, which
+        // allocated an array per property. It has to put the same bytes in the same place as the
+        // UTF-8 overload, including for a key that is not ASCII, or it is a faster way to be wrong.
+        Span<byte> scratch = stackalloc byte[256];
+        Span<spa_dict_item> items = stackalloc spa_dict_item[4];
+        var builder = new SpaDictBuilder(scratch, items);
+
+        builder.Add("plain", "value");
+        builder.Add("nøn-ascii", "vålue");
+        builder.Add("id", 4294967295u);
+
+        Assert.AreEqual(3, builder.Count);
+        spa_dict dict = builder.Build();
+
+        Assert.AreEqual("value", Read(ref dict, "plain"u8));
+        Assert.AreEqual("vålue", Read(ref dict, "nøn-ascii"u8),
+            "a key with a multi-byte character did not round trip");
+        Assert.AreEqual("4294967295", Read(ref dict, "id"u8));
+    }
+
+    [TestMethod]
+    public void AStringKeyAndAUtf8Key_ProduceTheSameEntry()
+    {
+        // The two overloads must be interchangeable, or which one a caller reaches for changes what
+        // the daemon receives.
+        Span<byte> scratchA = stackalloc byte[128];
+        Span<spa_dict_item> itemsA = stackalloc spa_dict_item[2];
+        var viaString = new SpaDictBuilder(scratchA, itemsA);
+        viaString.Add("node.name", "example");
+        spa_dict fromString = viaString.Build();
+
+        Span<byte> scratchB = stackalloc byte[128];
+        Span<spa_dict_item> itemsB = stackalloc spa_dict_item[2];
+        var viaUtf8 = new SpaDictBuilder(scratchB, itemsB);
+        viaUtf8.Add("node.name"u8, "example");
+        spa_dict fromUtf8 = viaUtf8.Build();
+
+        Assert.AreEqual(Read(ref fromUtf8, "node.name"u8), Read(ref fromString, "node.name"u8));
+        Assert.AreEqual(fromUtf8.n_items, fromString.n_items);
+    }
+
+    [TestMethod]
     public void TheFlagsAreZero_BecauseASetSortedBitWouldMakeTheDaemonBinarySearchUnsortedItems()
     {
         Span<byte> scratch = stackalloc byte[64];

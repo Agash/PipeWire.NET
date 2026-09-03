@@ -54,36 +54,77 @@ public sealed class SpaFormatTests
     [TestMethod]
     public void AnUnknownSpaVideoFormat_IsReportedAsUnknownRatherThanGuessed()
     {
-        // It used to answer BGRA. Reinterpreting an unrecognised layout as a known one produces a
-        // plausible-looking but wrong image, which is far harder to notice than an unsupported
-        // format - so the sentinel is the answer, and it still does not throw.
+        // Reinterpreting an unrecognised layout as a known one produces a plausible-looking but
+        // wrong image, which is far harder to notice than an unsupported format, so the sentinel
+        // is the answer, and it still does not throw.
         Assert.AreEqual(PixelFormat.Unknown, SpaFormatPod.FromSpaVideoFormat((SpaVideoFormat)0xDEADBEEF));
     }
 
     [TestMethod]
-    public void AnUnknownSpaAudioFormat_DefaultsToF32LeWhichIsLossy()
+    public void AnUnknownSpaAudioFormat_IsReportedAsUnknownRatherThanGuessed()
     {
-        // Unlike the video maps there is no Unknown member to land on, so an unrecognised format is
-        // indistinguishable from a real F32Le. Pinned because it is a trap, not because it is good.
-        Assert.AreEqual(AudioSampleFormat.F32Le, SpaFormatPod.FromSpaAudioFormat((SpaAudioFormat)0xDEADBEEF));
+        // An unrecognised format must not read as a real one, or a consumer reads four-byte
+        // floats out of whatever was actually negotiated. The audio map behaves like the video
+        // map above.
+        Assert.AreEqual(AudioSampleFormat.Unknown, SpaFormatPod.FromSpaAudioFormat((SpaAudioFormat)0xDEADBEEF));
+
+        // Two the daemon really does negotiate.
+        Assert.AreEqual(AudioSampleFormat.S24_32Le, SpaFormatPod.FromSpaAudioFormat(SpaAudioFormat.S24_32Le));
+        Assert.AreEqual(AudioSampleFormat.F64Le, SpaFormatPod.FromSpaAudioFormat(SpaAudioFormat.F64Le));
     }
 
     [TestMethod]
     public void EveryAudioSampleFormat_SurvivesARoundTrip()
     {
         foreach (AudioSampleFormat fmt in Enum.GetValues<AudioSampleFormat>())
+        {
+            // Unknown is an answer, never a request: there is nothing to ask the daemon for, so
+            // offering it is a caller mistake rather than a round trip.
+            if (fmt is AudioSampleFormat.Unknown) continue;
+
             Assert.AreEqual(fmt, SpaFormatPod.FromSpaAudioFormat(SpaFormatPod.ToSpaAudioFormat(fmt)),
                 $"{fmt} does not round-trip");
+        }
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => SpaFormatPod.ToSpaAudioFormat(AudioSampleFormat.Unknown));
     }
 
     // ---------------------------------------------------------------- buffer arithmetic
+
+    /// <summary>Every format with a layout this library knows.</summary>
+    /// <remarks>
+    /// Unknown is deliberately not one of them. It is what a negotiation reports when the producer
+    /// named a format this version does not model, so there is no layout to compute and every size
+    /// function refuses it - which is the point of
+    /// <see cref="TheArithmeticRefusesAFormatItDoesNotKnow"/>. Sweeping it through the loops below
+    /// would be asserting that a guess is available.
+    /// </remarks>
+    private static IEnumerable<PixelFormat> KnownFormats =>
+        Enum.GetValues<PixelFormat>().Where(static f => f != PixelFormat.Unknown);
+
+    [TestMethod]
+    public void TheArithmeticRefusesAFormatItDoesNotKnow()
+    {
+        // Guessing four bytes per pixel for an unmodelled format sizes every buffer and stride
+        // derived from it wrongly, and the frame that comes back renders as a tinted, sheared image
+        // rather than failing anywhere a caller can see.
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => SpaFormatPod.BytesPerPixel(PixelFormat.Unknown));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => SpaFormatPod.VideoStride(PixelFormat.Unknown, 640));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => SpaFormatPod.VideoImageSize(PixelFormat.Unknown, 640, 480));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => SpaFormatPod.ToSpaVideoFormat(PixelFormat.Unknown));
+    }
 
     [TestMethod]
     public void StrideAlwaysEqualsWidthTimesBytesPerPixel()
     {
         // Two functions computing the same thing independently; if they drift, a consumer walks
         // rows at the wrong pitch and every frame shears.
-        foreach (PixelFormat fmt in Enum.GetValues<PixelFormat>())
+        foreach (PixelFormat fmt in KnownFormats)
             foreach (int w in (int[])[1, 2, 3, 640, 1920, 4096])
                 Assert.AreEqual(w * SpaFormatPod.BytesPerPixel(fmt), SpaFormatPod.VideoStride(fmt, w),
                     $"{fmt} at width {w}: stride and bytes-per-pixel disagree");
@@ -112,7 +153,7 @@ public sealed class SpaFormatTests
     {
         // The absolute floor for any layout: the primary plane must fit. An allocation below this
         // is an overflow waiting to happen in whoever writes the frame.
-        foreach (PixelFormat fmt in Enum.GetValues<PixelFormat>())
+        foreach (PixelFormat fmt in KnownFormats)
             foreach ((int w, int h) in (( int, int )[])[(1, 1), (2, 2), (3, 3), (17, 13), (640, 480), (1920, 1080)])
             {
                 int size = SpaFormatPod.VideoImageSize(fmt, w, h);
@@ -145,11 +186,12 @@ public sealed class SpaFormatTests
     public void ImageSize_RefusesAFrameItCannotAddressRatherThanWrapping()
     {
         // Realistic sizes must still compute.
-        foreach (PixelFormat fmt in Enum.GetValues<PixelFormat>())
+        foreach (PixelFormat fmt in KnownFormats)
             foreach ((int w, int h) in (( int, int )[])[(7680, 4320), (16384, 16384)])
                 Assert.IsTrue(SpaFormatPod.VideoImageSize(fmt, w, h) > 0, $"{fmt} {w}x{h} should compute");
 
-        // 32768 square at 32bpp is exactly 2^32 bytes, which used to truncate to a zero-sized buffer.
+        // 32768 square at 32bpp is exactly 2^32 bytes, which must be refused rather than
+        // truncating to a zero-sized buffer.
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(
             () => SpaFormatPod.VideoImageSize(PixelFormat.Rgba, 32768, 32768));
     }
@@ -167,7 +209,7 @@ public sealed class SpaFormatTests
     [TestMethod]
     public void Stride_ComputesForLargeWidthsAndRefusesImpossibleOnes()
     {
-        foreach (PixelFormat fmt in Enum.GetValues<PixelFormat>())
+        foreach (PixelFormat fmt in KnownFormats)
             foreach (int w in (int[])[16384, 65536, 268_435_456])
                 Assert.IsTrue(SpaFormatPod.VideoStride(fmt, w) > 0,
                     $"{fmt} at width {w}: stride computed as {SpaFormatPod.VideoStride(fmt, w)}");
@@ -292,7 +334,7 @@ public sealed class SpaFormatTests
     public void TheDefaultVideoOffer_NamesEveryFormatThisLibrarySupports()
     {
         // A supported format missing from the default offer works only when the caller names it
-        // explicitly, which looks like the producer not offering it. NV12 was missing.
+        // explicitly, which looks like the producer not offering it.
         Span<byte> buf = stackalloc byte[1024];
         int len = SpaFormatPod.WriteVideoFormat(buf, [], 1920, 1080, 30, fixedSize: false);
 

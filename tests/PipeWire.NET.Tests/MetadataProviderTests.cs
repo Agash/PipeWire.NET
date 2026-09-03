@@ -8,10 +8,9 @@ namespace PipeWire.NET.Tests;
 /// Serving a metadata store, rather than consuming one.
 /// </summary>
 /// <remarks>
-/// The first attempt at this asked the daemon to create the store through the metadata factory,
-/// which returns an object the creating client is expected to serve. Nothing served it, so the
-/// daemon blocked and stopped answering every client on the machine. These check the store works
-/// and that the session survives it.
+/// The daemon returns an object the creating client is expected to serve. Nothing serving it
+/// blocks the daemon and stops it answering every client on the machine. These check the store
+/// works and that the session survives it.
 /// </remarks>
 [TestClass]
 [TestCategory("Integration")]
@@ -84,5 +83,54 @@ public sealed class MetadataProviderTests
 
         Assert.IsNull(provider.Get("a"));
         await Task.CompletedTask;
+    }
+
+    [TestMethod]
+    public async Task ClearingAStoreWeServe_EmptiesEverySubjectInOneCallEach()
+    {
+        // One set per entry drops the loop lock between each, so a reader can catch the store
+        // half-cleared. A null key is the implementation's own clear form: it empties the subject
+        // and emits one notification without letting go of the lock.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext("pwnet-provider-clear", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+
+        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique());
+
+        provider.Set("a", "1");
+        provider.Set("b", "2");
+        provider.Set("c", "3", subject: 7);
+        provider.Set("d", "4", subject: 7);
+        Assert.AreEqual(4, provider.Entries.Count);
+
+        int notifications = 0;
+        provider.EntryChanged += (_, _) => Interlocked.Increment(ref notifications);
+
+        provider.Clear();
+
+        Assert.AreEqual(0, provider.Entries.Count, "the store still holds entries after a clear");
+        Assert.IsNull(provider.Get("a"));
+        Assert.IsNull(provider.Get("c", subject: 7));
+
+        // One notification per entry removed, from the callback that walks the cache. What the
+        // clear does not do is issue one native write per entry.
+        Assert.AreEqual(4, notifications, "every removal must be reported");
+    }
+
+    [TestMethod]
+    public async Task ClearingAnEmptyStore_IsNotAnError()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext("pwnet-provider-clear-empty", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+
+        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique());
+
+        provider.Clear();
+        Assert.AreEqual(0, provider.Entries.Count);
     }
 }

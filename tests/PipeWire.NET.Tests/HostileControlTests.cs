@@ -53,7 +53,7 @@ public sealed class HostileControlTests
         {
             for (int round = 0; round < 6; round++)
             {
-                PipeWireNode node = await registry.CreateVirtualStereoNode("Vanish")
+                PipeWireNode node = await registry.CreateVirtualNode("Vanish")
                     .WithName(UniqueName("pwnet_vanish")).ExecuteAsync(cts.Token);
 
                 await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
@@ -62,14 +62,14 @@ public sealed class HostileControlTests
                 // value, with an empty answer, or with an exception - and never hang.
                 Task<ImmutableArray<SpaObject>> reading =
                     control.EnumerateParametersAsync(SpaParamType.Props, cts.Token);
-                Task destroying = registry.RemoveObjectAsync(node.NodeId, cts.Token);
+                Task destroying = registry.DestroyGlobalAsync(node.NodeId, cts.Token);
 
                 try
                 {
                     await Task.WhenAll(reading, destroying).WaitAsync(TimeSpan.FromSeconds(8), cts.Token);
                 }
                 catch (ObjectDisposedException) { }
-                catch (InvalidOperationException) { }
+                catch (Exception e) when (e is InvalidOperationException or PipeWireException) { }
             }
         }
     }
@@ -83,7 +83,7 @@ public sealed class HostileControlTests
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNode("DisposeRace")
+            PipeWireNode node = await registry.CreateVirtualNode("DisposeRace")
                 .WithName(UniqueName("pwnet_disposerace")).ExecuteAsync(cts.Token);
 
             for (int round = 0; round < 10; round++)
@@ -97,7 +97,7 @@ public sealed class HostileControlTests
                     {
                         try { await control.GetVolumeAsync(cts.Token); }
                         catch (ObjectDisposedException) { }
-                        catch (InvalidOperationException) { }
+                        catch (Exception e) when (e is InvalidOperationException or PipeWireException) { }
                         catch (OperationCanceledException) { }
                     }, cts.Token)),
                 ];
@@ -109,7 +109,7 @@ public sealed class HostileControlTests
                 await control.DisposeAsync();
             }
 
-            await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 
@@ -122,7 +122,7 @@ public sealed class HostileControlTests
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNode("CancelRace")
+            PipeWireNode node = await registry.CreateVirtualNode("CancelRace")
                 .WithName(UniqueName("pwnet_cancelrace")).ExecuteAsync(cts.Token);
 
             await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
@@ -143,7 +143,7 @@ public sealed class HostileControlTests
             Assert.IsNotNull(await control.GetVolumeAsync(cts.Token),
                 "the control must still answer after every read before it was cancelled");
 
-            await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 
@@ -156,7 +156,7 @@ public sealed class HostileControlTests
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNode("Overlap")
+            PipeWireNode node = await registry.CreateVirtualNode("Overlap")
                 .WithName(UniqueName("pwnet_overlap")).ExecuteAsync(cts.Token);
 
             await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
@@ -186,7 +186,7 @@ public sealed class HostileControlTests
                 Assert.IsTrue((await propInfo).Length > 0);
             }
 
-            await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 
@@ -199,7 +199,7 @@ public sealed class HostileControlTests
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNode("Nonsense")
+            PipeWireNode node = await registry.CreateVirtualNode("Nonsense")
                 .WithName(UniqueName("pwnet_nonsense")).ExecuteAsync(cts.Token);
 
             await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
@@ -221,12 +221,12 @@ public sealed class HostileControlTests
             foreach (SpaObject value in nonsense)
             {
                 try { await control.SetParameterAsync(SpaParamType.Props, value, cts.Token); }
-                catch (InvalidOperationException) { }
+                catch (PipeWireException) { }
             }
 
             // The connection survived and the node still answers.
             Assert.IsNotNull(await control.GetVolumeAsync(cts.Token));
-            await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 
@@ -239,7 +239,7 @@ public sealed class HostileControlTests
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNode("EdgeVolume")
+            PipeWireNode node = await registry.CreateVirtualNode("EdgeVolume")
                 .WithName(UniqueName("pwnet_edgevol")).ExecuteAsync(cts.Token);
 
             await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
@@ -263,11 +263,15 @@ public sealed class HostileControlTests
                 Assert.IsNotNull(read, $"the node stopped reporting a volume after being sent {extreme}");
             }
 
-            // Back to something sane, and it still takes.
+            // Back to something sane, and it still takes. Read back on the same connection, so the
+            // daemon orders it against the write. What it does not exclude is the session manager
+            // writing its own value in between: it manages this node and does override volumes on
+            // nodes it manages, which is why this reads back rather than asserting the daemon kept
+            // the value indefinitely.
             await control.SetVolumeAsync(0.5f, cts.Token);
             Assert.AreEqual(0.5f, (await control.GetVolumeAsync(cts.Token))!.Value, 0.001f);
 
-            await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 
@@ -280,7 +284,7 @@ public sealed class HostileControlTests
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNode("ChannelCount")
+            PipeWireNode node = await registry.CreateVirtualNode("ChannelCount")
                 .WithName(UniqueName("pwnet_chancount")).ExecuteAsync(cts.Token);
 
             await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
@@ -309,7 +313,7 @@ public sealed class HostileControlTests
             Assert.AreEqual(2, after.Length);
             Assert.AreEqual(0.3f, after[0], 0.01f);
 
-            await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 
@@ -331,19 +335,19 @@ public sealed class HostileControlTests
             foreach (PipeWireNode node in graph.Nodes)
             {
                 try { bound.Add(registry.BindNode(node.NodeId)); }
-                catch (InvalidOperationException) { }
+                catch (PipeWireException) { }
             }
 
             foreach (PipeWireDevice device in graph.Devices)
             {
                 try { bound.Add(registry.BindDevice(device.Id)); }
-                catch (InvalidOperationException) { }
+                catch (PipeWireException) { }
             }
 
             foreach (PipeWireClient client in graph.Clients)
             {
                 try { bound.Add(registry.BindClient(client.Id)); }
-                catch (InvalidOperationException) { }
+                catch (PipeWireException) { }
             }
 
             Assert.IsTrue(bound.Count > 0, "a live session must have something to bind");
@@ -366,7 +370,7 @@ public sealed class HostileControlTests
         {
             for (int round = 0; round < 5; round++)
             {
-                PipeWireNode node = await registry.CreateVirtualStereoNode("SubDestroy")
+                PipeWireNode node = await registry.CreateVirtualNode("SubDestroy")
                     .WithName(UniqueName("pwnet_subdestroy")).ExecuteAsync(cts.Token);
 
                 PipeWireNodeControl control = registry.BindNode(node.NodeId);
@@ -376,7 +380,7 @@ public sealed class HostileControlTests
                 // Destroy the object the subscription points at, then dispose the subscriber. The
                 // daemon may still be dispatching for it; the listener has to be detached before its
                 // memory goes back, which is the whole point of the disposal order.
-                await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+                await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
                 await control.DisposeAsync();
             }
         }
@@ -391,7 +395,7 @@ public sealed class HostileControlTests
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNode("ThrowingSub")
+            PipeWireNode node = await registry.CreateVirtualNode("ThrowingSub")
                 .WithName(UniqueName("pwnet_throwsub")).ExecuteAsync(cts.Token);
 
             await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
@@ -413,7 +417,7 @@ public sealed class HostileControlTests
 
             // And the graph is unharmed.
             Assert.IsNotNull(await control.GetVolumeAsync(cts.Token));
-            await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 
@@ -473,7 +477,7 @@ public sealed class HostileControlTests
                 string key = $"pwnet.test.concurrent.{Environment.ProcessId}";
 
                 try { await store.SetAsync(key, "seed", cancellationToken: cts.Token); }
-                catch (InvalidOperationException) { Assert.Inconclusive("cannot write metadata here."); }
+                catch (PipeWireException) { Assert.Inconclusive("cannot write metadata here."); }
 
                 // Ten writers to one key. Each waits for an echo, and the echoes are not
                 // distinguishable per writer - so the property being tested is that none of them
@@ -549,8 +553,8 @@ public sealed class HostileControlTests
 
                 // The store echoes every change back, and those echoes lag the sync that reports a
                 // write as processed. Under a burst, the echo of an older value lands after a newer
-                // one has been written - and putting it back would make a read return the value
-                // before last. Found by writing 1.7 million times against a churning session.
+                // one has been written, and putting it back would make a read return the value
+                // before last.
                 var regressions = new List<string>();
                 for (int i = 0; i < 400; i++)
                 {
@@ -577,8 +581,8 @@ public sealed class HostileControlTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        // Two independent connections, because the bug this pins is invisible with one: suppressing
-        // our own superseded echoes must not suppress somebody else's change to the same key.
+        // Two independent connections: suppressing our own superseded echoes must not suppress
+        // somebody else's change to the same key, which is invisible with one connection.
         (PipeWireContext ctxA, PipeWireRegistry regA) = await ConnectAsync("pwnet-ext-a", cts.Token);
         (PipeWireContext ctxB, PipeWireRegistry regB) = await ConnectAsync("pwnet-ext-b", cts.Token);
 
@@ -626,10 +630,18 @@ public sealed class HostileControlTests
                 catch (TimeoutException)
                 {
                     // Which half failed matters. If the cache holds the new value the echo arrived
-                    // and the event was suppressed, which is a reconciler bug; if it does not, the
-                    // daemon never delivered it, which is not.
-                    Assert.Fail(
-                        $"no event within 10s. cache holds '{mine.Get(key) ?? "(null)"}', "
+                    // and the event was suppressed, which is a reconciler bug. If it does not, the
+                    // session manager never relayed it, and nothing about this library follows.
+                    if (mine.Get(key) == "from-b")
+                    {
+                        Assert.Fail(
+                            "the cache took the other client's write but raised no event, "
+                            + "so the echo was suppressed");
+                    }
+
+                    Assert.Inconclusive(
+                        $"the session manager did not relay the other client's write within 10s. "
+                        + $"cache holds '{mine.Get(key) ?? "(null)"}', "
                         + $"peer holds '{theirs.Get(key) ?? "(null)"}'");
                 }
 

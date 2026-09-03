@@ -80,8 +80,8 @@ public sealed class RegistryRobustnessTests
             registry.GraphChanged += (_, _) => Bang("GraphChanged");
 
             // Exercise the full lifecycle so every one of those handlers gets its turn.
-            PipeWireNode a = await registry.CreateVirtualStereoNodeAsync("HA", "pwnet_hostile_a", cts.Token);
-            PipeWireNode b = await registry.CreateVirtualStereoNodeAsync("HB", "pwnet_hostile_b", cts.Token);
+            PipeWireNode a = await registry.CreateVirtualNodeAsync("HA", "pwnet_hostile_a", cts.Token);
+            PipeWireNode b = await registry.CreateVirtualNodeAsync("HB", "pwnet_hostile_b", cts.Token);
 
             PipeWireGraphSnapshot ready = await WaitForAsync(
                 registry,
@@ -93,9 +93,9 @@ public sealed class RegistryRobustnessTests
                 ready.GetPortsForNode(b.NodeId, PipeWirePortDirection.In).OrderBy(p => p.PortId).First(),
                 cts.Token);
 
-            await registry.RemoveObjectAsync(link.LinkId, cts.Token);
-            await registry.RemoveObjectAsync(a.NodeId, cts.Token);
-            await registry.RemoveObjectAsync(b.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(link.LinkId, cts.Token);
+            await registry.DestroyGlobalAsync(a.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(b.NodeId, cts.Token);
 
             PipeWireGraphSnapshot end = await WaitForAsync(
                 registry,
@@ -127,7 +127,7 @@ public sealed class RegistryRobustnessTests
             registry.GraphChanged += (_, _) => throw new InvalidOperationException("no");
             registry.PortAdded += _ => throw new InvalidOperationException("no");
 
-            PipeWireNode node = await registry.CreateVirtualStereoNodeAsync("C", "pwnet_consistent", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualNodeAsync("C", "pwnet_consistent", cts.Token);
             PipeWireGraphSnapshot graph = await WaitForAsync(
                 registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
 
@@ -157,17 +157,21 @@ public sealed class RegistryRobustnessTests
             registry.GraphChanged += (_, _) => throw new InvalidOperationException("hostile");
             registry.GraphChanged += (_, _) => Interlocked.Increment(ref good);
 
-            var goodPortEvents = 0;
+            // Recorded rather than counted, and filtered afterwards. The session is shared, so
+            // every other class creating a node delivers four more port events to this subscriber;
+            // an exact total would be measuring the rest of the suite. Filtering inside the handler
+            // is no good either, because the ports can be announced before the id is known here.
+            var seenPorts = new System.Collections.Concurrent.ConcurrentBag<uint>();
             registry.PortAdded += _ => throw new InvalidOperationException("hostile");
-            registry.PortAdded += _ => Interlocked.Increment(ref goodPortEvents);
+            registry.PortAdded += port => seenPorts.Add(port.NodeId);
 
-            PipeWireNode node = await registry.CreateVirtualStereoNodeAsync("SV", "pwnet_starve", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualNodeAsync("SV", "pwnet_starve", cts.Token);
             await WaitForAsync(registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
 
             Assert.IsTrue(Volatile.Read(ref good) > 0,
                 "a subscriber registered after a throwing one still has to be called");
-            Assert.AreEqual(4, Volatile.Read(ref goodPortEvents),
-                "every port event must reach the well-behaved subscriber");
+            Assert.AreEqual(4, seenPorts.Count(id => id == node.NodeId),
+                "every port event for this node must reach the well-behaved subscriber");
         }
     }
 
@@ -182,10 +186,10 @@ public sealed class RegistryRobustnessTests
         await using (registry)
         {
             // WatchAsync forwards snapshots through GraphChanged like any other subscriber, so a
-            // hostile handler registered first used to stop the stream dead. This is that case.
+            // hostile handler registered first must not stop the stream.
             registry.GraphChanged += (_, _) => throw new InvalidOperationException("hostile");
 
-            PipeWireNode node = await registry.CreateVirtualStereoNodeAsync("WS", "pwnet_watchstarve", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualNodeAsync("WS", "pwnet_watchstarve", cts.Token);
             PipeWireGraphSnapshot graph = await WaitForAsync(
                 registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
 
@@ -222,7 +226,7 @@ public sealed class RegistryRobustnessTests
 
             try
             {
-                await registry.CreateVirtualStereoNodeAsync("S", "pwnet_suicidal", cts.Token);
+                await registry.CreateVirtualNodeAsync("S", "pwnet_suicidal", cts.Token);
             }
             catch (ObjectDisposedException)
             {
@@ -232,7 +236,7 @@ public sealed class RegistryRobustnessTests
             await disposedFromHandler.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
 
             Assert.ThrowsExactly<ObjectDisposedException>(
-                () => registry.RemoveObjectAsync(1, CancellationToken.None),
+                () => registry.DestroyGlobalAsync(1, CancellationToken.None),
                 "the registry really is disposed afterwards");
         }
     }
@@ -247,7 +251,7 @@ public sealed class RegistryRobustnessTests
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNodeAsync("D", "pwnet_dirs", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualNodeAsync("D", "pwnet_dirs", cts.Token);
             PipeWireGraphSnapshot graph = await WaitForAsync(
                 registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
 
@@ -276,7 +280,7 @@ public sealed class RegistryRobustnessTests
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNodeAsync("N", "pwnet_nullports", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualNodeAsync("N", "pwnet_nullports", cts.Token);
             PipeWireGraphSnapshot graph = await WaitForAsync(
                 registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
             PipeWirePort real = graph.GetPortsForNode(node.NodeId, PipeWirePortDirection.Out).First();
@@ -304,9 +308,9 @@ public sealed class RegistryRobustnessTests
 
             // Mutations do not.
             Assert.ThrowsExactly<ObjectDisposedException>(
-                () => registry.RemoveObjectAsync(1, CancellationToken.None));
+                () => registry.DestroyGlobalAsync(1, CancellationToken.None));
             await Assert.ThrowsExactlyAsync<ObjectDisposedException>(
-                () => registry.CreateVirtualStereoNodeAsync("X", "pwnet_after", CancellationToken.None));
+                () => registry.CreateVirtualNodeAsync("X", "pwnet_after", CancellationToken.None));
         }
     }
 }

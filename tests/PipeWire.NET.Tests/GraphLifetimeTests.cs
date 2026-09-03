@@ -69,7 +69,7 @@ public sealed class GraphLifetimeTests
                 await ConnectAsync("pwnet-owner", cts.Token);
             await using (ownerContext)
             {
-                PipeWireNode node = await owner.CreateVirtualStereoNodeAsync(
+                PipeWireNode node = await owner.CreateVirtualNodeAsync(
                     "Cascade", "pwnet_cascade", cts.Token);
                 nodeId = node.NodeId;
 
@@ -99,7 +99,7 @@ public sealed class GraphLifetimeTests
 
         await using (context)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNodeAsync(
+            PipeWireNode node = await registry.CreateVirtualNodeAsync(
                 "D", "pwnet_dispose_node", cts.Token);
 
             // A second pw_proxy_destroy trips an assertion in PipeWire and aborts the process, so
@@ -131,8 +131,8 @@ public sealed class GraphLifetimeTests
         await using (context)
         await using (registry)
         {
-            PipeWireNode a = await registry.CreateVirtualStereoNodeAsync("L1", "pwnet_rel_a", cts.Token);
-            PipeWireNode b = await registry.CreateVirtualStereoNodeAsync("L2", "pwnet_rel_b", cts.Token);
+            PipeWireNode a = await registry.CreateVirtualNodeAsync("L1", "pwnet_rel_a", cts.Token);
+            PipeWireNode b = await registry.CreateVirtualNodeAsync("L2", "pwnet_rel_b", cts.Token);
 
             PipeWireGraphSnapshot ready = await WaitForAsync(
                 registry,
@@ -169,7 +169,7 @@ public sealed class GraphLifetimeTests
         await using (registry)
         {
             var seen = new List<long>();
-            PipeWireNode node = await registry.CreateVirtualStereoNodeAsync("W", "pwnet_watch", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualNodeAsync("W", "pwnet_watch", cts.Token);
 
             await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cts.Token))
             {
@@ -198,7 +198,7 @@ public sealed class GraphLifetimeTests
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNodeAsync("P", "pwnet_perms", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualNodeAsync("P", "pwnet_perms", cts.Token);
 
             Assert.AreNotEqual(PipeWirePermissions.None, node.Permissions,
                 "the registry must decode the permission bits the daemon reports");

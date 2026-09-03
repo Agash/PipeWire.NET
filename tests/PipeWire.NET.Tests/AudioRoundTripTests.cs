@@ -3,6 +3,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
 using PipeWire.NET.Media.Streams;
+using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Tests;
 
@@ -47,6 +48,68 @@ public sealed class AudioRoundTripTests
                 return graph;
 
         throw new InvalidOperationException("the snapshot stream ended before the condition held");
+    }
+
+    [TestMethod]
+    public async Task AProducerReturningAPartialFrame_PublishesOnlyWholeFrames()
+    {
+        // The producer deliberately returns a byte count that ends mid-frame. chunk.size is read in
+        // units of chunk.stride, so a remainder is taken as the start of the next frame and every
+        // channel after it is offset by the shortfall for the rest of the buffer: the audio keeps
+        // playing and the channels swap, which is much harder to notice than silence. The library
+        // truncates to whole frames, and the consumer is where that is visible.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext("pwnet-ragged", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+        await using var reg = new PipeWireRegistry(ctx);
+        await reg.WaitForInitialEnumerationAsync(cts.Token);
+
+        const int Rate = 48000;
+        const int Channels = 2;
+        const AudioSampleFormat Format = AudioSampleFormat.F32Le;
+        int frameBytes = Format.BytesPerSample() * Channels;
+
+        string nodeName = $"pwnet-ragged-{Environment.ProcessId}";
+        int askedRagged = 0;
+
+        await using var output = new PipeWireAudioOutput(ctx, nodeName, Rate, Channels, Format);
+        output.FillSamples += (_, samples, _, _, _) =>
+        {
+            for (int i = 0; i < samples.Length; i++) samples[i] = (byte)(i % 3 == 0 ? 0x01 : 0x00);
+
+            int ragged = Math.Min(samples.Length, (frameBytes * 8) + (frameBytes / 2));
+            if (ragged % frameBytes != 0) Interlocked.Increment(ref askedRagged);
+            return ragged;
+        };
+
+        output.Connect(autoConnect: false);
+
+        await WaitForAsync(reg, g => g.Nodes.Any(n => n.NodeName == nodeName), cts.Token);
+        Assert.IsNotNull(output.NodeId, "a connected output must expose its node id");
+
+        var received = 0;
+        var ragged = 0;
+
+        await using var capture = new PipeWireAudioCapture(ctx, $"pwnet-ragged-sink-{Environment.ProcessId}");
+        capture.FrameReady += (_, frame) =>
+        {
+            Interlocked.Increment(ref received);
+
+            int bytesPerFrame = frame.Channels * frame.Format.BytesPerSample();
+            if (bytesPerFrame > 0 && frame.Samples.Length % bytesPerFrame != 0)
+                Interlocked.Increment(ref ragged);
+        };
+
+        capture.Connect(output.NodeId!.Value, Rate, Channels, Format);
+
+        await WaitForCountAsync(() => Volatile.Read(ref received), 5, cts.Token);
+
+        Assert.IsTrue(Volatile.Read(ref askedRagged) > 0,
+            "the producer never actually returned a partial frame, so nothing was exercised");
+        Assert.AreEqual(0, Volatile.Read(ref ragged),
+            $"{ragged} buffers reached the consumer without being a whole number of frames");
     }
 
     [TestMethod]
@@ -154,7 +217,7 @@ public sealed class AudioRoundTripTests
                 Assert.AreEqual(id, port.NodeId);
 
             // And it must be linkable to a node we create separately.
-            PipeWireNode sink = await reg.CreateVirtualStereoNode("Sink")
+            PipeWireNode sink = await reg.CreateVirtualNode("Sink")
                                          .WithName("pwnet_art_sink").ExecuteAsync(cts.Token);
             PipeWireGraphSnapshot ready = await WaitForAsync(
                 reg, g => g.GetPortsForNode(sink.NodeId).Length == 4, cts.Token);

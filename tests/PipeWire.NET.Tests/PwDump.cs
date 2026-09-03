@@ -8,10 +8,8 @@ namespace PipeWire.NET.Tests;
 /// </summary>
 /// <remarks>
 /// pw-dump emits the whole graph as JSON, which is what makes it usable as an oracle: our snapshot
-/// can be diffed against it wholesale rather than object by object. The alternative in use before
-/// this was scraping <c>pw-link</c>'s human-readable output, which is formatted for people - its
-/// column alignment changes with id width, and reading it wrongly already produced one confident
-/// but false diagnosis in this repo.
+/// can be diffed against it wholesale rather than object by object. pw-link output is formatted
+/// for people, and its column alignment changes with id width, so it cannot serve the same role.
 /// </remarks>
 [SupportedOSPlatform("linux")]
 internal sealed record PwDump(IReadOnlyList<PwDump.Entry> Entries)

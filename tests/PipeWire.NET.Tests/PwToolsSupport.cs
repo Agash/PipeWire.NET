@@ -117,6 +117,21 @@ internal static class PwTools
         await RunAsync(Need(PwMetadata, "pw-metadata"), ["-n", "default", "0", key, value, "Spa:String"], ct);
     }
 
+    /// <summary>Clears every entry in a metadata store, from a process that is not us.</summary>
+    /// <remarks>
+    /// pw-metadata with a name and no key is the store-wide clear. Which subject the daemon puts on
+    /// the resulting event is the thing worth observing, and only a third process can produce it.
+    /// </remarks>
+    public static async Task ClearMetadataAsync(string storeName, CancellationToken ct)
+    {
+        if (PwMetadata is null)
+            Assert.Inconclusive("pw-metadata not present.");
+
+        (int code, _, string err) = await RunAsync(Need(PwMetadata, "pw-metadata"), ["-n", storeName, "-d"], ct);
+        if (code != 0)
+            throw new InvalidOperationException($"pw-metadata -n {storeName} -d failed ({code}): {err}");
+    }
+
     /// <summary>Links two ports by name, the way a user would from a terminal.</summary>
     /// <remarks><c>-w</c> waits for the attempt so the call is not merely fire-and-forget.</remarks>
     public static async Task LinkAsync(string outputPort, string inputPort, CancellationToken ct)
@@ -153,9 +168,8 @@ internal static class PwTools
 
             string trimmed = line.TrimStart();
 
-            // By the arrow, not by the indent. pw-link right-aligns ids to four columns, so a link
-            // line only has leading whitespace while ids are under 1000 - after which every link
-            // line was being read as a port line and the listing came back empty.
+            // By the arrow, not by the indent. pw-link right-aligns ids to four columns, so matching
+            // by indent misreads link lines as port lines once ids reach four digits.
             bool isLink = trimmed.Contains("|->", StringComparison.Ordinal)
                           || trimmed.Contains("|<-", StringComparison.Ordinal);
 
@@ -225,23 +239,41 @@ internal static class PwTools
         Process proc = Process.Start(psi)
             ?? throw new InvalidOperationException("failed to start pw-loopback");
 
-        // Waits for the nodes rather than guessing at how long publishing takes. A fixed delay is
-        // both too long here and too short on a loaded CI runner.
         var loopback = new Loopback(proc, name);
-        Dictionary<string, uint> ports = [];
-        for (int attempt = 0; attempt < 100; attempt++)
+
+        // Only the fast failure is checked here: a pw-loopback that cannot start is gone in
+        // milliseconds, and its stderr is the reason. Waiting for the nodes to appear is the
+        // caller's job, and every caller already does it against the registry, which is both the
+        // thing under test and the only source that reports when the node is actually usable.
+        try
         {
-            if (proc.HasExited)
-                throw new InvalidOperationException($"pw-loopback '{name}' exited before publishing.");
-
-            ports = await ListPortsAsync(outputs: true, ct);
-            if (ports.Keys.Any(k => k.Contains(name, StringComparison.Ordinal))) return loopback;
-
-            await Task.Delay(TimeSpan.FromMilliseconds(25), ct);
+            await proc.WaitForExitAsync(ct).WaitAsync(TimeSpan.FromMilliseconds(250), ct);
+        }
+        catch (TimeoutException)
+        {
+            // Still running after a quarter second, which is what starting successfully looks like.
+            return loopback;
+        }
+        catch
+        {
+            // Anything else, cancellation above all, and the caller never receives the loopback to
+            // dispose. The process and its two redirected pipes would then outlive the test that
+            // started them, which is exactly what the soak's descriptor count reports and blames on
+            // the library.
+            await loopback.DisposeAsync();
+            throw;
         }
 
-        await loopback.DisposeAsync();
-        throw new InvalidOperationException($"pw-loopback '{name}' never published a port.");
+        try
+        {
+            string stderr = await proc.StandardError.ReadToEndAsync(ct);
+            throw new InvalidOperationException(
+                $"pw-loopback '{name}' exited immediately with {proc.ExitCode}: {stderr}");
+        }
+        finally
+        {
+            await loopback.DisposeAsync();
+        }
     }
 
     internal sealed class Loopback(Process proc, string name) : IAsyncDisposable

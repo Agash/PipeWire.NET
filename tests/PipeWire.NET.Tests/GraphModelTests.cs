@@ -38,7 +38,7 @@ public sealed class GraphModelTests
     [TestMethod]
     public void InputAndOutputLinks_AreNotTheSameSet()
     {
-        // The original bug: OutputLinks filtered on the input port, so both sides matched.
+        // OutputLinks must filter on the output port, so both sides are checked separately.
         var graph = Build(
             ports: [Port(10, 1, PipeWirePortDirection.Out), Port(20, 2, PipeWirePortDirection.In)],
             links: [new(100, LinkInputNode: 2, LinkInputPort: 20, LinkOutputNode: 1, LinkOutputPort: 10)]);

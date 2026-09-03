@@ -107,11 +107,27 @@ public sealed class ConversionBoundaryTests
         Assert.AreEqual(expected, fmt.BytesPerSample());
 
     [TestMethod]
-    public void EverySampleFormat_HasANonZeroWidth()
+    public void EveryUsableSampleFormat_HasANonZeroWidth()
     {
         // FrameCount divides by this, so a zero would be a divide-by-zero on a real capture.
         foreach (AudioSampleFormat fmt in Enum.GetValues<AudioSampleFormat>())
+        {
+            if (fmt is AudioSampleFormat.Unknown) continue;
+
             Assert.IsTrue(fmt.BytesPerSample() > 0, $"{fmt} reports a width of {fmt.BytesPerSample()}");
+        }
+    }
+
+    [TestMethod]
+    public void AnUnknownFormat_HasNoWidthAndStillDoesNotDivideByZero()
+    {
+        // Zero is the honest width for a format whose layout is unknown, and it is only safe
+        // because FrameCount treats a non-positive stride as no frames rather than dividing. The
+        // two belong together: widening the enum requires keeping that guard.
+        Assert.AreEqual(0, AudioSampleFormat.Unknown.BytesPerSample());
+
+        var frame = new AudioFrame(new byte[64], 48000, 2, AudioSampleFormat.Unknown, 0);
+        Assert.AreEqual(0, frame.FrameCount, "an unknown format must report no frames, not throw");
     }
 
     [TestMethod]

@@ -42,6 +42,55 @@ public sealed class CoreSyncContractTests
     }
 
     [TestMethod]
+    public async Task ARequestTheDaemonRefusesSynchronously_ReportsTheRefusal()
+    {
+        // pw_registry_destroy_global returns 0 rather than an async sequence, so there is no tag to
+        // correlate the daemon's answer against and the refusal arrives on the core error stream.
+        // Reported through the round-trip or not at all.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-sync-refuse", cts.Token);
+
+        await using (ctx)
+        await using (registry)
+        {
+            PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireException>(
+                async () => await registry.DestroyGlobalAsync(NoSuchGlobal, cts.Token));
+
+            Assert.IsTrue(refused.Result < 0, $"a refusal must carry the daemon's code, got {refused.Result}");
+        }
+    }
+
+    [TestMethod]
+    public async Task ABarrierRunningBesideARefusedRequest_DoesNotAdoptItsError()
+    {
+        // A barrier issues nothing, so nothing on the shared core error stream is its to report.
+        // Failing on a neighbour's refusal turns every enumeration wait into a lottery on what else
+        // the connection happens to be doing.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-sync-barrier", cts.Token);
+
+        await using (ctx)
+        await using (registry)
+        {
+            for (int attempt = 0; attempt < 20; attempt++)
+            {
+                Task refused = Task.Run(
+                    async () =>
+                    {
+                        try { await registry.DestroyGlobalAsync(NoSuchGlobal + (uint)attempt, cts.Token); }
+                        catch (PipeWireException) { /* the point of the neighbour */ }
+                    },
+                    cts.Token);
+
+                await registry.WaitForInitialEnumerationAsync(cts.Token);
+                await refused;
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task ManyRoundTripsAtOnce_EachCompletesOnItsOwnReply()
     {
         RequireLinux();
@@ -133,7 +182,7 @@ public sealed class CoreSyncContractTests
                     await registry.WaitForInitialEnumerationAsync(CancellationToken.None);
                 }
                 catch (ObjectDisposedException) { }
-                catch (InvalidOperationException) { }
+                catch (Exception e) when (e is InvalidOperationException or PipeWireException) { }
                 catch (OperationCanceledException) { }
             }, cts.Token);
 
@@ -153,7 +202,7 @@ public sealed class CoreSyncContractTests
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNode("SyncErr")
+            PipeWireNode node = await registry.CreateVirtualNode("SyncErr")
                 .WithName($"pwnet_syncerr_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
 
@@ -174,7 +223,7 @@ public sealed class CoreSyncContractTests
                     $"iteration {i}: an error on one request poisoned the next");
             }
 
-            await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 
@@ -190,12 +239,12 @@ public sealed class CoreSyncContractTests
             // The core. The daemon accepts the request and does nothing at all - no error, no
             // removal - so a caller that trusted the return value would believe it had worked.
             await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
-                async () => await registry.RemoveObjectAsync(0, cts.Token));
+                async () => await registry.DestroyGlobalAsync(0, cts.Token));
 
             // An id the daemon has never issued. This one it does refuse, out of band on the error
             // stream, and that refusal has to reach the caller rather than being lost.
             PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireException>(
-                async () => await registry.RemoveObjectAsync(NoSuchGlobal, cts.Token));
+                async () => await registry.DestroyGlobalAsync(NoSuchGlobal, cts.Token));
 
             // The point of the type: a caller can tell what failed and why without parsing text.
             Assert.IsTrue(refused.Result < 0, "a refusal must carry the daemon's result code");
@@ -238,6 +287,79 @@ public sealed class CoreSyncContractTests
     }
 
     [TestMethod]
+    public async Task CancellingAWriteDoesNotRecallIt_AndLeavesTheStoreAgreeingWithTheDaemon()
+    {
+        // Cancellation abandons the wait, not the request: the write is already on its way when the
+        // token trips, so the daemon may apply it anyway. That is documented rather than prevented,
+        // because preventing it would mean a rollback the protocol has no way to express. What must
+        // not happen is the two disagreeing afterwards, or the connection being left unusable.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-cancel-write", cts.Token);
+        await using (ctx)
+        await using (registry)
+        {
+            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            if (store is null) Assert.Inconclusive("no session manager, so no default store.");
+
+            await using (store)
+            {
+                await store!.ReadyAsync(cts.Token);
+
+                string key = $"pwnet.cancel.{Environment.ProcessId}.{Random.Shared.Next():x}";
+                int cancelled = 0, completed = 0;
+
+                try
+                {
+                    for (int round = 0; round < 30; round++)
+                    {
+                        // Cancelled at a different point in the request's life each time, so the
+                        // window where the native call has been made but the reply has not arrived
+                        // is actually hit rather than assumed.
+                        using var race = new CancellationTokenSource();
+                        Task write = store.SetAsync(key, $"v{round}", cancellationToken: race.Token);
+
+                        if (round % 3 == 0) race.Cancel();
+                        else if (round % 3 == 1) await Task.Yield();
+
+                        race.CancelAfter(TimeSpan.FromMilliseconds(round % 7));
+
+                        try
+                        {
+                            await write;
+                            completed++;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            cancelled++;
+                        }
+                    }
+
+                    // Whatever the split, the store and the daemon must agree at the end. A fresh
+                    // read of the key from a barrier the daemon answered is the arbiter.
+                    await store.ReadyAsync(cts.Token);
+                    string? settled = store.Get(key);
+
+                    await store.SetAsync(key, "final", cancellationToken: cts.Token);
+                    Assert.AreEqual("final", store.Get(key),
+                        $"the store stopped tracking the key after {cancelled} cancelled and "
+                        + $"{completed} completed writes (it had settled on '{settled ?? "(null)"}')");
+                }
+                finally
+                {
+                    await store.SetAsync(key, null, cancellationToken: CancellationToken.None);
+                }
+
+                Assert.IsTrue(cancelled > 0, "no write was actually cancelled, so nothing was exercised");
+
+                // And the connection still works, which a half-torn-down request would not leave it.
+                await registry.WaitForInitialEnumerationAsync(cts.Token);
+                Assert.IsTrue(registry.Current.Nodes.Length > 0);
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task ABindingDisposedTwiceAndThenFinalized_DestroysItsProxyExactlyOnce()
     {
         RequireLinux();
@@ -246,7 +368,7 @@ public sealed class CoreSyncContractTests
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNode("DestroyOnce")
+            PipeWireNode node = await registry.CreateVirtualNode("DestroyOnce")
                 .WithName($"pwnet_destroyonce_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
 
@@ -283,7 +405,7 @@ public sealed class CoreSyncContractTests
             await using PipeWireNodeControl fresh = registry.BindNode(node.NodeId);
             Assert.IsNotNull(await fresh.GetVolumeAsync(cts.Token));
 
-            await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 

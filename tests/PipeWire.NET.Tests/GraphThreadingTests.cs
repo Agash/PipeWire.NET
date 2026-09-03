@@ -76,7 +76,7 @@ public sealed class GraphThreadingTests
                 catch (Exception ex) { faulted ??= ex; }
             };
 
-            PipeWireNode node = await registry.CreateVirtualStereoNodeAsync("RE", "pwnet_reentrant", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualNodeAsync("RE", "pwnet_reentrant", cts.Token);
             await WaitForAsync(registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
 
             Assert.IsNull(faulted, $"reading the graph from a handler threw: {faulted}");
@@ -99,7 +99,7 @@ public sealed class GraphThreadingTests
 
             registry.PortAdded += _ => handlerThreads.Add(Environment.CurrentManagedThreadId);
 
-            PipeWireNode node = await registry.CreateVirtualStereoNodeAsync("TI", "pwnet_threadid", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualNodeAsync("TI", "pwnet_threadid", cts.Token);
             await WaitForAsync(registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
 
             Assert.IsFalse(handlerThreads.IsEmpty, "no PortAdded handler ran");
@@ -126,10 +126,10 @@ public sealed class GraphThreadingTests
             var seen = 0;
             registry.PortAdded += _ => { Interlocked.Increment(ref seen); throw new InvalidOperationException("boom"); };
 
-            PipeWireNode first = await registry.CreateVirtualStereoNodeAsync("T1", "pwnet_throw_1", cts.Token);
+            PipeWireNode first = await registry.CreateVirtualNodeAsync("T1", "pwnet_throw_1", cts.Token);
             await WaitForAsync(registry, g => g.GetPortsForNode(first.NodeId).Length == 4, cts.Token);
 
-            PipeWireNode second = await registry.CreateVirtualStereoNodeAsync("T2", "pwnet_throw_2", cts.Token);
+            PipeWireNode second = await registry.CreateVirtualNodeAsync("T2", "pwnet_throw_2", cts.Token);
             PipeWireGraphSnapshot after = await WaitForAsync(
                 registry, g => g.GetPortsForNode(second.NodeId).Length == 4, cts.Token);
 
@@ -180,8 +180,8 @@ public sealed class GraphThreadingTests
 
             for (int i = 0; i < 20; i++)
             {
-                PipeWireNode n = await registry.CreateVirtualStereoNodeAsync($"R{i}", $"pwnet_race_{i}", cts.Token);
-                await registry.RemoveObjectAsync(n.NodeId, cts.Token);
+                PipeWireNode n = await registry.CreateVirtualNodeAsync($"R{i}", $"pwnet_race_{i}", cts.Token);
+                await registry.DestroyGlobalAsync(n.NodeId, cts.Token);
             }
 
             await stop.CancelAsync();
@@ -215,13 +215,13 @@ public sealed class GraphThreadingTests
 
                 try
                 {
-                    _ = registry.RemoveObjectAsync(node.NodeId, CancellationToken.None);
+                    _ = registry.DestroyGlobalAsync(node.NodeId, CancellationToken.None);
                     issued.TrySetResult(true);
                 }
                 catch (Exception ex) { issued.TrySetException(ex); }
             };
 
-            PipeWireNode trigger = await registry.CreateVirtualStereoNodeAsync(
+            PipeWireNode trigger = await registry.CreateVirtualNodeAsync(
                 "Nested", "pwnet_nested_trigger", cts.Token);
 
             Assert.IsTrue(await issued.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token),
@@ -260,8 +260,8 @@ public sealed class GraphThreadingTests
 
             for (int i = 0; i < 10; i++)
             {
-                PipeWireNode n = await registry.CreateVirtualStereoNodeAsync($"MW{i}", $"pwnet_mw_{i}", cts.Token);
-                await registry.RemoveObjectAsync(n.NodeId, cts.Token);
+                PipeWireNode n = await registry.CreateVirtualNodeAsync($"MW{i}", $"pwnet_mw_{i}", cts.Token);
+                await registry.DestroyGlobalAsync(n.NodeId, cts.Token);
             }
 
             await stop.CancelAsync();
@@ -293,8 +293,8 @@ public sealed class GraphThreadingTests
                 {
                     for (int i = 0; i < 30; i++)
                     {
-                        PipeWireNode n = await registry.CreateVirtualStereoNodeAsync($"DR{i}", $"pwnet_dr_{i}", cts.Token);
-                        await registry.RemoveObjectAsync(n.NodeId, cts.Token);
+                        PipeWireNode n = await registry.CreateVirtualNodeAsync($"DR{i}", $"pwnet_dr_{i}", cts.Token);
+                        await registry.DestroyGlobalAsync(n.NodeId, cts.Token);
                         Interlocked.Increment(ref churned);
                     }
                 }
@@ -316,7 +316,7 @@ public sealed class GraphThreadingTests
             // Reaching here without an abort is the point, but assert the registry is actually shut
             // so a disposal that silently did nothing cannot pass.
             Assert.ThrowsExactly<ObjectDisposedException>(
-                () => registry.RemoveObjectAsync(1, CancellationToken.None));
+                () => registry.DestroyGlobalAsync(1, CancellationToken.None));
         }
     }
 }

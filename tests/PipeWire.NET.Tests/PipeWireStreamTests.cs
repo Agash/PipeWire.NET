@@ -18,8 +18,7 @@ public sealed class SpaPodBuilderTests
         var builder = new SpaPodBuilder(buf);
 
         // No fluent chaining - each call mutates `builder` directly. Chaining on a
-        // ref struct invokes subsequent calls on a returned copy (see TryReadProperty
-        // failures committed in the previous revision).
+        // ref struct invokes subsequent calls on a returned copy.
         builder.PushObject(SpaType.ObjectFormat, SpaParamType.EnumFormat);
         builder.AddId(SpaFormat.MediaType,    SpaMediaType.Video);
         builder.AddId(SpaFormat.MediaSubtype, SpaMediaSubtype.Raw);
@@ -199,7 +198,6 @@ public sealed class MetadataMappingTests
     [TestMethod]
     public unsafe void ParseVideoFormat_ReadsColorMetadata()
     {
-        // Build a Format object carrying color props, then parse it back.
         Span<byte> buf = stackalloc byte[512];
         var b = new SpaPodBuilder(buf);
         b.PushObject(SpaType.ObjectFormat, SpaParamType.Format);
@@ -304,8 +302,8 @@ public sealed class ModifierNegotiationTests
             Assert.IsTrue(value.TryReadModifier(out long first, out int count));
             // SPA Choice Enum body is { default, ...allowed }: the first value is the default AND must also
             // appear in the allowed set, so the preferred modifier is written twice. For [Tiled, Linear] the
-            // wire is [Tiled(default), Tiled, Linear] = 3 longs. (A single modifier written once would leave
-            // the allowed set empty - the consumer then has nothing to select, the dmabuf negotiation bug.)
+            // wire is [Tiled(default), Tiled, Linear] = 3 longs. A single modifier written once would leave
+            // the allowed set empty and the consumer with nothing to select.
             Assert.AreEqual(3, count, "default is repeated into the allowed set, then both modifiers follow");
             Assert.AreEqual(ModTiled, first, "the first offered modifier is the preferred one (the default)");
         }

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -147,7 +148,7 @@ public sealed class HostileConditionsTests
         // the interesting ones: a name must not be able to inject a second property.
         try
         {
-            PipeWireNode node = await reg.CreateVirtualStereoNode("Hostile").WithName(name)
+            PipeWireNode node = await reg.CreateVirtualNode("Hostile").WithName(name)
                                          .ExecuteAsync(cts.Token);
 
             PipeWireNode? live = reg.Current.GetNode(node.NodeId);
@@ -156,7 +157,7 @@ public sealed class HostileConditionsTests
             Assert.AreEqual("Audio/Sink", live.MediaClass,
                 "a name must never be able to change another property");
 
-            await reg.RemoveObjectAsync(node.NodeId, cts.Token);
+            await reg.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
@@ -179,7 +180,7 @@ public sealed class HostileConditionsTests
         const string Name = "pwnet_hc_nul\0hidden";
         try
         {
-            PipeWireNode node = await reg.CreateVirtualStereoNode("Nul").WithName(Name)
+            PipeWireNode node = await reg.CreateVirtualNode("Nul").WithName(Name)
                                          .ExecuteAsync(cts.Token);
 
             string? stored = reg.Current.GetNode(node.NodeId)?.NodeName;
@@ -187,7 +188,7 @@ public sealed class HostileConditionsTests
             Assert.IsFalse(stored!.Contains("hidden", StringComparison.Ordinal),
                 "text after a NUL must not reappear in the graph");
 
-            await reg.RemoveObjectAsync(node.NodeId, cts.Token);
+            await reg.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
         catch (ArgumentException)
         {
@@ -206,12 +207,12 @@ public sealed class HostileConditionsTests
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         var name = "pwnet_hc_" + new string('x', 8192);
-        PipeWireNode node = await reg.CreateVirtualStereoNode("Long").WithName(name).ExecuteAsync(cts.Token);
+        PipeWireNode node = await reg.CreateVirtualNode("Long").WithName(name).ExecuteAsync(cts.Token);
 
         string? stored = reg.Current.GetNode(node.NodeId)?.NodeName;
         Assert.AreEqual(name, stored, "a name that was accepted must come back whole");
 
-        await reg.RemoveObjectAsync(node.NodeId, cts.Token);
+        await reg.DestroyGlobalAsync(node.NodeId, cts.Token);
     }
 
     // ------------------------------------------------------------------ streams pointed nowhere
@@ -237,7 +238,7 @@ public sealed class HostileConditionsTests
         {
             capture.Connect(999_999, [PixelFormat.Bgra]);
         }
-        catch (InvalidOperationException)
+        catch (Exception e) when (e is InvalidOperationException or PipeWireException)
         {
             return;   // refusing outright is the cleanest answer
         }
@@ -266,10 +267,10 @@ public sealed class HostileConditionsTests
 
         // Create, note the id, destroy - then connect to the id we remember. A patchbay holding a
         // stale id and acting on it is the everyday version of this.
-        PipeWireNode node = await reg.CreateVirtualStereoNode("Gone")
+        PipeWireNode node = await reg.CreateVirtualNode("Gone")
                                      .WithName("pwnet_hc_gone").ExecuteAsync(cts.Token);
         uint staleId = node.NodeId;
-        await reg.RemoveObjectAsync(staleId, cts.Token);
+        await reg.DestroyGlobalAsync(staleId, cts.Token);
         await WaitForAsync(reg, g => g.GetNode(staleId) is null, cts.Token);
 
         await using var capture = new PipeWireAudioCapture(ctx, "pwnet-hc-gone-consumer");
@@ -278,7 +279,7 @@ public sealed class HostileConditionsTests
             capture.Connect(staleId);
             await Task.Delay(1500, cts.Token);   // must not hang, whatever it decides
         }
-        catch (InvalidOperationException)
+        catch (Exception e) when (e is InvalidOperationException or PipeWireException)
         {
         }
     }
@@ -339,7 +340,11 @@ public sealed class HostileConditionsTests
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-        int nodesBefore = reg.Current.Nodes.Length;
+        // Every id this test creates, so what is asserted at the end is this test's residue rather
+        // than the session's population. A session manager adds and removes its own nodes
+        // throughout - on a box whose ALSA probing is flapping, several - so comparing the total
+        // count against a baseline measures the session, not the library.
+        var mine = new ConcurrentBag<uint>();
 
         // Eight concurrent workers, each churning. The daemon reuses ids aggressively under this,
         // which is exactly the condition that breaks a cache keyed on them.
@@ -347,23 +352,26 @@ public sealed class HostileConditionsTests
         {
             for (int i = 0; i < 10; i++)
             {
-                PipeWireNode n = await reg.CreateVirtualStereoNode($"Storm {w}-{i}")
+                PipeWireNode n = await reg.CreateVirtualNode($"Storm {w}-{i}")
                                           .WithName($"pwnet_hc_storm_{w}_{i}").ExecuteAsync(cts.Token);
+                mine.Add(n.NodeId);
                 Assert.IsNotNull(reg.Current.GetNode(n.NodeId), "a created node was not in the graph");
-                await reg.RemoveObjectAsync(n.NodeId, cts.Token);
+                await reg.DestroyGlobalAsync(n.NodeId, cts.Token);
             }
         }, cts.Token))];
 
         await Task.WhenAll(workers);
 
-        // Everything we made must be gone, and the graph back where it started.
+        // Everything we made must be gone. By name and by id: the name catches one that outlived
+        // its destroy, and the id catches one whose properties never arrived, which the name check
+        // alone would not see.
         PipeWireGraphSnapshot end = await WaitForAsync(
             reg,
             g => !g.Nodes.Any(n => n.NodeName?.StartsWith("pwnet_hc_storm_", StringComparison.Ordinal) == true),
             cts.Token);
 
-        Assert.AreEqual(nodesBefore, end.Nodes.Length,
-            $"the storm left the graph at {end.Nodes.Length} nodes, started at {nodesBefore}");
+        uint[] left = [.. mine.Where(id => end.GetNode(id) is not null)];
+        Assert.IsEmpty(left, $"the storm left {left.Length} of its own nodes in the graph: {string.Join(", ", left)}");
     }
 
     // ------------------------------------------------------------------ losing the daemon
@@ -381,7 +389,7 @@ public sealed class HostileConditionsTests
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await reg.CreateVirtualStereoNode("Doomed")
+        PipeWireNode node = await reg.CreateVirtualNode("Doomed")
                                      .WithName("pwnet_hc_kicked_node").ExecuteAsync(cts.Token);
         Assert.IsNotNull(reg.Current.GetNode(node.NodeId));
 
@@ -401,7 +409,7 @@ public sealed class HostileConditionsTests
         // Mutations must fail rather than appear to succeed against a dead connection.
         try
         {
-            await reg.CreateVirtualStereoNode("After").WithName("pwnet_hc_after").ExecuteAsync(cts.Token);
+            await reg.CreateVirtualNode("After").WithName("pwnet_hc_after").ExecuteAsync(cts.Token);
         }
         catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException
                                       or OperationCanceledException or TimeoutException)

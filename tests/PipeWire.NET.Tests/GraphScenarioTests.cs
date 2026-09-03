@@ -13,8 +13,7 @@ namespace PipeWire.NET.Tests;
 /// </summary>
 /// <remarks>
 /// These exist because the unit tests each prove one call works, which is not the same as the
-/// sequence a consumer actually performs working. Every failure found in this file so far came from
-/// the joins between calls, not the calls.
+/// sequence a consumer actually performs working. The risk is in the joins between calls, not the calls.
 /// </remarks>
 [TestClass]
 [TestCategory("Integration")]
@@ -71,8 +70,8 @@ public sealed class GraphScenarioTests
         await using (context)
         await using (registry)
         {
-            PipeWireNode source = await registry.CreateVirtualStereoNodeAsync("Deck A", "pwnet_pb_a", cts.Token);
-            PipeWireNode sink = await registry.CreateVirtualStereoNodeAsync("Deck B", "pwnet_pb_b", cts.Token);
+            PipeWireNode source = await registry.CreateVirtualNodeAsync("Deck A", "pwnet_pb_a", cts.Token);
+            PipeWireNode sink = await registry.CreateVirtualNodeAsync("Deck B", "pwnet_pb_b", cts.Token);
 
             PipeWireGraphSnapshot ready = await WaitForAsync(
                 registry,
@@ -137,13 +136,13 @@ public sealed class GraphScenarioTests
         await using (context)
         await using (registry)
         {
-            PipeWireNode first = await registry.CreateVirtualStereoNodeAsync("First", "pwnet_stale_1", cts.Token);
+            PipeWireNode first = await registry.CreateVirtualNodeAsync("First", "pwnet_stale_1", cts.Token);
             uint id = first.NodeId;
 
-            await registry.RemoveObjectAsync(id, cts.Token);
+            await registry.DestroyGlobalAsync(id, cts.Token);
             await WaitForAsync(registry, g => g.GetNode(id) is null, cts.Token);
 
-            PipeWireNode second = await registry.CreateVirtualStereoNodeAsync("Second", "pwnet_stale_2", cts.Token);
+            PipeWireNode second = await registry.CreateVirtualNodeAsync("Second", "pwnet_stale_2", cts.Token);
 
             if (second.NodeId != id)
                 Assert.Inconclusive("the daemon did not reuse the id this run; the hazard is unchanged");
@@ -214,7 +213,7 @@ public sealed class GraphScenarioTests
         await using (context)
         await using (registry)
         {
-            PipeWireNode sink = await registry.CreateVirtualStereoNodeAsync("Target", "pwnet_select", cts.Token);
+            PipeWireNode sink = await registry.CreateVirtualNodeAsync("Target", "pwnet_select", cts.Token);
             PipeWireGraphSnapshot graph = await WaitForPortsAsync(registry, sink.NodeId, cts.Token);
 
             PipeWireNode node = graph.GetNode(sink.NodeId)!;
@@ -225,15 +224,14 @@ public sealed class GraphScenarioTests
             Assert.AreEqual(PipeWireMediaFlow.Sink, node.Flow);
 
             // Capability says what you can do with it, and the two disagree on purpose: a sink is
-            // still readable through its monitor ports. The old API called this "IsAudioSource",
-            // which was simply false.
+            // still readable through its monitor ports.
             Assert.IsTrue(graph.CanCaptureFrom(node), "a sink is readable through its monitor ports");
             Assert.IsTrue(graph.CanSendTo(node), "and writable through its playback ports");
 
             // And it must not appear as video by either measure.
             Assert.AreNotEqual(PipeWireMediaKind.Video, node.Media);
-            CollectionAssert.DoesNotContain(graph.VideoSources.ToArray(), node);
-            CollectionAssert.Contains(graph.AudioSources.ToArray(), node,
+            CollectionAssert.DoesNotContain(graph.GetVideoSources().ToArray(), node);
+            CollectionAssert.Contains(graph.GetAudioSources().ToArray(), node,
                 "an audio sink with monitor ports is a legitimate audio source to capture from");
 
             foreach (PipeWirePort port in graph.GetPortsForNode(sink.NodeId))
@@ -245,7 +243,7 @@ public sealed class GraphScenarioTests
             }
 
             // And the audio-source view must not invent nodes that are not in the graph.
-            foreach (PipeWireNode candidate in graph.AudioSources)
+            foreach (PipeWireNode candidate in graph.GetAudioSources())
                 Assert.IsNotNull(graph.GetNode(candidate.NodeId));
         }
     }
@@ -276,9 +274,9 @@ public sealed class GraphScenarioTests
                 await ConnectAsync("pwnet-routing-builder", cts.Token);
             await using (builderContext)
             {
-                PipeWireNode a = await builder.CreateVirtualStereoNode("Routed A")
+                PipeWireNode a = await builder.CreateVirtualNode("Routed A")
                                               .WithName("pwnet_route_a").WithLinger().ExecuteAsync(cts.Token);
-                PipeWireNode b = await builder.CreateVirtualStereoNode("Routed B")
+                PipeWireNode b = await builder.CreateVirtualNode("Routed B")
                                               .WithName("pwnet_route_b").WithLinger().ExecuteAsync(cts.Token);
                 sourceId = a.NodeId;
                 sinkId = b.NodeId;
@@ -314,10 +312,10 @@ public sealed class GraphScenarioTests
                 "the surviving link must still be wired to its ports");
 
             // --- second "run": tear the setup down deliberately.
-            await observer.RemoveObjectAsync(linkId, cts.Token);
+            await observer.DestroyGlobalAsync(linkId, cts.Token);
             await WaitForAsync(observer, g => g.GetLink(linkId) is null, cts.Token);
-            await observer.RemoveObjectAsync(sourceId, cts.Token);
-            await observer.RemoveObjectAsync(sinkId, cts.Token);
+            await observer.DestroyGlobalAsync(sourceId, cts.Token);
+            await observer.DestroyGlobalAsync(sinkId, cts.Token);
 
             PipeWireGraphSnapshot cleaned = await WaitForAsync(
                 observer, g => g.GetNode(sourceId) is null && g.GetNode(sinkId) is null, cts.Token);
@@ -341,13 +339,20 @@ public sealed class GraphScenarioTests
         await using (context)
         await using (registry)
         {
-            int nodesAtStart = registry.Current.Nodes.Length;
+            // Counted by name, not graph-wide. The suite shares one session and other classes are
+            // creating and destroying nodes throughout, so a total that has not returned to its
+            // starting value says nothing about whether this test cleaned up after itself.
+            const string prefix = "pwnet_rb_";
+            static int Ours(PipeWireGraphSnapshot graph) =>
+                graph.Nodes.Count(n => n.NodeName?.StartsWith(prefix, StringComparison.Ordinal) == true);
+
+            int nodesAtStart = Ours(registry.Current);
             int linksAtStart = registry.Current.Links.Length;
 
             for (int cycle = 0; cycle < 5; cycle++)
             {
-                PipeWireNode a = await registry.CreateVirtualStereoNodeAsync($"RB A{cycle}", $"pwnet_rb_a{cycle}", cts.Token);
-                PipeWireNode b = await registry.CreateVirtualStereoNodeAsync($"RB B{cycle}", $"pwnet_rb_b{cycle}", cts.Token);
+                PipeWireNode a = await registry.CreateVirtualNodeAsync($"RB A{cycle}", $"{prefix}a{cycle}", cts.Token);
+                PipeWireNode b = await registry.CreateVirtualNodeAsync($"RB B{cycle}", $"{prefix}b{cycle}", cts.Token);
 
                 PipeWireGraphSnapshot ready = await WaitForAsync(
                     registry,
@@ -359,9 +364,9 @@ public sealed class GraphScenarioTests
                     ready.GetPortsForNode(b.NodeId, PipeWirePortDirection.In).OrderBy(p => p.PortId).First(),
                     cts.Token);
 
-                await registry.RemoveObjectAsync(link.LinkId, cts.Token);
-                await registry.RemoveObjectAsync(a.NodeId, cts.Token);
-                await registry.RemoveObjectAsync(b.NodeId, cts.Token);
+                await registry.DestroyGlobalAsync(link.LinkId, cts.Token);
+                await registry.DestroyGlobalAsync(a.NodeId, cts.Token);
+                await registry.DestroyGlobalAsync(b.NodeId, cts.Token);
 
                 await WaitForAsync(
                     registry,
@@ -370,9 +375,13 @@ public sealed class GraphScenarioTests
             }
 
             PipeWireGraphSnapshot end = registry.Current;
-            Assert.AreEqual(nodesAtStart, end.Nodes.Length,
-                $"nodes accumulated across five build/teardown cycles: {nodesAtStart} -> {end.Nodes.Length}");
-            Assert.AreEqual(linksAtStart, end.Links.Length,
+            Assert.AreEqual(nodesAtStart, Ours(end),
+                $"this test's nodes accumulated across five build/teardown cycles: "
+                + $"{nodesAtStart} -> {Ours(end)}");
+
+            // Links carry no name, so this one stays graph-wide and only has to not grow. The
+            // cycles above each waited for their own link to disappear before the next began.
+            Assert.IsTrue(end.Links.Length <= linksAtStart + 1,
                 $"links accumulated across five build/teardown cycles: {linksAtStart} -> {end.Links.Length}");
         }
     }

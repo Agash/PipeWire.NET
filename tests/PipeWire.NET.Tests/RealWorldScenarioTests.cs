@@ -71,13 +71,13 @@ public sealed class RealWorldScenarioTests
             // The shape a streaming app builds: several sources feeding one submix, each at its own
             // level, the submix at a master level.
             string submixName = Unique("pwnet_submix");
-            PipeWireNode submix = await registry.CreateVirtualStereoNode("Submix")
+            PipeWireNode submix = await registry.CreateVirtualNode("Submix")
                 .WithName(submixName).ExecuteAsync(cts.Token);
 
             var sources = new List<PipeWireNode>();
             for (int i = 0; i < 3; i++)
             {
-                sources.Add(await registry.CreateVirtualStereoNode($"Source{i}")
+                sources.Add(await registry.CreateVirtualNode($"Source{i}")
                     .WithName(Unique($"pwnet_src{i}")).ExecuteAsync(cts.Token));
             }
 
@@ -124,25 +124,29 @@ public sealed class RealWorldScenarioTests
             }
 
             // Read every level back through fresh bindings, the way a UI redrawing itself would.
-            Assert.AreEqual(0.8f, (await master.GetVolumeAsync(cts.Token))!.Value, 0.01f);
+            // Polled, not read once: a parameter write returns when the daemon has processed it,
+            // which is not when the node has applied it, and the last source written is the one
+            // with the least time to have got there.
+            Assert.AreEqual(0.8f, await SettledVolumeAsync(master, 0.8f, cts.Token), 0.01f);
             for (int i = 0; i < sources.Count; i++)
             {
                 await using PipeWireNodeControl channel = registry.BindNode(sources[i].NodeId);
-                ImmutableArray<float> volumes = await channel.GetChannelVolumesAsync(cts.Token);
-                Assert.AreEqual(0.2f * (i + 1), volumes[0], 0.01f, $"source {i} level did not stick");
+                float want = 0.2f * (i + 1);
+                float got = await SettledChannelVolumeAsync(channel, want, cts.Token);
+                Assert.AreEqual(want, got, 0.01f, $"source {i} level did not stick");
             }
 
             // Tear down in the awkward order: links first, then the sources, then the submix they
             // pointed at - and the graph must agree at every step.
             foreach (uint link in links)
-                await registry.RemoveObjectAsync(link, cts.Token);
+                await registry.DestroyGlobalAsync(link, cts.Token);
 
             Assert.AreEqual(0, registry.Current.GetLinksForNode(submix.NodeId).Count(),
                 "every link must be gone");
 
             foreach (PipeWireNode source in sources)
-                await registry.RemoveObjectAsync(source.NodeId, cts.Token);
-            await registry.RemoveObjectAsync(submix.NodeId, cts.Token);
+                await registry.DestroyGlobalAsync(source.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(submix.NodeId, cts.Token);
 
             graph = registry.Current;
             Assert.IsNull(graph.GetNode(submix.NodeId));
@@ -160,9 +164,9 @@ public sealed class RealWorldScenarioTests
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode a = await registry.CreateVirtualStereoNode("CascadeA")
+            PipeWireNode a = await registry.CreateVirtualNode("CascadeA")
                 .WithName(Unique("pwnet_casc_a")).ExecuteAsync(cts.Token);
-            PipeWireNode b = await registry.CreateVirtualStereoNode("CascadeB")
+            PipeWireNode b = await registry.CreateVirtualNode("CascadeB")
                 .WithName(Unique("pwnet_casc_b")).ExecuteAsync(cts.Token);
 
             ImmutableArray<PipeWirePort> aPorts = await PortsOfAsync(registry, a.NodeId, 4, cts.Token);
@@ -175,7 +179,7 @@ public sealed class RealWorldScenarioTests
 
             // Destroy the node in the middle. Its ports and links must leave the graph with it, and
             // no snapshot may ever be published that still holds a link to a port that is gone.
-            await registry.RemoveObjectAsync(a.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(a.NodeId, cts.Token);
             await registry.WaitForInitialEnumerationAsync(cts.Token);
 
             PipeWireGraphSnapshot graph = registry.Current;
@@ -191,7 +195,7 @@ public sealed class RealWorldScenarioTests
                     $"link {link.LinkId} points at input node {link.LinkInputNode}, which is not in the graph");
             }
 
-            await registry.RemoveObjectAsync(b.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(b.NodeId, cts.Token);
         }
     }
 
@@ -206,9 +210,9 @@ public sealed class RealWorldScenarioTests
         {
             // The classic insert: source -> filter -> sink, with the filter doing the work. This is
             // the arrangement an equaliser or a noise gate lives in.
-            PipeWireNode source = await registry.CreateVirtualStereoNode("InsertSrc")
+            PipeWireNode source = await registry.CreateVirtualNode("InsertSrc")
                 .WithName(Unique("pwnet_insert_src")).ExecuteAsync(cts.Token);
-            PipeWireNode sink = await registry.CreateVirtualStereoNode("InsertSink")
+            PipeWireNode sink = await registry.CreateVirtualNode("InsertSink")
                 .WithName(Unique("pwnet_insert_sink")).ExecuteAsync(cts.Token);
 
             await using PipeWireFilter filter = PipeWireFilter.Create(ctx, Unique("pwnet_insert_filter"));
@@ -260,8 +264,8 @@ public sealed class RealWorldScenarioTests
             Assert.AreEqual(2, graph.GetLinksForNode(filterNode).Count(),
                 "the filter must be linked on both sides");
 
-            await registry.RemoveObjectAsync(source.NodeId, cts.Token);
-            await registry.RemoveObjectAsync(sink.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(source.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(sink.NodeId, cts.Token);
         }
     }
 
@@ -396,7 +400,7 @@ public sealed class RealWorldScenarioTests
             var created = new List<uint>();
             for (int i = 0; i < 4; i++)
             {
-                PipeWireNode node = await registry.CreateVirtualStereoNode($"Ui{i}")
+                PipeWireNode node = await registry.CreateVirtualNode($"Ui{i}")
                     .WithName(Unique($"pwnet_ui{i}")).ExecuteAsync(cts.Token);
                 created.Add(node.NodeId);
             }
@@ -410,7 +414,7 @@ public sealed class RealWorldScenarioTests
             Assert.IsTrue(registry.Current.Version > held.Version, "and its version advanced");
 
             foreach (uint id in created)
-                await registry.RemoveObjectAsync(id, cts.Token);
+                await registry.DestroyGlobalAsync(id, cts.Token);
 
             // Still readable after the objects it describes are gone: a snapshot is data, not a
             // handle on anything native.
@@ -418,5 +422,43 @@ public sealed class RealWorldScenarioTests
             foreach (PipeWireNode node in held.Nodes)
                 Assert.IsNotNull(node.NodeId.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
+    }
+
+    /// <summary>Reads a node's volume until it reports the value written, or the budget runs out.</summary>
+    /// <remarks>
+    /// <c>SetParameterAsync</c> returns once the daemon has processed the write, not once the object
+    /// has applied it. Reading once therefore races the object, and the race is invisible on an idle
+    /// session and reliable on a busy one.
+    /// </remarks>
+    private static async Task<float> SettledVolumeAsync(
+        PipeWireNodeControl node, float want, CancellationToken cancellationToken)
+    {
+        float last = float.NaN;
+        for (int attempt = 0; attempt < 40; attempt++)
+        {
+            last = (await node.GetVolumeAsync(cancellationToken).ConfigureAwait(false)) ?? float.NaN;
+            if (Math.Abs(last - want) <= 0.01f) return last;
+            await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+        }
+
+        return last;
+    }
+
+    /// <inheritdoc cref="SettledVolumeAsync"/>
+    private static async Task<float> SettledChannelVolumeAsync(
+        PipeWireNodeControl node, float want, CancellationToken cancellationToken)
+    {
+        float last = float.NaN;
+        for (int attempt = 0; attempt < 40; attempt++)
+        {
+            ImmutableArray<float> volumes =
+                await node.GetChannelVolumesAsync(cancellationToken).ConfigureAwait(false);
+
+            last = volumes.IsDefaultOrEmpty ? float.NaN : volumes[0];
+            if (Math.Abs(last - want) <= 0.01f) return last;
+            await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+        }
+
+        return last;
     }
 }

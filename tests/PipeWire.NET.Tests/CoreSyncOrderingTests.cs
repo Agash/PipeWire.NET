@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
+using PipeWire.NET.Interop;
 
 namespace PipeWire.NET.Tests;
 
@@ -53,7 +54,7 @@ public sealed class CoreSyncOrderingTests
             var created = new List<uint>();
             for (int i = 0; i < 12; i++)
             {
-                PipeWireNode node = await registry.CreateVirtualStereoNode("Ordering")
+                PipeWireNode node = await registry.CreateVirtualNode("Ordering")
                     .WithName(Unique("pwnet_order"))
                     .ExecuteAsync(cts.Token);
 
@@ -69,7 +70,7 @@ public sealed class CoreSyncOrderingTests
                 Assert.IsNotNull(graph.GetNode(id), $"node {id} was created before the barrier but is absent after it");
 
             foreach (uint id in created)
-                await registry.RemoveObjectAsync(id, cts.Token);
+                await registry.DestroyGlobalAsync(id, cts.Token);
 
             await registry.WaitForInitialEnumerationAsync(cts.Token);
 
@@ -88,9 +89,9 @@ public sealed class CoreSyncOrderingTests
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode source = await registry.CreateVirtualStereoNode("OrderSrc")
+            PipeWireNode source = await registry.CreateVirtualNode("OrderSrc")
                 .WithName(Unique("pwnet_order_src")).ExecuteAsync(cts.Token);
-            PipeWireNode sink = await registry.CreateVirtualStereoNode("OrderSink")
+            PipeWireNode sink = await registry.CreateVirtualNode("OrderSink")
                 .WithName(Unique("pwnet_order_sink")).ExecuteAsync(cts.Token);
 
             ImmutableArray<PipeWirePort> outputs = await PortsAsync(
@@ -110,15 +111,20 @@ public sealed class CoreSyncOrderingTests
             Assert.IsTrue(graph.GetLinksForNode(source.NodeId).Any(l => l.LinkId == link.LinkId),
                 "the link is not reachable from the node it starts at");
 
-            await registry.RemoveObjectAsync(link.LinkId, cts.Token);
-            await registry.RemoveObjectAsync(source.NodeId, cts.Token);
-            await registry.RemoveObjectAsync(sink.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(link.LinkId, cts.Token);
+            await registry.DestroyGlobalAsync(source.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(sink.NodeId, cts.Token);
         }
     }
 
     [TestMethod]
-    public async Task AfterARoundTrip_AMetadataWriteIsVisibleToASecondClient()
+    public async Task AMetadataWriteReachesASecondClient_ButNotBecauseOfABarrier()
     {
+        // A round trip orders one connection against the daemon and nothing else. The default store
+        // is served by the session manager, a third process, so a write travels
+        // writer -> daemon -> session manager -> daemon -> reader, and neither client's barrier
+        // creates a happens-before with the middle hop. What can be relied on is that the change
+        // arrives, so that is what is waited for; the timeout is the assertion.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext a, PipeWireRegistry ra) = await ConnectAsync("pwnet-order-meta-a", cts.Token);
@@ -139,15 +145,47 @@ public sealed class CoreSyncOrderingTests
                 await Task.WhenAll(writer.ReadyAsync(cts.Token), reader.ReadyAsync(cts.Token));
 
                 string key = Unique("pwnet.order");
-                await writer.SetAsync(key, "v", cancellationToken: cts.Token);
+                try
+                {
+                    string? seen = await MetadataRelay.AwaitRelayAsync(
+                        reader,
+                        key,
+                        () => writer.SetAsync(key, "v", cancellationToken: cts.Token),
+                        cts.Token);
 
-                // The reader's barrier is issued after the write reached the daemon, so the echo
-                // must already have been dispatched to it.
-                await reader.ReadyAsync(cts.Token);
-                Assert.AreEqual("v", reader.Get(key), "a write before the barrier is not readable after it");
-
-                await writer.SetAsync(key, null, cancellationToken: cts.Token);
+                    Assert.AreEqual("v", seen, "the reader was told about the write, with the wrong value");
+                    Assert.AreEqual("v", reader.Get(key),
+                        "the change was raised but the store it came from does not hold it");
+                }
+                finally
+                {
+                    await writer.SetAsync(key, null, cancellationToken: CancellationToken.None);
+                }
             }
+        }
+    }
+
+    [TestMethod]
+    public async Task ARoundTrip_OrdersOnlyItsOwnConnection()
+    {
+        // The half of the contract that does hold: everything this connection sent before the
+        // barrier has been processed by the daemon when the barrier completes. A global created
+        // before it is therefore in our own registry by then, with no polling.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-order-own", cts.Token);
+        await using (ctx)
+        await using (registry)
+        {
+            PipeWireNode node = await registry.CreateVirtualNode("Barrier")
+                .WithName(Unique("pwnet_barrier")).ExecuteAsync(cts.Token);
+
+            await CoreSync.RoundTripAsync(ctx, cts.Token);
+
+            Assert.IsNotNull(registry.Current.GetNode(node.NodeId),
+                "a global created before the barrier is not in the graph after it");
+
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 

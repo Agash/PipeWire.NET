@@ -10,16 +10,13 @@ namespace PipeWire.NET.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A review raised this as a use-after-free: <c>pw_proxy_destroy</c> reads <c>proxy-&gt;core</c>,
-/// while the context disconnects the core independently, so a proxy outliving the context would
-/// dereference freed memory.
+/// <c>pw_proxy_destroy</c> reads <c>proxy-&gt;core</c> while the context disconnects the core
+/// independently, so the question is whether a proxy outliving the context dereferences freed memory.
 /// </para>
 /// <para>
-/// Reading PipeWire 1.6.8 says otherwise. During core teardown <c>destroy_proxy</c> sets
-/// <c>p-&gt;core = NULL</c> on every surviving proxy, and both <c>pw_proxy_destroy</c> and
-/// <c>remove_from_map</c> guard on <c>proxy-&gt;core</c> being non-null. The loop is separately
-/// protected by the handle ref-count. These tests exercise the sequence rather than argue about it:
-/// an abort here is a real failure, and a clean pass is the evidence.
+/// During core teardown <c>destroy_proxy</c> sets <c>p-&gt;core = NULL</c> on every surviving proxy,
+/// and both <c>pw_proxy_destroy</c> and <c>remove_from_map</c> guard on <c>proxy-&gt;core</c> being
+/// non-null. The loop is separately protected by the handle ref-count.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -52,15 +49,14 @@ public sealed class NativeLifetimeTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        // The exact sequence the review called a use-after-free: own several proxies, tear the
-        // context down first, then let the registry unwind afterwards.
+        // Own several proxies, tear the context down first, then let the registry unwind afterwards.
         var ctx = new PipeWireContext("pwnet-nl-owned", ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
         var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         for (int i = 0; i < 4; i++)
-            await reg.CreateVirtualStereoNode($"Owned {i}").WithName($"pwnet_nl_owned_{i}")
+            await reg.CreateVirtualNode($"Owned {i}").WithName($"pwnet_nl_owned_{i}")
                      .ExecuteAsync(cts.Token);
 
         await ctx.DisposeAsync();     // core disconnected, proxies still owned
@@ -89,9 +85,8 @@ public sealed class NativeLifetimeTests
         using var cts = new CancellationTokenSource(Budget);
 
         // The harder version: nothing disposes the registry at all, so the proxy handles are
-        // released by finalization, long after the context and its core went away. This is the
-        // sequence a review specifically asked to see, because it removes every ordering guarantee
-        // except the handle ref-count itself.
+        // released by finalization, long after the context and its core went away. This removes
+        // every ordering guarantee except the handle ref-count itself.
         await CreateAndAbandonAsync(cts.Token);
 
         GC.Collect();
@@ -105,6 +100,193 @@ public sealed class NativeLifetimeTests
             "finalizing orphaned proxies left the process unable to reach the daemon");
     }
 
+    [TestMethod]
+    public async Task ALingeringNodeSurvivesItsCreatorBeingFinalized_NotJustDisposed()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        // Disposal is the orderly path and it is already covered. This is the one that says whether
+        // linger is a property of the object on the daemon or an artefact of how we shut down: the
+        // creator is abandoned to the finalizer, so the proxies are released with no ordering and
+        // no chance for the library to say anything to the daemon first. If a finalizer took the
+        // node with it, linger would be a promise the library breaks whenever a caller forgets a
+        // using, which is exactly when they are relying on it.
+        uint lingering = await CreateLingeringAndAbandonAsync(cts.Token);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+
+        await Task.Delay(500, cts.Token);
+
+        await using var observer = new PipeWireContext("pwnet-linger-finalize-obs", ConsoleTestLoggerFactory.Instance);
+        await observer.StartAsync(cts.Token);
+        await using var registry = new PipeWireRegistry(observer);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+
+        Assert.IsNotNull(registry.Current.GetNode(lingering),
+            "a lingering node did not survive its creator being finalized rather than disposed");
+
+        // And it is a real object, not a stale registry entry: another client can still take it down.
+        await registry.DestroyGlobalAsync(lingering, cts.Token);
+        await WaitForRemovedAsync(registry, lingering, cts.Token);
+    }
+
+    [TestMethod]
+    public async Task AControlDroppedWithoutDisposing_IsStillCollectable()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        // A listener needs the daemon to be able to find the managed object, and the obvious way to
+        // arrange that is a strong GCHandle. The trap is that the handle is freed by the proxy
+        // handle's release path, the proxy handle is reached through the object the GCHandle roots,
+        // and a rooted object is never finalized: the release that frees the handle is waiting on
+        // the handle being freed. A caller who forgets a using then leaks the control, its proxy and
+        // its listener for the life of the process, and no descriptor or daemon-side count shows it.
+        await using var ctx = new PipeWireContext("pwnet-control-collect", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+        await using var registry = new PipeWireRegistry(ctx);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+
+        PipeWireNode node = await registry.CreateVirtualNode("Collect")
+            .WithName($"pwnet_collect_{Environment.ProcessId}_{Random.Shared.Next():x}")
+            .ExecuteAsync(cts.Token);
+
+        WeakReference weak = BindAndAbandon(registry, node.NodeId);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+
+        Assert.IsFalse(weak.IsAlive,
+            "a control dropped without disposing is still rooted, so it and its proxy never go away");
+
+        await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
+    }
+
+    /// <summary>Binds a control and returns only a weak reference to it.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static WeakReference BindAndAbandon(PipeWireRegistry registry, uint nodeId)
+    {
+        PipeWireNodeControl control = registry.BindNode(nodeId);
+        return new WeakReference(control);
+    }
+
+    [TestMethod]
+    public async Task ManyContextsCreatedAndDisposed_DoNotAccumulateProcessResources()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        // pw_init is called per context and pw_deinit is never called, which reads like an
+        // unbalanced refcount. The balancing call is not the fix it looks like: pw_deinit tears down
+        // process-global PipeWire state, and a library that does that when its last context closes
+        // breaks a host application, or another library in the same process, that is still using
+        // PipeWire. So the question is not whether the calls are balanced but whether repeating
+        // pw_init actually costs anything, which is measurable.
+        for (int i = 0; i < 10; i++)
+        {
+            await using var warm = new PipeWireContext($"pwnet-init-warm-{i}", ConsoleTestLoggerFactory.Instance);
+            await warm.StartAsync(cts.Token);
+        }
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        int fdsBefore = OpenFileDescriptors();
+        int threadsBefore = ProcessThreads();
+        long rssBefore = ResidentBytes();
+
+        const int Rounds = 100;
+        for (int i = 0; i < Rounds; i++)
+        {
+            await using var ctx = new PipeWireContext($"pwnet-init-{i}", ConsoleTestLoggerFactory.Instance);
+            await ctx.StartAsync(cts.Token);
+        }
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        int fdsAfter = OpenFileDescriptors();
+        int threadsAfter = ProcessThreads();
+        long rssAfter = ResidentBytes();
+
+        Console.Error.WriteLine(
+            $"{Rounds} contexts: fds {fdsBefore} -> {fdsAfter}, threads {threadsBefore} -> {threadsAfter}, "
+            + $"rss {rssBefore / 1024}KB -> {rssAfter / 1024}KB");
+
+        Assert.IsTrue(fdsAfter <= fdsBefore + 2,
+            $"file descriptors grew {fdsBefore} -> {fdsAfter} over {Rounds} contexts");
+        Assert.IsTrue(threadsAfter <= threadsBefore + 1,
+            $"threads grew {threadsBefore} -> {threadsAfter}, so loop threads are being stranded");
+
+        // Resident memory is the one that would show a per-pw_init allocation never released.
+        // Generous, because the allocator keeps what it takes: 100 rounds leaking even 8KB apiece
+        // would be 800KB and fail this.
+        Assert.IsTrue(rssAfter - rssBefore < 512 * 1024,
+            $"resident memory grew {(rssAfter - rssBefore) / 1024}KB over {Rounds} contexts");
+    }
+
+    private static int OpenFileDescriptors() => Directory.GetFiles("/proc/self/fd").Length;
+
+    private static int ProcessThreads() => ReadStatus("Threads:");
+
+    private static long ResidentBytes() => ReadStatus("VmRSS:") * 1024L;
+
+    private static int ReadStatus(string key)
+    {
+        foreach (string line in File.ReadLines("/proc/self/status"))
+        {
+            if (!line.StartsWith(key, StringComparison.Ordinal)) continue;
+
+            ReadOnlySpan<char> rest = line.AsSpan(key.Length).Trim();
+            int space = rest.IndexOf(' ');
+            if (space > 0) rest = rest[..space];
+
+            return int.Parse(rest, System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return -1;
+    }
+
+    /// <summary>Creates a lingering node and drops every managed reference without disposing.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static async Task<uint> CreateLingeringAndAbandonAsync(CancellationToken ct)
+    {
+        var context = new PipeWireContext("pwnet-linger-finalize", ConsoleTestLoggerFactory.Instance);
+        await context.StartAsync(ct);
+
+        var registry = new PipeWireRegistry(context);
+        await registry.WaitForInitialEnumerationAsync(ct);
+
+        PipeWireNode node = await registry.CreateVirtualNode("LingerFinalize")
+            .WithName($"pwnet_linger_fin_{Environment.ProcessId}_{Random.Shared.Next():x}")
+            .WithLinger()
+            .ExecuteAsync(ct);
+
+        // Nothing is disposed and nothing is returned but the id, so both objects are unreachable
+        // the moment this returns.
+        return node.NodeId;
+    }
+
+    private static async Task WaitForRemovedAsync(
+        PipeWireRegistry registry, uint id, CancellationToken ct)
+    {
+        while (registry.Current.GetNode(id) is not null)
+        {
+            ct.ThrowIfCancellationRequested();
+            await registry.WaitForInitialEnumerationAsync(ct);
+        }
+    }
+
     /// <summary>Creates owned proxies and drops every managed reference without disposing.</summary>
     private static async Task CreateAndAbandonAsync(CancellationToken ct)
     {
@@ -114,7 +296,7 @@ public sealed class NativeLifetimeTests
         await reg.WaitForInitialEnumerationAsync(ct);
 
         for (int i = 0; i < 3; i++)
-            await reg.CreateVirtualStereoNode($"Abandoned {i}").WithName($"pwnet_nl_ab_{i}")
+            await reg.CreateVirtualNode($"Abandoned {i}").WithName($"pwnet_nl_ab_{i}")
                      .ExecuteAsync(ct);
 
         // Context goes; registry and its proxy handles are simply dropped.
@@ -135,7 +317,7 @@ public sealed class NativeLifetimeTests
         var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await reg.CreateVirtualStereoNode("LoopRef")
+        PipeWireNode node = await reg.CreateVirtualNode("LoopRef")
                                      .WithName("pwnet_nl_loopref").ExecuteAsync(cts.Token);
         Assert.IsNotNull(reg.Current.GetNode(node.NodeId));
 
@@ -173,7 +355,7 @@ public sealed class NativeLifetimeTests
         Assert.IsNotNull(reg.Current.GetNode(foreignId));
 
         // Our own node alongside it, so disposal has both kinds to unwind.
-        await reg.CreateVirtualStereoNode("Ours").WithName("pwnet_nl_ours").ExecuteAsync(cts.Token);
+        await reg.CreateVirtualNode("Ours").WithName("pwnet_nl_ours").ExecuteAsync(cts.Token);
 
         // Disposal releases only what we own. A second destroy of the foreign object would trip
         // the assertion in proxy.c and abort.
@@ -234,7 +416,7 @@ public sealed class NativeLifetimeTests
             var reg = new PipeWireRegistry(ctx);
             await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-            PipeWireNode node = await reg.CreateVirtualStereoNode("Outlive")
+            PipeWireNode node = await reg.CreateVirtualNode("Outlive")
                                          .WithName("pwnet_nl_outlive").ExecuteAsync(cts.Token);
             nodeId = node.NodeId;
             held = await WaitForAsync(reg, g => g.GetPortsForNode(nodeId).Length == 4, cts.Token);
@@ -278,10 +460,10 @@ public sealed class NativeLifetimeTests
             if (current.Version < snapshot.Version) Interlocked.Increment(ref violations);
         };
 
-        PipeWireNode node = await reg.CreateVirtualStereoNode("Order")
+        PipeWireNode node = await reg.CreateVirtualNode("Order")
                                      .WithName("pwnet_nl_order").ExecuteAsync(cts.Token);
         await WaitForAsync(reg, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
-        await reg.RemoveObjectAsync(node.NodeId, cts.Token);
+        await reg.DestroyGlobalAsync(node.NodeId, cts.Token);
         await WaitForAsync(reg, g => g.GetNode(node.NodeId) is null, cts.Token);
 
         Assert.IsTrue(Volatile.Read(ref seen) > 0, "no GraphChanged fired, so nothing was checked");
@@ -302,7 +484,7 @@ public sealed class NativeLifetimeTests
         // application starts and immediately publishes its own node.
         await using var reg = new PipeWireRegistry(ctx);
 
-        Task<PipeWireNode> creation = reg.CreateVirtualStereoNode("Burst")
+        Task<PipeWireNode> creation = reg.CreateVirtualNode("Burst")
                                          .WithName("pwnet_nl_burst").ExecuteAsync(cts.Token);
         Task enumeration = reg.WaitForInitialEnumerationAsync(cts.Token);
 
@@ -315,7 +497,7 @@ public sealed class NativeLifetimeTests
         Assert.AreEqual("pwnet_nl_burst", live!.NodeName, "the node arrived without its properties");
         Assert.AreEqual("Audio/Sink", live.MediaClass);
 
-        await reg.RemoveObjectAsync(node.NodeId, cts.Token);
+        await reg.DestroyGlobalAsync(node.NodeId, cts.Token);
     }
 
     [TestMethod]
@@ -328,12 +510,12 @@ public sealed class NativeLifetimeTests
 
         // Tighter still: create on the line after construction, before any global can have arrived.
         await using var reg = new PipeWireRegistry(ctx);
-        PipeWireNode node = await reg.CreateVirtualStereoNode("Immediate")
+        PipeWireNode node = await reg.CreateVirtualNode("Immediate")
                                      .WithName("pwnet_nl_immediate").ExecuteAsync(cts.Token);
 
         Assert.IsNotNull(reg.Current.GetNode(node.NodeId),
             "creation must not depend on enumeration having finished");
 
-        await reg.RemoveObjectAsync(node.NodeId, cts.Token);
+        await reg.DestroyGlobalAsync(node.NodeId, cts.Token);
     }
 }

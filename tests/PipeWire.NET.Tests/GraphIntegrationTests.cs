@@ -58,15 +58,14 @@ public sealed class GraphIntegrationTests
         await using (context)
         await using (registry)
         {
-            // The sync barrier means the graph is already populated when the wait returns; the old
-            // 250ms settle delay was the only thing that used to make this true.
+            // The sync barrier means the graph is already populated when the wait returns.
             Assert.IsTrue(registry.Current.Nodes.Length > 0, "a running daemon always has nodes");
             Assert.IsTrue(registry.Current.Version > 0, "a snapshot should have been published");
         }
     }
 
     [TestMethod]
-    public async Task CreateVirtualStereoNode_AppearsInTheGraphWithFourPorts()
+    public async Task CreateVirtualNode_AppearsInTheGraphWithFourPorts()
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
@@ -74,7 +73,7 @@ public sealed class GraphIntegrationTests
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNodeAsync(
+            PipeWireNode node = await registry.CreateVirtualNodeAsync(
                 "PipeWire.NET test sink", "pwnet_test_sink", cts.Token);
 
             Assert.IsNotNull(registry.Current.GetNode(node.NodeId),
@@ -96,8 +95,8 @@ public sealed class GraphIntegrationTests
         await using (context)
         await using (registry)
         {
-            PipeWireNode a = await registry.CreateVirtualStereoNodeAsync("A", "pwnet_link_a", cts.Token);
-            PipeWireNode b = await registry.CreateVirtualStereoNodeAsync("B", "pwnet_link_b", cts.Token);
+            PipeWireNode a = await registry.CreateVirtualNodeAsync("A", "pwnet_link_a", cts.Token);
+            PipeWireNode b = await registry.CreateVirtualNodeAsync("B", "pwnet_link_b", cts.Token);
 
             PipeWireGraphSnapshot ready = await WaitForAsync(
                 registry,
@@ -132,7 +131,7 @@ public sealed class GraphIntegrationTests
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNodeAsync("R", "pwnet_reject", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualNodeAsync("R", "pwnet_reject", cts.Token);
             PipeWireGraphSnapshot graph = await WaitForPortsAsync(registry, node.NodeId, cts.Token);
 
             PipeWirePort output = graph.GetPortsForNode(node.NodeId, PipeWirePortDirection.Out).First();
@@ -164,7 +163,7 @@ public sealed class GraphIntegrationTests
                     violations.Add($"node {n.NodeId}");
             };
 
-            PipeWireNode node = await registry.CreateVirtualStereoNodeAsync("O", "pwnet_order", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualNodeAsync("O", "pwnet_order", cts.Token);
             await WaitForPortsAsync(registry, node.NodeId, cts.Token);
 
             CollectionAssert.AreEqual(Array.Empty<string>(), violations,
@@ -173,7 +172,7 @@ public sealed class GraphIntegrationTests
     }
 
     [TestMethod]
-    public async Task CreateVirtualStereoNode_HonoursCancellation()
+    public async Task CreateVirtualNode_HonoursCancellation()
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
@@ -185,7 +184,7 @@ public sealed class GraphIntegrationTests
             await cancelled.CancelAsync();
 
             await Assert.ThrowsAsync<OperationCanceledException>(
-                () => registry.CreateVirtualStereoNodeAsync("C", "pwnet_cancel", cancelled.Token));
+                () => registry.CreateVirtualNodeAsync("C", "pwnet_cancel", cancelled.Token));
         }
     }
 
@@ -201,7 +200,7 @@ public sealed class GraphIntegrationTests
             PipeWireGraphSnapshot before = registry.Current;
             int nodesBefore = before.Nodes.Length;
 
-            await registry.CreateVirtualStereoNodeAsync("I", "pwnet_immutable", cts.Token);
+            await registry.CreateVirtualNodeAsync("I", "pwnet_immutable", cts.Token);
 
             Assert.AreEqual(nodesBefore, before.Nodes.Length, "an already-published snapshot must not change");
             Assert.IsTrue(registry.Current.Version > before.Version, "a new snapshot must have been published");

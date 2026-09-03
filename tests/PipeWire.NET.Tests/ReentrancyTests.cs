@@ -79,9 +79,9 @@ public sealed class ReentrancyTests
             {
                 for (int i = 0; i < 10; i++)
                 {
-                    PipeWireNode node = await registry.CreateVirtualStereoNode("Reentrant")
+                    PipeWireNode node = await registry.CreateVirtualNode("Reentrant")
                         .WithName(Unique("pwnet_reentrant")).ExecuteAsync(cts.Token);
-                    await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+                    await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
                 }
 
                 await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -141,9 +141,9 @@ public sealed class ReentrancyTests
             {
                 for (int i = 0; i < 10; i++)
                 {
-                    PipeWireNode node = await registry.CreateVirtualStereoNode("Mutate")
+                    PipeWireNode node = await registry.CreateVirtualNode("Mutate")
                         .WithName(Unique("pwnet_mutate")).ExecuteAsync(cts.Token);
-                    await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+                    await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
                 }
 
                 await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -229,12 +229,11 @@ public sealed class ReentrancyTests
         {
             // Destroying a proxy on the loop thread can happen while the daemon dispatches through
             // that proxy's own listener, and the destroy frees the hook the dispatch is walking.
-            // Before this was deferred it was a use-after-free that took the process down.
             var faults = new ConcurrentQueue<string>();
 
             for (int round = 0; round < 6; round++)
             {
-                PipeWireNode node = await registry.CreateVirtualStereoNode("SelfDispose")
+                PipeWireNode node = await registry.CreateVirtualNode("SelfDispose")
                     .WithName(Unique("pwnet_selfdispose")).ExecuteAsync(cts.Token);
 
                 PipeWireNodeControl control = registry.BindNode(node.NodeId);
@@ -260,7 +259,7 @@ public sealed class ReentrancyTests
                 // Disposing again from a normal thread must be a no-op, not a second teardown.
                 control.Dispose();
 
-                await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+                await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
             }
 
             Assert.IsTrue(faults.IsEmpty, string.Join("; ", faults));
@@ -268,6 +267,60 @@ public sealed class ReentrancyTests
             // And the connection still works, which a corrupted listener list would not leave it.
             await registry.WaitForInitialEnumerationAsync(cts.Token);
             Assert.IsTrue(registry.Current.Nodes.Length > 0);
+        }
+    }
+
+    [TestMethod]
+    public async Task DisposingTheContextFromItsOwnCallback_SaysSoRatherThanHanging()
+    {
+        // pw_thread_loop_stop joins the loop thread. Asked for from inside a callback, that is the
+        // thread waiting for itself: the process stops with nothing in the log to explain it, and
+        // no timeout anywhere to break it. There is no correct way to satisfy the request, so the
+        // only useful answer is a clear refusal. The wait below is the real assertion: if this ever
+        // regresses to a join, the test times out instead of hanging the run for ever.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-dispose-self", cts.Token);
+
+        var attempted = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        void OnAdded(PipeWireNode _)
+        {
+            if (attempted.Task.IsCompleted) return;
+
+            try
+            {
+                ctx.Dispose();
+                attempted.TrySetResult(null);
+            }
+            catch (Exception ex)
+            {
+                attempted.TrySetResult(ex);
+            }
+        }
+
+        registry.NodeAdded += OnAdded;
+        try
+        {
+            PipeWireNode node = await registry.CreateVirtualNode("DisposeSelf")
+                .WithName(Unique("pwnet_dispose_self")).ExecuteAsync(cts.Token);
+
+            Exception? thrown = await attempted.Task.WaitAsync(TimeSpan.FromSeconds(20), cts.Token);
+
+            Assert.IsInstanceOfType<InvalidOperationException>(thrown,
+                "disposing from the loop thread has to be refused, not attempted");
+            Assert.Contains("loop thread", thrown!.Message, StringComparison.Ordinal);
+
+            // Refused, so the context is untouched and still works.
+            await registry.WaitForInitialEnumerationAsync(cts.Token);
+            Assert.IsNotNull(registry.Current.GetNode(node.NodeId));
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
+        }
+        finally
+        {
+            registry.NodeAdded -= OnAdded;
+            await registry.DisposeAsync();
+            await ctx.DisposeAsync();
         }
     }
 }

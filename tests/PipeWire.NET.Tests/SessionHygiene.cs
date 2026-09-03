@@ -8,22 +8,42 @@ namespace PipeWire.NET.Tests;
 /// Removes the metadata keys the suite wrote, once the whole run is over.
 /// </summary>
 /// <remarks>
-/// The daemon's metadata store outlives the test process, and nothing else ever clears it: every
-/// run used to leave its keys behind, so a machine used for a night of testing accumulated dozens
-/// of them. That is worth cleaning up on its own, and it also removes a confusing failure mode -
-/// tests that assert on the contents of the default store see the debris from every previous run.
+/// The daemon's metadata store outlives the test process, and nothing else ever clears it, so keys
+/// left behind accumulate and confuse tests that assert on the contents of the default store.
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
 public static class SessionHygiene
 {
-    /// <summary>The prefix every key this suite writes begins with.</summary>
-    private const string TestKeyPrefix = "pwnet.";
+    /// <summary>The prefixes every key this suite writes begins with.</summary>
+    /// <remarks>
+    /// More than one because the pen harness names its keys after itself rather than after the
+    /// suite, and those must be swept too or they accumulate in the default store.
+    /// </remarks>
+    private static readonly string[] TestKeyPrefixes = ["pwnet.", "pen."];
+
+    private static bool IsOurs(string key)
+    {
+        foreach (string prefix in TestKeyPrefixes)
+        {
+            if (key.StartsWith(prefix, StringComparison.Ordinal)) return true;
+        }
+
+        return false;
+    }
 
     [AssemblyCleanup]
     public static async Task RemoveOurMetadataKeysAsync()
     {
         if (!OperatingSystem.IsLinux()) return;
+
+        // Nothing to clean after a run that never had a daemon, and connecting only to find that
+        // out costs the whole 30-second budget on a host that has none. The unit leg runs here too.
+        if (Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is not { Length: > 0 } runtimeDir
+            || !Directory.EnumerateFiles(runtimeDir, "pipewire-*").Any())
+        {
+            return;
+        }
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         try
@@ -42,7 +62,7 @@ public static class SessionHygiene
 
                 foreach (PipeWireMetadataEntry entry in store.Entries)
                 {
-                    if (!entry.Key.StartsWith(TestKeyPrefix, StringComparison.Ordinal)) continue;
+                    if (!IsOurs(entry.Key)) continue;
 
                     // A null value is the removal. One key failing to clear must not stop the rest.
                     try
@@ -50,7 +70,7 @@ public static class SessionHygiene
                         await store.SetAsync(entry.Key, null, subject: entry.Subject,
                             cancellationToken: cts.Token);
                     }
-                    catch (InvalidOperationException)
+                    catch (PipeWireException)
                     {
                         // Not ours to remove on this daemon; nothing to do but leave it.
                     }
@@ -61,7 +81,7 @@ public static class SessionHygiene
         {
             // Best-effort cleanup on the way out; a slow session is not a test failure.
         }
-        catch (InvalidOperationException)
+        catch (PipeWireException)
         {
             // No daemon, or no permission to reach the store. Neither is a test failure.
         }

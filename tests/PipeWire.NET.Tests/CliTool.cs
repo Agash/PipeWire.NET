@@ -8,10 +8,8 @@ namespace PipeWire.NET.Tests;
 /// One external command-line program, resolved and run.
 /// </summary>
 /// <remarks>
-/// Every tool wrapper was repeating the same plumbing, and each copy got the cancellation handling
-/// slightly differently - one of them leaked a child process on every cancelled test. Resolution is
-/// through PATH with an environment override rather than a hardcoded prefix, because /usr/bin is
-/// one distribution's layout and CI images do not all share it.
+/// Resolution is through PATH with an environment override rather than a hardcoded prefix,
+/// because /usr/bin is one distribution's layout and CI images do not all share it.
 /// </remarks>
 [SupportedOSPlatform("linux")]
 internal sealed class CliTool
@@ -51,6 +49,17 @@ internal sealed class CliTool
 
     private static CliTool SkipBecauseMissing(string name)
     {
+        // Skipping is right on a developer machine that has no wpctl: the rest of the suite still
+        // runs. It is wrong on a build image that is supposed to have one, where a whole category
+        // would stop testing and the run would stay green. PWNET_REQUIRE_TOOLS=1 is how CI says
+        // the tools are part of the image.
+        if (Environment.GetEnvironmentVariable("PWNET_REQUIRE_TOOLS") is "1" or "true")
+        {
+            Assert.Fail(
+                $"{name} is not installed, and PWNET_REQUIRE_TOOLS is set. Either install it in the "
+                + "image or drop the variable, but do not let this category stop running unnoticed.");
+        }
+
         Assert.Inconclusive($"{name} is not installed.");
         throw new InvalidOperationException("unreachable");
     }

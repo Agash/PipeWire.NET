@@ -47,7 +47,7 @@ public sealed class ControlSurfaceTests
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNode("Formats")
+            PipeWireNode node = await registry.CreateVirtualNode("Formats")
                 .WithName($"pwnet_formats_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
 
@@ -61,7 +61,7 @@ public sealed class ControlSurfaceTests
             foreach (SpaObject format in formats)
                 Assert.AreEqual(SpaType.ObjectFormat, format.ObjectType);
 
-            await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 

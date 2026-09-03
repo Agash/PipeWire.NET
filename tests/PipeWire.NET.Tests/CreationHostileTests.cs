@@ -50,7 +50,7 @@ public sealed class CreationHostileTests
             // A link between two ports that cannot be linked: the daemon reports the failure on the
             // error stream after the proxy is bound, which is the window where a waiter has an id
             // and no object. It has to fault rather than wait for a global that is not coming.
-            PipeWireNode node = await registry.CreateVirtualStereoNode("Refuse")
+            PipeWireNode node = await registry.CreateVirtualNode("Refuse")
                 .WithName(Unique("pwnet_refuse")).ExecuteAsync(cts.Token);
 
             PipeWirePort[] ports = await PortsAsync(registry, node.NodeId, cts.Token);
@@ -66,7 +66,7 @@ public sealed class CreationHostileTests
             await registry.WaitForInitialEnumerationAsync(cts.Token);
             Assert.IsNotNull(registry.Current.GetNode(node.NodeId));
 
-            await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 
@@ -96,23 +96,89 @@ public sealed class CreationHostileTests
             {
                 for (int round = 0; round < 10; round++)
                 {
-                    PipeWireNode node = await registry.CreateVirtualStereoNode("Vanish")
+                    PipeWireNode node = await registry.CreateVirtualNode("Vanish")
                         .WithName(Unique("pwnet_vanish")).ExecuteAsync(cts.Token);
 
-                    // Remove it from the other client the moment it exists.
                     while (doomed.TryDequeue(out uint id))
                     {
-                        try { await killer.RemoveObjectAsync(id, cts.Token); }
+                        try { await killer.DestroyGlobalAsync(id, cts.Token); }
                         catch (PipeWireException) { /* already gone; that is the race working */ }
                     }
 
-                    try { await registry.RemoveObjectAsync(node.NodeId, cts.Token); }
+                    try { await registry.DestroyGlobalAsync(node.NodeId, cts.Token); }
                     catch (PipeWireException) { /* the killer got there first */ }
                 }
 
                 // Both connections still work, and neither is holding a waiter that never completed.
                 await registry.WaitForInitialEnumerationAsync(cts.Token);
                 await killer.WaitForInitialEnumerationAsync(cts.Token);
+            }
+            finally
+            {
+                killer.NodeAdded -= OnAdded;
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task ObjectsDestroyedWhileBeingCreated_LeaveNoProxyBehind()
+    {
+        // A created object's proxy is filed once the graph publishes it, which is a window: the
+        // object exists on the daemon and can be destroyed by anyone before the filing happens.
+        // Nothing observable moves when a proxy is left filed for a removed object, which is why
+        // this counts the table directly rather than descriptors.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-proxy-race", cts.Token);
+        (PipeWireContext killerCtx, PipeWireRegistry killer) = await ConnectAsync("pwnet-proxy-killer", cts.Token);
+        await using (ctx)
+        await using (registry)
+        await using (killerCtx)
+        await using (killer)
+        {
+            int before = registry.OwnedProxyCount;
+
+            var doomed = new System.Collections.Concurrent.ConcurrentQueue<uint>();
+            void OnAdded(PipeWireNode n)
+            {
+                if (n.NodeName?.StartsWith("pwnet_proxyrace", StringComparison.Ordinal) == true)
+                    doomed.Enqueue(n.NodeId);
+            }
+
+            killer.NodeAdded += OnAdded;
+            try
+            {
+                var mine = new List<uint>();
+
+                for (int round = 0; round < 20; round++)
+                {
+                    // The killer races the creation from the other connection. Whichever wins, the
+                    // proxy must not be left filed for an object that no longer exists.
+                    Task<PipeWireNode> creating = registry.CreateVirtualNode("ProxyRace")
+                        .WithName(Unique("pwnet_proxyrace")).ExecuteAsync(cts.Token);
+
+                    while (doomed.TryDequeue(out uint id))
+                    {
+                        try { await killer.DestroyGlobalAsync(id, cts.Token); }
+                        catch (PipeWireException) { /* already gone; that is the race working */ }
+                    }
+
+                    try { mine.Add((await creating).NodeId); }
+                    catch (PipeWireException) { /* the killer got it before it was published */ }
+                }
+
+                foreach (uint id in mine)
+                {
+                    try { await registry.DestroyGlobalAsync(id, cts.Token); }
+                    catch (PipeWireException) { /* the killer got there first */ }
+                }
+
+                // Every object this test made is gone, so every proxy it filed should be too.
+                for (int attempt = 0; attempt < 100 && registry.OwnedProxyCount > before; attempt++)
+                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+
+                Assert.AreEqual(before, registry.OwnedProxyCount,
+                    "proxies are still filed for objects that no longer exist");
             }
             finally
             {
@@ -132,7 +198,7 @@ public sealed class CreationHostileTests
         {
             // PipeWire reuses ids. A snapshot is immutable, so the object it recorded under an id
             // must stay that object even after the daemon has handed the id to something else.
-            PipeWireNode first = await registry.CreateVirtualStereoNode("Reuse")
+            PipeWireNode first = await registry.CreateVirtualNode("Reuse")
                 .WithName(Unique("pwnet_reuse_first")).ExecuteAsync(cts.Token);
 
             await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -140,14 +206,14 @@ public sealed class CreationHostileTests
             string? firstName = held.GetNode(first.NodeId)?.NodeName;
             Assert.IsNotNull(firstName);
 
-            await registry.RemoveObjectAsync(first.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(first.NodeId, cts.Token);
 
             // Churn until an id is reused. The daemon hands ids out again quickly once freed.
             bool reused = false;
             var created = new List<uint>();
             for (int i = 0; i < 30 && !reused; i++)
             {
-                PipeWireNode next = await registry.CreateVirtualStereoNode("Reuse")
+                PipeWireNode next = await registry.CreateVirtualNode("Reuse")
                     .WithName(Unique("pwnet_reuse_next")).ExecuteAsync(cts.Token);
 
                 created.Add(next.NodeId);
@@ -156,7 +222,7 @@ public sealed class CreationHostileTests
 
             foreach (uint id in created)
             {
-                try { await registry.RemoveObjectAsync(id, cts.Token); }
+                try { await registry.DestroyGlobalAsync(id, cts.Token); }
                 catch (PipeWireException) { /* already gone */ }
             }
 

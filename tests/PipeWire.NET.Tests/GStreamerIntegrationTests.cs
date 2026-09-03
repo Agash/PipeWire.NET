@@ -87,6 +87,211 @@ public sealed class GStreamerIntegrationTests
     [TestMethod]
     [TestCategory("Integration")]
     [TestCategory("RequiresDaemon")]
+    public async Task CaptureVideo_AsksForTheGeometryItWasGiven()
+    {
+        // The parameters have to actually reach the format pod, and a value nowhere near the usual
+        // default is what shows that: the source produces 320x240, so frames of that size prove the
+        // request was carried rather than silently negotiating down to whatever the producer offered.
+        GstTestSource.RequireGStreamer();
+
+        await using var ctx = new PipeWireContext("test", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync();
+
+        const string node = "gst-geometry";
+        await using var src = await GstTestSource.StartAsync(ctx, node,
+            "videotestsrc is-live=true ! video/x-raw,format=BGRA,width=320,height=240,framerate=15/1",
+            mediaClass: "Video/Source");
+
+        var done = new TaskCompletionSource<(int Width, int Height)>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using var cap = new PipeWireVideoCapture(ctx, $"{node}-sink");
+        cap.FrameReady += (_, frame) =>
+        {
+            if (frame.Data.Length > 0) done.TrySetResult((frame.Width, frame.Height));
+        };
+
+        cap.Connect(
+            preferredFormats: stackalloc[] { PixelFormat.Bgra },
+            targetObjectName: node,
+            preferredWidth: 320,
+            preferredHeight: 240,
+            preferredFrameRate: 15);
+
+        (int width, int height) = await done.Task.WaitAsync(TimeSpan.FromSeconds(8));
+
+        Assert.AreEqual(320, width, "the width the consumer asked for did not reach the negotiation");
+        Assert.AreEqual(240, height, "the height the consumer asked for did not reach the negotiation");
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    public async Task CaptureVideo_RefusesAGeometryThatCannotBeMeant()
+    {
+        // Zero and negative are caller mistakes, not preferences: they would go into the pod as
+        // enormous unsigned values and the negotiation would fail somewhere far from the cause.
+        await using var ctx = new PipeWireContext("test", ConsoleTestLoggerFactory.Instance);
+        await using var cap = new PipeWireVideoCapture(ctx, "geometry-refused");
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => cap.Connect(preferredWidth: 0));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => cap.Connect(preferredHeight: -1));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => cap.Connect(preferredFrameRate: 0));
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    public async Task AConsumerThatStaysWithItsSource_EndsWhenTheSourceGoes()
+    {
+        // By default the daemon reattaches a stream whose source disappears to another one. For a
+        // media player that is convenient; for anything that cares which device it is reading it is
+        // silent substitution, with frames still arriving from somewhere else. The opt-out has to
+        // actually reach the connect flags, which is what this checks: the stream must leave
+        // Streaming when its only source goes, rather than carrying on against a different node.
+        GstTestSource.RequireGStreamer();
+
+        await using var ctx = new PipeWireContext("test", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync();
+
+        const string node = "gst-stay";
+        var states = new System.Collections.Concurrent.ConcurrentQueue<PipeWireStreamState>();
+        var streamed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var left = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using var cap = new PipeWireVideoCapture(ctx, $"{node}-sink");
+        cap.StateChanged += (_, _, s) =>
+        {
+            states.Enqueue(s);
+            if (s == PipeWireStreamState.Streaming) streamed.TrySetResult();
+            else if (streamed.Task.IsCompleted) left.TrySetResult();
+        };
+
+        GstTestSource src = await GstTestSource.StartAsync(ctx, node,
+            "videotestsrc is-live=true ! video/x-raw,format=BGRA,width=160,height=120,framerate=30/1",
+            mediaClass: "Video/Source");
+
+        try
+        {
+            cap.Connect(
+                preferredFormats: stackalloc[] { PixelFormat.Bgra },
+                targetObjectName: node,
+                stayWithTheSource: true);
+
+            await streamed.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        }
+        finally
+        {
+            // The source goes away underneath a stream that asked not to be moved.
+            await src.DisposeAsync();
+        }
+
+        await left.Task.WaitAsync(TimeSpan.FromSeconds(15));
+
+        Assert.AreNotEqual(PipeWireStreamState.Streaming, states.Last(),
+            $"the stream stayed streaming after its source went: {string.Join(" -> ", states)}");
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    public async Task AStreamNegotiatingASecondTime_ReportsTheNewFormatNotTheOld()
+    {
+        // Negotiation after the first one, on a live stream instance. A true A-then-B-then-A from
+        // one producer would need it to renegotiate on command, which neither gst-launch nor this
+        // library offers; what does happen in the field, and is the same code path, is the daemon
+        // moving a stream to another producer when its source goes. The consumer's param_changed
+        // runs a second time and everything derived from the format has to be rebuilt: format,
+        // dimensions, stride, buffer sizes. State kept from the first negotiation shows up as
+        // frames decoded with the old geometry, which look like corruption rather than a bug here.
+        GstTestSource.RequireGStreamer();
+
+        await using var ctx = new PipeWireContext("test", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync();
+        await using var reg = new PipeWireRegistry(ctx);
+        await reg.WaitForInitialEnumerationAsync();
+
+        var seen = new System.Collections.Concurrent.ConcurrentQueue<(PixelFormat Format, int Width, int Height)>();
+        var ragged = 0;
+
+        await using var cap = new PipeWireVideoCapture(ctx, "gst-reneg-sink");
+        cap.FrameReady += (_, frame) =>
+        {
+            if (frame.Data.Length == 0) return;
+
+            // The frame has to be self-consistent with the geometry it reports, whichever
+            // negotiation produced it. A stride from the previous format is what this catches.
+            int expected = frame.Height * frame.Stride;
+            if (frame.Stride > 0 && frame.Data.Length < expected) Interlocked.Increment(ref ragged);
+
+            seen.Enqueue((frame.Format, frame.Width, frame.Height));
+        };
+
+        // First producer: BGRA at 160x120. Left to autoconnect so the daemon owns the routing and
+        // can move the stream when this one goes.
+        GstTestSource first = await GstTestSource.StartAsync(ctx, "gst-reneg",
+            "videotestsrc is-live=true ! video/x-raw,format=BGRA,width=160,height=120,framerate=30/1",
+            mediaClass: "Video/Source");
+
+        try
+        {
+            cap.Connect(preferredFormats: stackalloc[] { PixelFormat.Bgra, PixelFormat.Yuv420 },
+                targetObjectName: "gst-reneg");
+
+            await WaitForAsync(() => seen.Any(f => f.Width == 160), TimeSpan.FromSeconds(15),
+                "no frame ever arrived from the first producer");
+        }
+        finally
+        {
+            await first.DisposeAsync();
+        }
+
+        // Second producer, different format and geometry, same node name so the daemon reattaches
+        // the stream that is already connected rather than this test connecting again.
+        await using GstTestSource second = await GstTestSource.StartAsync(ctx, "gst-reneg",
+            "videotestsrc is-live=true ! video/x-raw,format=I420,width=320,height=240,framerate=30/1",
+            mediaClass: "Video/Source");
+
+        bool renegotiated = await TryWaitAsync(
+            () => seen.Any(f => f.Width == 320 && f.Height == 240), TimeSpan.FromSeconds(20));
+
+        if (!renegotiated)
+        {
+            // The daemon is entitled not to reattach, and when it does not there is no second
+            // negotiation to check. Saying so beats asserting on a routing decision that is not
+            // ours to make.
+            Assert.Inconclusive("the daemon did not move the stream to the second producer.");
+        }
+
+        Assert.AreEqual(0, Volatile.Read(ref ragged),
+            "a frame carried less data than its own geometry needs, so something survived the first format");
+
+        (PixelFormat format, int width, int height) = seen.Last();
+        Assert.AreEqual(320, width, "the stream is still reporting the first producer's width");
+        Assert.AreEqual(240, height, "the stream is still reporting the first producer's height");
+        Assert.AreEqual(PixelFormat.Yuv420, format, "the stream is still reporting the first producer's format");
+    }
+
+    private static async Task WaitForAsync(Func<bool> condition, TimeSpan budget, string message)
+    {
+        if (!await TryWaitAsync(condition, budget)) Assert.Fail(message);
+    }
+
+    private static async Task<bool> TryWaitAsync(Func<bool> condition, TimeSpan budget)
+    {
+        DateTime deadline = DateTime.UtcNow + budget;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition()) return true;
+            await Task.Delay(100);
+        }
+
+        return condition();
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
     public async Task Registry_DiscoversGstSource()
     {
         GstTestSource.RequireGStreamer();
@@ -174,8 +379,8 @@ public sealed class GStreamerIntegrationTests
         await using var cap = new PipeWireVideoCapture(ctx, node + "-sink");
         cap.FrameReady += (_, f) =>
         {
-            if (f.PresentationTimeNs < 0) return;
-            lock (pts) { if (pts.Count < want) { pts.Add(f.PresentationTimeNs); if (pts.Count == want) enough.TrySetResult(); } }
+            if (f.PresentationTimeNs is not { } stamp) return;
+            lock (pts) { if (pts.Count < want) { pts.Add(stamp); if (pts.Count == want) enough.TrySetResult(); } }
         };
         cap.Connect(preferredFormats: stackalloc[] { PixelFormat.Bgra }, targetObjectName: node);
 
@@ -224,7 +429,7 @@ public sealed class GStreamerIntegrationTests
         cap.FrameReady += (_, f) =>
         {
             lastDelay = f.DelayNs;
-            lock (media) { if (media.Count < want && f.MediaClockNs >= 0) { media.Add(f.MediaClockNs); if (media.Count == want) done.TrySetResult(); } }
+            lock (media) { if (media.Count < want && f.MediaClockNs is { } pos) { media.Add(pos); if (media.Count == want) done.TrySetResult(); } }
         };
         cap.Connect(sampleRate: 48000, channels: 2, format: AudioSampleFormat.F32Le, targetObjectName: node);
 
@@ -270,7 +475,7 @@ public sealed class GStreamerIntegrationTests
         await using var vCap = new PipeWireVideoCapture(ctx, "gst-av-video-sink");
         vCap.FrameReady += (_, f) =>
         {
-            lock (vClk) { if (vClk.Count < cap) vClk.Add(f.CaptureClockNs); }
+            lock (vClk) { if (vClk.Count < cap && f.CaptureClockNs is { } t) vClk.Add(t); }
         };
         vCap.Connect(preferredFormats: stackalloc[] { PixelFormat.Bgra }, targetObjectName: vNode);
 
@@ -278,7 +483,7 @@ public sealed class GStreamerIntegrationTests
         aCap.FrameReady += (_, f) =>
         {
             foreach (byte b in f.Samples) { if (b != 0) { audioNonSilent = true; break; } }
-            lock (aClk) { if (aClk.Count < cap) aClk.Add(f.CaptureClockNs); }
+            lock (aClk) { if (aClk.Count < cap && f.CaptureClockNs is { } t) aClk.Add(t); }
         };
         aCap.Connect(sampleRate: 48000, channels: 2, format: AudioSampleFormat.F32Le, targetObjectName: aNode);
 

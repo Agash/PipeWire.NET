@@ -53,7 +53,7 @@ public sealed class ToolOracleTests
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNode("Oracle")
+            PipeWireNode node = await registry.CreateVirtualNode("Oracle")
                 .WithName(Unique("pwnet_oracle")).ExecuteAsync(cts.Token);
 
             // Both views are taken after the same barrier, so neither is a moving target - and the
@@ -62,28 +62,46 @@ public sealed class ToolOracleTests
             PwDump dump = await PwDump.CaptureAsync(cts.Token);
             PipeWireGraphSnapshot ours = registry.Current;
 
-            AssertWeSeeAll("Node", dump.IdsOfKind("Node"), ours.Nodes.Select(n => n.NodeId));
-            AssertWeSeeAll("Port", dump.IdsOfKind("Port"), ours.Ports.Select(p => p.PortId));
-            AssertWeSeeAll("Link", dump.IdsOfKind("Link"), ours.Links.Select(l => l.LinkId));
-            AssertWeSeeAll("Device", dump.IdsOfKind("Device"), ours.Devices.Select(d => d.Id));
+            await AssertWeSeeAllAsync("Node", d => d.IdsOfKind("Node"),
+                g => g.Nodes.Select(n => n.NodeId), dump, registry, cts.Token);
+            await AssertWeSeeAllAsync("Port", d => d.IdsOfKind("Port"),
+                g => g.Ports.Select(p => p.PortId), dump, registry, cts.Token);
+            await AssertWeSeeAllAsync("Link", d => d.IdsOfKind("Link"),
+                g => g.Links.Select(l => l.LinkId), dump, registry, cts.Token);
+            await AssertWeSeeAllAsync("Device", d => d.IdsOfKind("Device"),
+                g => g.Devices.Select(x => x.Id), dump, registry, cts.Token);
             // Clients are compared as a superset: pw-dump connects to produce the dump, so its own
             // client is in its output and cannot be in a snapshot taken before it ran.
-            var theirClients = dump.IdsOfKind("Client").ToHashSet();
-            var ourClients = ours.Clients.Select(c => c.Id).ToHashSet();
-            var weLack = ourClients.Except(theirClients).ToList();
-            Assert.IsTrue(weLack.Count == 0,
-                $"Client: we report ids pw-dump does not have [{string.Join(",", weLack)}]");
-            // pw-dump connects in order to produce the dump, so its own client is in its output and
-            // cannot be in a snapshot taken before it ran.
-            AssertWeSeeAll(
+            // The other direction, which is racy by construction: our snapshot is taken after the
+            // dump, so a client that connected in between is legitimately ours alone. What is not
+            // legitimate is holding a client that two independent dumps both lack while we still
+            // report it, which is an object we invented or failed to retire.
+            HashSet<uint> theirClients = dump.IdsOfKind("Client").ToHashSet();
+            List<uint> weLack = [.. ours.Clients.Select(c => c.Id).Except(theirClients)];
+
+            if (weLack.Count > 0)
+            {
+                PwDump second = await PwDump.CaptureAsync(cts.Token);
+                HashSet<uint> theirsNow = second.IdsOfKind("Client").ToHashSet();
+                HashSet<uint> oursNow = registry.Current.Clients.Select(c => c.Id).ToHashSet();
+
+                List<uint> phantom = [.. weLack.Where(id => !theirsNow.Contains(id) && oursNow.Contains(id))];
+
+                Assert.IsTrue(phantom.Count == 0,
+                    $"Client: we still report ids no dump has [{string.Join(",", phantom)}]");
+            }
+            await AssertWeSeeAllAsync(
                 "Client",
-                dump.OfKind("Client")
+                d => d.OfKind("Client")
                     .Where(e => !string.Equals(e.Prop("application.name"), "pw-dump", StringComparison.Ordinal))
                     .Select(e => e.Id),
-                ours.Clients.Select(c => c.Id));
-            AssertWeSeeAll("Factory", dump.IdsOfKind("Factory"), ours.Factories.Select(f => f.Id));
-            AssertWeSeeAll("Module", dump.IdsOfKind("Module"), ours.Modules.Select(m => m.Id));
-            AssertWeSeeAll("Metadata", dump.IdsOfKind("Metadata"), ours.MetadataStores.Select(m => m.Id));
+                g => g.Clients.Select(c => c.Id), dump, registry, cts.Token);
+            await AssertWeSeeAllAsync("Factory", d => d.IdsOfKind("Factory"),
+                g => g.Factories.Select(f => f.Id), dump, registry, cts.Token);
+            await AssertWeSeeAllAsync("Module", d => d.IdsOfKind("Module"),
+                g => g.Modules.Select(m => m.Id), dump, registry, cts.Token);
+            await AssertWeSeeAllAsync("Metadata", d => d.IdsOfKind("Metadata"),
+                g => g.MetadataStores.Select(m => m.Id), dump, registry, cts.Token);
 
             // And the properties we parsed for our own node match what pw-dump read independently.
             PwDump.Entry? theirs = dump.ById(node.NodeId);
@@ -91,22 +109,52 @@ public sealed class ToolOracleTests
             Assert.AreEqual(theirs!.Prop("node.name"), ours.GetNode(node.NodeId)!.NodeName,
                 "we and pw-dump disagree about a node's name");
 
-            await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 
-    /// <summary>Everything pw-dump reports must be in our graph.</summary>
+    /// <summary>Everything pw-dump reports must reach our graph.</summary>
     /// <remarks>
     /// A containment check, not equality. pw-dump binds each object to describe it and omits the
     /// ones it cannot, while the registry reports every global it is told about, so our side is
     /// legitimately the larger of the two. Missing one is the defect worth catching.
+    /// <para>
+    /// "Reach", not "already contains". The registry is fed asynchronously, so an object created
+    /// while the dump was being produced can be in the dump and not yet in a snapshot taken after
+    /// it. Clients are where this shows: every other test in the run connects and disconnects, so
+    /// there are always several in flight. An id is therefore given time to arrive, and one that
+    /// still has not is checked against a fresh dump before it counts as missing, because an object
+    /// that has since gone away is never going to arrive and is not a defect either.
+    /// </para>
     /// </remarks>
-    private static void AssertWeSeeAll(string kind, IEnumerable<uint> theirs, IEnumerable<uint> ours)
+    private static async Task AssertWeSeeAllAsync(
+        string kind,
+        Func<PwDump, IEnumerable<uint>> theirs,
+        Func<PipeWireGraphSnapshot, IEnumerable<uint>> ours,
+        PwDump dump,
+        PipeWireRegistry registry,
+        CancellationToken cancellationToken)
     {
-        var missing = theirs.ToHashSet().Except(ours.ToHashSet()).Order().ToList();
+        HashSet<uint> wanted = theirs(dump).ToHashSet();
+        List<uint> missing = [];
 
-        Assert.IsTrue(missing.Count == 0,
-            $"{kind}: pw-dump reports ids we never saw [{string.Join(",", missing)}]");
+        for (int attempt = 0; attempt < 40; attempt++)
+        {
+            missing = [.. wanted.Except(ours(registry.Current).ToHashSet()).Order()];
+            if (missing.Count == 0) return;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
+        }
+
+        // Still absent. Anything that has left the graph since the first dump was never going to
+        // arrive, so the question is only about what is still there.
+        PwDump now = await PwDump.CaptureAsync(cancellationToken);
+        HashSet<uint> stillThere = theirs(now).ToHashSet();
+
+        List<uint> real = [.. missing.Where(stillThere.Contains)];
+
+        Assert.IsTrue(real.Count == 0,
+            $"{kind}: pw-dump reports ids that never reached our graph [{string.Join(",", real)}]");
     }
 
     [TestMethod]
@@ -119,7 +167,7 @@ public sealed class ToolOracleTests
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualStereoNode("WpctlOracle")
+            PipeWireNode node = await registry.CreateVirtualNode("WpctlOracle")
                 .WithName(Unique("pwnet_wpctl")).ExecuteAsync(cts.Token);
 
             await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
@@ -150,7 +198,7 @@ public sealed class ToolOracleTests
                 $"wpctl set {Asked} (expecting {expected} linear) and we report "
                 + $"[{string.Join(",", await control.GetChannelVolumesAsync(cts.Token))}]");
 
-            await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+            await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 
@@ -232,27 +280,43 @@ public sealed class ToolOracleTests
 
             try
             {
-                await Task.Delay(500, cts.Token);   // let pw-mon finish its initial dump
+                // Waited for rather than slept through. pw-mon dumps the whole graph before it
+                // starts reporting changes, and how long that takes is the session's size and the
+                // machine's load, neither of which a fixed delay knows about.
+                bool dumped = await EventuallyAsync(
+                    () =>
+                    {
+                        lock (monitorOutput) return Task.FromResult(monitorOutput.Length > 0);
+                    },
+                    TimeSpan.FromSeconds(10), cts.Token);
 
-                PipeWireNode node = await registry.CreateVirtualStereoNode("MonOracle")
+                if (!dumped) Assert.Inconclusive("pw-mon printed nothing, so it never started.");
+
+                PipeWireNode node = await registry.CreateVirtualNode("MonOracle")
                     .WithName(Unique("pwnet_mon")).ExecuteAsync(cts.Token);
 
-                await registry.RemoveObjectAsync(node.NodeId, cts.Token);
+                await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
                 await registry.WaitForInitialEnumerationAsync(cts.Token);
-                await Task.Delay(500, cts.Token);   // and to report the removal
+
+                // pw-mon prints both an added and a removed record for the id. Its exact wording is
+                // version-dependent, so the id appearing at all is what is asserted, and it is
+                // polled for rather than assumed to have arrived within a fixed window.
+                bool mentioned = await EventuallyAsync(
+                    () =>
+                    {
+                        string current;
+                        lock (monitorOutput) current = monitorOutput.ToString();
+
+                        return Task.FromResult(
+                            current.Contains($"id: {node.NodeId}", StringComparison.Ordinal)
+                            || current.Contains($"id:{node.NodeId}", StringComparison.Ordinal));
+                    },
+                    TimeSpan.FromSeconds(10), cts.Token);
 
                 lock (added) Assert.IsTrue(added.Contains(node.NodeId), "we never raised NodeAdded");
                 lock (removed) Assert.IsTrue(removed.Contains(node.NodeId), "we never raised NodeRemoved");
 
-                // pw-mon prints both an added and a removed record for the id. Its exact wording is
-                // version-dependent, so the id appearing at all is what is asserted.
-                string text;
-                lock (monitorOutput) text = monitorOutput.ToString();
-
-                Assert.IsTrue(
-                    text.Contains($"id: {node.NodeId}", StringComparison.Ordinal)
-                    || text.Contains($"id:{node.NodeId}", StringComparison.Ordinal),
-                    "pw-mon never mentioned an object we created and destroyed");
+                Assert.IsTrue(mentioned, "pw-mon never mentioned an object we created and destroyed");
             }
             finally
             {

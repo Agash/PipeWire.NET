@@ -59,7 +59,7 @@ public sealed class ThirdPartyGraphTests
         await using (ctx)
         await using (reg)
         {
-            PipeWireNode node = await reg.CreateVirtualStereoNode("Visible")
+            PipeWireNode node = await reg.CreateVirtualNode("Visible")
                                          .WithName("pwnet_tp_visible").ExecuteAsync(cts.Token);
             PipeWireGraphSnapshot graph = await WaitForPortsAsync(reg, node.NodeId, cts.Token);
 
@@ -186,7 +186,7 @@ public sealed class ThirdPartyGraphTests
         await using (ctx)
         await using (reg)
         {
-            PipeWireNode node = await reg.CreateVirtualStereoNode("Doomed")
+            PipeWireNode node = await reg.CreateVirtualNode("Doomed")
                                          .WithName("pwnet_tp_doomed").WithLinger().ExecuteAsync(cts.Token);
             PipeWireGraphSnapshot ready = await WaitForPortsAsync(reg, node.NodeId, cts.Token);
             uint[] portIds = [.. ready.GetPortsForNode(node.NodeId).Select(p => p.PortId)];
@@ -222,8 +222,13 @@ public sealed class ThirdPartyGraphTests
             // nothing about us.
             PipeWireGraphSnapshot graph = await WaitForAsync(
                 reg,
+                // Both directions, not just "has any port". A loopback's input node publishes its
+                // inputs first and its monitors a moment later, so waiting for one port lets the
+                // walk continue before the monitors exist - and the capability assertion below is
+                // about exactly those.
                 g => g.Nodes.Any(n => n.NodeName == "input.pwnet_tp_loop"
-                                      && g.GetPortsForNode(n.NodeId).Length > 0)
+                                      && g.GetPortsForNode(n.NodeId, PipeWirePortDirection.In).Any()
+                                      && g.GetPortsForNode(n.NodeId, PipeWirePortDirection.Out).Any())
                      && g.Nodes.Any(n => n.NodeName == "output.pwnet_tp_loop"),
                 cts.Token);
 
@@ -245,7 +250,7 @@ public sealed class ThirdPartyGraphTests
             PipeWirePort theirInput = graph.GetPortsForNode(theirs.NodeId, PipeWirePortDirection.In)
                                            .OrderBy(p => p.PortId).First();
 
-            PipeWireNode ours = await reg.CreateVirtualStereoNode("Feeder")
+            PipeWireNode ours = await reg.CreateVirtualNode("Feeder")
                                          .WithName("pwnet_tp_feeder").ExecuteAsync(cts.Token);
             PipeWireGraphSnapshot ready = await WaitForPortsAsync(reg, ours.NodeId, cts.Token);
             PipeWirePort ourOutput = ready.GetPortsForNode(ours.NodeId, PipeWirePortDirection.Out)
@@ -403,8 +408,8 @@ public sealed class ThirdPartyGraphTests
     private static async Task<(PipeWireNode A, PipeWireNode B, PipeWireGraphSnapshot Ready)> TwoNodesAsync(
         PipeWireRegistry reg, string nameA, string nameB, CancellationToken ct)
     {
-        PipeWireNode a = await reg.CreateVirtualStereoNode(nameA).WithName(nameA).ExecuteAsync(ct);
-        PipeWireNode b = await reg.CreateVirtualStereoNode(nameB).WithName(nameB).ExecuteAsync(ct);
+        PipeWireNode a = await reg.CreateVirtualNode(nameA).WithName(nameA).ExecuteAsync(ct);
+        PipeWireNode b = await reg.CreateVirtualNode(nameB).WithName(nameB).ExecuteAsync(ct);
 
         PipeWireGraphSnapshot ready = await WaitForAsync(
             reg,

@@ -221,8 +221,8 @@ public sealed class ControlContractTests
     [TestMethod]
     public void AnEmptySnapshot_AnswersEveryNewQueryWithoutThrowing()
     {
-        // The graph before anything has been enumerated. Every accessor added for the new object
-        // kinds has to cope with there being none of them.
+        // The graph before anything has been enumerated. Every accessor has to cope with
+        // there being none of them.
         PipeWireGraphSnapshot graph = PipeWireGraphSnapshot.Empty;
 
         Assert.AreEqual(0, graph.Objects.Length);
@@ -288,9 +288,8 @@ public sealed class ControlContractTests
     [TestMethod]
     public void ManyThreadsReadingATypedCollectionAtOnce_AllSeeTheWholeThing()
     {
-        // The lazy collections were guarded by "lock (gate ??= new object())", which is two
-        // operations: two threads arriving together each made their own lock object and each locked
-        // it, so both entered the section at once and could publish a half-filled array.
+        // A racing first touch must build the collection once and publish it whole: two threads
+        // arriving together must not each build or see a half-filled array.
         var devices = Enumerable.Range(0, 50).Select(i =>
             new PipeWireDevice((uint)i, PipeWirePermissions.None, 3,
                 $"dev{i}", null, null, "alsa", null, null, null, null));

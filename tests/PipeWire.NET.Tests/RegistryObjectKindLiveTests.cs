@@ -103,4 +103,70 @@ public sealed class RegistryObjectKindLiveTests
             Assert.IsNotNull(device.Api, $"device {device.Id} arrived without an api");
         }
     }
+
+    [TestMethod]
+    public async Task TheProfiler_CanBeBoundAndReportsTheGraphsTimings()
+    {
+        // Binding is what makes the daemon start producing reports, so there is nothing to observe
+        // until a client asks. Each one is a Profiler object carrying a cycle's timings, which is
+        // what pw-top renders.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var context = new PipeWireContext("pwnet-profiler", ConsoleTestLoggerFactory.Instance);
+        await context.StartAsync(cts.Token);
+        await using var registry = new PipeWireRegistry(context);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+
+        PipeWireProfiler? profiler = registry.Current.Profiler;
+        if (profiler is null) Assert.Inconclusive("this daemon was built without the profiler.");
+
+        Assert.ThrowsExactly<ArgumentException>(() => registry.BindProfiler(uint.MaxValue),
+            "an id that is not the profiler must be refused rather than bound");
+
+        var reports = new System.Collections.Concurrent.ConcurrentQueue<Spa.SpaObject>();
+        var arrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        PipeWireProfilerReader reader;
+        try
+        {
+            reader = registry.BindProfiler(profiler!.Id);
+        }
+        catch (Exception e) when (e is InvalidOperationException or PipeWireException)
+        {
+            // Whether an ordinary client may bind the profiler is the daemon's policy, and it
+            // refuses on a session that reserves it for something else. Its answer is not this
+            // library's contract.
+            Assert.Inconclusive(
+                $"the daemon refused to bind its profiler; it reports permissions {profiler!.Permissions}.");
+            return;
+        }
+
+        await using (reader)
+        {
+        reader.ProfileReceived += (_, report) =>
+        {
+            reports.Enqueue(report);
+            arrived.TrySetResult();
+        };
+
+        Assert.AreEqual(profiler.Id, reader.Id);
+
+        try
+        {
+            await arrived.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
+        }
+        catch (TimeoutException)
+        {
+            // A session with nothing running has no cycles to report on, and whether this one does
+            // is the machine's business rather than this library's.
+            Assert.Inconclusive("the daemon produced no profiler report within 10s.");
+        }
+
+        Assert.IsTrue(reports.TryDequeue(out Spa.SpaObject? first));
+        Assert.AreEqual(Spa.SpaType.ObjectProfiler, first!.ObjectType,
+            "a profiler report is a Profiler object");
+        Assert.IsTrue(first.Properties.Length > 0, "a report with no properties says nothing");
+        }
+    }
 }

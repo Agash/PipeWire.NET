@@ -30,7 +30,7 @@ public sealed class FilterTests
     private static async Task<(PipeWireNode Sink, uint FilterNodeId)> LinkToSinkAsync(
         PipeWireRegistry registry, PipeWireFilter filter, string sinkName, CancellationToken cancellationToken)
     {
-        PipeWireNode sink = await registry.CreateVirtualStereoNode("FilterSink")
+        PipeWireNode sink = await registry.CreateVirtualNode("FilterSink")
             .WithName(sinkName).ExecuteAsync(cancellationToken);
 
         await filter.ConnectAsync(cancellationToken: cancellationToken);
@@ -138,7 +138,7 @@ public sealed class FilterTests
         Assert.IsTrue(Interlocked.Read(ref cycles) > 0, "the filter never processed a cycle");
         Assert.IsTrue(Interlocked.Read(ref buffered) > 0, "the filter never received a buffer to write");
 
-        await registry.RemoveObjectAsync(sink.NodeId, cts.Token);
+        await registry.DestroyGlobalAsync(sink.NodeId, cts.Token);
     }
 
     [TestMethod]
@@ -170,7 +170,7 @@ public sealed class FilterTests
         await threw.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
 
         await registry.WaitForInitialEnumerationAsync(cts.Token);
-        await registry.RemoveObjectAsync(sink.NodeId, cts.Token);
+        await registry.DestroyGlobalAsync(sink.NodeId, cts.Token);
     }
 
     [TestMethod]
