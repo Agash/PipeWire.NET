@@ -85,12 +85,16 @@ public sealed class StreamProperties
         foreach ((string key, string value) in _props)
             bytes += Encoding.UTF8.GetByteCount(key) + Encoding.UTF8.GetByteCount(value) + 2;
 
-        byte[] scratch = new byte[bytes];
-        var items = new spa_dict_item[_props.Count];
+        // Pinned, both of them. SpaDictBuilder writes raw pointers into the item array and hands
+        // that array's address to native code, so a compacting collection between Build and the
+        // native call leaves the daemon reading freed or reused memory. There are managed
+        // allocations in between, and every one of those is a place a collection can happen.
+        byte[] scratch = GC.AllocateUninitializedArray<byte>(bytes, pinned: true);
+        spa_dict_item[] items = GC.AllocateUninitializedArray<spa_dict_item>(_props.Count, pinned: true);
 
         var builder = new SpaDictBuilder(scratch, items);
         foreach ((string key, string value) in _props)
-            builder.Add(Encoding.UTF8.GetBytes(key), value);
+            builder.Add(key, value);
 
         spa_dict dict = builder.Build();
         return Native.pw_properties_new_dict(&dict);

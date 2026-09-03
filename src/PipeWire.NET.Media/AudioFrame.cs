@@ -13,7 +13,7 @@ public readonly ref struct AudioFrame
     /// <param name="sequenceNumber">Monotonically increasing chunk index for this stream session.</param>
     /// <param name="presentationTimeNs">Presentation timestamp in nanoseconds, or -1 if unavailable.</param>
     /// <param name="captureClockNs">Graph clock time (monotonic ns) of the capture cycle.</param>
-    /// <param name="mediaClockNs">Media position (ns) at the cycle; -1 if unknown.</param>
+    /// <param name="mediaClockNs">Media position (ns) at the cycle; null if unknown.</param>
     /// <param name="delayNs">Signal delay/latency (ns) from source to this stream.</param>
     public AudioFrame(
         ReadOnlySpan<byte> samples,
@@ -31,14 +31,27 @@ public readonly ref struct AudioFrame
         Channels           = channels;
         Format             = format;
         SequenceNumber     = sequenceNumber;
-        PresentationTimeNs = presentationTimeNs;
-        CaptureClockNs     = captureClockNs;
-        MediaClockNs       = mediaClockNs;
+        PresentationTimeNs = presentationTimeNs < 0 ? null : presentationTimeNs;
+        CaptureClockNs     = captureClockNs < 0 ? null : captureClockNs;
+        MediaClockNs       = mediaClockNs < 0 ? null : mediaClockNs;
         DelayNs            = delayNs;
     }
 
     /// <summary>Raw interleaved sample bytes.</summary>
     public ReadOnlySpan<byte> Samples { get; }
+
+    /// <summary>Copies the chunk so it can be kept past the handler that delivered it.</summary>
+    /// <inheritdoc cref="OwnedAudioFrame" path="/remarks"/>
+    public OwnedAudioFrame Clone() => new(
+        [.. Samples],
+        SampleRate,
+        Channels,
+        Format,
+        SequenceNumber,
+        PresentationTimeNs,
+        CaptureClockNs,
+        MediaClockNs,
+        DelayNs);
 
     /// <summary>Sample rate in Hz.</summary>
     public int SampleRate { get; }
@@ -53,27 +66,27 @@ public readonly ref struct AudioFrame
     public ulong SequenceNumber { get; }
 
     /// <summary>
-    /// Content presentation timestamp in nanoseconds (from SPA_META_Header), or -1 if unavailable.
+    /// Content presentation timestamp in nanoseconds (from SPA_META_Header), or null if unavailable.
     /// </summary>
     /// <remarks>
-    /// PipeWire audio does NOT carry a per-buffer header timestamp, so this is normally -1 for
-    /// audio. For A/V synchronization use <see cref="CaptureClockNs"/> instead - it is the shared
+    /// PipeWire audio does not carry a per-buffer header timestamp, so this is normally null for
+    /// audio. For A/V synchronisation use <see cref="CaptureClockNs"/> instead - it is the shared
     /// graph-clock time and is populated for audio and video alike.
     /// </remarks>
-    public long PresentationTimeNs { get; }
+    public long? PresentationTimeNs { get; }
 
     /// <summary>
     /// Graph clock time (monotonic ns) of the processing cycle that delivered this chunk, from
     /// <c>pw_stream_get_time</c>. Shared across all streams in the graph - this is the timestamp
-    /// to align audio against video for A/V sync (audio has no per-buffer header PTS). -1 if unavailable.
+    /// to align audio against video for A/V sync (audio has no per-buffer header PTS), or null.
     /// </summary>
-    public long CaptureClockNs { get; }
+    public long? CaptureClockNs { get; }
 
     /// <summary>
     /// Media position (ns) of this stream at the capture cycle (<c>ticks*rate</c>) - a
-    /// sample-accurate, monotonic media clock for this audio stream. -1 if unknown.
+    /// sample-accurate, monotonic media clock for this audio stream. null if unknown.
     /// </summary>
-    public long MediaClockNs { get; }
+    public long? MediaClockNs { get; }
 
     /// <summary>
     /// Signal delay (ns) from the source to this stream. The samples correspond to roughly

@@ -8,10 +8,24 @@ namespace PipeWire.NET.Media.Streams;
 /// Publishes audio samples TO PipeWire (virtual source / playback). PipeWire pulls
 /// samples by invoking <see cref="FillSamples"/>; write PCM into the supplied span.
 /// </summary>
+/// <remarks>
+/// <b>Dispose it; do not let it fall out of scope.</b> The callbacks the daemon holds refer back
+/// here through a weak handle, so an instance the application drops is collected and simply stops
+/// delivering, with no error and no final state change. That is the deliberate half of the trade:
+/// a strong handle would keep every one ever made alive for the life of the process. What it costs
+/// is that the garbage collector cannot be the thing that closes one, because by the time it runs
+/// there is nothing left to close it from.
+/// </remarks>
 [SupportedOSPlatform("linux")]
 public sealed class PipeWireAudioOutput : IAsyncDisposable
 {
-    /// <summary>Signature for <see cref="FillSamples"/>. Return the number of bytes written (0 = silence).</summary>
+    /// <summary>Signature for <see cref="FillSamples"/>. Return the number of bytes written.</summary>
+    /// <remarks>
+    /// Zero is an <em>empty</em> buffer, not a silent one - the consumer sees an underrun, which is
+    /// not the same thing as hearing nothing. To publish silence, clear the span and return its
+    /// full length. A handler that throws also publishes an empty buffer rather than whatever the
+    /// previous cycle left in it.
+    /// </remarks>
     public delegate int FillSamplesHandler(
         PipeWireAudioOutput sender, Span<byte> samples, int sampleRate, int channels, AudioSampleFormat format);
 
@@ -56,9 +70,9 @@ public sealed class PipeWireAudioOutput : IAsyncDisposable
     /// </param>
     /// <param name="autoConnect">
     /// When true the session manager routes this stream automatically, which for a playback stream
-    /// means the current default sink - i.e. the speakers. Pass <see langword="false"/> to publish
+    /// means the current default sink, that is the speakers. Pass <see langword="false"/> to publish
     /// the node and leave it unrouted, so a caller can link it deliberately. A test or a transport
-    /// agent usually wants that; a media player does not.
+    /// usually wants that; a media player does not.
     /// </param>
     public unsafe void Connect(
         uint targetNodeId = AnyNode, string? targetObjectName = null, bool autoConnect = true)
@@ -122,13 +136,26 @@ public sealed class PipeWireAudioOutput : IAsyncDisposable
         if (d->maxsize > int.MaxValue) return;
 
         int max = (int)d->maxsize;
+        int frameBytes = _format.BytesPerSample() * _channels;
+
+        // Written before the handler runs, not after. The core queues the buffer in a finally even
+        // when the handler throws, and a chunk left holding the previous cycle's size publishes
+        // that many bytes of whatever is in the buffer now - stale audio, presented as current.
+        d->chunk->offset = 0;
+        d->chunk->stride = frameBytes;
+        d->chunk->size   = 0;
+
         var samples = new Span<byte>(d->data, max);
         int written = FillSamples?.Invoke(this, samples, _sampleRate, _channels, _format) ?? 0;
         written = Math.Clamp(written, 0, max);
 
-        d->chunk->offset = 0;
-        d->chunk->stride = _format.BytesPerSample() * _channels;
-        d->chunk->size   = (uint)written;
+        // Down to a whole number of frames. A producer that returns a byte count mid-frame would
+        // otherwise publish a partial one, and since chunk.size is read in units of chunk.stride
+        // the consumer takes the remainder as the start of the next frame: every channel after it
+        // is offset by the shortfall for the rest of the buffer.
+        if (frameBytes > 0) written -= written % frameBytes;
+
+        d->chunk->size = (uint)written;
     }
 
     private void OnState(PipeWireStreamState oldState, PipeWireStreamState newState) =>

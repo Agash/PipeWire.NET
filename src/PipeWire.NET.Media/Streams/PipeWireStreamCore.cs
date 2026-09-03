@@ -42,6 +42,10 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     internal delegate void StateHandler(PipeWireStreamState oldState, PipeWireStreamState newState);
 
     /// <summary>Invoked from <c>param_changed</c> for the negotiated Format param only.</summary>
+    /// <param name="param">
+    /// The negotiated format, or <see langword="null"/> when the daemon withdrew it - the stream is
+    /// no longer configured and whatever was negotiated before no longer describes anything.
+    /// </param>
     internal delegate void FormatHandler(spa_pod* param);
 
     /// <summary>
@@ -90,10 +94,15 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     // The spa_hook MUST live in unmanaged memory, not as a managed field: pw_stream_add_listener stores this
     // pointer in the stream's listener list, and the GC compacting the heap would move a managed field, leaving
     // PipeWire with a dangling pointer that crashes (spa_list_remove on freed memory) the next time it emits an
-    // event. _selfHandle is GCHandleType.Normal (non-pinning), so it does not keep a field address stable.
+    // event. _selfHandle is weak and non-pinning either way, so it does not keep a field address stable.
     private spa_hook*         _hook;
     private GCHandle          _selfHandle;
-    private volatile bool     _disposed;
+
+    // 0 until disposal is claimed. Read from every native callback, so volatile; claimed with an
+    // interlocked exchange, so two concurrent disposals cannot both tear the stream down.
+    private volatile int      _disposedFlag;
+
+    private bool _disposed => _disposedFlag != 0;
 
     /// <param name="ctx">A started <see cref="PipeWireContext"/>.</param>
     /// <param name="props">Stream properties (consumed by pw_stream_new).</param>
@@ -161,8 +170,23 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             }
 
             // Owned like every other native object: the handle keeps the core and loop alive for as
-            // long as the stream needs them to tear itself down.
-            _streamOwner = new PipeWireStreamHandle(stream, _ctx.LoopOwner, _ctx.CoreOwner);
+            // long as the stream needs them to tear itself down. Until it exists, nothing else
+            // knows about this stream, so a throw out of its constructor - the loop or core handle
+            // refusing a reference because disposal won the race - would strand it.
+            try
+            {
+                _streamOwner = new PipeWireStreamHandle(stream, _ctx.LoopOwner, _ctx.CoreOwner);
+            }
+            catch
+            {
+                Native.pw_stream_destroy(stream);
+                _selfHandle.Free();
+                NativeMemory.Free(_events);
+                _events = null;
+                NativeMemory.Free(_hook);
+                _hook = null;
+                throw;
+            }
 
             // Handed over before the listener is attached, so the free happens after the stream has
             // been destroyed rather than racing its last callbacks.
@@ -179,17 +203,42 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// PipeWire's contract is to declare buffer/meta wants from the <c>param_changed</c> callback
     /// once the format is set, via <c>pw_stream_update_params</c>. The core does that automatically.
     /// </remarks>
-    internal void Connect(SpaDirection direction, uint targetNodeId, PipeWireStreamFlags flags, ReadOnlySpan<byte> formatPod)
+    internal void Connect(
+        SpaDirection direction,
+        uint targetNodeId,
+        PipeWireStreamFlags flags,
+        ReadOnlySpan<byte> formatPod,
+        ReadOnlySpan<byte> fallbackPod = default,
+        CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // Checked before the loop lock rather than after: taking it can wait on the loop thread,
+        // and a caller that has already given up should not join that queue.
+        cancellationToken.ThrowIfCancellationRequested();
+
+        using System.Diagnostics.Activity? span =
+            PipeWireDiagnostics.Source.StartActivity("pipewire.stream.connect");
+        span?.SetTag("pipewire.stream.name", _streamName);
+        span?.SetTag("pipewire.stream.direction", direction.ToString());
+        span?.SetTag("pipewire.target.node", targetNodeId);
 
         using (_ctx.Lock())
         {
             int rc;
             fixed (byte* fp = formatPod)
+            fixed (byte* fb = fallbackPod)
             {
-                spa_pod* param = (spa_pod*)fp;
-                rc = Native.pw_stream_connect(_stream, direction, targetNodeId, flags, &param, 1);
+                // Offered in preference order. A modifier choice is written mandatory, so with one
+                // pod a producer that cannot do DMA-BUF has nothing left to agree to and
+                // negotiation fails outright; a second pod without modifiers is the host-memory
+                // path it can fall back to.
+                spa_pod** offers = stackalloc spa_pod*[2];
+                offers[0] = (spa_pod*)fp;
+                offers[1] = (spa_pod*)fb;
+
+                rc = Native.pw_stream_connect(
+                    _stream, direction, targetNodeId, flags, offers, fallbackPod.IsEmpty ? 1u : 2u);
             }
             if (rc < 0)
                 throw new PipeWireException("pw_stream_connect", rc);
@@ -236,8 +285,19 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
     private void DisposeCore()
     {
-        if (_disposed) return;
-        _disposed = true;
+        // Refused, loudly, rather than crashing. Disposing from inside a stream callback destroys
+        // the stream while the frame that dispatched the callback is still on the stack: OnProcess
+        // requeues the buffer in its finally, and that requeue lands on freed memory. The context
+        // refuses the same thing for the same reason, and this is the stream's half of that rule.
+        if (_ctx.IsOnLoopThread)
+        {
+            throw new InvalidOperationException(
+                "A stream cannot be disposed from its own callback: the callback's frame is still "
+                + "using the stream, and destroying it here corrupts the loop thread. Signal your "
+                + "own code from the handler and dispose from the thread that created the stream.");
+        }
+
+        if (Interlocked.Exchange(ref _disposedFlag, 1) != 0) return;
 
         // The handle disconnects and destroys under the loop lock, holding the core and loop open
         // for exactly as long as that takes - so this works whichever order the caller disposed in.
@@ -251,10 +311,28 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
     // - Native callbacks (invoked by the loop thread with the lock held) -
 
+    /// <summary>Resolves the instance a native callback belongs to, or null if it is gone.</summary>
+    /// <remarks>
+    /// Contained on purpose. The handle is weak, and a freed one throws out of
+    /// <see cref="GCHandle.FromIntPtr"/>; these are native frames, so an exception escaping the
+    /// lookup aborts the process instead of unwinding into anything that could handle it.
+    /// </remarks>
+    private static PipeWireStreamCore? FromData(void* data)
+    {
+        try
+        {
+            return (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnProcess(void* data)
     {
-        var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
+        PipeWireStreamCore? self = FromData(data);
         if (self is null || self._disposed) return;
 
         // Snapshotted once. Every call in this callback, including the queue in the finally, must
@@ -274,7 +352,10 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         try
         {
             spa_buffer* spaBuf = buf->buffer;
-            if (spaBuf is null || spaBuf->n_datas == 0) return;
+
+            // The count and the array are separate fields of a struct this process does not own, so
+            // a non-zero count with no array behind it is a shape the daemon can present.
+            if (spaBuf is null || spaBuf->datas is null || spaBuf->n_datas == 0) return;
 
             if (!self._firstBufferLogged)
             {
@@ -289,9 +370,18 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             pw_time t;
             if (Native.pw_stream_get_time_n(stream, &t, (nuint)sizeof(pw_time)) == 0)
             {
+                // Integer, not double. A tick count past 2^53 loses resolution in a double, and
+                // the product with 1e9 gets there far sooner: at 48 kHz the media clock drifts off
+                // the sample grid within a few days of continuous playback, which is exactly the
+                // kind of session this is meant to keep in sync. 128-bit intermediates cannot
+                // overflow for any rate a sound card has.
                 long num = t.rate.num, denom = t.rate.denom;     // seconds per tick = num/denom
-                long mediaNs = denom != 0 ? (long)((double)(ulong)t.ticks * num / denom * 1e9) : -1;
-                long delayNs = denom != 0 ? (long)((double)(long)t.delay * num / denom * 1e9) : 0;
+                long mediaNs = denom != 0
+                    ? (long)((Int128)(ulong)t.ticks * num * 1_000_000_000 / denom)
+                    : -1;
+                long delayNs = denom != 0
+                    ? (long)((Int128)(long)t.delay * num * 1_000_000_000 / denom)
+                    : 0;
                 clock = new StreamClock((long)t.now, mediaNs, delayNs);
             }
 
@@ -318,7 +408,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnAddBuffer(void* data, pw_buffer* buffer)
     {
-        var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
+        PipeWireStreamCore? self = FromData(data);
         if (self is null || self._disposed) return;
         // The producer backs this buffer with its own dmabuf here. An escaping throw would abort the
         // process, and a silent swallow hides a handler that fails on every buffer, so the fault is
@@ -340,7 +430,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnRemoveBuffer(void* data, pw_buffer* buffer)
     {
-        var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
+        PipeWireStreamCore? self = FromData(data);
         if (self is null) return;
         try
         {
@@ -359,18 +449,19 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnStateChanged(void* data, PipeWireStreamState old, PipeWireStreamState state, sbyte* error)
     {
-        var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
+        PipeWireStreamCore? self = FromData(data);
         if (self is null) return;
 
-        if (error is not null)
-            self.LogStreamError(Marshal.PtrToStringUTF8((nint)error) ?? "(null)");
-
-        self.LogStateChanged((PipeWireStreamState)(int)old, (PipeWireStreamState)(int)state);
-
-        // The handler is user code and this is a native callback frame: an exception escaping here
-        // does not unwind into a catch, it aborts the process.
+        // The whole body, not just the handler. Reading the daemon's error string is a marshal over
+        // a pointer this process did not allocate, and it is as capable of throwing out of a native
+        // frame as the user code below it.
         try
         {
+            if (error is not null)
+                self.LogStreamError(DaemonText.String(error) ?? "(null)");
+
+            self.LogStateChanged((PipeWireStreamState)(int)old, (PipeWireStreamState)(int)state);
+
             self._onState?.Invoke((PipeWireStreamState)(int)old, (PipeWireStreamState)(int)state);
         }
         catch (Exception ex)
@@ -382,13 +473,39 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnParamChanged(void* data, uint id, spa_pod* param)
     {
-        if (param is null) return;
-        var self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
+        PipeWireStreamCore? self;
+        try
+        {
+            self = (PipeWireStreamCore?)GCHandle.FromIntPtr((nint)data).Target;
+        }
+        catch (Exception)
+        {
+            // A freed handle throws out of FromIntPtr, and this is a native frame: an escaping
+            // exception aborts the process rather than unwinding to anyone.
+            return;
+        }
+
         if (self is null || self._disposed) return;
 
-        // SPA_PARAM_PeerCapability (a newer PipeWire signal) would be the place to (re-)announce + activate a
-        // dmabuf producer (video-src-fixate.c), but it is unavailable on the 1.6.6 runtime - the daemon does
-        // not reliably deliver it, and re-announcing EnumFormat from this path crashed the daemon's set_param.
+        // Null means the parameter was withdrawn, not that it is unchanged. For the Format that is
+        // the daemon saying the stream is no longer configured, and keeping the last one delivers
+        // frames described by geometry that is no longer negotiated. The wrapper is told so it can
+        // reset; every other param is genuinely nothing to do.
+        if (param is null)
+        {
+            if ((SpaParamType)id != SpaParamType.Format) return;
+
+        using System.Diagnostics.Activity? span =
+            PipeWireDiagnostics.Source.StartActivity("pipewire.stream.negotiate");
+        span?.SetTag("pipewire.stream.name", self._streamName);
+
+            try { self._onFormat?.Invoke(null); }
+            catch (Exception ex) { self.LogFormatHandlerThrew(ex); }
+            return;
+        }
+
+        // SPA_PARAM_PeerCapability (a newer PipeWire signal) would be the place to (re-)announce and activate a
+        // dmabuf producer (video-src-fixate.c), but it is unavailable on the 1.6.6 runtime.
         // On 1.6.6 the producer instead offers a fixated modifier up front (it owns the surfaces, so it knows
         // the single modifier) and negotiates through the normal Format param flow below.
         self.LogParamChanged(id);
@@ -401,8 +518,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
         if ((SpaParamType)id != SpaParamType.Format) return;
 
-        // This runs in an unmanaged callback - an escaping exception would abort the process,
-        // so contain it. (A managed bug here must not take down the host application.)
+        // This runs in an unmanaged callback, so contain it: an escaping exception would abort the process.
         try
         {
             self._onFormat?.Invoke(param);
@@ -439,49 +555,48 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     }
 
     /// <summary>
-    /// Activates or deactivates the stream (<c>pw_stream_set_active</c>). A dmabuf DRIVER connects INACTIVE and
-    /// is activated once its format + buffers are negotiated. Safe to call from the param_changed callback (the
-    /// loop lock is held there); otherwise it takes the loop lock itself.
+    /// Activates or deactivates the stream (<c>pw_stream_set_active</c>), taking the loop lock.
+    /// A dmabuf DRIVER connects INACTIVE and is activated once its format and buffers are negotiated.
     /// </summary>
-    internal void SetActive(bool active, bool lockHeld = false)
+    internal void SetActive(bool active)
     {
-        if (_disposed || _stream is null)
-        {
-            return;
-        }
-
-        if (lockHeld)
-        {
-            Native.pw_stream_set_active(_stream, active);
-            return;
-        }
+        if (_disposed || _stream is null) return;
 
         using (_ctx.Lock())
         {
-            Native.pw_stream_set_active(_stream, active);
+            SetActiveFromCallback(active);
         }
     }
 
     /// <summary>
-    /// Drives one processing cycle (<c>pw_stream_trigger_process</c>) - how a DRIVER producer paces output when
-    /// no other node drives the graph clock. No-op if the stream is gone. Takes the loop lock unless held.
+    /// Same as <see cref="SetActive"/>, for callers already on the loop thread inside a stream
+    /// callback, where the loop lock is held. Taking it again would work, the lock is recursive,
+    /// but the name is the contract: a caller that is not in a callback wants the other method.
     /// </summary>
-    internal void TriggerProcess(bool lockHeld = false)
+    internal void SetActiveFromCallback(bool active)
     {
-        if (_disposed || _stream is null)
-        {
-            return;
-        }
+        if (_disposed || _stream is null) return;
 
-        if (lockHeld)
-        {
-            Native.pw_stream_trigger_process(_stream);
-            return;
-        }
+        Native.pw_stream_set_active(_stream, active);
+    }
+
+    /// <summary>
+    /// Drives one processing cycle (<c>pw_stream_trigger_process</c>), which is how a DRIVER
+    /// producer paces output when no other node drives the graph clock. No-op if the stream is gone.
+    /// </summary>
+    internal void TriggerProcess()
+    {
+        if (_disposed || _stream is null) return;
 
         using (_ctx.Lock())
         {
-            Native.pw_stream_trigger_process(_stream);
+            // Re-read and re-checked under the lock. The check above is against a field a
+            // concurrent disposal clears, and taking the lock is exactly the window in which that
+            // happens, so a pointer read after it can be null where the one before it was not.
+            pw_stream* stream = _stream;
+            if (_disposed || stream is null) return;
+
+            Native.pw_stream_trigger_process(stream);
         }
     }
 
@@ -489,38 +604,44 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// Sends up to two param pods via pw_stream_update_params. Call only from the param_changed
     /// callback (where the loop lock is held), e.g. from a <see cref="PostFormatHandler"/>.
     /// </summary>
-    /// <summary>
-    /// Announces new params. Valid only from a stream callback, where the loop lock is already held.
-    /// </summary>
     /// <remarks>
     /// Deliberately does not take the lock. Every caller is a format or peer callback dispatched by
     /// the loop thread, which holds it already; taking it here again is harmless today because the
     /// mutex is recursive, but the name records the contract so it does not get "fixed" into a call
     /// that also runs from a caller thread.
     /// </remarks>
-    internal void RequestParamsFromCallback(ReadOnlySpan<byte> pod0, ReadOnlySpan<byte> pod1 = default)
+    /// <returns>
+    /// The daemon's result, negative on failure, or <c>-EINVAL</c> when there was nothing to send.
+    /// </returns>
+    internal int RequestParamsFromCallback(ReadOnlySpan<byte> pod0, ReadOnlySpan<byte> pod1 = default)
     {
+        // An empty span fixes to a null pointer, and handing the daemon an array of one null pod
+        // with a count of one is a dereference on its side, not ours. Snapshotted once for the same
+        // reason OnProcess does: the field can be cleared by a disposal between the two reads.
+        if (pod0.IsEmpty) return -22;
+
+        pw_stream* stream = _stream;
+        if (_disposed || stream is null) return -22;
+
         fixed (byte* p0 = pod0)
         fixed (byte* p1 = pod1)
         {
             if (pod1.IsEmpty)
             {
                 spa_pod* one = (spa_pod*)p0;
-                Native.pw_stream_update_params(_stream, &one, 1);
+                return Native.pw_stream_update_params(stream, &one, 1);
             }
-            else
-            {
-                spa_pod** arr = stackalloc spa_pod*[2];
-                arr[0] = (spa_pod*)p0;
-                arr[1] = (spa_pod*)p1;
-                Native.pw_stream_update_params(_stream, arr, 2);
-            }
+
+            spa_pod** arr = stackalloc spa_pod*[2];
+            arr[0] = (spa_pod*)p0;
+            arr[1] = (spa_pod*)p1;
+            return Native.pw_stream_update_params(stream, arr, 2);
         }
     }
 
-    // - Diagnostics (source-generated, level-gated). Enable at Debug/Trace via the host's logger
-    //   factory passed to PipeWireContext (e.g. the agent's --verbose). The stream name is the
-    //   logger category, so each stream's lifecycle is filterable on its own. -
+    // Diagnostics (source-generated, level-gated). Enable at Debug/Trace via the host's logger
+    // factory passed to PipeWireContext. The stream name is the logger category, so each
+    // stream's lifecycle is filterable on its own.
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "state {Old} -> {New}")]
     private partial void LogStateChanged(PipeWireStreamState old, PipeWireStreamState @new);

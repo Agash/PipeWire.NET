@@ -19,7 +19,6 @@
     <MinVerTagPrefix>v</MinVerTagPrefix>
     <IsPackable>true</IsPackable>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <NoWarn>CA1515;CA1050</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
