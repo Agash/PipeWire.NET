@@ -345,37 +345,23 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         // The loop thread is live from here, but _started is only set once this returns and disposal
         // gates pw_thread_loop_stop on it - so a throw below would strand the thread.
         //
-        // The descriptor the connect runs over, and whether it is a duplicate this method owns.
-        // The duplication lives inside this try like every other step - a failure anywhere stops
-        // the loop thread it started - and the catch below closes exactly what is still owned,
-        // never the caller's own descriptor: a SafeFileHandle is borrowed (read once, duplicated),
-        // a raw descriptor is handed over untouched and stays the caller's on every failure path.
-        int fd = rawFd;
-        bool ownsDuplicate = false;
-
-        // Which native connect this start performs. A raw descriptor also goes through the fd
-        // form: pw_context_connect_fd with the caller's number, no duplication on this side.
-        bool overFd = handle is not null || rawFd >= 0;
+        // The duplicated descriptor is a plain SafeFileHandle, so every failure path closes it by
+        // ordinary disposal and none of them touches the caller's own descriptor: a SafeFileHandle
+        // argument is borrowed (read once, duplicated), a raw descriptor is handed over untouched
+        // and stays the caller's on every failure path.
         try
         {
-            if (handle is not null)
-            {
-                // A reference, not a validity check, in the TryLock style: reading the descriptor
-                // out of the handle and using it are two steps, and disposal in between would
-                // hand fcntl a number that is already closed. The reference pins the handle for
-                // exactly the duplication call; the borrow lasts no longer.
-                bool referenced = false;
-                try
-                {
-                    handle.DangerousAddRef(ref referenced);
-                    fd = FdInterop.DuplicateWithCloseOnExec((int)handle.DangerousGetHandle());
-                    ownsDuplicate = true;
-                }
-                finally
-                {
-                    if (referenced) handle.DangerousRelease();
-                }
-            }
+            // A reference, not a validity check, in the TryLock style: reading the descriptor out
+            // of the handle and using it are two steps, and disposal in between would hand fcntl a
+            // number that is already closed. The reference pins the handle for exactly the
+            // duplication call; the borrow lasts no longer.
+            using SafeFileHandle? duplicate = handle is null ? null : BorrowDuplicate(handle);
+
+            // The descriptor the connect runs over: the duplicate's number, the caller's raw
+            // number, or none of them for the default daemon socket.
+            int connectFd = duplicate is not null ? (int)duplicate.DangerousGetHandle()
+                          : rawFd >= 0 ? rawFd
+                          : -1;
 
             pw_core* core;
 
@@ -397,9 +383,9 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
                 if (props is null)
                     throw new PipeWireException("pw_properties_new_dict", -12);   // ENOMEM
 
-                core = !overFd
+                core = connectFd < 0
                     ? Native.pw_context_connect(_contextHandle!.Context, props, user_data_size: 0)
-                    : Native.pw_context_connect_fd(_contextHandle!.Context, fd, props, user_data_size: 0);
+                    : Native.pw_context_connect_fd(_contextHandle!.Context, connectFd, props, user_data_size: 0);
             }
             finally
             {
@@ -409,9 +395,9 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
             if (core is null)
             {
                 // pw_context_connect_fd fails before its io source exists, so a duplicated
-                // descriptor is still open and this method is its last owner. A raw descriptor
-                // stays the caller's; the catch below closes only what ownsDuplicate marks.
-                throw !overFd
+                // descriptor is still open and its SafeFileHandle is still the owner - ordinary
+                // disposal closes it. A raw descriptor stays the caller's; nothing here closes it.
+                throw connectFd < 0
                     ? new PipeWireException(
                         "pw_context_connect", -2,   // ENOENT
                         objectId: null,
@@ -426,23 +412,37 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
 
             // A successful connect hands the descriptor to PipeWire: pw_context_connect_fd puts
             // it into an io source created with close-on-destroy, so the connection closes it
-            // when it is torn down. Ownership leaves this method here - which is why the raw
-            // form is for callers who understand that handover, and the borrowed form exists
-            // for everyone else.
-            ownsDuplicate = false;
+            // when it is torn down. For the duplicate this is expressed the SafeHandle way -
+            // invalidating the wrapper makes its disposal inert, there is no second close path.
+            // Which is why the raw form is for callers who understand that handover, and the
+            // borrowed form exists for everyone else.
+            duplicate?.SetHandleAsInvalid();
 
             _coreHandle = new PipeWireCoreHandle(core, _loopHandle!, _contextHandle!);
         }
         catch
         {
-            // Exactly one owner at every instant: before a successful connect it is this method
-            // (for a duplicated descriptor only), after it, the connection. The caller's handle
-            // and the raw descriptor are on no close path here.
-            if (ownsDuplicate)
-                _ = FdInterop.TryClose(fd);
-
             Native.pw_thread_loop_stop(loop);
             throw;
+        }
+    }
+
+    /// <summary>Duplicates <paramref name="handle"/>'s descriptor with close-on-exec set.</summary>
+    /// <remarks>
+    /// The handle is only pinned for the duration of the duplication call: the duplicate is
+    /// independent, and once fcntl has returned, the caller's handle no longer matters here.
+    /// </remarks>
+    private static SafeFileHandle BorrowDuplicate(SafeFileHandle handle)
+    {
+        bool referenced = false;
+        try
+        {
+            handle.DangerousAddRef(ref referenced);
+            return FdInterop.DuplicateWithCloseOnExec((int)handle.DangerousGetHandle());
+        }
+        finally
+        {
+            if (referenced) handle.DangerousRelease();
         }
     }
 
