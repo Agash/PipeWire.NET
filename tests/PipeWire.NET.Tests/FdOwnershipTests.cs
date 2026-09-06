@@ -214,14 +214,18 @@ public sealed partial class FdOwnershipTests
         using CancellationTokenSource cts = new(Budget);
 
         using Socket socket = await ConnectDaemonSocketAsync(cts.Token);
+        using SafeFileHandle duplicate = FdInterop.DuplicateWithCloseOnExec(
+            (int)socket.SafeHandle.DangerousGetHandle());
 
         await using PipeWireContext context = new("fd-ownership-test", ConsoleTestLoggerFactory.Instance);
-        await context.StartAsync(FdInterop.DuplicateWithCloseOnExec(
-            (int)socket.SafeHandle.DangerousGetHandle()), cts.Token);
+        await context.StartAsync((int)duplicate.DangerousGetHandle(), cts.Token);
 
-        // The handed-over descriptor is the duplicate, so the caller-side Socket still owns the
-        // original and disposing it stays the test's own business. The duplicate is PipeWire's
-        // from a successful connect on - which is what the internal raw form documents.
+        // The handed-over number is the duplicate, so the caller-side Socket still owns the
+        // original. The duplicate is PipeWire's from a successful connect on - which is what the
+        // internal raw form documents - so the wrapper that owns it must never close it again:
+        // invalidating it is exactly how the library itself expresses that handover.
+        duplicate.SetHandleAsInvalid();
+
         await using PipeWireRegistry registry = new(context);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
