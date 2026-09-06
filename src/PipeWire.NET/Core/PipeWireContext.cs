@@ -219,13 +219,18 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     /// a <see cref="SafeFileHandle"/> and let the library borrow instead.
     /// </para>
     /// </remarks>
+    /// <param name="fd">
+    /// A caller-owned descriptor already connected to a PipeWire daemon. Ownership transfers on
+    /// success - PipeWire closes it when the connection is torn down; on a failed start it stays
+    /// the caller's. See the remarks.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation of the wait for another start already in flight.</param>
     /// <exception cref="PipeWireException">The daemon refuses the handshake on the fd.</exception>
     internal Task StartAsync(int fd, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
-        if (fd < 0)
-            throw new ArgumentOutOfRangeException(nameof(fd), fd, "a descriptor is never negative");
+        ArgumentOutOfRangeException.ThrowIfNegative(fd);
 
         return StartAsyncCore(handle: null, rawFd: fd, cancellationToken);
     }
