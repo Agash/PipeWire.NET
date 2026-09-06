@@ -24,19 +24,31 @@ jobs:
       # because attestation needs more than the read-only default.
       id-token: write
       attestations: write
+
+    # Trace-level registry logs are tens of megabytes per daemon leg and crash the web log
+    # renderer; state transitions and warnings still show on failure.
+    env:
+      PWNET_TEST_LOG_LEVEL: Information
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0   # MinVer needs full history
 
-      - name: Install PipeWire runtime + dev headers + libclang
+      - name: Install PipeWire, session tools, dev headers, libclang
+        # One update and one install for everything this job needs later: the dev headers for
+        # the build and binding check, the daemon plus session manager plus GStreamer sinks for
+        # the test legs. Installing the daemons early starts nothing; each leg starts its own
+        # throwaway session through build/session.sh.
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             libpipewire-0.3-0 \
             libpipewire-0.3-dev \
             libclang-dev \
-            pkg-config
+            pkg-config \
+            dbus \
+            pipewire wireplumber pipewire-bin \
+            gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pipewire
 
       - uses: actions/setup-dotnet@v5
         with:
@@ -157,12 +169,6 @@ jobs:
         run: dotnet test PipeWire.NET.slnx --no-build -c Release
              --filter "TestCategory=Integration&TestCategory!=RequiresDaemon&TestCategory!=PenTest&TestCategory!=KillsTheDaemon" --max-parallel-test-modules 1
 
-      - name: Install a headless PipeWire session
-        run: |
-          sudo apt-get install -y --no-install-recommends \
-            pipewire wireplumber pipewire-bin \
-            gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pipewire
-
       - name: Graph tests against a real daemon
         # Gating. Registry enumeration, object creation and linking need only the daemon and the
         # SPA support plugins, both of which a headless runner hosts reliably.
@@ -173,13 +179,9 @@ jobs:
         run: |
           source build/session.sh
           pwnet_session_start
-          set +e
-          dotnet test PipeWire.NET.slnx --no-build -c Release \
+          pwnet_session_run dotnet test PipeWire.NET.slnx --no-build -c Release \
             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon" --max-parallel-test-modules 1
-          RC=$?
-          set -e
-          pwnet_session_stop
-          exit $RC
+          exit $PWNET_LAST_RC
 
       - name: Session diagnostics
         if: failure()
@@ -208,14 +210,11 @@ jobs:
 
           # Exit 1 is the sample's "no video source", which a headless runner has. Connecting and
           # enumerating is what is being checked.
-          set +e
-          OUT=$("$BIN" 2>&1); RC=$?
-          set -e
+          OUT=$(pwnet_session_run "$BIN" 2>&1)
           echo "$OUT"
-          pwnet_session_stop
 
           echo "$OUT" | grep -q "connected to daemon" || { echo "AOT binary did not reach the daemon"; exit 1; }
-          test $RC -le 1
+          test $PWNET_LAST_RC -le 1
 
       - name: DMA-BUF lifetime tests (no GPU required)
         # The zero-copy path is excluded from every daemon leg by TestCategory!=RequiresGpu, so the
@@ -226,13 +225,9 @@ jobs:
         run: |
           source build/session.sh
           pwnet_session_start
-          set +e
-          dotnet test PipeWire.NET.slnx --no-build -c Release \
+          pwnet_session_run dotnet test PipeWire.NET.slnx --no-build -c Release \
             --filter "TestCategory=RequiresGpu&TestCategory!=RequiresGStreamer" --max-parallel-test-modules 1
-          RC=$?
-          set -e
-          pwnet_session_stop
-          echo "::notice::DMA-BUF leg exit $RC (non-gating: a hosted runner has no GPU to import with)"
+          echo "::notice::DMA-BUF leg exit $PWNET_LAST_RC (non-gating: a hosted runner has no GPU to import with)"
 
       - name: Daemon end-to-end tests (GStreamer real sources)
         # Non-gating, and now actually so. These exercise a real GStreamer to PipeWire graph and
@@ -243,13 +238,9 @@ jobs:
         run: |
           source build/session.sh
           pwnet_session_start
-          set +e
-          dotnet test PipeWire.NET.slnx --no-build -c Release \
+          pwnet_session_run dotnet test PipeWire.NET.slnx --no-build -c Release \
             --filter "TestCategory=RequiresGStreamer&TestCategory!=RequiresGpu&TestCategory!=PenTest" --max-parallel-test-modules 1
-          RC=$?
-          set -e
-          pwnet_session_stop
-          exit $RC
+          exit $PWNET_LAST_RC
 
       - name: Pack
         if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
@@ -356,14 +347,11 @@ jobs:
           source build/session.sh
           pwnet_session_start
 
-          set +e
-          OUT=$("$BIN" 2>&1); RC=$?
-          set -e
+          OUT=$(pwnet_session_run "$BIN" 2>&1)
           echo "$OUT"
-          pwnet_session_stop
 
           echo "$OUT" | grep -q "connected to daemon" || { echo "AOT binary did not reach the daemon"; exit 1; }
-          test $RC -le 1
+          test $PWNET_LAST_RC -le 1
 
   daemon_version_skew:
     name: Daemon skew (PipeWire ${{ matrix.os }})
@@ -379,6 +367,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
+
+    # Same reason as the main job: per-global registry traces dominate daemon-leg logs.
+    env:
+      PWNET_TEST_LOG_LEVEL: Information
     steps:
       - uses: actions/checkout@v6
         with:
@@ -393,7 +385,7 @@ jobs:
       - name: Install a headless PipeWire session
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends pipewire wireplumber pipewire-bin
+          sudo apt-get install -y --no-install-recommends dbus pipewire wireplumber pipewire-bin
 
       - name: Report the versions under test
         run: |
@@ -416,19 +408,19 @@ jobs:
         run: |
           source build/session.sh
           pwnet_session_start
-          set +e
-          dotnet test PipeWire.NET.slnx -c Release             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon"             --max-parallel-test-modules 1
-          RC=$?
-          set -e
-          pwnet_session_stop
+          pwnet_session_run dotnet test PipeWire.NET.slnx -c Release             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon"             --max-parallel-test-modules 1
 
-          if [ $RC -eq 0 ]; then
+          if [ $PWNET_LAST_RC -eq 0 ]; then
             echo "- result: passed" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "- result: **failed** (this job is non-gating)" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-          exit $RC
+          echo "- note: tests tagged \`RequiresPipeWire168\` self-skip below PipeWire 1.6.8" >> "$GITHUB_STEP_SUMMARY"
+          echo "  (racy destroy-during-create aborts older daemons, and a few behaviors changed;" >> "$GITHUB_STEP_SUMMARY"
+          echo "  unrelated to interface skew)" >> "$GITHUB_STEP_SUMMARY"
+
+          exit $PWNET_LAST_RC
 
       - name: Session diagnostics
         if: failure()

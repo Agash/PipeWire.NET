@@ -132,10 +132,19 @@ internal static class PwTools
     }
 
     /// <summary>Links two ports by name, the way a user would from a terminal.</summary>
-    /// <remarks><c>-w</c> waits for the attempt so the call is not merely fire-and-forget.</remarks>
+    /// <remarks>
+    /// <c>-w</c> waits for the attempt so the call is not merely fire-and-forget. pw-link only
+    /// grew it after 1.0, so on older tools a usage error falls back to the plain form: every
+    /// caller waits for the link to appear before asserting anything, so the settle happens there.
+    /// </remarks>
     public static async Task LinkAsync(string outputPort, string inputPort, CancellationToken ct)
     {
         (int code, _, string err) = await RunAsync(Need(PwLink, "pw-link"), ["-w", outputPort, inputPort], ct);
+        if (code == 0) return;
+
+        if (err.Contains("invalid option", StringComparison.Ordinal))
+            (code, _, err) = await RunAsync(Need(PwLink, "pw-link"), [outputPort, inputPort], ct);
+
         if (code != 0)
             throw new InvalidOperationException($"pw-link {outputPort} {inputPort} failed ({code}): {err}");
     }

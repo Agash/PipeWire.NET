@@ -181,11 +181,15 @@ public sealed class ControlSurfaceTests
     }
 
     [TestMethod]
+    [TestCategory("RequiresPipeWire168")]
     public async Task ASubscribedVolumeChange_RaisesAnEventWhileConcurrentReadsAgree()
     {
         // Two things the ordinary read path never touches: the subscription set the daemon keeps
         // per binding, and several enumerations sharing one answers table keyed by sequence.
+        // 1.0.5 emits the current volume as the first subscribed event where 1.6.8 emits only
+        // the change, so this expectation only holds where the daemon behaves the newer way.
         RequireLinux();
+        SessionGates.RequireDaemonAtLeast(1, 6, 8);
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-subscribe", cts.Token);
         await using (ctx)

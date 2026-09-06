@@ -273,11 +273,15 @@ public sealed class FilterTests
     }
 
     [TestMethod]
+    [TestCategory("RequiresPipeWire168")]
     public async Task AMidiAndAControlPort_JoinTheGraphBesideAudio()
     {
         // MIDI and control ports are not audio ports with a different name,
         // they declare DSP formats the graph links by.
+        // 1.0.5 reports a fresh unlinked filter as driving where 1.6.8 does not,
+        // so this expectation only holds where the daemon behaves the newer way.
         RequireLinux();
+        SessionGates.RequireDaemonAtLeast(1, 6, 8);
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext("pwnet-filter-ports", ConsoleTestLoggerFactory.Instance);

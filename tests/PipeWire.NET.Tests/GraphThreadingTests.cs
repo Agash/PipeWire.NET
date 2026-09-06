@@ -193,9 +193,13 @@ public sealed class GraphThreadingTests
     }
 
     [TestMethod]
+    [TestCategory("RequiresPipeWire168")]
     public async Task CreatingFromInsideAHandler_CompletesRatherThanDeadlocking()
     {
         RequireLinux();
+        // Destroying from inside the handler races the same way the hostile creation tests do,
+        // and 1.0.5 answers with a hang followed by a dead daemon.
+        SessionGates.RequireDaemonAtLeast(1, 6, 8);
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-nested", cts.Token);
 

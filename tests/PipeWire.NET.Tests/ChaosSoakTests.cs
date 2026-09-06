@@ -537,6 +537,11 @@ public sealed class ChaosSoakTests
     {
         try
         {
+            // Loopback processes only earn ports once the session manager links them somewhere,
+            // which needs an audio route. Headless sessions have none; the Inconclusive this
+            // raises is caught below, and the other actors carry the soak without this one.
+            await SessionGates.RequireAudioRouteAsync(registry, ct).ConfigureAwait(false);
+
             while (!ct.IsCancellationRequested)
             {
                 // Processes that are not us, changing the same graph. This is what makes the soak

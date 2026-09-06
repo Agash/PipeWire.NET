@@ -226,6 +226,7 @@ public sealed class ThirdPartyGraphTests
     }
 
     [TestMethod]
+    [TestCategory("RequiresAudioRoute")]
     public async Task AThirdPartyNodeAppearsAndWeCanLinkToIt()
     {
         PwTools.Require();
@@ -235,6 +236,8 @@ public sealed class ThirdPartyGraphTests
         await using (ctx)
         await using (reg)
         {
+            await SessionGates.RequireAudioRouteAsync(reg, cts.Token).ConfigureAwait(false);
+
             await using PwTools.Loopback loop = await PwTools.StartLoopbackAsync("pwnet_tp_loop", cts.Token);
 
             // pw-loopback publishes a pair: input.NAME (Stream/Input/Audio) and output.NAME
@@ -283,6 +286,7 @@ public sealed class ThirdPartyGraphTests
     }
 
     [TestMethod]
+    [TestCategory("RequiresAudioRoute")]
     public async Task AThirdPartyNodeDisappearing_TakesItsPortsAndLinksWithIt()
     {
         PwTools.Require();
@@ -292,6 +296,8 @@ public sealed class ThirdPartyGraphTests
         await using (ctx)
         await using (reg)
         {
+            await SessionGates.RequireAudioRouteAsync(reg, cts.Token).ConfigureAwait(false);
+
             uint theirNode;
             {
                 await using PwTools.Loopback loop =
