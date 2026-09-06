@@ -824,6 +824,7 @@ PipeWire.NET.PipeWireContext.IsDisposed : Boolean
 PipeWire.NET.PipeWireContext.Lock()
 PipeWire.NET.PipeWireContext.LoopLock
 PipeWire.NET.PipeWireContext.StartAsync(CancellationToken)
+PipeWire.NET.PipeWireContext.StartAsync(SafeFileHandle, CancellationToken)
 PipeWire.NET.PipeWireContext.TryLock(LoopLock&)
 PipeWire.NET.PipeWireDiagnostics
 PipeWire.NET.PipeWireDiagnostics.Name = String

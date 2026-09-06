@@ -2,6 +2,7 @@ using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Win32.SafeHandles;
 using PipeWire.NET.Interop;
 using PipeWire.NET.Spa;
 
@@ -158,6 +159,89 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
 
+        return StartAsyncCore(handle: null, rawFd: -1, cancellationToken);
+    }
+
+    /// <summary>
+    /// Starts the loop thread and connects to the daemon over an already-connected socket fd.
+    /// </summary>
+    /// <param name="fd">
+    /// A descriptor already connected to a PipeWire daemon, as handed out by the
+    /// xdg-desktop-portal ScreenCast <c>OpenPipeWireRemote</c> request. Borrowed only: this call
+    /// duplicates it, and the caller's handle stays fully usable afterwards.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation of the wait for another start already in flight.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="fd"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="fd"/> is invalid.</exception>
+    /// <exception cref="PipeWireException">
+    /// The fd is not a connected PipeWire socket, or the daemon refuses the handshake on it.
+    /// </exception>
+    /// <remarks>
+    /// <para>
+    /// The descriptor is borrowed, not taken. Before the connection is attempted the library
+    /// duplicates it (with the close-on-exec flag, see <see cref="FdInterop.DuplicateWithCloseOnExec"/>)
+    /// and it is the duplicate that <c>pw_context_connect_fd</c> takes ownership of. Exactly one
+    /// owner exists from that point on: the library closes the duplicate when the start fails,
+    /// PipeWire closes it when a connected session is torn down - and <paramref name="fd"/> is
+    /// never touched by any of those paths.
+    /// </para>
+    /// <para>
+    /// The fd form is admission-controlled by the same single-starter gate as
+    /// <see cref="StartAsync(CancellationToken)"/>, and a failed attempt returns the context to a
+    /// startable state.
+    /// </para>
+    /// </remarks>
+    public Task StartAsync(SafeFileHandle fd, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(fd);
+        if (fd.IsInvalid)
+            throw new ArgumentException("the handle does not carry a valid descriptor", nameof(fd));
+
+        return StartAsyncCore(fd, rawFd: -1, cancellationToken);
+    }
+
+    /// <summary>
+    /// Starts the loop thread and connects to the daemon over an already-connected socket fd
+    /// handed over as a raw descriptor.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Low-level counterpart of <see cref="StartAsync(SafeFileHandle, CancellationToken)"/> for
+    /// callers that hold the descriptor itself and manage its lifetime explicitly. Ownership
+    /// transfers on success: from a successful connect on, PipeWire owns the descriptor and
+    /// closes it when the connection is torn down. On a failed start the descriptor is left
+    /// open - closing it stays the caller's decision.
+    /// </para>
+    /// <para>
+    /// This is deliberately not public: callers without an explicit ownership story should pass
+    /// a <see cref="SafeFileHandle"/> and let the library borrow instead.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="PipeWireException">The daemon refuses the handshake on the fd.</exception>
+    internal Task StartAsync(int fd, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (fd < 0)
+            throw new ArgumentOutOfRangeException(nameof(fd), fd, "a descriptor is never negative");
+
+        return StartAsyncCore(handle: null, rawFd: fd, cancellationToken);
+    }
+
+    /// <summary>
+    /// The one shared path through the single-starter gate. The three start forms differ only
+    /// in how their native connect produces the core: the daemon socket resolved by PipeWire,
+    /// or an fd handed in from outside.
+    /// </summary>
+    /// <remarks>
+    /// The gate/admission/settle/lease logic is copied verbatim from the pre-fd form and must
+    /// stay identical across overloads: it is the order the whole context is reasoned about -
+    /// admission under the gate, the native loop lock after, never nested the other way.
+    /// </remarks>
+    private Task StartAsyncCore(SafeFileHandle? handle, int rawFd, CancellationToken cancellationToken)
+    {
         // Under the same gate as disposal, and only for the state transition. Two threads both
         // seeing Created would both call pw_thread_loop_start; the second fails because the loop
         // is already running, and its error path then stops the loop the first is connecting on.
@@ -204,7 +288,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
 
         try
         {
-            StartNative();
+            StartNative(handle, rawFd);
         }
         catch
         {
@@ -242,7 +326,9 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         return Task.CompletedTask;
     }
 
-    private unsafe void StartNative()
+    /// <param name="handle">A borrowed <see cref="SafeFileHandle"/> to connect over, or null.</param>
+    /// <param name="rawFd">A caller-owned raw descriptor to connect over, or -1 when <paramref name="handle"/> is set.</param>
+    private unsafe void StartNative(SafeFileHandle? handle, int rawFd)
     {
         pw_thread_loop* loop = LoopHandle;
         if (Native.pw_thread_loop_start(loop) < 0)
@@ -250,8 +336,39 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
 
         // The loop thread is live from here, but _started is only set once this returns and disposal
         // gates pw_thread_loop_stop on it - so a throw below would strand the thread.
+        //
+        // The descriptor the connect runs over, and whether it is a duplicate this method owns.
+        // The duplication lives inside this try like every other step - a failure anywhere stops
+        // the loop thread it started - and the catch below closes exactly what is still owned,
+        // never the caller's own descriptor: a SafeFileHandle is borrowed (read once, duplicated),
+        // a raw descriptor is handed over untouched and stays the caller's on every failure path.
+        int fd = rawFd;
+        bool ownsDuplicate = false;
+
+        // Which native connect this start performs. A raw descriptor also goes through the fd
+        // form: pw_context_connect_fd with the caller's number, no duplication on this side.
+        bool overFd = handle is not null || rawFd >= 0;
         try
         {
+            if (handle is not null)
+            {
+                // A reference, not a validity check, in the TryLock style: reading the descriptor
+                // out of the handle and using it are two steps, and disposal in between would
+                // hand fcntl a number that is already closed. The reference pins the handle for
+                // exactly the duplication call; the borrow lasts no longer.
+                bool referenced = false;
+                try
+                {
+                    handle.DangerousAddRef(ref referenced);
+                    fd = FdInterop.DuplicateWithCloseOnExec((int)handle.DangerousGetHandle());
+                    ownsDuplicate = true;
+                }
+                finally
+                {
+                    if (referenced) handle.DangerousRelease();
+                }
+            }
+
             pw_core* core;
 
             // Connecting touches the loop's objects -> must hold the loop lock.
@@ -272,7 +389,9 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
                 if (props is null)
                     throw new PipeWireException("pw_properties_new_dict", -12);   // ENOMEM
 
-                core = Native.pw_context_connect(_contextHandle!.Context, props, user_data_size: 0);
+                core = !overFd
+                    ? Native.pw_context_connect(_contextHandle!.Context, props, user_data_size: 0)
+                    : Native.pw_context_connect_fd(_contextHandle!.Context, fd, props, user_data_size: 0);
             }
             finally
             {
@@ -280,15 +399,40 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
             }
 
             if (core is null)
-                throw new PipeWireException(
-                    "pw_context_connect", -2,   // ENOENT
-                    objectId: null,
-                    "ensure the PipeWire daemon is running (pipewire.service / wireplumber.service)");
+            {
+                // pw_context_connect_fd fails before its io source exists, so a duplicated
+                // descriptor is still open and this method is its last owner. A raw descriptor
+                // stays the caller's; the catch below closes only what ownsDuplicate marks.
+                throw !overFd
+                    ? new PipeWireException(
+                        "pw_context_connect", -2,   // ENOENT
+                        objectId: null,
+                        "ensure the PipeWire daemon is running (pipewire.service / wireplumber.service)")
+                    : new PipeWireException(
+                        "pw_context_connect_fd", -2,   // ENOENT
+                        objectId: null,
+                        "the fd must be a connected PipeWire socket (as returned by a portal "
+                        + "OpenPipeWireRemote request), not a plain file, and the daemon must be "
+                        + "reachable on it");
+            }
+
+            // A successful connect hands the descriptor to PipeWire: pw_context_connect_fd puts
+            // it into an io source created with close-on-destroy, so the connection closes it
+            // when it is torn down. Ownership leaves this method here - which is why the raw
+            // form is for callers who understand that handover, and the borrowed form exists
+            // for everyone else.
+            ownsDuplicate = false;
 
             _coreHandle = new PipeWireCoreHandle(core, _loopHandle!, _contextHandle!);
         }
         catch
         {
+            // Exactly one owner at every instant: before a successful connect it is this method
+            // (for a duplicated descriptor only), after it, the connection. The caller's handle
+            // and the raw descriptor are on no close path here.
+            if (ownsDuplicate)
+                _ = FdInterop.TryClose(fd);
+
             Native.pw_thread_loop_stop(loop);
             throw;
         }

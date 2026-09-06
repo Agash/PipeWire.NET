@@ -1,6 +1,6 @@
-using System.Collections.Immutable;
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -166,7 +166,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// <summary>Raised once when disposal begins, so watchers can finish rather than block.</summary>
     private event Action? Disposing;
 
-    /// <param name="context">A <see cref="PipeWireContext"/> with <see cref="PipeWireContext.StartAsync"/> already called.</param>
+    /// <param name="context">A <see cref="PipeWireContext"/> with <see cref="PipeWireContext.StartAsync(CancellationToken)"/> already called.</param>
     public PipeWireRegistry(PipeWireContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
