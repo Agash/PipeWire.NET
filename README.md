@@ -76,6 +76,20 @@ await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationTo
 }
 ```
 
+### Connecting over a portal fd
+
+A sandboxed client may not see the daemon socket itself. xdg-desktop-portal's ScreenCast
+`OpenPipeWireRemote` returns the next best thing: a socket fd already connected to the daemon,
+restricted to the access the user granted. `StartAsync` connects over that fd directly. The
+handle is only borrowed: the library duplicates the descriptor (close-on-exec, as PipeWire does
+itself), the connection owns the duplicate, and the caller's handle stays open and usable.
+
+```csharp
+// fd: the SafeFileHandle the ScreenCast OpenPipeWireRemote reply carries
+await using var ctx = new PipeWireContext();
+await ctx.StartAsync(fd, cancellationToken);
+```
+
 ### Creating nodes and links
 
 ```csharp
