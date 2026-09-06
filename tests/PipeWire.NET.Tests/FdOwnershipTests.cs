@@ -4,6 +4,7 @@ using System.Runtime.Versioning;
 using Microsoft.Win32.SafeHandles;
 
 using PipeWire.NET.Graph;
+using PipeWire.NET.Interop;
 
 namespace PipeWire.NET.Tests;
 
@@ -29,7 +30,7 @@ namespace PipeWire.NET.Tests;
 /// </summary>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class FdOwnershipTests
+public sealed partial class FdOwnershipTests
 {
     [TestMethod]
     public async Task StartAsync_BorrowOnly_LeavesTheCallerHandleUsableAndLeaksNoDuplicate()
@@ -39,8 +40,10 @@ public sealed class FdOwnershipTests
 
         await using PipeWireContext context = new("fd-ownership-test");
 
-        // A regular file never reaches a daemon handshake - whatever the connect makes of it,
-        // no assertion here depends on the outcome, only on what happens to the descriptors.
+        // On PipeWire 1.6.8 a connect over a regular file fd succeeds structurally: the SPA loop
+        // wraps non-epoll-able fds in an idle source, so the connect never reaches a daemon
+        // handshake. That structurally-successful connect is an observed behavior, not the
+        // contract - the assertions here are about descriptor ownership, whichever pw paths run.
         await context.StartAsync(stream.SafeFileHandle);
 
         Assert.IsFalse(stream.SafeFileHandle.IsClosed,
@@ -75,7 +78,7 @@ public sealed class FdOwnershipTests
         using SafeFileHandle invalid = new(new IntPtr(-1), ownsHandle: true);
 
         Assert.ThrowsExactly<ArgumentException>(
-            () => context.StartAsync(invalid).GetAwaiter().GetResult());
+            () => context.StartAsync(invalid));
     }
 
     /// <summary>
@@ -98,15 +101,11 @@ public sealed class FdOwnershipTests
 
         // Environment.SetEnvironmentVariable does not reach the native environment, and it is
         // native code that reads PIPEWIRE_REMOTE at connect time; setenv goes through libc
-        // directly. Restored before this test returns.
-        NativeTestEnv.Set("PIPEWIRE_REMOTE", "fd-ownership-test-absent");
-        try
+        // directly. Disposing the scope restores the variable's previous state - the value it
+        // held before, or its absence.
+        using (ScopedNativeEnv remote = ScopedNativeEnv.Override("PIPEWIRE_REMOTE", "fd-ownership-test-absent"))
         {
             await Assert.ThrowsExactlyAsync<PipeWireException>(() => context.StartAsync());
-        }
-        finally
-        {
-            NativeTestEnv.Unset("PIPEWIRE_REMOTE");
         }
 
         // The failed attempt fell back to Created; an fd start succeeds over the same context.
@@ -116,18 +115,52 @@ public sealed class FdOwnershipTests
         await context.StartAsync(stream.SafeFileHandle);
     }
 
-    /// <summary>Process environment access that native code (getenv) observes.</summary>
-    private static class NativeTestEnv
+    /// <summary>
+    /// Overrides a variable in the process environment that native code (getenv) observes, for
+    /// the duration of a using scope, and restores the previous state on dispose.
+    /// </summary>
+    /// <remarks>
+    /// Environment.SetEnvironmentVariable does not reach the native environment, and it is native
+    /// code that reads PIPEWIRE_REMOTE at connect time - hence the direct libc calls. The saved
+    /// value is captured before the override and written back in Dispose: a variable absent before
+    /// the override is absent again after it, not merely emptied. A class rather than a ref
+    /// struct because the scope spans awaits (the test waits a connect out inside it), which a
+    /// ref struct cannot.
+    /// </remarks>
+    private sealed partial class ScopedNativeEnv : IDisposable
     {
-        [DllImport("libc")]
-        private static extern int setenv(string name, string value, int overwrite);
+        [LibraryImport("libc", StringMarshalling = StringMarshalling.Utf8)]
+        private static partial int setenv(string name, string value, int overwrite);
 
-        [DllImport("libc")]
-        private static extern int unsetenv(string name);
+        [LibraryImport("libc", StringMarshalling = StringMarshalling.Utf8)]
+        private static partial int unsetenv(string name);
 
-        internal static void Set(string name, string value) => setenv(name, value, overwrite: 1);
+        /// <summary>The value <paramref name="name"/> held before the override; null when absent.</summary>
+        private readonly string? _saved;
 
-        internal static void Unset(string name) => _ = unsetenv(name);
+        private readonly string _name;
+
+        private ScopedNativeEnv(string name, string? saved) => (_name, _saved) = (name, saved);
+
+        /// <summary>Sets <paramref name="name"/> to <paramref name="value"/> and returns a scope that restores the previous state on dispose.</summary>
+        internal static ScopedNativeEnv Override(string name, string value)
+        {
+            string? saved = Marshal.PtrToStringUTF8(getenv(name));
+            _ = setenv(name, value, overwrite: 1);
+            return new ScopedNativeEnv(name, saved);
+        }
+
+        /// <summary>Restores the variable's previous state: the saved value, or its absence.</summary>
+        public void Dispose()
+        {
+            if (_saved is null)
+                _ = unsetenv(_name);
+            else
+                _ = setenv(_name, _saved, overwrite: 1);
+        }
+
+        [LibraryImport("libc", StringMarshalling = StringMarshalling.Utf8)]
+        private static partial IntPtr getenv(string name);
     }
 
     /// <summary>
@@ -160,10 +193,16 @@ public sealed class FdOwnershipTests
         _ = socket.Poll(0, SelectMode.SelectRead);
 
         await context.DisposeAsync();
-        socket.Dispose();
 
         // And it survives the teardown: the connection owned a duplicate, not this descriptor.
+        // Poll makes the borrow contract real - a descriptor the library closed by now throws
+        // SocketException (EBADF) here and fails the test, which IsClosed on the managed
+        // wrapper alone cannot show. The poll runs before the socket's own disposal, so it
+        // observes the real descriptor, not the disposed wrapper.
         Assert.IsFalse(borrowed.IsClosed);
+        _ = socket.Poll(0, SelectMode.SelectRead);
+
+        socket.Dispose();
     }
 
     [TestMethod]
@@ -175,19 +214,22 @@ public sealed class FdOwnershipTests
         using CancellationTokenSource cts = new(Budget);
 
         using Socket socket = await ConnectDaemonSocketAsync(cts.Token);
-        int fd = (int)socket.SafeHandle.DangerousGetHandle();
 
         await using PipeWireContext context = new("fd-ownership-test", ConsoleTestLoggerFactory.Instance);
-        await context.StartAsync(fd, cts.Token);
+        await context.StartAsync(FdInterop.DuplicateWithCloseOnExec(
+            (int)socket.SafeHandle.DangerousGetHandle()), cts.Token);
 
+        // The handed-over descriptor is the duplicate, so the caller-side Socket still owns the
+        // original and disposing it stays the test's own business. The duplicate is PipeWire's
+        // from a successful connect on - which is what the internal raw form documents.
         await using PipeWireRegistry registry = new(context);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        // Ownership transferred on success: disposing the context tears the connection down,
-        // which closes the descriptor. The socket object on the caller's side is a passenger
-        // from here - dispose it without touching the descriptor again.
+        // Ownership transferred for the duplicate: disposing the context tears the connection
+        // down, which closes it. The original descriptor is untouched throughout - the poll
+        // proves it is still live after the teardown.
         await context.DisposeAsync();
-        socket.Dispose();
+        _ = socket.Poll(0, SelectMode.SelectRead);
     }
 
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
