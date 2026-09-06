@@ -174,7 +174,10 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     /// <exception cref="ArgumentNullException"><paramref name="fd"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException"><paramref name="fd"/> is invalid.</exception>
     /// <exception cref="PipeWireException">
-    /// The fd is not a connected PipeWire socket, or the daemon refuses the handshake on it.
+    /// The connection could not be established over the fd - for example, the daemon refused
+    /// the handshake on it, or the descriptor could not be duplicated. A fd that is not a
+    /// PipeWire socket may instead connect structurally and only fail later as a protocol
+    /// error; this call does not pre-validate the fd type.
     /// </exception>
     /// <remarks>
     /// <para>
