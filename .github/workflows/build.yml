@@ -446,9 +446,18 @@ jobs:
   publish_nuget:
     name: Publish NuGet Packages
     needs: [build_and_test]
-    # Publishing runs only when a GitHub release is published (or manually dispatched), matching
-    # the other Agash packages. Requires a NuGet.org trusted-publishing policy for this package.
-    if: (github.event_name == 'release' && github.event.action == 'published') || github.event_name == 'workflow_dispatch'
+    # Publishing runs only when a GitHub release is published, matching the other Agash packages.
+    # Requires a NuGet.org trusted-publishing policy for this package.
+    #
+    # A manual dispatch may publish too, but only from main or a version tag. It used to publish
+    # from whatever ref it was dispatched on, so dispatching the workflow to check CI on a feature
+    # branch pushed that branch's build to nuget.org - and nuget.org has no delete, only unlist.
+    # Running the workflow and releasing a package are different intentions; the ref is what
+    # separates them.
+    if: >-
+      (github.event_name == 'release' && github.event.action == 'published')
+      || (github.event_name == 'workflow_dispatch'
+          && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
     runs-on: ubuntu-latest
     # Declaring an environment is what makes GitHub record a deployment, which is what
     # surfaces the Deployments tab and the package link on the repo home page.
