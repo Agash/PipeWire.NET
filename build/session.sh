@@ -51,10 +51,8 @@ pwnet_session_start() {
     fi
   fi
 
-  pipewire    > "$PWNET_SESSION_LOG_DIR/pipewire.log"    2>&1 &
+  pipewire > "$PWNET_SESSION_LOG_DIR/pipewire.log" 2>&1 &
   PWNET_PW_PID=$!
-  wireplumber > "$PWNET_SESSION_LOG_DIR/wireplumber.log" 2>&1 &
-  PWNET_WP_PID=$!
 
   local i
   for ((i = 1; i <= attempts; i++)); do
@@ -87,6 +85,12 @@ pwnet_session_start() {
   PWNET_DAEMON_VERSION="$(pipewire --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
   export PWNET_DAEMON_VERSION
 
+  # Only now, with the socket proven to answer. WirePlumber exits rather than retries when it
+  # cannot reach PipeWire at startup, so starting the two together is a race the loaded machine
+  # loses: "Failed to connect to PipeWire" and a session that answers pw-cli but manages nothing.
+  wireplumber > "$PWNET_SESSION_LOG_DIR/wireplumber.log" 2>&1 &
+  PWNET_WP_PID=$!
+
   # pipewire answering is only half the session: the tests need WirePlumber managing it
   # (linking streams, default metadata), and a WirePlumber that died on startup looks
   # exactly like a healthy one to pw-cli. Wait for its client global instead.
@@ -118,7 +122,9 @@ pwnet_session_dump() {
 }
 
 pwnet_session_stop() {
-  kill "$PWNET_WP_PID" "$PWNET_PW_PID" "$PWNET_DBUS_PID" 2>/dev/null || true
+  # Defaulted, not bare: the function documents itself as safe to call twice, and the second
+  # call runs after the unset below - which is an error, not a no-op, under `set -u`.
+  kill "${PWNET_WP_PID:-}" "${PWNET_PW_PID:-}" "${PWNET_DBUS_PID:-}" 2>/dev/null || true
   # A second session in the same shell must bring its own bus: the socket this one used
   # is gone with it. Only ours, never a pre-existing address we did not set.
   if [ -n "${PWNET_DBUS_PID:-}" ]; then
@@ -143,7 +149,7 @@ pwnet_session_run() {
   set -e
 
   PWNET_SESSION_DIED=0
-  if ! kill -0 "$PWNET_PW_PID" 2>/dev/null || ! pw-cli info 0 >/dev/null 2>&1; then
+  if ! kill -0 "${PWNET_PW_PID:-}" 2>/dev/null || ! pw-cli info 0 >/dev/null 2>&1; then
     PWNET_SESSION_DIED=1
     echo "::error::the PipeWire daemon did not survive this leg; failures after the point it"
     echo "::error::died are downstream of that, not independent results"

@@ -164,6 +164,16 @@ public sealed class MultiClientHarmonyTests
             .WithName(Unique("pwnet_contended"))
             .ExecuteAsync(cts.Token);
 
+        // b is a separate connection and learns about a's new node from the daemon, so it has to
+        // be waited for: binding is against the caller's own snapshot, and on a loaded machine
+        // b's has not caught up by the time the create returns on a.
+        bool visibleToB = await EventuallyAsync(async () =>
+        {
+            await b.Registry.WaitForInitialEnumerationAsync(cts.Token);
+            return b.Registry.Current.GetNode(node.NodeId) is not null;
+        }, TimeSpan.FromSeconds(10), cts.Token);
+        Assert.IsTrue(visibleToB, "the second client never saw the contended node");
+
         await using PipeWireNodeControl ca = a.Registry.BindNode(node.NodeId);
         await using PipeWireNodeControl cb = b.Registry.BindNode(node.NodeId);
         await Task.WhenAll(ca.ReadyAsync(cts.Token), cb.ReadyAsync(cts.Token));

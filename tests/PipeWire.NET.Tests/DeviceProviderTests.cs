@@ -381,7 +381,19 @@ public sealed class DeviceProviderTests
         provider.SetParameter(SpaParamType.EnumProfile, three);
 
         Assert.HasCount(3, provider.GetParameter(SpaParamType.EnumProfile));
-        Assert.HasCount(3, await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token),
+
+        // Polled, not read once. SetParameter returns when the info event is queued on the
+        // provider's loop; the reader is a second connection, so the daemon has to process that
+        // event before it re-reads instead of answering the enumeration it cached. Nothing here
+        // can make that crossing synchronous, and a single read just races it.
+        int answered = 0;
+        for (int attempt = 0; attempt < 40 && answered != 3; attempt++)
+        {
+            answered = (await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token)).Length;
+            if (answered != 3) await Task.Delay(50, cts.Token);
+        }
+
+        Assert.AreEqual(3, answered,
             "the replacement set is not what the next enumeration answered with");
     }
 
