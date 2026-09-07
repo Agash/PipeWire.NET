@@ -34,6 +34,10 @@ public sealed class ParameterAndMetadataTests
         return (context, registry);
     }
 
+    // Unique names per process: the session manager restores volume and mute by node.name,
+    // so reusing a fixed name lets a previous leg's values race the assertions below.
+    private static string Unique(string p) => $"{p}_{Environment.ProcessId}_{Random.Shared.Next():x}";
+
     [TestMethod]
     public async Task AVirtualSink_ReportsAVolumeAndAcceptsANewOne()
     {
@@ -45,7 +49,7 @@ public sealed class ParameterAndMetadataTests
         {
             // A node we create ourselves, so nothing in the session is disturbed by changing it.
             PipeWireNode node = await registry.CreateVirtualNode("Params")
-                .WithName("pwnet_param_sink").ExecuteAsync(cts.Token);
+                .WithName(Unique("pwnet_param_sink")).ExecuteAsync(cts.Token);
 
             await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
 
@@ -83,11 +87,16 @@ public sealed class ParameterAndMetadataTests
         await using (registry)
         {
             PipeWireNode node = await registry.CreateVirtualNode("Mute")
-                .WithName("pwnet_mute_sink").ExecuteAsync(cts.Token);
+                .WithName(Unique("pwnet_mute_sink")).ExecuteAsync(cts.Token);
 
             await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
 
-            Assert.AreEqual(false, await control.GetMutedAsync(cts.Token));
+            // Deliberately no assertion about the starting mute. A session manager restores
+            // mute by node.name, so a node created with a name used before (the other TFM leg
+            // runs in the same session) comes back as it was last left. Drive both directions
+            // instead; each round-trip is the real behaviour to pin.
+            await control.SetMutedAsync(false, cts.Token);
+            Assert.AreEqual(false, await control.GetMutedAsync(cts.Token), "unmute did not take");
             await control.SetMutedAsync(true, cts.Token);
             Assert.AreEqual(true, await control.GetMutedAsync(cts.Token), "mute did not take");
 
@@ -221,6 +230,7 @@ public sealed class ParameterAndMetadataTests
     }
 
     [TestMethod]
+    [TestCategory("RequiresAudioRoute")]
     public async Task TheDefaultStore_ReportsTheSessionDefaultSink()
     {
         RequireLinux();
@@ -229,6 +239,12 @@ public sealed class ParameterAndMetadataTests
         await using (ctx)
         await using (registry)
         {
+            // A default sink only exists where the session manager has somewhere to route.
+            // Headless sessions never set one, so without this gate the test below can only
+            // skip late (or time out waiting for a metadata burst a churned session never
+            // finishes) instead of skipping fast.
+            await SessionGates.RequireAudioRouteAsync(registry, cts.Token).ConfigureAwait(false);
+
             PipeWireMetadataStore? store = registry.BindMetadataStore("default");
             if (store is null)
                 Assert.Inconclusive("no session manager is running, so there is no default store.");

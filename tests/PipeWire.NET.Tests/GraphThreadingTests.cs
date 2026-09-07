@@ -154,7 +154,12 @@ public sealed class GraphThreadingTests
             long reads = 0;
 
             // Eight threads walking the graph while the loop thread republishes it underneath them.
-            Task[] readers = [.. Enumerable.Range(0, 8).Select(_ => Task.Run(() =>
+            // Dedicated threads, not pool work items: these loops never await, so eight of them on
+            // the pool hold every worker and the awaits below then wait out the pool's one-per-second
+            // thread injection instead of the daemon. On a four-core runner that alone spends the
+            // whole budget. Yielding each pass keeps the loop thread schedulable against the
+            // oversubscription that is the point of the test.
+            Task[] readers = [.. Enumerable.Range(0, 8).Select(_ => Task.Factory.StartNew(() =>
             {
                 try
                 {
@@ -173,10 +178,11 @@ public sealed class GraphThreadingTests
                                 throw new InvalidOperationException($"link {link.LinkId} missing from its own index");
 
                         Interlocked.Increment(ref reads);
+                        Thread.Yield();
                     }
                 }
                 catch (Exception ex) { faulted ??= ex; }
-            }))];
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default))];
 
             for (int i = 0; i < 20; i++)
             {
@@ -193,9 +199,13 @@ public sealed class GraphThreadingTests
     }
 
     [TestMethod]
+    [TestCategory("RequiresPipeWire168")]
     public async Task CreatingFromInsideAHandler_CompletesRatherThanDeadlocking()
     {
         RequireLinux();
+        // Destroying from inside the handler races the same way the hostile creation tests do,
+        // and 1.0.5 answers with a hang followed by a dead daemon.
+        SessionGates.RequireDaemonAtLeast(1, 6, 8);
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-nested", cts.Token);
 

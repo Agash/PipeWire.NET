@@ -226,6 +226,7 @@ public sealed class ThirdPartyGraphTests
     }
 
     [TestMethod]
+    [TestCategory("RequiresAudioRoute")]
     public async Task AThirdPartyNodeAppearsAndWeCanLinkToIt()
     {
         PwTools.Require();
@@ -235,6 +236,8 @@ public sealed class ThirdPartyGraphTests
         await using (ctx)
         await using (reg)
         {
+            await SessionGates.RequireAudioRouteAsync(reg, cts.Token).ConfigureAwait(false);
+
             await using PwTools.Loopback loop = await PwTools.StartLoopbackAsync("pwnet_tp_loop", cts.Token);
 
             // pw-loopback publishes a pair: input.NAME (Stream/Input/Audio) and output.NAME
@@ -283,6 +286,7 @@ public sealed class ThirdPartyGraphTests
     }
 
     [TestMethod]
+    [TestCategory("RequiresAudioRoute")]
     public async Task AThirdPartyNodeDisappearing_TakesItsPortsAndLinksWithIt()
     {
         PwTools.Require();
@@ -292,6 +296,8 @@ public sealed class ThirdPartyGraphTests
         await using (ctx)
         await using (reg)
         {
+            await SessionGates.RequireAudioRouteAsync(reg, cts.Token).ConfigureAwait(false);
+
             uint theirNode;
             {
                 await using PwTools.Loopback loop =
@@ -340,7 +346,10 @@ public sealed class ThirdPartyGraphTests
             Exception? torn = null;
             long reads = 0;
 
-            Task reader = Task.Run(() =>
+            // A dedicated thread rather than a pool work item: the loop never awaits, so on the
+            // pool it holds a worker for the whole test and the awaits below queue behind the
+            // pool's thread injection.
+            Task reader = Task.Factory.StartNew(() =>
             {
                 try
                 {
@@ -355,10 +364,11 @@ public sealed class ThirdPartyGraphTests
                                 throw new InvalidOperationException($"link {link.LinkId} missing from the input index");
                         }
                         Interlocked.Increment(ref reads);
+                        Thread.Yield();
                     }
                 }
                 catch (Exception ex) { torn ??= ex; }
-            }, CancellationToken.None);
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
             for (int i = 0; i < 6; i++)
             {

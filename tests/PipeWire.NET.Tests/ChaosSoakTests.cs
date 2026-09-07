@@ -298,6 +298,7 @@ public sealed class ChaosSoakTests
     }
 
     [TestMethod]
+    [TestCategory("RequiresAudioRoute")]
     public async Task SeveralActorsChangingOneGraph_LeaveNothingBehindOnEitherSide()
     {
         RequireLinux();
@@ -313,6 +314,11 @@ public sealed class ChaosSoakTests
             await using (warmCtx)
             await using (warmReg)
             {
+                // Fail fast on a routeless session: the soak hammers the daemon faster than
+                // such a session absorbs. Unlinked churn makes 1.0.5-era daemons silently
+                // drop some creates mid-run, which the soak then (correctly) reports as faults.
+                await SessionGates.RequireAudioRouteAsync(warmReg, cts.Token).ConfigureAwait(false);
+
                 PipeWireNode warm = await warmReg.CreateVirtualNode("Warm")
                     .WithName(Unique("pwnet_soak_warm")).ExecuteAsync(cts.Token);
                 await warmReg.DestroyGlobalAsync(warm.NodeId, cts.Token);
@@ -537,6 +543,8 @@ public sealed class ChaosSoakTests
     {
         try
         {
+            // The test-level gate already required an audio route, so the session manager
+            // links these loopback processes and they earn ports to exercise.
             while (!ct.IsCancellationRequested)
             {
                 // Processes that are not us, changing the same graph. This is what makes the soak

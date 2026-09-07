@@ -71,9 +71,11 @@ public sealed class CreationHostileTests
     }
 
     [TestMethod]
+    [TestCategory("RequiresPipeWire168")]
     public async Task AnObjectRemovedTheInstantItAppears_LeavesNoWaiterBehind()
     {
         RequireLinux();
+        SessionGates.RequireDaemonAtLeast(1, 6, 8);
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-create-vanish", cts.Token);
         (PipeWireContext killerCtx, PipeWireRegistry killer) = await ConnectAsync("pwnet-create-killer", cts.Token);
@@ -121,6 +123,7 @@ public sealed class CreationHostileTests
     }
 
     [TestMethod]
+    [TestCategory("RequiresPipeWire168")]
     public async Task ObjectsDestroyedWhileBeingCreated_LeaveNoProxyBehind()
     {
         // A created object's proxy is filed once the graph publishes it, which is a window: the
@@ -128,6 +131,7 @@ public sealed class CreationHostileTests
         // Nothing observable moves when a proxy is left filed for a removed object, which is why
         // this counts the table directly rather than descriptors.
         RequireLinux();
+        SessionGates.RequireDaemonAtLeast(1, 6, 8);
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-proxy-race", cts.Token);
         (PipeWireContext killerCtx, PipeWireRegistry killer) = await ConnectAsync("pwnet-proxy-killer", cts.Token);
