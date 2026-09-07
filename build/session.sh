@@ -130,10 +130,25 @@ pwnet_session_stop() {
 # Runs one test leg inside an already-started session, stops the session afterwards, and
 # leaves the exit code in PWNET_LAST_RC. Always returns success itself, so callers under
 # `set -e` need no set +e dance: `pwnet_session_run dotnet test ...` then read the variable.
+#
+# PWNET_SESSION_DIED is set when the daemon did not survive the leg. A daemon that dies partway
+# fails every test after it with the same ENOENT from pw_context_connect, which reads as hundreds
+# of independent failures and is one: the difference matters enough to state rather than leave to
+# whoever opens the log. Observed on PipeWire 0.3.48, where racy destroy-during-create traffic
+# aborts the daemon (a use-after-free fixed upstream since).
 pwnet_session_run() {
   set +e
   "$@"
   PWNET_LAST_RC=$?
   set -e
+
+  PWNET_SESSION_DIED=0
+  if ! kill -0 "$PWNET_PW_PID" 2>/dev/null || ! pw-cli info 0 >/dev/null 2>&1; then
+    PWNET_SESSION_DIED=1
+    echo "::error::the PipeWire daemon did not survive this leg; failures after the point it"
+    echo "::error::died are downstream of that, not independent results"
+    pwnet_session_dump
+  fi
+
   pwnet_session_stop
 }

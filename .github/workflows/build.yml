@@ -421,6 +421,14 @@ jobs:
             echo "- result: **failed** (this job is non-gating)" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+          # A daemon that dies partway fails every remaining test with the same connect error, so
+          # the failure count says how far into the leg it got and nothing about interface skew.
+          # Saying so on the summary is the difference between a diagnosis and a wall of red.
+          if [ "${PWNET_SESSION_DIED:-0}" -eq 1 ]; then
+            echo "- **the daemon did not survive the leg**: failures after that point are all the" >> "$GITHUB_STEP_SUMMARY"
+            echo "  same dead session, not separate results" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
           echo "- note: tests tagged \`RequiresPipeWire168\` self-skip below PipeWire 1.6.8" >> "$GITHUB_STEP_SUMMARY"
           echo "  (racy destroy-during-create aborts older daemons, and a few behaviors changed;" >> "$GITHUB_STEP_SUMMARY"
           echo "  unrelated to interface skew)" >> "$GITHUB_STEP_SUMMARY"
