@@ -111,6 +111,66 @@ public sealed class ToolOracleTests
         }
     }
 
+    /// <summary>
+    /// The properties the session gates classify on must be the ones pw-dump read.
+    /// </summary>
+    /// <remarks>
+    /// The environment gates ask our own snapshot whether the session has an ALSA card, an audio
+    /// sink and source, a MIDI node - and go Inconclusive when it says no. That makes a
+    /// misclassification worse than a wrong answer: a device we saw but filed under the wrong
+    /// <c>device.api</c>, or a node whose <c>media.class</c> never reached us, turns a test that
+    /// should be red into one that is skipped, and nobody sees it. The presence check above does
+    /// not catch that, because the object is present; only its properties are wrong.
+    /// <para>
+    /// Compared as raw strings, deliberately. <c>Media</c> and <c>Flow</c> are pure functions of
+    /// <c>MediaClass</c> with their own unit tests, so the string is the part that can only be
+    /// checked against something that read it independently.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task ThePropertiesTheGatesClassifyOn_AreWhatPwDumpRead()
+    {
+        RequireLinux();
+        CliTool.Require("pw-dump");
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-oracle-props", cts.Token);
+        await using (ctx)
+        await using (registry)
+        {
+            await registry.WaitForInitialEnumerationAsync(cts.Token);
+            PwDump dump = await PwDump.CaptureAsync(cts.Token);
+            PipeWireGraphSnapshot ours = registry.Current;
+
+            var disagreements = new List<string>();
+
+            foreach (PwDump.Entry entry in dump.OfKind("Device"))
+            {
+                PipeWireDevice? mine = ours.Devices.FirstOrDefault(d => d.Id == entry.Id);
+                if (mine is null) continue;   // presence is the other test's business
+
+                if (!string.Equals(mine.Api, entry.Prop("device.api"), StringComparison.Ordinal))
+                    disagreements.Add(
+                        $"device {entry.Id}: device.api is '{entry.Prop("device.api")}', we say '{mine.Api}'");
+
+                if (!string.Equals(mine.MediaClass, entry.Prop("media.class"), StringComparison.Ordinal))
+                    disagreements.Add(
+                        $"device {entry.Id}: media.class is '{entry.Prop("media.class")}', we say '{mine.MediaClass}'");
+            }
+
+            foreach (PwDump.Entry entry in dump.OfKind("Node"))
+            {
+                PipeWireNode? mine = ours.GetNode(entry.Id);
+                if (mine is null) continue;
+
+                if (!string.Equals(mine.MediaClass, entry.Prop("media.class"), StringComparison.Ordinal))
+                    disagreements.Add(
+                        $"node {entry.Id}: media.class is '{entry.Prop("media.class")}', we say '{mine.MediaClass}'");
+            }
+
+            Assert.IsTrue(disagreements.Count == 0, string.Join("; ", disagreements));
+        }
+    }
+
     /// <summary>Everything pw-dump reports must reach our graph.</summary>
     /// <remarks>
     /// A containment check, not equality. pw-dump binds each object to describe it and omits the
