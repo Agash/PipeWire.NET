@@ -23,18 +23,25 @@ namespace PipeWire.NET.Tests;
 /// 4. null/invalid handles are rejected before any descriptor work.
 ///
 /// How the connect behaves over a descriptor that is not a PipeWire socket is a
-/// native detail: PipeWire wraps file fds in an idle source (their epoll_ctl fails
-/// with EPERM, which the loop treats as always-ready), so the connect itself
-/// succeeds and any failure only surfaces later as a protocol error. The ownership
-/// contract does not depend on it, and neither do these tests.
+/// native detail that has differed between releases: PipeWire wraps a fd its epoll
+/// refuses in an idle source (epoll_ctl gives EPERM for file fds, and the loop then
+/// treats them as always-ready), so on some versions the connect completes and only
+/// a later protocol exchange fails. The ownership contract does not depend on which
+/// way that goes, and neither do these tests.
 /// </summary>
 [TestClass]
+// Every test here constructs a PipeWireContext, and that constructor already calls pw_init, so
+// none of them is a unit test: the Windows leg and the arm64 ABI leg both run everything outside
+// this category and have no libpipewire to run it against. The four that need no daemon are the
+// first real occupants of the workflow's Integration-without-a-daemon step.
+[TestCategory("Integration")]
 [SupportedOSPlatform("linux")]
 public sealed partial class FdOwnershipTests
 {
     [TestMethod]
     public async Task StartAsync_BorrowOnly_LeavesTheCallerHandleUsableAndLeaksNoDuplicate()
     {
+        RequireLinux();
         string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         using FileStream stream = OpenTempFile(path);
 
@@ -42,9 +49,10 @@ public sealed partial class FdOwnershipTests
 
         // On PipeWire 1.6.8 a connect over a regular file fd succeeds structurally: the SPA loop
         // wraps non-epoll-able fds in an idle source, so the connect never reaches a daemon
-        // handshake. That structurally-successful connect is an observed behavior, not the
-        // contract - the assertions here are about descriptor ownership, whichever pw paths run.
-        await context.StartAsync(stream.SafeFileHandle);
+        // handshake. That is an observed behavior of one version and not the contract, so both
+        // outcomes are accepted here: on either, exactly one owner holds the duplicate and the
+        // caller's handle is untouched, which is what this pins.
+        _ = await TryStartOverAsync(context, stream.SafeFileHandle);
 
         Assert.IsFalse(stream.SafeFileHandle.IsClosed,
             "the caller's handle is only borrowed and must never be closed by the library");
@@ -65,6 +73,7 @@ public sealed partial class FdOwnershipTests
     [TestMethod]
     public async Task StartAsync_NullHandle_ThrowsArgumentNull_BeforeAnyDescriptorWork()
     {
+        RequireLinux();
         await using PipeWireContext context = new("fd-ownership-test");
 
         Assert.ThrowsExactly<ArgumentNullException>(
@@ -74,6 +83,7 @@ public sealed partial class FdOwnershipTests
     [TestMethod]
     public async Task StartAsync_InvalidHandle_ThrowsArgument_BeforeAnyDescriptorWork()
     {
+        RequireLinux();
         await using PipeWireContext context = new("fd-ownership-test");
         using SafeFileHandle invalid = new(new IntPtr(-1), ownsHandle: true);
 
@@ -94,6 +104,7 @@ public sealed partial class FdOwnershipTests
     [TestMethod]
     public async Task StartAsync_AfterAFailedAttempt_TheContextIsStartableAgain()
     {
+        RequireLinux();
         string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         using FileStream stream = OpenTempFile(path);
 
@@ -108,11 +119,41 @@ public sealed partial class FdOwnershipTests
             await Assert.ThrowsExactlyAsync<PipeWireException>(() => context.StartAsync());
         }
 
-        // The failed attempt fell back to Created; an fd start succeeds over the same context.
-        await context.StartAsync(stream.SafeFileHandle);
+        // The failed attempt fell back to Created rather than wedging the context: a start over
+        // the same context is admitted and reaches the native connect again. Whether that connect
+        // then succeeds over a regular file fd is the version-dependent part above; being let
+        // through at all is the invariant, and a context stuck in Starting would instead block
+        // here or come back as ObjectDisposedException.
+        bool connected = await TryStartOverAsync(context, stream.SafeFileHandle);
 
-        // And the recovered context is live rather than wedged: a second start is idempotent.
-        await context.StartAsync(stream.SafeFileHandle);
+        // A connect that did go through leaves a Running context, where a further start is a
+        // no-op rather than a second connect.
+        if (connected)
+            await context.StartAsync(stream.SafeFileHandle);
+    }
+
+    /// <summary>
+    /// Starts <paramref name="context"/> over <paramref name="handle"/>, reporting whether the
+    /// native connect went through instead of requiring it to.
+    /// </summary>
+    /// <remarks>
+    /// Whether a connect over a descriptor that is not a PipeWire socket succeeds is a native
+    /// detail that has differed between releases - PipeWire wraps a fd its epoll refuses in an
+    /// idle source, so on some versions the connect completes and only a later protocol exchange
+    /// fails. The ownership contract these tests pin holds on both outcomes, so neither is
+    /// treated as the expected one.
+    /// </remarks>
+    private static async Task<bool> TryStartOverAsync(PipeWireContext context, SafeFileHandle handle)
+    {
+        try
+        {
+            await context.StartAsync(handle);
+            return true;
+        }
+        catch (PipeWireException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
