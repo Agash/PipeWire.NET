@@ -2,6 +2,7 @@ using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
+using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using PipeWire.NET.Interop;
 using PipeWire.NET.Spa;
@@ -194,7 +195,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     /// startable state.
     /// </para>
     /// </remarks>
-    public Task StartAsync(SafeFileHandle fd, CancellationToken cancellationToken = default)
+    public Task StartAsync(SafeHandle fd, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
@@ -211,7 +212,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Low-level counterpart of <see cref="StartAsync(SafeFileHandle, CancellationToken)"/> for
+    /// Low-level counterpart of <see cref="StartAsync(SafeHandle, CancellationToken)"/> for
     /// callers that hold the descriptor itself and manage its lifetime explicitly. Ownership
     /// transfers on success: from a successful connect on, PipeWire owns the descriptor and
     /// closes it when the connection is torn down. On a failed start the descriptor is left
@@ -219,7 +220,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     /// </para>
     /// <para>
     /// This is deliberately not public: callers without an explicit ownership story should pass
-    /// a <see cref="SafeFileHandle"/> and let the library borrow instead.
+    /// a <see cref="SafeHandle"/> and let the library borrow instead.
     /// </para>
     /// </remarks>
     /// <param name="fd">
@@ -248,7 +249,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     /// stay identical across overloads: it is the order the whole context is reasoned about -
     /// admission under the gate, the native loop lock after, never nested the other way.
     /// </remarks>
-    private Task StartAsyncCore(SafeFileHandle? handle, int rawFd, CancellationToken cancellationToken)
+    private Task StartAsyncCore(SafeHandle? handle, int rawFd, CancellationToken cancellationToken)
     {
         // Under the same gate as disposal, and only for the state transition. Two threads both
         // seeing Created would both call pw_thread_loop_start; the second fails because the loop
@@ -334,9 +335,9 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         return Task.CompletedTask;
     }
 
-    /// <param name="handle">A borrowed <see cref="SafeFileHandle"/> to connect over, or null.</param>
+    /// <param name="handle">A borrowed <see cref="SafeHandle"/> to connect over, or null.</param>
     /// <param name="rawFd">A caller-owned raw descriptor to connect over, or -1 when <paramref name="handle"/> is set.</param>
-    private unsafe void StartNative(SafeFileHandle? handle, int rawFd)
+    private unsafe void StartNative(SafeHandle? handle, int rawFd)
     {
         pw_thread_loop* loop = LoopHandle;
         if (Native.pw_thread_loop_start(loop) < 0)
@@ -351,11 +352,9 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         // and stays the caller's on every failure path.
         try
         {
-            // A reference, not a validity check, in the TryLock style: reading the descriptor out
-            // of the handle and using it are two steps, and disposal in between would hand fcntl a
-            // number that is already closed. The reference pins the handle for exactly the
-            // duplication call; the borrow lasts no longer.
-            using SafeFileHandle? duplicate = handle is null ? null : BorrowDuplicate(handle);
+            using SafeFileHandle? duplicate = handle is null
+                ? null
+                : FdInterop.Borrow(handle, FdInterop.DuplicateWithCloseOnExec);
 
             // The descriptor the connect runs over: the duplicate's number, the caller's raw
             // number, or none of them for the default daemon socket.
@@ -424,25 +423,6 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         {
             Native.pw_thread_loop_stop(loop);
             throw;
-        }
-    }
-
-    /// <summary>Duplicates <paramref name="handle"/>'s descriptor with close-on-exec set.</summary>
-    /// <remarks>
-    /// The handle is only pinned for the duration of the duplication call: the duplicate is
-    /// independent, and once fcntl has returned, the caller's handle no longer matters here.
-    /// </remarks>
-    private static SafeFileHandle BorrowDuplicate(SafeFileHandle handle)
-    {
-        bool referenced = false;
-        try
-        {
-            handle.DangerousAddRef(ref referenced);
-            return FdInterop.DuplicateWithCloseOnExec((int)handle.DangerousGetHandle());
-        }
-        finally
-        {
-            if (referenced) handle.DangerousRelease();
         }
     }
 

@@ -1,5 +1,8 @@
+using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.Win32.SafeHandles;
 using PipeWire.NET.Graph;
 
 namespace PipeWire.NET.Tests;
@@ -182,13 +185,13 @@ public sealed class PermissionRefusalTests
             $"IsPermissionDenied disagrees with the result code {refused.Result}");
     }
 
+    /// <summary>
+    /// A descriptor that cannot listen is refused here, not forwarded: sending one leaves the
+    /// daemon spinning in accept4 for the rest of the session.
+    /// </summary>
     [TestMethod]
-    public async Task ASecurityContextGivenNonsenseDescriptors_IsRefusedRatherThanAccepted()
+    public async Task ASecurityContextGivenADescriptorThatCannotListen_IsRefusedBeforeItIsSent()
     {
-        // The adversarial half. A security context hands the daemon file descriptors, and the
-        // failure mode worth knowing is a bad one being accepted: the sandbox would then exist on
-        // paper while admitting anyone. Descriptors that cannot be a listening socket must come
-        // back as a refusal, and the connection must survive it.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
@@ -208,49 +211,38 @@ public sealed class PermissionRefusalTests
             ["pipewire.sec.engine"] = "org.pipewire.Test",
         };
 
-        // Negative descriptors are a caller mistake and are caught before the daemon sees them.
-        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
-            async () => await control.CreateAsync(-1, 0, properties, cts.Token));
+        using (SafeFileHandle invalid = new(new IntPtr(-1), ownsHandle: false))
+        {
+            await Assert.ThrowsExactlyAsync<ArgumentException>(
+                async () => await control.CreateAsync(invalid, invalid, properties, cts.Token));
+        }
 
-        // A descriptor that exists but is not a listening socket. Whether the daemon validates it
-        // is the daemon's business and not this library's contract: /dev/null is a character device
-        // that epoll accepts quite happily. A regular file is the stricter case, since epoll refuses
-        // those outright.
-        //
-        // So what is asserted is our half. If the daemon refuses, the refusal must reach the caller
-        // as a typed error carrying the code, rather than the call appearing to succeed. If it
-        // accepts, the connection must still be usable, because a sandbox that was set up wrongly
-        // is not a reason for this client to stop working.
         string scratch = Path.Combine(Path.GetTempPath(), $"pwnet-secctx-{Environment.ProcessId}.tmp");
         await File.WriteAllTextAsync(scratch, "not a socket", cts.Token);
-
         try
         {
             using var notASocket = new FileStream(scratch, FileMode.Open, FileAccess.Read);
-            int fd = (int)notASocket.SafeFileHandle.DangerousGetHandle();
+            SafeHandle fd = notASocket.SafeFileHandle;
 
-            try
-            {
-                await control.CreateAsync(fd, fd, properties, cts.Token);
-                Console.Error.WriteLine(
-                    "the daemon accepted a regular file as a sandbox socket; it validates on use, not here");
-            }
-            catch (PipeWireException ex)
-            {
-                Assert.IsTrue(ex.Result < 0, "a refusal must carry the daemon's code");
-                Assert.AreEqual(ex.Result == -13, ex.IsPermissionDenied,
-                    "IsPermissionDenied disagrees with the result code");
-                Console.Error.WriteLine($"the daemon refused a bogus sandbox socket: {ex.Message}");
-            }
+            await Assert.ThrowsExactlyAsync<ArgumentException>(
+                async () => await control.CreateAsync(fd, fd, properties, cts.Token));
         }
         finally
         {
             File.Delete(scratch);
         }
 
-        // And the connection is unharmed by the refusal, which is what makes it a refusal rather
-        // than a disconnection.
+        // A real socket, but connected rather than listening.
+        using (var connected = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified))
+        {
+            SafeHandle fd = connected.SafeHandle;
+            await Assert.ThrowsExactlyAsync<ArgumentException>(
+                async () => await control.CreateAsync(fd, fd, properties, cts.Token));
+        }
+
+        // Still usable, which is what makes them refusals.
         await registry.WaitForInitialEnumerationAsync(cts.Token);
         Assert.IsTrue(registry.Current.Nodes.Length > 0);
     }
+
 }

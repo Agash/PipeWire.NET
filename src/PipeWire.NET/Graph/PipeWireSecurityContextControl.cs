@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -68,10 +69,40 @@ public sealed partial class PipeWireSecurityContextControl : IDisposable, IAsync
     /// Abandons the wait. The request is already on its way, so cancelling does not recall
     /// it: the daemon can still apply the change after this throws.
     /// </param>
-    /// <exception cref="ArgumentOutOfRangeException">A descriptor is negative.</exception>
+    /// <exception cref="ArgumentNullException">A handle is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">
+    /// A handle is invalid, or <paramref name="listenFd"/> is not a listening socket.
+    /// </exception>
     /// <exception cref="ObjectDisposedException">This control has been disposed.</exception>
     /// <exception cref="PipeWireException">The daemon refused the request.</exception>
-    public async Task CreateAsync(
+    public Task CreateAsync(
+        SafeHandle listenFd,
+        SafeHandle closeFd,
+        IReadOnlyDictionary<string, string> properties,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(listenFd);
+        ArgumentNullException.ThrowIfNull(closeFd);
+        if (listenFd.IsInvalid)
+            throw new ArgumentException("the handle does not carry a valid descriptor", nameof(listenFd));
+        if (closeFd.IsInvalid)
+            throw new ArgumentException("the handle does not carry a valid descriptor", nameof(closeFd));
+
+        // Both are only read here: the daemon receives copies over the socket and closes those,
+        // never these.
+        return FdInterop.Borrow(listenFd, closeFd,
+            (listen, close) => CreateAsync(listen, close, properties, cancellationToken));
+    }
+
+    /// <summary>
+    /// Raw-descriptor counterpart of
+    /// <see cref="CreateAsync(SafeHandle, SafeHandle, IReadOnlyDictionary{string, string}, CancellationToken)"/>.
+    /// </summary>
+    /// <remarks>
+    /// Not public: a caller holding the numbers is responsible for keeping them open across the
+    /// call, which a handle does on its own.
+    /// </remarks>
+    internal async Task CreateAsync(
         int listenFd,
         int closeFd,
         IReadOnlyDictionary<string, string> properties,
@@ -82,6 +113,12 @@ public sealed partial class PipeWireSecurityContextControl : IDisposable, IAsync
         ArgumentOutOfRangeException.ThrowIfNegative(closeFd);
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
+
+        // The daemon does not check this and cannot recover: it ends up calling accept4 on
+        // whatever it was given, forever, which costs the whole session.
+        if (!FdInterop.IsListeningSocket(listenFd))
+            throw new ArgumentException(
+                "the descriptor must be a listening socket", nameof(listenFd));
 
         await CoreSync.RoundTripAsync(_ctx, () => Create(listenFd, closeFd, properties), cancellationToken)
             .ConfigureAwait(false);

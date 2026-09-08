@@ -27,8 +27,29 @@ internal static partial class FdInterop
     /// <summary>The lowest descriptor a duplication may return, just above stdio.</summary>
     private const int LowestDuplicate = 3;
 
+    /// <summary><c>SOL_SOCKET</c> from <c>socket.h</c>: the socket-level option namespace.</summary>
+    private const int SolSocket = 1;
+
+    /// <summary><c>SO_ACCEPTCONN</c>: non-zero when the socket is listening.</summary>
+    private const int SoAcceptConn = 30;
+
     [LibraryImport("libc", SetLastError = true)]
     private static partial int fcntl(int fd, int cmd, int arg);
+
+    [LibraryImport("libc", SetLastError = true)]
+    private static unsafe partial int getsockopt(int fd, int level, int optname, int* optval, int* optlen);
+
+    /// <summary>Whether <paramref name="fd"/> is a socket that is listening for connections.</summary>
+    /// <remarks>False for a non-socket (<c>ENOTSOCK</c>) as well as for a connected socket.</remarks>
+    internal static unsafe bool IsListeningSocket(int fd)
+    {
+        int listening = 0;
+        int size = sizeof(int);
+        if (getsockopt(fd, SolSocket, SoAcceptConn, &listening, &size) < 0)
+            return false;
+
+        return listening != 0;
+    }
 
     /// <summary>Duplicates <paramref name="fd"/> with the close-on-exec flag set on the duplicate.</summary>
     /// <param name="fd">The descriptor to duplicate. Must stay open for the duration of the call.</param>
@@ -58,4 +79,28 @@ internal static partial class FdInterop
 
         return new SafeFileHandle(duplicate, ownsHandle: true);
     }
+
+    /// <summary>Runs <paramref name="use"/> on <paramref name="handle"/>'s descriptor.</summary>
+    /// <remarks>
+    /// The reference is what makes reading the descriptor and using it one step rather than two:
+    /// a disposal in between would hand the syscall a number that is already closed, or reopened
+    /// as something else.
+    /// </remarks>
+    internal static T Borrow<T>(SafeHandle handle, Func<int, T> use)
+    {
+        bool referenced = false;
+        try
+        {
+            handle.DangerousAddRef(ref referenced);
+            return use((int)handle.DangerousGetHandle());
+        }
+        finally
+        {
+            if (referenced) handle.DangerousRelease();
+        }
+    }
+
+    /// <summary>Runs <paramref name="use"/> on both descriptors, holding a reference to each.</summary>
+    internal static T Borrow<T>(SafeHandle first, SafeHandle second, Func<int, int, T> use) =>
+        Borrow(first, a => Borrow(second, b => use(a, b)));
 }

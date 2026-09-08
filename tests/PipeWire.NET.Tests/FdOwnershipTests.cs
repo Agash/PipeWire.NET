@@ -9,7 +9,7 @@ using PipeWire.NET.Interop;
 namespace PipeWire.NET.Tests;
 
 /// <summary>
-/// fd ownership contract of <see cref="PipeWireContext.StartAsync(SafeFileHandle, CancellationToken)"/>.
+/// fd ownership contract of <see cref="PipeWireContext.StartAsync(SafeHandle, CancellationToken)"/>.
 ///
 /// The caller's handle is only BORROWED: the library duplicates the descriptor
 /// (FD_CLOEXEC, like PipeWire's own impl_steal_fd does) and hands the duplicate to
@@ -77,7 +77,7 @@ public sealed partial class FdOwnershipTests
         await using PipeWireContext context = new("fd-ownership-test");
 
         Assert.ThrowsExactly<ArgumentNullException>(
-            () => context.StartAsync((SafeFileHandle)null!));
+            () => context.StartAsync((SafeHandle)null!));
     }
 
     [TestMethod]
@@ -143,7 +143,7 @@ public sealed partial class FdOwnershipTests
     /// fails. The ownership contract these tests pin holds on both outcomes, so neither is
     /// treated as the expected one.
     /// </remarks>
-    private static async Task<bool> TryStartOverAsync(PipeWireContext context, SafeFileHandle handle)
+    private static async Task<bool> TryStartOverAsync(PipeWireContext context, SafeHandle handle)
     {
         try
         {
@@ -218,7 +218,7 @@ public sealed partial class FdOwnershipTests
         using CancellationTokenSource cts = new(Budget);
 
         using Socket socket = await ConnectDaemonSocketAsync(cts.Token);
-        using SafeFileHandle borrowed = new(socket.SafeHandle.DangerousGetHandle(), ownsHandle: false);
+        SafeHandle borrowed = socket.SafeHandle;
 
         await using PipeWireContext context = new("fd-ownership-test", ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(borrowed, cts.Token);

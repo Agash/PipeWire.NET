@@ -496,7 +496,7 @@ PipeWire.NET.Graph.PipeWireSecurityContext.Kind : PipeWireObjectKind
 PipeWire.NET.Graph.PipeWireSecurityContext.Permissions : PipeWirePermissions
 PipeWire.NET.Graph.PipeWireSecurityContext.ToString()
 PipeWire.NET.Graph.PipeWireSecurityContextControl
-PipeWire.NET.Graph.PipeWireSecurityContextControl.CreateAsync(Int32, Int32, IReadOnlyDictionary<String, String>, CancellationToken)
+PipeWire.NET.Graph.PipeWireSecurityContextControl.CreateAsync(SafeHandle, SafeHandle, IReadOnlyDictionary<String, String>, CancellationToken)
 PipeWire.NET.Graph.PipeWireSecurityContextControl.Dispose()
 PipeWire.NET.Graph.PipeWireSecurityContextControl.DisposeAsync()
 PipeWire.NET.Graph.PipeWireSecurityContextControl.Id : UInt32
@@ -824,7 +824,7 @@ PipeWire.NET.PipeWireContext.IsDisposed : Boolean
 PipeWire.NET.PipeWireContext.Lock()
 PipeWire.NET.PipeWireContext.LoopLock
 PipeWire.NET.PipeWireContext.StartAsync(CancellationToken)
-PipeWire.NET.PipeWireContext.StartAsync(SafeFileHandle, CancellationToken)
+PipeWire.NET.PipeWireContext.StartAsync(SafeHandle, CancellationToken)
 PipeWire.NET.PipeWireContext.TryLock(LoopLock&)
 PipeWire.NET.PipeWireDiagnostics
 PipeWire.NET.PipeWireDiagnostics.Name = String
