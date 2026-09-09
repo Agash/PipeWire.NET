@@ -228,7 +228,7 @@ public sealed class LatencyAndTagTests : PipeWireTestBase
         {
             tags = await control.GetTagsAsync(cts.Token);
         }
-        catch (PipeWireException ex) when (ex.Result == -2)
+        catch (PipeWireException ex) when (ex.IsObjectGone)
         {
             tags = [];
         }

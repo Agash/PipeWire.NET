@@ -77,6 +77,13 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
     /// <c>Profile</c> are what make it selectable; <c>EnumRoute</c> and <c>Route</c> give it
     /// ports.
     /// </param>
+    /// <remarks>
+    /// A route is served exactly as given. SPA does not mark <c>available</c> as mandatory, so a
+    /// route that omits it is a valid pod, but WirePlumber's route policy formats that value
+    /// without checking it and throws on the omission, which takes down route handling for the
+    /// whole session rather than just for this device. Set it - <c>unknown</c> is a legitimate
+    /// answer - on every route object.
+    /// </remarks>
     /// <param name="properties">Extra device properties, or null.</param>
     /// <returns>The provider, which serves the device until disposed.</returns>
     /// <exception cref="ArgumentException"><paramref name="name"/> is null or empty.</exception>
@@ -215,6 +222,23 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
             EmitInfoLocked();
 
         LogExported(_name);
+    }
+
+    /// <summary>
+    /// Waits for the daemon to have processed the export, so other clients can see the device.
+    /// </summary>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <remarks>
+    /// <see cref="Create"/> returns once the export has been sent, not once the daemon has dealt
+    /// with it, so the device is not yet visible to anybody else when it comes back. Requests are
+    /// ordered, so a core round-trip cannot answer before the export ahead of it has been
+    /// processed.
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The provider has been disposed.</exception>
+    public Task ReadyAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return CoreSync.RoundTripAsync(_ctx, cancellationToken);
     }
 
     /// <summary>Replaces a parameter's values, and tells the daemon it changed.</summary>

@@ -474,6 +474,17 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     /// </remarks>
     public void TriggerFrame() => _core?.TriggerProcess();
 
+    /// <summary>Whether this stream is driving the graph.</summary>
+    /// <remarks>
+    /// True only when the stream was connected as a driver and the daemon chose it as the one.
+    /// <see cref="TriggerFrame"/> does nothing unless this is true - upstream routes the request
+    /// to whichever node actually drives, and a node that does not implement it answers with an
+    /// error per call - so a producer that paces its own output should ask before assuming it can.
+    /// Whether a stream drives is the daemon's answer and depends on the rest of the graph, so it
+    /// can change after connecting.
+    /// </remarks>
+    public bool IsDriving => _core?.IsDriving ?? false;
+
     /// <summary>
     /// This stream's own node in the graph, or <see langword="null"/> until it is connected.
     /// </summary>

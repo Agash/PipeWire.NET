@@ -40,7 +40,9 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         await using var ctx = new PipeWireContext("pwnet-provider-nul", ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
 
-        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique());
+        // Not exported: this one only checks argument validation, and a served store that is made and
+        // unmade while a device is rebuilding can leave the daemon unable to answer anyone.
+        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique(), export: false);
 
         Assert.ThrowsExactly<ArgumentException>(() => provider.Set("a\0b", "v"));
         Assert.ThrowsExactly<ArgumentException>(() => provider.Set("k", "a\0b"));
@@ -61,6 +63,8 @@ public sealed class MetadataProviderTests : PipeWireTestBase
 
         using (PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique()))
         {
+            // Export is a request, not a transaction: settle before treating the store as served.
+            await provider.ReadyAsync(cts.Token);
             provider.Set("k", "v");
 
             // The failure this exists for: the daemon stops answering every client, not just us.
@@ -83,7 +87,9 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         await using var ctx = new PipeWireContext("pwnet-provider-events", ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
 
-        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique());
+        // Not exported: these assertions are all in-process, and a served store that is made and
+        // unmade while a device is rebuilding can leave the daemon unable to answer anyone.
+        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique(), export: false);
 
         var seen = new List<PipeWireMetadataEntry>();
         provider.EntryChanged += (_, e) => { lock (seen) seen.Add(e); };
@@ -116,7 +122,9 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         await using var ctx = new PipeWireContext("pwnet-provider-clear", ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
 
-        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique());
+        // Not exported: these assertions are all in-process, and a served store that is made and
+        // unmade while a device is rebuilding can leave the daemon unable to answer anyone.
+        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique(), export: false);
 
         provider.Set("a", "1");
         provider.Set("b", "2");
@@ -147,7 +155,9 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         await using var ctx = new PipeWireContext("pwnet-provider-clear-empty", ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
 
-        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique());
+        // Not exported: these assertions are all in-process, and a served store that is made and
+        // unmade while a device is rebuilding can leave the daemon unable to answer anyone.
+        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique(), export: false);
 
         provider.Clear();
         Assert.AreEqual(0, provider.Entries.Count);

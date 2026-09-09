@@ -84,6 +84,7 @@ PipeWire.NET.Graph.PipeWireDeviceProvider.Dispose()
 PipeWire.NET.Graph.PipeWireDeviceProvider.GetParameter(SpaParamType)
 PipeWire.NET.Graph.PipeWireDeviceProvider.Name : String
 PipeWire.NET.Graph.PipeWireDeviceProvider.ParameterWritten event
+PipeWire.NET.Graph.PipeWireDeviceProvider.ReadyAsync(CancellationToken)
 PipeWire.NET.Graph.PipeWireDeviceProvider.SetParameter(SpaParamType, ImmutableArray<SpaObject>)
 PipeWire.NET.Graph.PipeWireDspFormat
 PipeWire.NET.Graph.PipeWireDspFormat.Control = PipeWireDspFormat
@@ -261,6 +262,7 @@ PipeWire.NET.Graph.PipeWireMetadataProvider.Entries : IReadOnlyCollection<PipeWi
 PipeWire.NET.Graph.PipeWireMetadataProvider.EntryChanged event
 PipeWire.NET.Graph.PipeWireMetadataProvider.Get(String, UInt32)
 PipeWire.NET.Graph.PipeWireMetadataProvider.Name : String
+PipeWire.NET.Graph.PipeWireMetadataProvider.ReadyAsync(CancellationToken)
 PipeWire.NET.Graph.PipeWireMetadataProvider.Set(String, String, String, UInt32)
 PipeWire.NET.Graph.PipeWireMetadataStore
 PipeWire.NET.Graph.PipeWireMetadataStore.ClearAsync(CancellationToken)
@@ -844,6 +846,7 @@ PipeWire.NET.Media.Streams.PipeWireVideoOutput.FillDmaBufHandler
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.FillFrame event
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.FillFrameHandler
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.GetControl(UInt32)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.IsDriving : Boolean
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.NodeId : Nullable<UInt32>
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.ReleaseDmaBuf event
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.ReleaseDmaBufHandler
@@ -971,6 +974,7 @@ PipeWire.NET.PipeWireException..ctor(String, Exception)
 PipeWire.NET.PipeWireException..ctor(String, Int32, Nullable<UInt32>, String)
 PipeWire.NET.PipeWireException.DaemonMessage : String
 PipeWire.NET.PipeWireException.IsDisconnected : Boolean
+PipeWire.NET.PipeWireException.IsObjectGone : Boolean
 PipeWire.NET.PipeWireException.IsPermissionDenied : Boolean
 PipeWire.NET.PipeWireException.ObjectId : Nullable<UInt32>
 PipeWire.NET.PipeWireException.Operation : String

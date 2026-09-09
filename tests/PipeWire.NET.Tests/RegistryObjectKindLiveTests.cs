@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
+using PipeWire.NET.Media.Streams;
 
 namespace PipeWire.NET.Tests;
 
@@ -214,16 +215,29 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
 
         Assert.AreEqual(profiler.Id, reader.Id);
 
+        // The daemon only profiles a graph that is running, and an idle session drives nothing -
+        // which is why waiting here used to end in a skip rather than an answer. Give it something
+        // to drive: a producer and a consumer linked to each other keep the graph cycling for as
+        // long as they are connected.
+        await using var producer = new PipeWireAudioOutput(context, $"pwnet_profiler_drive_{Environment.ProcessId}");
+        producer.FillSamples += (_, _, _, _, _) => 0;
+        producer.Connect(autoConnect: false);
+
+        for (int i = 0; i < 100 && producer.NodeId is null; i++)
+        {
+            await Task.Delay(50, cts.Token);
+            await registry.WaitForInitialEnumerationAsync(cts.Token);
+        }
+
+        Assert.IsNotNull(producer.NodeId, "the driving producer never reached the graph");
+
+        await using var consumer = new PipeWireAudioCapture(context, $"pwnet_profiler_sink_{Environment.ProcessId}");
+        consumer.FrameReady += (_, _) => { };
+        consumer.Connect(producer.NodeId!.Value);
+
         // Shorter than the class budget, so running out of patience is reported as such rather
         // than arriving as the budget's own cancellation.
-        try
-        {
-            await arrived.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
-        }
-        catch (Exception e) when (e is TimeoutException or OperationCanceledException)
-        {
-            Assert.Inconclusive("no profiler report arrived while the graph was being driven.");
-        }
+        await arrived.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
 
         Assert.IsTrue(reports.TryDequeue(out Spa.SpaObject? first));
         Assert.AreEqual(Spa.SpaType.ObjectProfiler, first!.ObjectType,

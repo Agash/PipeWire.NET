@@ -738,6 +738,22 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         Native.pw_stream_set_active(_stream, active);
     }
 
+    /// <summary>Whether the daemon has made this stream the graph's driver.</summary>
+    internal unsafe bool IsDriving
+    {
+        get
+        {
+            if (_disposed || _stream is null) return false;
+
+            using (_ctx.Lock())
+            {
+                pw_stream* stream = _stream;
+                if (_disposed || stream is null) return false;
+                return Native.pw_stream_is_driving(stream);
+            }
+        }
+    }
+
     /// <summary>
     /// Drives one processing cycle (<c>pw_stream_trigger_process</c>), which is how a DRIVER
     /// producer paces output when no other node drives the graph clock. No-op if the stream is gone.

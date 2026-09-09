@@ -484,13 +484,21 @@ public sealed class ChaosSoakTests : PipeWireTestBase
                             await control.SetVolumeAsync(0.1f * (i + 1), ct);
                     }
                 }
-                catch (PipeWireException e) when (e.Result == -2) { }
+                catch (PipeWireException e) when (e.IsObjectGone) { }
+                catch (ArgumentException)
+                {
+                    // The same disappearance, noticed here rather than by the daemon: BindNode
+                    // looks the id up in our own snapshot first, so a node reaped between the
+                    // create and the bind fails as an ArgumentException instead of an ENOENT.
+                    // Tolerated for the same reason, and no wider: only the bind can raise it,
+                    // because everything else in this block takes no id.
+                }
 
                 // ENOENT is the object having gone already (see above); the destroy below keeps
                 // its own tolerance rather than sharing the block's, because a create that never
                 // finished binding must still be withdrawn.
                 try { await registry.DestroyGlobalAsync(node.NodeId, ct); }
-                catch (PipeWireException e) when (e.Result == -2) { }
+                catch (PipeWireException e) when (e.IsObjectGone) { }
             }
         }
         catch (OperationCanceledException) { /* the soak's own clock */ }

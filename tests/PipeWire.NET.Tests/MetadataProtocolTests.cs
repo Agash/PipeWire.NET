@@ -115,6 +115,9 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
             await using PipeWireMetadataProvider provider =
                 PipeWireMetadataProvider.Create(serverCtx, storeName, export: true);
 
+            // Export is a request, not a transaction: settle before treating the store as served.
+            await provider.ReadyAsync(cts.Token);
+
             provider.Set("a", "1");
             provider.Set("b", "2");
 
@@ -181,6 +184,9 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
             await using PipeWireMetadataProvider provider =
                 PipeWireMetadataProvider.Create(serverCtx, storeName, export: true);
 
+            // Export is a request, not a transaction: settle before treating the store as served.
+            await provider.ReadyAsync(cts.Token);
+
             provider.Set("a", "1");
             provider.Set("b", "2");
 
@@ -239,6 +245,9 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
             // audio unrouted.
             await using PipeWireMetadataProvider provider =
                 PipeWireMetadataProvider.Create(ctx, Unique("pwnet-clear-store"));
+
+            // Export is a request, not a transaction: settle before treating the store as served.
+            await provider.ReadyAsync(cts.Token);
 
             provider.Set("a", "1");
             provider.Set("b", "2");

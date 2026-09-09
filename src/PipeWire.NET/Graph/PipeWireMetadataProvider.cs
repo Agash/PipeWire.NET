@@ -112,6 +112,15 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
     /// clients arrive here, and changes made here are sent out to them.
     /// </para>
     /// <para>
+    /// Serve a store for as long as you need it rather than making and unmaking one repeatedly.
+    /// An exported store is cheap to hold and expensive to churn: withdrawing and recreating one
+    /// while the session manager is rebuilding a device - a card profile change, from this or any
+    /// other client - can leave the daemon holding a client it never reads from again, which
+    /// stops it answering every client on the machine until the session restarts. Holding one
+    /// store across the same work does not do this. The session managers that ship with PipeWire
+    /// export their stores once and keep them.
+    /// </para>
+    /// <para>
     /// That wiring is also why creating a metadata object straight from the factory wedges the
     /// daemon. The factory hands back an object whose server side the creating client is expected
     /// to be, and a client that takes it without serving it leaves every request waiting on an
@@ -232,6 +241,28 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
         }
 
         LogRegistered(Name);
+    }
+
+    /// <summary>
+    /// Waits for the daemon to have processed the export, so other clients can see the store.
+    /// </summary>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <remarks>
+    /// <see cref="Create"/> returns as soon as the export has been sent, not once the daemon has
+    /// dealt with it, so a store is not yet visible to anybody else when it comes back. Requests
+    /// are ordered, so a core round-trip cannot answer before the export ahead of it has been
+    /// processed. An unexported store has nothing to wait for and completes at once.
+    /// <para>
+    /// The session managers that ship with PipeWire wait for the equivalent - their exported
+    /// objects are not treated as usable until the daemon has bound them - and a caller that
+    /// serves a store for others to read should do the same before announcing it.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The store has been disposed.</exception>
+    public Task ReadyAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _export ? CoreSync.RoundTripAsync(_ctx, cancellationToken) : Task.CompletedTask;
     }
 
     /// <summary>

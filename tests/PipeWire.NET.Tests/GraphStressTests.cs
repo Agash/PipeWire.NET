@@ -493,8 +493,20 @@ public sealed class GraphStressTests : PipeWireTestBase
         {
             PipeWireNode node = await registry.CreateVirtualNodeAsync("DD", "pwnet_dd", cts.Token);
 
+            ulong? serial = node.ObjectSerial;
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
-            await WaitForAsync(registry, g => g.GetNode(node.NodeId) is null, cts.Token);
+
+            // Waiting for the *node* to go is not enough: the daemon reuses a freed id immediately
+            // and for any kind of object, so a port or a link can be holding it while GetNode still
+            // answers null. Destroying it then would destroy a stranger and report success, which
+            // is exactly how this test failed under a full run. Nothing at all may hold the id.
+            await WaitForAsync(registry, g => !g.Objects.Any(o => o.Id == node.NodeId), cts.Token);
+
+            // And it is the object we made that went, not one that inherited its id: serials are
+            // monotonic and never reused, so this cannot be satisfied by a recycled id.
+            Assert.IsFalse(
+                registry.Current.Objects.Any(o => o.ObjectSerial == serial),
+                "the object we destroyed is still in the graph under its own serial");
 
             // The id is gone from the daemon, so the second destroy must be *reported* as refused.
             // destroy_global returns SPA_ASYNC_BIT | seq for both outcomes, so an implementation

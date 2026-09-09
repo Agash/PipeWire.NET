@@ -255,7 +255,17 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
                 // barrier a read races that burst.
                 await store.ReadyAsync(cts.Token);
 
-                PipeWireMetadataEntry? sink = store.DefaultAudioSink;
+                // Polled, not read once. The "default" store is served by the session manager, so its
+                // entries travel wireplumber -> daemon -> here and are not ordered against our own
+                // core sync: ReadyAsync proves the bind was processed, not that the contents have
+                // arrived. Reading once turns that race into a skip.
+                PipeWireMetadataEntry? sink = null;
+                for (int i = 0; i < 50 && sink is null; i++)
+                {
+                    sink = store.DefaultAudioSink;
+                    if (sink is null) await Task.Delay(100, cts.Token);
+                }
+
                 if (sink is null)
                     Assert.Inconclusive("this session has no default sink set.");
 

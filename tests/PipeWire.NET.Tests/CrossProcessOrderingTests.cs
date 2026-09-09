@@ -144,6 +144,9 @@ public sealed class CrossProcessOrderingTests : PipeWireTestBase
             await using PipeWireMetadataProvider provider =
                 PipeWireMetadataProvider.Create(ctx, Unique("pwnet-xproc-store"));
 
+            // Export is a request, not a transaction: settle before treating the store as served.
+            await provider.ReadyAsync(cts.Token);
+
             string key = Unique("pwnet.xproc.own");
 
             for (int round = 0; round < 20; round++)

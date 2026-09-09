@@ -92,6 +92,14 @@ internal sealed unsafe class PipeWireImplMetadataHandle : SafeHandle
                 Native.pw_thread_loop_lock(loop);
                 try
                 {
+                    // Listener off first, then destroy. This is the order wireplumber's
+                    // WpImplMetadata uses, and it is the only reference implementation of serving
+                    // a store: spa_hook_remove then pw_impl_metadata_destroy. Destroying with the
+                    // hook still linked leaves the implementation emitting into it as it tears
+                    // down.
+                    if (_hook is not null)
+                        Native.spa_hook_remove(_hook);
+
                     Native.pw_impl_metadata_destroy(metadata);
                 }
                 finally

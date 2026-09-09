@@ -79,6 +79,24 @@ public class PipeWireException : Exception
     /// <summary>True when the connection is gone (<c>-EPIPE</c>).</summary>
     public bool IsDisconnected => Result == -32;
 
+    /// <summary>
+    /// True when the object the request was against no longer exists (<c>-ENOENT</c>).
+    /// </summary>
+    /// <remarks>
+    /// A racing removal, not a caller mistake. Anything bound can be withdrawn by the daemon at
+    /// any moment - switching a card's profile replaces its nodes, and a device can leave the
+    /// graph entirely - so a request already in flight arrives at a resource that has gone. The
+    /// daemon reports that against the core rather than the object, with a message naming the
+    /// protocol resource ("unknown resource 3 op:3"), which says nothing a caller can act on;
+    /// this is the same answer in a form they can branch on. Re-bind and retry, or treat the
+    /// object as gone.
+    /// <para>
+    /// The window cannot be closed by checking first: the object can be removed between the check
+    /// and the daemon processing the request.
+    /// </para>
+    /// </remarks>
+    public bool IsObjectGone => Result == -2;
+
     /// <summary>Throws if <paramref name="result"/> reports a failure.</summary>
     internal static void ThrowIfFailed(int result, string operation, uint? objectId = null)
     {

@@ -152,7 +152,7 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 await control.SetRouteAsync(index.Value, device.Value, cancellationToken: cts.Token);
                 after = await control.GetActiveRoutesAsync(cts.Token);
             }
-            catch (PipeWireException e) when (e.Result == -2)
+            catch (PipeWireException e) when (e.IsObjectGone)
             {
                 Assert.Inconclusive($"the card was destroyed while the test held it: {e.Message}");
                 return;
@@ -322,7 +322,17 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             {
                 await store.ReadyAsync(cts.Token);
 
-                string? currentName = store.DefaultAudioSink?.NameValue;
+                // Polled, not read once. The "default" store is served by the session manager, so its
+                // entries travel wireplumber -> daemon -> here and are not ordered against our own
+                // core sync: ReadyAsync proves the bind was processed, not that the contents have
+                // arrived. Reading once turns that race into a skip.
+                string? currentName = null;
+                for (int i = 0; i < 50 && currentName is null; i++)
+                {
+                    currentName = store.DefaultAudioSink?.NameValue;
+                    if (currentName is null) await Task.Delay(100, cts.Token);
+                }
+
                 if (currentName is null)
                     Assert.Inconclusive("this session has no default sink set.");
 
@@ -450,10 +460,18 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
 
             // The nodes this card provides right now. A profile change replaces this whole set, so
             // it is both what must disappear on the way out and what must come back on the way in.
-            List<uint> CardNodes() =>
-                [.. registry.Current.Nodes.Where(n => n.DeviceId == card.Id).Select(n => n.Id)];
+            // Serials, not ids. A profile switch frees the old profile's nodes and creates the
+            // new profile's, and the daemon reuses a freed id at once - so the new nodes can land
+            // on the very ids the old ones had, and comparing ids reads that as "the old nodes are
+            // still here". Serials are monotonic and never reused, so they answer the question the
+            // test is actually asking. The test's own warning that "any node id held across it is
+            // stale" applies to the test as much as to a caller.
+            List<ulong> CardNodes() =>
+                [.. registry.Current.Nodes
+                    .Where(n => n.DeviceId == card.Id && n.ObjectSerial is not null)
+                    .Select(n => n.ObjectSerial!.Value)];
 
-            List<uint> before = CardNodes();
+            List<ulong> before = CardNodes();
             try
             {
                 // Switching a profile is the most destructive thing this library can do to a graph:
@@ -474,10 +492,10 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 // the session. That is the daemon's behaviour, not this library's - two bare
                 // `pw-cli set-param <dev> Profile` calls back to back reproduce it, and the same
                 // pair with a settle between them does not.
-                List<uint> settled = [];
+                List<ulong> settled = [];
                 for (int attempt = 0; attempt < 60; attempt++)
                 {
-                    List<uint> seen = CardNodes();
+                    List<ulong> seen = CardNodes();
                     if (seen.Count > 0 && !seen.Intersect(before).Any() && seen.SequenceEqual(settled))
                         break;
                     settled = seen;
@@ -528,7 +546,7 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
 
                 // Teardown is not synchronous with the profile write, so the set is given time to
                 // settle before anything is claimed about it.
-                List<uint> stale = [];
+                List<ulong> stale = [];
                 for (int attempt = 0; attempt < 40; attempt++)
                 {
                     stale = [.. CardNodes().Except(before)];
@@ -592,14 +610,32 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 await control.SetRouteVolumeAsync(
                     index, device, test, originalMute, save: false, cts.Token);
 
-                ImmutableArray<SpaObject> after = await control.GetActiveRoutesAsync(cts.Token);
-                SpaObject? changed = after.FirstOrDefault(r =>
-                    r[SpaParamRoute.Index] is SpaInt i && i.Value == index);
+                // Polled rather than read once. The write is answered when the daemon has taken
+                // it, not when the card's route params have been re-read, and a route set that is
+                // still settling - a profile change recreates every route on the card - answers
+                // with the value it had before. The assertion is unchanged: it still has to reach
+                // the value that was written.
+                SpaObject? changed = null;
+                float first = float.NaN;
+                for (int attempt = 0; attempt < 50; attempt++)
+                {
+                    ImmutableArray<SpaObject> after = await control.GetActiveRoutesAsync(cts.Token);
+                    changed = after.FirstOrDefault(r =>
+                        r[SpaParamRoute.Index] is SpaInt i && i.Value == index);
+
+                    if (changed?[SpaParamRoute.Props] is SpaObject routeProps
+                        && routeProps[SpaProp.ChannelVolumes] is SpaArray volumes
+                        && !volumes.Items.IsDefaultOrEmpty
+                        && volumes.Items[0] is SpaFloat value)
+                    {
+                        first = value.Value;
+                        if (Math.Abs(first - 0.37f) <= 0.02f) break;
+                    }
+
+                    await Task.Delay(100, cts.Token);
+                }
 
                 Assert.IsNotNull(changed, "the route must still be active after being written to");
-
-                var readBack = (SpaArray)((SpaObject)changed![SpaParamRoute.Props]!)[SpaProp.ChannelVolumes]!;
-                float first = ((SpaFloat)readBack.Items[0]).Value;
                 Assert.AreEqual(0.37f, first, 0.02f, "the hardware volume did not take");
             }
             catch (PipeWireException ex)

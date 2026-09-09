@@ -268,6 +268,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
             using PipeWireDeviceProvider device = PipeWireDeviceProvider.Create(
                 context, tag + "_device", "A device this test withdraws");
             using PipeWireMetadataProvider served = PipeWireMetadataProvider.Create(context, tag + "_meta");
+            await served.ReadyAsync(cts.Token);
 
             // Bound from a second connection, which is what stores are for: binding a store
             // this same connection serves wedges the session, so no test does that here.

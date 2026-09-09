@@ -362,7 +362,17 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             {
                 await defaults.ReadyAsync(cts.Token);
 
-                string? sinkName = defaults.DefaultAudioSink?.NameValue;
+                // Polled, not read once. The "default" store is served by the session manager, so its
+                // entries travel wireplumber -> daemon -> here and are not ordered against our own
+                // core sync: ReadyAsync proves the bind was processed, not that the contents have
+                // arrived. Reading once turns that race into a skip.
+                string? sinkName = null;
+                for (int i = 0; i < 50 && sinkName is null; i++)
+                {
+                    sinkName = defaults.DefaultAudioSink?.NameValue;
+                    if (sinkName is null) await Task.Delay(100, cts.Token);
+                }
+
                 if (sinkName is null)
                     Assert.Inconclusive("this session has no default sink set.");
 

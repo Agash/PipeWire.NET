@@ -25,3 +25,6 @@ TestResults/
 # and anything else worth reading while working on the bindings. Cloned by
 # build/fetch-upstream.sh, never committed - the pin that matters is generate/HEADER-VERSION.
 external/
+
+# Reproduction programs for upstream bugs; scratch, not part of the library.
+repro/
