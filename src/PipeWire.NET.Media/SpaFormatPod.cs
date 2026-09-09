@@ -25,6 +25,102 @@ internal static class SpaFormatPod
         return b.GetPod().Length;
     }
 
+    /// <summary>Writes a ParamMeta requesting <c>SPA_META_Cursor</c> - pointer position and image.</summary>
+    /// <remarks>
+    /// The size has to cover the cursor struct, the bitmap header that may follow it, and the
+    /// bitmap's pixels, because they all live in the one metadata block. A producer with a larger
+    /// cursor than the room offered simply sends no bitmap, so the number here is a ceiling on what
+    /// can be received rather than a demand.
+    /// </remarks>
+    internal static unsafe int WriteCursorMetaParam(Span<byte> buf, int maxCursorSide = 64)
+    {
+        int pixels = maxCursorSide * maxCursorSide * 4;
+        var b = new SpaPodBuilder(buf);
+        b.PushObject(SpaType.ObjectParamMeta, SpaParamType.Meta);
+        b.AddId(SpaParamMeta.Type, SpaMetaType.Cursor);
+        b.AddInt(SpaParamMeta.Size, sizeof(spa_meta_cursor) + sizeof(spa_meta_bitmap) + pixels);
+        return b.GetPod().Length;
+    }
+
+    /// <summary>Reads the pointer, if this frame carries it.</summary>
+    /// <remarks>
+    /// Two separate absences to respect: an id of 0 means there is no cursor information at all,
+    /// and a bitmap offset of 0 means the position moved but the image did not change. The second
+    /// is the common case - the pointer moves far more often than it is redrawn - so the bitmap
+    /// span is usually empty while the position is not.
+    /// </remarks>
+    internal static unsafe bool TryFindCursor(spa_buffer* buf, out VideoCursor cursor)
+    {
+        cursor = default;
+        void* d = FindMeta(buf, SpaMetaType.Cursor, (uint)sizeof(spa_meta_cursor));
+        if (d is null) return false;
+
+        var c = (spa_meta_cursor*)d;
+        if (c->id == 0) return false;
+
+        // A bitmap only follows when the offset points past the cursor struct itself; upstream
+        // spells that rule out in spa/buffer/meta.h rather than using a flag.
+        if (c->bitmap_offset < (uint)sizeof(spa_meta_cursor))
+        {
+            cursor = new VideoCursor(
+                c->id, c->position.x, c->position.y, c->hotspot.x, c->hotspot.y,
+                PixelFormat.Unknown, 0, 0, 0, default);
+            return true;
+        }
+
+        var bm = (spa_meta_bitmap*)((byte*)d + c->bitmap_offset);
+        int stride = bm->stride;
+        uint height = bm->size.height;
+
+        ReadOnlySpan<byte> pixels = stride > 0 && height > 0
+            ? new ReadOnlySpan<byte>((byte*)bm + bm->offset, checked((int)(stride * height)))
+            : default;
+
+        cursor = new VideoCursor(
+            c->id, c->position.x, c->position.y, c->hotspot.x, c->hotspot.y,
+            FromSpaVideoFormat((SpaVideoFormat)bm->format), bm->size.width, height, stride, pixels);
+        return true;
+    }
+
+    /// <summary>Writes a ParamMeta requesting <c>SPA_META_VideoCrop</c> - the visible region.</summary>
+    /// <remarks>
+    /// Advisory: a producer that sends none means the whole buffer is visible. A screencast whose
+    /// buffer is larger than the region shows padding without this.
+    /// </remarks>
+    internal static unsafe int WriteCropMetaParam(Span<byte> buf)
+    {
+        var b = new SpaPodBuilder(buf);
+        b.PushObject(SpaType.ObjectParamMeta, SpaParamType.Meta);
+        b.AddId(SpaParamMeta.Type, SpaMetaType.VideoCrop);
+        b.AddInt(SpaParamMeta.Size, sizeof(spa_meta_region));
+        return b.GetPod().Length;
+    }
+
+    /// <summary>Writes a ParamMeta requesting <c>SPA_META_VideoDamage</c> - what changed.</summary>
+    /// <remarks>
+    /// Room is asked for one more region than will be read, because the list is terminated by an
+    /// empty region rather than by a count. Absent damage means "not stated", which a consumer must
+    /// treat as the whole frame having changed - not as nothing having changed.
+    /// </remarks>
+    internal static unsafe int WriteDamageMetaParam(Span<byte> buf, int regions = 8)
+    {
+        var b = new SpaPodBuilder(buf);
+        b.PushObject(SpaType.ObjectParamMeta, SpaParamType.Meta);
+        b.AddId(SpaParamMeta.Type, SpaMetaType.VideoDamage);
+        b.AddInt(SpaParamMeta.Size, sizeof(spa_meta_region) * (regions + 1));
+        return b.GetPod().Length;
+    }
+
+    /// <summary>Writes a ParamMeta requesting <c>SPA_META_VideoTransform</c> - the orientation.</summary>
+    internal static unsafe int WriteTransformMetaParam(Span<byte> buf)
+    {
+        var b = new SpaPodBuilder(buf);
+        b.PushObject(SpaType.ObjectParamMeta, SpaParamType.Meta);
+        b.AddId(SpaParamMeta.Type, SpaMetaType.VideoTransform);
+        b.AddInt(SpaParamMeta.Size, sizeof(spa_meta_videotransform));
+        return b.GetPod().Length;
+    }
+
     /// <summary>
     /// Writes a ParamMeta object requesting <c>SPA_META_SyncTimeline</c>, so a DMA-BUF producer can
     /// hand over explicit acquire and release points instead of relying on implicit fences.
@@ -304,6 +400,75 @@ internal static class SpaFormatPod
                 return (long)((spa_meta_header*)m->data)->pts;
         }
         return -1;
+    }
+
+    /// <summary>Finds a metadata block of the given type on a buffer, or null.</summary>
+    /// <remarks>
+    /// The managed equivalent of upstream's <c>spa_buffer_find_meta_data</c>. Metadata is only
+    /// present when it was asked for in a ParamMeta at negotiation and the producer chose to
+    /// attach it, so every reader has to cope with its absence.
+    /// </remarks>
+    internal static unsafe void* FindMeta(spa_buffer* buf, SpaMetaType type, uint minimumSize)
+    {
+        if (buf is null || buf->metas is null) return null;
+
+        uint want = (uint)type;
+        uint count = Math.Min(buf->n_metas, MaxMetasWalked);
+        for (uint i = 0; i < count; i++)
+        {
+            spa_meta* m = &buf->metas[i];
+            if (m->type == want && m->data is not null && m->size >= minimumSize)
+                return m->data;
+        }
+        return null;
+    }
+
+    /// <summary>The visible region of a buffer, when the producer sends one larger than the frame.</summary>
+    internal static unsafe VideoRegion? FindCrop(spa_buffer* buf)
+    {
+        void* d = FindMeta(buf, SpaMetaType.VideoCrop, (uint)sizeof(spa_meta_region));
+        if (d is null) return null;
+
+        spa_region r = ((spa_meta_region*)d)->region;
+
+        // An all-zero region is how a producer says "nothing cropped" rather than "crop everything".
+        if (r.size.width == 0 || r.size.height == 0) return null;
+
+        return new VideoRegion(r.position.x, r.position.y, r.size.width, r.size.height);
+    }
+
+    /// <summary>How the producer says the image is oriented.</summary>
+    internal static unsafe SpaMetaVideotransformValue FindTransform(spa_buffer* buf)
+    {
+        void* d = FindMeta(buf, SpaMetaType.VideoTransform, (uint)sizeof(spa_meta_videotransform));
+        return d is null
+            ? SpaMetaVideotransformValue.None
+            : (SpaMetaVideotransformValue)((spa_meta_videotransform*)d)->transform;
+    }
+
+    /// <summary>
+    /// The regions that changed since the last buffer, or an empty span if the producer did not say.
+    /// </summary>
+    /// <remarks>
+    /// The list is terminated by a region with a negative width, not by a count, so it is walked
+    /// rather than indexed. An empty result means "no damage information", which is not the same as
+    /// "nothing changed" - a consumer that cannot tell them apart must treat the whole frame as
+    /// changed.
+    /// </remarks>
+    internal static unsafe int ReadDamage(spa_buffer* buf, Span<VideoRegion> into)
+    {
+        void* d = FindMeta(buf, SpaMetaType.VideoDamage, (uint)sizeof(spa_meta_region));
+        if (d is null || into.IsEmpty) return 0;
+
+        var region = (spa_meta_region*)d;
+        int n = 0;
+        while (n < into.Length && region->region.size.width != 0 && region->region.size.height != 0)
+        {
+            spa_region r = region->region;
+            into[n++] = new VideoRegion(r.position.x, r.position.y, r.size.width, r.size.height);
+            region++;
+        }
+        return n;
     }
 
     // - Format-pod parsing (param_changed) -

@@ -58,7 +58,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
     /// <summary>
     /// Invoked after <see cref="FormatHandler"/> so the stream can declare its buffer/meta
-    /// requirements (it now knows the negotiated geometry). Call <see cref="RequestParamsFromCallback"/>
+    /// requirements (it now knows the negotiated geometry). Call <c>RequestParamsFromCallback</c>
     /// from here. If not supplied, the core requests just the SPA_META_Header.
     /// </summary>
     internal delegate void PostFormatHandler(PipeWireStreamCore core);
@@ -77,6 +77,11 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
     private readonly PipeWireContext _ctx;
     private readonly ILogger _logger;
+
+    // The graph hands these out once and updates them in place every cycle, so what is kept is the
+    // pointer, not a copy. Written on the loop thread from io_changed, read under the loop lock.
+    private unsafe spa_io_position* _ioPosition;
+    private unsafe spa_io_rate_match* _ioRateMatch;
     private readonly string _streamName;
 
     /// <summary>The node this stream asked to be linked to, for reporting a failure against it.</summary>
@@ -165,6 +170,9 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         _events->state_changed = &OnStateChanged;
         _events->param_changed = &OnParamChanged;
         _events->control_info  = &OnControlInfo;
+        _events->io_changed    = &OnIoChanged;
+        _events->drained       = &OnDrained;
+        _events->trigger_done  = &OnTriggerDone;
         if (onAddBuffer is not null)    _events->add_buffer    = &OnAddBuffer;
         if (onRemoveBuffer is not null) _events->remove_buffer = &OnRemoveBuffer;
 
@@ -689,9 +697,15 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         }
         catch (Exception ex)
         {
-            // Negotiation continues with defaults rather than crashing the loop thread, but the
-            // reason it fell back is worth knowing - this is not the realtime path.
+            // Reported to the graph, not just to the log. A handler that threw could not take the
+            // format it was offered, and a stream that stays silent about that leaves its peer
+            // waiting on a negotiation that will never finish. This is what gstreamer's
+            // pipewiresrc does in the same place: pw_stream_set_error with EINVAL for a format it
+            // cannot handle. The loop lock is already held in this callback.
             self.LogFormatHandlerThrew(ex);
+
+            if (!self._disposed && self._stream is not null)
+                Native.pw_stream_set_error(self._stream, -22, $"format handler failed: {ex.Message}");
         }
     }
 
@@ -738,6 +752,172 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         Native.pw_stream_set_active(_stream, active);
     }
 
+    // A drain finishing and a trigger cycle finishing are both one-shot notifications from the
+    // loop thread. Kept as TaskCompletionSources so a caller can await them rather than poll.
+    private TaskCompletionSource? _drained;
+    private TaskCompletionSource? _triggerDone;
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void OnDrained(void* data)
+    {
+        PipeWireStreamCore? self;
+        try { self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target; }
+        catch (Exception) { return; }
+        self?._drained?.TrySetResult();
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void OnTriggerDone(void* data)
+    {
+        PipeWireStreamCore? self;
+        try { self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target; }
+        catch (Exception) { return; }
+        self?._triggerDone?.TrySetResult();
+    }
+
+    /// <summary>Drains what is queued and waits for the daemon to say it has played out.</summary>
+    internal Task DrainAsync(CancellationToken cancellationToken)
+    {
+        if (_disposed || _stream is null) return Task.CompletedTask;
+
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _drained = done;
+        FlushDraining();
+        return StreamSignal.AwaitAsync(done, cancellationToken);
+    }
+
+    /// <summary>Runs one cycle and waits for it to finish. Only meaningful while driving.</summary>
+    internal Task TriggerAndWaitAsync(CancellationToken cancellationToken)
+    {
+        if (_disposed || _stream is null) return Task.CompletedTask;
+
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _triggerDone = done;
+        TriggerProcess();
+        return StreamSignal.AwaitAsync(done, cancellationToken);
+    }
+
+    // Split out because the class is unsafe and an await cannot live in an unsafe context.
+    private unsafe void FlushDraining()
+    {
+        using (_ctx.Lock())
+        {
+            pw_stream* stream = _stream;
+            if (_disposed || stream is null) return;
+            Native.pw_stream_flush(stream, drain: true);
+        }
+    }
+
+
+    // SPA_IO_Position (7) and SPA_IO_RateMatch (8) from spa/node/io.h.
+    private const uint SpaIoPosition = 7;
+    private const uint SpaIoRateMatch = 8;
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void OnIoChanged(void* data, uint id, void* area, uint size)
+    {
+        PipeWireStreamCore? self;
+        try { self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target; }
+        catch (Exception) { return; }
+        if (self is null || self._disposed) return;
+
+        // A null area means the graph took it away, which happens on disconnect; keeping the old
+        // pointer would read freed memory on the next look.
+        switch (id)
+        {
+            case SpaIoPosition:
+                self._ioPosition = size >= (uint)sizeof(spa_io_position) ? (spa_io_position*)area : null;
+                break;
+            case SpaIoRateMatch:
+                self._ioRateMatch = size >= (uint)sizeof(spa_io_rate_match) ? (spa_io_rate_match*)area : null;
+                break;
+        }
+    }
+
+    /// <summary>The graph clock as of the last cycle, or null if the graph has not offered it.</summary>
+    internal unsafe PipeWireGraphClock? GraphClock
+    {
+        get
+        {
+            if (_disposed) return null;
+
+            using (_ctx.Lock())
+            {
+                spa_io_position* p = _ioPosition;
+                if (_disposed || p is null) return null;
+
+                return new PipeWireGraphClock(
+                    p->clock.nsec, p->clock.position, p->clock.duration,
+                    p->clock.rate.num, p->clock.rate.denom,
+                    p->clock.delay, p->clock.rate_diff, p->clock.next_nsec);
+            }
+        }
+    }
+
+    /// <summary>What the resampler is doing, or null when nothing is resampling this stream.</summary>
+    internal unsafe PipeWireRateMatch? RateMatch
+    {
+        get
+        {
+            if (_disposed) return null;
+
+            using (_ctx.Lock())
+            {
+                spa_io_rate_match* r = _ioRateMatch;
+                if (_disposed || r is null) return null;
+
+                return new PipeWireRateMatch(r->delay, r->size, r->rate, r->flags);
+            }
+        }
+    }
+
+    /// <summary>Applies a rate correction, 1.0 being none.</summary>
+    internal unsafe void SetRate(double rate)
+    {
+        if (_disposed || _stream is null) return;
+
+        using (_ctx.Lock())
+        {
+            pw_stream* stream = _stream;
+            if (_disposed || stream is null) return;
+            Native.pw_stream_set_rate(stream, rate);
+        }
+    }
+
+    /// <summary>
+    /// Announces this stream's own latency to the graph.
+    /// </summary>
+    /// <remarks>
+    /// A stream that adds delay - a transport with a queue, an encoder - has to say so, or nothing
+    /// downstream can compensate and audio and video drift apart by exactly the amount nobody was
+    /// told about. PipeWire's own rtp and tunnel modules announce both of these together, which is
+    /// why both are taken here rather than one.
+    /// </remarks>
+    internal unsafe void AnnounceLatency(PipeWireLatency latency, PipeWireProcessLatency? process)
+    {
+        if (_disposed || _stream is null) return;
+
+        byte[] latencyPod = SpaPod.ToBytes(latency.ToParameter());
+        byte[]? processPod = process is null ? null : SpaPod.ToBytes(process.ToParameter());
+
+        using (_ctx.Lock())
+        {
+            pw_stream* stream = _stream;
+            if (_disposed || stream is null) return;
+
+            fixed (byte* lp = latencyPod)
+            fixed (byte* pp = processPod)
+            {
+                spa_pod** pods = stackalloc spa_pod*[2];
+                uint n = 0;
+                pods[n++] = (spa_pod*)lp;
+                if (processPod is not null) pods[n++] = (spa_pod*)pp;
+
+                Native.pw_stream_update_params(stream, pods, n);
+            }
+        }
+    }
+
     /// <summary>Whether the daemon has made this stream the graph's driver.</summary>
     internal unsafe bool IsDriving
     {
@@ -782,6 +962,47 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     }
 
     /// <summary>
+    /// Sends any number of params, laid out end to end in one buffer.
+    /// </summary>
+    /// <remarks>
+    /// The fixed-arity overload runs out at six, and a video consumer already wants seven. Pods are
+    /// self-describing - each carries its own size - so one buffer of them can be walked rather than
+    /// passed a parameter at a time.
+    /// </remarks>
+    /// <param name="pods">Concatenated pods, each starting on an 8-byte boundary as SPA requires.</param>
+    /// <param name="count">How many pods are in the buffer.</param>
+    internal int RequestParamsFromCallback(ReadOnlySpan<byte> pods, int count)
+    {
+        if (pods.IsEmpty || count <= 0) return -22;
+
+        pw_stream* stream = _stream;
+        if (_disposed || stream is null) return -22;
+
+        fixed (byte* start = pods)
+        {
+            spa_pod** arr = stackalloc spa_pod*[count];
+            byte* p = start;
+            byte* end = start + pods.Length;
+
+            for (int i = 0; i < count; i++)
+            {
+                if (p + sizeof(spa_pod) > end) return -22;
+
+                arr[i] = (spa_pod*)p;
+
+                // A pod is its header plus its body, rounded up to 8 - the same walk SPA does.
+                nuint advance = (nuint)sizeof(spa_pod) + ((spa_pod*)p)->size;
+                advance = (advance + 7) & ~(nuint)7;
+                p += advance;
+
+                if (p > end && i + 1 < count) return -22;
+            }
+
+            return Native.pw_stream_update_params(stream, arr, (uint)count);
+        }
+    }
+
+    /// <summary>
     /// Sends up to two param pods via pw_stream_update_params. Call only from the param_changed
     /// callback (where the loop lock is held), e.g. from a <see cref="PostFormatHandler"/>.
     /// </summary>
@@ -795,7 +1016,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// The daemon's result, negative on failure, or <c>-EINVAL</c> when there was nothing to send.
     /// </returns>
     internal int RequestParamsFromCallback(
-        ReadOnlySpan<byte> pod0, ReadOnlySpan<byte> pod1 = default, ReadOnlySpan<byte> pod2 = default)
+        ReadOnlySpan<byte> pod0, ReadOnlySpan<byte> pod1 = default, ReadOnlySpan<byte> pod2 = default,
+        ReadOnlySpan<byte> pod3 = default, ReadOnlySpan<byte> pod4 = default, ReadOnlySpan<byte> pod5 = default)
     {
         // An empty span fixes to a null pointer, and handing the daemon an array of one null pod
         // with a count of one is a dereference on its side, not ours. Snapshotted once for the same
@@ -806,6 +1028,9 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         // position along. Refused rather than compacted: a caller passing the third and not the
         // second has miscounted, and silently sending two pods hides that.
         if (pod1.IsEmpty && !pod2.IsEmpty) return -22;
+        if (pod2.IsEmpty && !pod3.IsEmpty) return -22;
+        if (pod3.IsEmpty && !pod4.IsEmpty) return -22;
+        if (pod4.IsEmpty && !pod5.IsEmpty) return -22;
 
         pw_stream* stream = _stream;
         if (_disposed || stream is null) return -22;
@@ -813,12 +1038,18 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         fixed (byte* p0 = pod0)
         fixed (byte* p1 = pod1)
         fixed (byte* p2 = pod2)
+        fixed (byte* p3 = pod3)
+        fixed (byte* p4 = pod4)
+        fixed (byte* p5 = pod5)
         {
-            spa_pod** arr = stackalloc spa_pod*[3];
+            spa_pod** arr = stackalloc spa_pod*[6];
             int count = 0;
             arr[count++] = (spa_pod*)p0;
             if (!pod1.IsEmpty) arr[count++] = (spa_pod*)p1;
             if (!pod2.IsEmpty) arr[count++] = (spa_pod*)p2;
+            if (!pod3.IsEmpty) arr[count++] = (spa_pod*)p3;
+            if (!pod4.IsEmpty) arr[count++] = (spa_pod*)p4;
+            if (!pod5.IsEmpty) arr[count++] = (spa_pod*)p5;
 
             return Native.pw_stream_update_params(stream, arr, (uint)count);
         }
@@ -852,4 +1083,18 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
     [LoggerMessage(Level = LogLevel.Error, Message = "a format handler threw; negotiation continued with defaults")]
     private partial void LogFormatHandlerThrew(Exception ex);
+}
+
+/// <summary>
+/// Awaits a one-shot signal from the loop thread. Separate from the stream because that class is
+/// unsafe, and an await cannot appear in an unsafe context.
+/// </summary>
+internal static class StreamSignal
+{
+    internal static async Task AwaitAsync(TaskCompletionSource done, CancellationToken cancellationToken)
+    {
+        using CancellationTokenRegistration reg = cancellationToken.Register(
+            static s => ((TaskCompletionSource)s!).TrySetCanceled(), done);
+        await done.Task.ConfigureAwait(false);
+    }
 }

@@ -19,6 +19,8 @@
 #pragma warning disable CA1707 // Identifiers should not contain underscores (matches generated style)
 #pragma warning disable CA1711 // Identifiers should not have incorrect suffix
 
+using System.Runtime.InteropServices;
+
 namespace PipeWire.NET.Interop;
 
 internal static unsafe partial class Native
@@ -574,6 +576,34 @@ internal static unsafe partial class Native
         if (methods is null || methods->clear is null)
             return -1;
         return methods->clear(data);
+    }
+
+    /// <summary>
+    /// Puts the stream into the error state and tells the daemon why.
+    /// </summary>
+    /// <remarks>
+    /// Not generated: the C function is variadic (<c>const char *error, ...</c>) and the binding
+    /// generator skips those. Declared here with the message as the format string and no varargs,
+    /// which is why callers must escape any <c>%</c> in it - see the wrapper below.
+    /// <para>
+    /// This is what the reference consumers do when they cannot satisfy a negotiation: gstreamer's
+    /// pipewiresrc calls it with <c>-EINVAL</c> for an unhandled format and <c>-EPIPE</c> when it
+    /// has no formats in common with the peer. Without it a stream that cannot proceed simply goes
+    /// quiet, and the peer waits for a negotiation that will never finish.
+    /// </para>
+    /// </remarks>
+    [DllImport("libpipewire-0.3", EntryPoint = "pw_stream_set_error", CallingConvention = CallingConvention.Cdecl)]
+    internal static extern unsafe int pw_stream_set_error_raw(pw_stream* stream, int res, sbyte* error);
+
+    /// <summary>Reports a stream error, with the message escaped so it cannot be read as a format.</summary>
+    internal static unsafe int pw_stream_set_error(pw_stream* stream, int res, string message)
+    {
+        // The message goes in as the format string, so a stray % would make the callee read
+        // arguments that were never passed. The trailing NUL is explicit: GetBytes does not add
+        // one, and the callee would otherwise read past the end of the array.
+        byte[] utf8 = System.Text.Encoding.UTF8.GetBytes(message.Replace("%", "%%") + '\0');
+        fixed (byte* p = utf8)
+            return pw_stream_set_error_raw(stream, res, (sbyte*)p);
     }
 
     /// <summary>

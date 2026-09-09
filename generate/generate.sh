@@ -477,6 +477,43 @@ for f in "$WORK"/*.cs; do
   sed -i 's/^\(\s*\)public static extern /internal static extern /' "$OUT/${base}.g.cs"
 done
 
+# Second pass: the DRM format constants.
+#
+# Separate invocation because it needs --generate macro-bindings, which is fatal on the
+# PipeWire header set (see generate/drm.rsp). Kernel uapi, so the values are stable ABI;
+# regenerating is about not hand-transcribing 300 fourcc codes, not about drift.
+if [ ! -f /usr/include/libdrm/drm_fourcc.h ]; then
+  echo "ERROR: drm_fourcc.h not found at /usr/include/libdrm/."
+  echo "Install: sudo apt-get install libdrm-dev"
+  exit 1
+fi
+
+# Its own preamble: the DRM output is a single file, and in single-file mode the generator emits
+# no using directives, so the NativeTypeName attribute on every constant would not resolve.
+{
+  cat "$WORK/header.txt"
+  printf '\nusing PipeWire.NET.Interop;\n'
+} > "$WORK/header-drm.txt"
+
+"$TOOL" "@$REPO_ROOT/generate/drm.rsp" \
+  --file "$REPO_ROOT/generate/drm_composite.h" \
+  --header-file "$WORK/header-drm.txt" \
+  --resource-directory "$CLANG_RESOURCE_DIR" \
+  --output "$WORK/DrmFourcc.cs" 2>&1 | tee "$WORK/gen-drm.log"
+
+DRM_EXIT=${PIPESTATUS[0]}
+if [ $DRM_EXIT -ne 0 ]; then
+  echo "DRM generator failed with exit $DRM_EXIT."
+  exit $DRM_EXIT
+fi
+if grep -qi "^Warning:" "$WORK/gen-drm.log"; then
+  echo "ERROR: the DRM generator warned. Fix it rather than committing the output:"
+  grep -i "^Warning:" "$WORK/gen-drm.log"
+  exit 1
+fi
+
+cp "$WORK/DrmFourcc.cs" "$OUT/DrmFourcc.g.cs"
+
 printf '%s
 ' "$HEADER_VERSION" > "$PINNED_FILE"
 

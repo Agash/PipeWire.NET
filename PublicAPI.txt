@@ -1,3 +1,313 @@
+PipeWire.NET.Drm.DrmFourcc
+PipeWire.NET.Drm.DrmFourcc.AFBC_FORMAT_MOD_BCH = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFBC_FORMAT_MOD_BLOCK_SIZE_16x16 = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFBC_FORMAT_MOD_BLOCK_SIZE_32x8 = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFBC_FORMAT_MOD_BLOCK_SIZE_32x8_64x4 = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFBC_FORMAT_MOD_BLOCK_SIZE_64x4 = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFBC_FORMAT_MOD_BLOCK_SIZE_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AFBC_FORMAT_MOD_CBR = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFBC_FORMAT_MOD_DB = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFBC_FORMAT_MOD_SC = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFBC_FORMAT_MOD_SPARSE = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFBC_FORMAT_MOD_SPLIT = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFBC_FORMAT_MOD_TILED = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFBC_FORMAT_MOD_USM = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFBC_FORMAT_MOD_YTR = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFRC_FORMAT_MOD_CU_SIZE_16 = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFRC_FORMAT_MOD_CU_SIZE_24 = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFRC_FORMAT_MOD_CU_SIZE_32 = UInt64
+PipeWire.NET.Drm.DrmFourcc.AFRC_FORMAT_MOD_CU_SIZE_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AFRC_FORMAT_MOD_LAYOUT_SCAN = UInt64
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD = UInt64
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_BANK_XOR_BITS_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_BANK_XOR_BITS_SHIFT = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_BLOCK_128B = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_BLOCK_256B = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_BLOCK_64B = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_CONSTANT_ENCODE_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_CONSTANT_ENCODE_SHIFT = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_INDEPENDENT_128B_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_INDEPENDENT_128B_SHIFT = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_INDEPENDENT_64B_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_INDEPENDENT_64B_SHIFT = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_MAX_COMPRESSED_BLOCK_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_MAX_COMPRESSED_BLOCK_SHIFT = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_PIPE_ALIGN_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_PIPE_ALIGN_SHIFT = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_RETILE_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_RETILE_SHIFT = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_DCC_SHIFT = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_PACKERS_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_PACKERS_SHIFT = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_PIPE_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_PIPE_SHIFT = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_PIPE_XOR_BITS_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_PIPE_XOR_BITS_SHIFT = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_RB_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_RB_SHIFT = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_GFX11_256K_R_X = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_GFX12_256B_2D = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_GFX12_256K_2D = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_GFX12_4K_2D = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_GFX12_64K_2D = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_GFX9_4K_D_X = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_GFX9_64K_D = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_GFX9_64K_D_X = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_GFX9_64K_R_X = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_GFX9_64K_S = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_GFX9_64K_S_X = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_SHIFT = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_VERSION_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_VERSION_SHIFT = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_VER_GFX10 = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_VER_GFX10_RBPLUS = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_VER_GFX11 = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_VER_GFX12 = Int32
+PipeWire.NET.Drm.DrmFourcc.AMD_FMT_MOD_TILE_VER_GFX9 = Int32
+PipeWire.NET.Drm.DrmFourcc.AMLOGIC_FBC_LAYOUT_BASIC = UInt64
+PipeWire.NET.Drm.DrmFourcc.AMLOGIC_FBC_LAYOUT_SCATTER = UInt64
+PipeWire.NET.Drm.DrmFourcc.AMLOGIC_FBC_OPTION_MEM_SAVING = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_ABGR1555 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_ABGR16161616 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_ABGR16161616F = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_ABGR2101010 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_ABGR32323232F = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_ABGR4444 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_ABGR8888 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_ARGB1555 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_ARGB16161616 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_ARGB16161616F = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_ARGB2101010 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_ARGB4444 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_ARGB8888 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_AVUY8888 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_AXBXGXRX106106106106 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_AYUV = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGR161616 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGR161616F = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGR233 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGR323232F = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGR565 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGR565_A8 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGR888 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGR888_A8 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGRA1010102 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGRA4444 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGRA5551 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGRA8888 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGRX1010102 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGRX4444 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGRX5551 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGRX8888 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BGRX8888_A8 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_BIG_ENDIAN = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_C1 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_C2 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_C4 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_C8 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_D1 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_D2 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_D4 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_D8 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_GR1616 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_GR1616F = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_GR3232F = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_GR88 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_INVALID = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_ALLWINNER_TILED = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_APPLE_GPU_TILED = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_APPLE_GPU_TILED_COMPRESSED = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_ARM_16X16_BLOCK_U_INTERLEAVED = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_ARM_INTERLEAVED_64K = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_ARM_TYPE_AFBC = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_ARM_TYPE_AFRC = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_ARM_TYPE_MISC = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_BROADCOM_SAND128 = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_BROADCOM_SAND256 = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_BROADCOM_SAND32 = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_BROADCOM_SAND64 = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_BROADCOM_UIF = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_BROADCOM_VC4_T_TILED = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_GENERIC_16_16_TILE = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_INVALID = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_LINEAR = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_MTK_16L_32S_TILE = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_NONE = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_NVIDIA_16BX2_BLOCK_EIGHT_GOB = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_NVIDIA_16BX2_BLOCK_FOUR_GOB = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_NVIDIA_16BX2_BLOCK_ONE_GOB = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_NVIDIA_16BX2_BLOCK_SIXTEEN_GOB = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_NVIDIA_16BX2_BLOCK_THIRTYTWO_GOB = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_NVIDIA_16BX2_BLOCK_TWO_GOB = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_NVIDIA_TEGRA_TILED = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_QCOM_COMPRESSED = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_QCOM_TILED2 = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_QCOM_TILED3 = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_SAMSUNG_16_16_TILE = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_SAMSUNG_64_32_TILE = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VENDOR_ALLWINNER = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VENDOR_AMD = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VENDOR_AMLOGIC = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VENDOR_APPLE = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VENDOR_ARM = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VENDOR_BROADCOM = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VENDOR_INTEL = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VENDOR_MTK = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VENDOR_NONE = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VENDOR_NVIDIA = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VENDOR_QCOM = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VENDOR_SAMSUNG = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VENDOR_VIVANTE = Int32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VIVANTE_SPLIT_SUPER_TILED = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VIVANTE_SPLIT_TILED = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VIVANTE_SUPER_TILED = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_MOD_VIVANTE_TILED = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_NV12 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_NV15 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_NV16 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_NV20 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_NV21 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_NV24 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_NV30 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_NV42 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_NV61 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_P010 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_P012 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_P016 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_P030 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_P210 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_P230 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_Q401 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_Q410 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_R1 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_R10 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_R12 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_R16 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_R16F = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_R2 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_R32F = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_R4 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_R8 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RESERVED = UInt64
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RG1616 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RG88 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RGB161616 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RGB332 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RGB565 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RGB565_A8 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RGB888 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RGB888_A8 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RGBA1010102 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RGBA4444 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RGBA5551 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RGBA8888 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RGBX1010102 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RGBX4444 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RGBX5551 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RGBX8888 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_RGBX8888_A8 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_S010 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_S012 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_S016 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_S210 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_S212 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_S216 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_S410 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_S412 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_S416 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_T430 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_UYVY = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_VUY101010 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_VUY888 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_VYUY = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_X0L0 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_X0L2 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XBGR1555 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XBGR16161616 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XBGR16161616F = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XBGR2101010 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XBGR4444 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XBGR8888 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XBGR8888_A8 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XRGB1555 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XRGB16161616 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XRGB16161616F = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XRGB2101010 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XRGB4444 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XRGB8888 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XRGB8888_A8 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XVUY2101010 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XVUY8888 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XVYU12_16161616 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XVYU16161616 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XVYU2101010 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XYUV8888 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_XYYY2101010 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_Y0L0 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_Y0L2 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_Y210 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_Y212 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_Y216 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_Y410 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_Y412 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_Y416 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_Y8 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_YUV410 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_YUV411 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_YUV420 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_YUV420_10BIT = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_YUV420_8BIT = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_YUV422 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_YUV444 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_YUYV = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_YVU410 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_YVU411 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_YVU420 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_YVU422 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_YVU444 = UInt32
+PipeWire.NET.Drm.DrmFourcc.DRM_FORMAT_YVYU = UInt32
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_4_TILED = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_4_TILED_BMG_CCS = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_4_TILED_DG2_MC_CCS = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_4_TILED_DG2_RC_CCS = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_4_TILED_DG2_RC_CCS_CC = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_4_TILED_LNL_CCS = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_4_TILED_MTL_MC_CCS = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_4_TILED_MTL_RC_CCS = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_4_TILED_MTL_RC_CCS_CC = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_X_TILED = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_Y_TILED = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_Y_TILED_CCS = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_Y_TILED_GEN12_MC_CCS = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_Y_TILED_GEN12_RC_CCS = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_Y_TILED_GEN12_RC_CCS_CC = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_Yf_TILED = UInt64
+PipeWire.NET.Drm.DrmFourcc.I915_FORMAT_MOD_Yf_TILED_CCS = UInt64
+PipeWire.NET.Drm.DrmFourcc.MTK_FMT_MOD_10BIT_LAYOUT_LSBRASTER = Int32
+PipeWire.NET.Drm.DrmFourcc.MTK_FMT_MOD_10BIT_LAYOUT_LSBTILED = Int32
+PipeWire.NET.Drm.DrmFourcc.MTK_FMT_MOD_10BIT_LAYOUT_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.MTK_FMT_MOD_10BIT_LAYOUT_PACKED = Int32
+PipeWire.NET.Drm.DrmFourcc.MTK_FMT_MOD_COMPRESS_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.MTK_FMT_MOD_COMPRESS_NONE = Int32
+PipeWire.NET.Drm.DrmFourcc.MTK_FMT_MOD_COMPRESS_V1 = Int32
+PipeWire.NET.Drm.DrmFourcc.MTK_FMT_MOD_TILE_16L32S = Int32
+PipeWire.NET.Drm.DrmFourcc.MTK_FMT_MOD_TILE_MASK = Int32
+PipeWire.NET.Drm.DrmFourcc.MTK_FMT_MOD_TILE_NONE = Int32
+PipeWire.NET.Drm.DrmFourcc.VIVANTE_MOD_COMP_DEC400 = UInt64
+PipeWire.NET.Drm.DrmFourcc.VIVANTE_MOD_COMP_MASK = UInt64
+PipeWire.NET.Drm.DrmFourcc.VIVANTE_MOD_EXT_MASK = UInt64
+PipeWire.NET.Drm.DrmFourcc.VIVANTE_MOD_TS_128_4 = UInt64
+PipeWire.NET.Drm.DrmFourcc.VIVANTE_MOD_TS_256_4 = UInt64
+PipeWire.NET.Drm.DrmFourcc.VIVANTE_MOD_TS_64_2 = UInt64
+PipeWire.NET.Drm.DrmFourcc.VIVANTE_MOD_TS_64_4 = UInt64
+PipeWire.NET.Drm.DrmFourcc.VIVANTE_MOD_TS_MASK = UInt64
+PipeWire.NET.Drm.DrmFourcc.__fourcc_mod_amlogic_layout_mask = Int32
+PipeWire.NET.Drm.DrmFourcc.__fourcc_mod_amlogic_options_mask = Int32
+PipeWire.NET.Drm.DrmFourcc.__fourcc_mod_amlogic_options_shift = Int32
+PipeWire.NET.Drm.DrmFourcc.__fourcc_mod_broadcom_param_bits = Int32
+PipeWire.NET.Drm.DrmFourcc.__fourcc_mod_broadcom_param_shift = Int32
 PipeWire.NET.Graph.IPipeWireObject
 PipeWire.NET.Graph.IPipeWireObject.Id : UInt32
 PipeWire.NET.Graph.IPipeWireObject.InterfaceVersion : UInt32
@@ -129,6 +439,21 @@ PipeWire.NET.Graph.PipeWireFilterPort.Direction : PipeWirePortDirection
 PipeWire.NET.Graph.PipeWireFilterPort.Format : PipeWireDspFormat
 PipeWire.NET.Graph.PipeWireFilterPort.GetSamples(UInt32)
 PipeWire.NET.Graph.PipeWireFilterPort.Name : String
+PipeWire.NET.Graph.PipeWireGraphClock
+PipeWire.NET.Graph.PipeWireGraphClock..ctor(UInt64, UInt64, UInt64, UInt32, UInt32, Int64, Double, UInt64)
+PipeWire.NET.Graph.PipeWireGraphClock.Deconstruct(UInt64&, UInt64&, UInt64&, UInt32&, UInt32&, Int64&, Double&, UInt64&)
+PipeWire.NET.Graph.PipeWireGraphClock.Delay : Int64
+PipeWire.NET.Graph.PipeWireGraphClock.Duration : UInt64
+PipeWire.NET.Graph.PipeWireGraphClock.Equals(Object)
+PipeWire.NET.Graph.PipeWireGraphClock.Equals(PipeWireGraphClock)
+PipeWire.NET.Graph.PipeWireGraphClock.GetHashCode()
+PipeWire.NET.Graph.PipeWireGraphClock.NextNsec : UInt64
+PipeWire.NET.Graph.PipeWireGraphClock.Nsec : UInt64
+PipeWire.NET.Graph.PipeWireGraphClock.Position : UInt64
+PipeWire.NET.Graph.PipeWireGraphClock.RateDen : UInt32
+PipeWire.NET.Graph.PipeWireGraphClock.RateDiff : Double
+PipeWire.NET.Graph.PipeWireGraphClock.RateNum : UInt32
+PipeWire.NET.Graph.PipeWireGraphClock.ToString()
 PipeWire.NET.Graph.PipeWireGraphExtensions
 PipeWire.NET.Graph.PipeWireGraphExtensions.CanCaptureFrom(PipeWireGraphSnapshot, PipeWireNode)
 PipeWire.NET.Graph.PipeWireGraphExtensions.CanSendTo(PipeWireGraphSnapshot, PipeWireNode)
@@ -564,6 +889,17 @@ PipeWire.NET.Graph.PipeWireProperties.Item : String
 PipeWire.NET.Graph.PipeWireProperties.Keys : IEnumerable<String>
 PipeWire.NET.Graph.PipeWireProperties.TryGetValue(String, String&)
 PipeWire.NET.Graph.PipeWireProperties.Values : IEnumerable<String>
+PipeWire.NET.Graph.PipeWireRateMatch
+PipeWire.NET.Graph.PipeWireRateMatch..ctor(UInt32, UInt32, Double, UInt32)
+PipeWire.NET.Graph.PipeWireRateMatch.Deconstruct(UInt32&, UInt32&, Double&, UInt32&)
+PipeWire.NET.Graph.PipeWireRateMatch.Delay : UInt32
+PipeWire.NET.Graph.PipeWireRateMatch.Equals(Object)
+PipeWire.NET.Graph.PipeWireRateMatch.Equals(PipeWireRateMatch)
+PipeWire.NET.Graph.PipeWireRateMatch.Flags : UInt32
+PipeWire.NET.Graph.PipeWireRateMatch.GetHashCode()
+PipeWire.NET.Graph.PipeWireRateMatch.Rate : Double
+PipeWire.NET.Graph.PipeWireRateMatch.Size : UInt32
+PipeWire.NET.Graph.PipeWireRateMatch.ToString()
 PipeWire.NET.Graph.PipeWireRegistry
 PipeWire.NET.Graph.PipeWireRegistry+GraphChangedHandler
 PipeWire.NET.Graph.PipeWireRegistry+GraphChangedHandler..ctor(Object, IntPtr)
@@ -658,6 +994,10 @@ PipeWire.NET.Media.AudioSampleFormat.Unknown = AudioSampleFormat
 PipeWire.NET.Media.AudioSampleFormat.value__ = Int32
 PipeWire.NET.Media.AudioSampleFormatExtensions
 PipeWire.NET.Media.AudioSampleFormatExtensions.BytesPerSample(AudioSampleFormat)
+PipeWire.NET.Media.DrmFormat
+PipeWire.NET.Media.DrmFormat.FromPixelFormat(PixelFormat)
+PipeWire.NET.Media.DrmFormat.FromVideoFormat(SpaVideoFormat)
+PipeWire.NET.Media.DrmFormat.Invalid = UInt32
 PipeWire.NET.Media.DrmFormatModifier
 PipeWire.NET.Media.DrmFormatModifier.Invalid = UInt64
 PipeWire.NET.Media.DrmFormatModifier.Linear = UInt64
@@ -701,6 +1041,14 @@ PipeWire.NET.Media.PipeWireBufferType.MemFd = PipeWireBufferType
 PipeWire.NET.Media.PipeWireBufferType.MemPtr = PipeWireBufferType
 PipeWire.NET.Media.PipeWireBufferType.Unknown = PipeWireBufferType
 PipeWire.NET.Media.PipeWireBufferType.value__ = Int32
+PipeWire.NET.Media.PipeWireRateController
+PipeWire.NET.Media.PipeWireRateController..ctor()
+PipeWire.NET.Media.PipeWireRateController.Bandwidth : Double
+PipeWire.NET.Media.PipeWireRateController.MaxBandwidth = Double
+PipeWire.NET.Media.PipeWireRateController.MinBandwidth = Double
+PipeWire.NET.Media.PipeWireRateController.Reset()
+PipeWire.NET.Media.PipeWireRateController.SetBandwidth(Double, Int32, Int32)
+PipeWire.NET.Media.PipeWireRateController.Update(Double)
 PipeWire.NET.Media.PipeWireStreamControl
 PipeWire.NET.Media.PipeWireStreamControl..ctor(UInt32, String, Single, Single, Single, ImmutableArray<Single>, UInt32)
 PipeWire.NET.Media.PipeWireStreamControl.Deconstruct(UInt32&, String&, Single&, Single&, Single&, ImmutableArray`1&, UInt32&)
@@ -725,6 +1073,37 @@ PipeWire.NET.Media.PixelFormat.Unknown = PixelFormat
 PipeWire.NET.Media.PixelFormat.Yuv420 = PixelFormat
 PipeWire.NET.Media.PixelFormat.Yuyv = PixelFormat
 PipeWire.NET.Media.PixelFormat.value__ = Int32
+PipeWire.NET.Media.PulledVideoFrame
+PipeWire.NET.Media.PulledVideoFrame.BufferType : PipeWireBufferType
+PipeWire.NET.Media.PulledVideoFrame.CaptureClockNs : Nullable<Int64>
+PipeWire.NET.Media.PulledVideoFrame.Color : VideoColorInfo
+PipeWire.NET.Media.PulledVideoFrame.Crop : Nullable<VideoRegion>
+PipeWire.NET.Media.PulledVideoFrame.DelayNs : Int64
+PipeWire.NET.Media.PulledVideoFrame.Dispose()
+PipeWire.NET.Media.PulledVideoFrame.DrmFourcc : UInt32
+PipeWire.NET.Media.PulledVideoFrame.Format : PixelFormat
+PipeWire.NET.Media.PulledVideoFrame.Height : Int32
+PipeWire.NET.Media.PulledVideoFrame.IsFdBacked : Boolean
+PipeWire.NET.Media.PulledVideoFrame.MediaClockNs : Nullable<Int64>
+PipeWire.NET.Media.PulledVideoFrame.Modifier : UInt64
+PipeWire.NET.Media.PulledVideoFrame.Pixels : ImmutableArray<Byte>
+PipeWire.NET.Media.PulledVideoFrame.Planes : ImmutableArray<PulledVideoPlane>
+PipeWire.NET.Media.PulledVideoFrame.PresentationTimeNs : Nullable<Int64>
+PipeWire.NET.Media.PulledVideoFrame.SequenceNumber : UInt64
+PipeWire.NET.Media.PulledVideoFrame.Stride : Int32
+PipeWire.NET.Media.PulledVideoFrame.Transform : SpaMetaVideotransformValue
+PipeWire.NET.Media.PulledVideoFrame.Width : Int32
+PipeWire.NET.Media.PulledVideoPlane
+PipeWire.NET.Media.PulledVideoPlane..ctor(SafeDescriptorHandle, UInt32, Int32, UInt32)
+PipeWire.NET.Media.PulledVideoPlane.Deconstruct(SafeDescriptorHandle&, UInt32&, Int32&, UInt32&)
+PipeWire.NET.Media.PulledVideoPlane.Descriptor : SafeDescriptorHandle
+PipeWire.NET.Media.PulledVideoPlane.Equals(Object)
+PipeWire.NET.Media.PulledVideoPlane.Equals(PulledVideoPlane)
+PipeWire.NET.Media.PulledVideoPlane.GetHashCode()
+PipeWire.NET.Media.PulledVideoPlane.Offset : UInt32
+PipeWire.NET.Media.PulledVideoPlane.Size : UInt32
+PipeWire.NET.Media.PulledVideoPlane.Stride : Int32
+PipeWire.NET.Media.PulledVideoPlane.ToString()
 PipeWire.NET.Media.StreamCategory
 PipeWire.NET.Media.StreamCategory.Capture = StreamCategory
 PipeWire.NET.Media.StreamCategory.Playback = StreamCategory
@@ -748,6 +1127,7 @@ PipeWire.NET.Media.Streams.PipeWireAudioCapture+FrameReadyHandler.BeginInvoke(Pi
 PipeWire.NET.Media.Streams.PipeWireAudioCapture+FrameReadyHandler.EndInvoke(IAsyncResult)
 PipeWire.NET.Media.Streams.PipeWireAudioCapture+FrameReadyHandler.Invoke(PipeWireAudioCapture, AudioFrame)
 PipeWire.NET.Media.Streams.PipeWireAudioCapture..ctor(PipeWireContext, String)
+PipeWire.NET.Media.Streams.PipeWireAudioCapture.AnnounceLatency(PipeWireLatency, PipeWireProcessLatency)
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.AnyNode = UInt32
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.Connect(PipeWireNode, Int32, Int32, AudioSampleFormat, Boolean, CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.Connect(UInt32, Int32, Int32, AudioSampleFormat, String, Boolean, CancellationToken)
@@ -756,8 +1136,11 @@ PipeWire.NET.Media.Streams.PipeWireAudioCapture.DisposeAsync()
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.FrameReady event
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.FrameReadyHandler
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.GetControl(UInt32)
+PipeWire.NET.Media.Streams.PipeWireAudioCapture.GraphClock : Nullable<PipeWireGraphClock>
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.NodeId : Nullable<UInt32>
+PipeWire.NET.Media.Streams.PipeWireAudioCapture.RateMatch : Nullable<PipeWireRateMatch>
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.SetControl(UInt32, ReadOnlySpan<Single>, CancellationToken)
+PipeWire.NET.Media.Streams.PipeWireAudioCapture.SetRate(Double)
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.StateChanged event
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.WaitForStreamingAsync(CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireAudioOutput
@@ -767,15 +1150,20 @@ PipeWire.NET.Media.Streams.PipeWireAudioOutput+FillSamplesHandler.BeginInvoke(Pi
 PipeWire.NET.Media.Streams.PipeWireAudioOutput+FillSamplesHandler.EndInvoke(IAsyncResult)
 PipeWire.NET.Media.Streams.PipeWireAudioOutput+FillSamplesHandler.Invoke(PipeWireAudioOutput, Span<Byte>, Int32, Int32, AudioSampleFormat)
 PipeWire.NET.Media.Streams.PipeWireAudioOutput..ctor(PipeWireContext, String, Int32, Int32, AudioSampleFormat)
+PipeWire.NET.Media.Streams.PipeWireAudioOutput.AnnounceLatency(PipeWireLatency, PipeWireProcessLatency)
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.AnyNode = UInt32
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.Connect(UInt32, String, Boolean, CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.Controls : ImmutableArray<PipeWireStreamControl>
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.DisposeAsync()
+PipeWire.NET.Media.Streams.PipeWireAudioOutput.DrainAsync(CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.FillSamples event
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.FillSamplesHandler
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.GetControl(UInt32)
+PipeWire.NET.Media.Streams.PipeWireAudioOutput.GraphClock : Nullable<PipeWireGraphClock>
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.NodeId : Nullable<UInt32>
+PipeWire.NET.Media.Streams.PipeWireAudioOutput.RateMatch : Nullable<PipeWireRateMatch>
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.SetControl(UInt32, ReadOnlySpan<Single>, CancellationToken)
+PipeWire.NET.Media.Streams.PipeWireAudioOutput.SetRate(Double)
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.StateChanged event
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.WaitForStreamingAsync(CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireVideoCapture
@@ -790,6 +1178,7 @@ PipeWire.NET.Media.Streams.PipeWireVideoCapture+StateChangedHandler.BeginInvoke(
 PipeWire.NET.Media.Streams.PipeWireVideoCapture+StateChangedHandler.EndInvoke(IAsyncResult)
 PipeWire.NET.Media.Streams.PipeWireVideoCapture+StateChangedHandler.Invoke(PipeWireVideoCapture, PipeWireStreamState, PipeWireStreamState)
 PipeWire.NET.Media.Streams.PipeWireVideoCapture..ctor(PipeWireContext, String)
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.AnnounceLatency(PipeWireLatency, PipeWireProcessLatency)
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.AnyNode = UInt32
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.Connect(PipeWireNode, ReadOnlySpan<PixelFormat>, CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.Connect(UInt32, ReadOnlySpan<PixelFormat>, String, ReadOnlySpan<Int64>, Boolean, Int32, Int32, Int32, Boolean, CancellationToken)
@@ -798,11 +1187,16 @@ PipeWire.NET.Media.Streams.PipeWireVideoCapture.DisposeAsync()
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.FrameReady event
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.FrameReadyHandler
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.GetControl(UInt32)
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.GraphClock : Nullable<PipeWireGraphClock>
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.KeepLatestFrame : Boolean
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.NegotiatedModifier : UInt64
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.NodeId : Nullable<UInt32>
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.RateMatch : Nullable<PipeWireRateMatch>
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.SetControl(UInt32, ReadOnlySpan<Single>, CancellationToken)
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.SetRate(Double)
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.StateChanged event
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.StateChangedHandler
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.TryGetFrame(PulledVideoFrame&)
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.WaitForStreamingAsync(CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireVideoOutput
 PipeWire.NET.Media.Streams.PipeWireVideoOutput+AllocateDmaBufHandler
@@ -835,25 +1229,31 @@ PipeWire.NET.Media.Streams.PipeWireVideoOutput.AllocateDmaBuf event
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.AllocateDmaBufHandler
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.AllocateDmaBufSync event
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.AllocateDmaBufSyncHandler
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.AnnounceLatency(PipeWireLatency, PipeWireProcessLatency)
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.AnyNode = UInt32
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.Connect(UInt32, String, Boolean, CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.ConnectDmaBuf(ReadOnlySpan<Int64>, CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.ConnectDmaBufSync(ReadOnlySpan<Int64>, CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.Controls : ImmutableArray<PipeWireStreamControl>
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.DisposeAsync()
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.DrainAsync(CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.FillDmaBuf event
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.FillDmaBufHandler
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.FillFrame event
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.FillFrameHandler
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.GetControl(UInt32)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.GraphClock : Nullable<PipeWireGraphClock>
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.IsDriving : Boolean
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.NodeId : Nullable<UInt32>
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.RateMatch : Nullable<PipeWireRateMatch>
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.ReleaseDmaBuf event
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.ReleaseDmaBufHandler
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.SetControl(UInt32, ReadOnlySpan<Single>, CancellationToken)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.SetRate(Double)
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.StampSyncPoints(Int32, UInt64, UInt64)
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.StateChanged event
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.TriggerFrame()
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.TriggerFrameAndWaitAsync(CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.WaitForStreamingAsync(CancellationToken)
 PipeWire.NET.Media.VideoColorInfo
 PipeWire.NET.Media.VideoColorInfo..ctor(VideoColorRange, VideoColorMatrix, VideoTransferFunction, VideoColorPrimaries)
@@ -884,17 +1284,33 @@ PipeWire.NET.Media.VideoColorRange.Full_0_255 = VideoColorRange
 PipeWire.NET.Media.VideoColorRange.Limited_16_235 = VideoColorRange
 PipeWire.NET.Media.VideoColorRange.Unknown = VideoColorRange
 PipeWire.NET.Media.VideoColorRange.value__ = Int32
+PipeWire.NET.Media.VideoCursor
+PipeWire.NET.Media.VideoCursor.Format : PixelFormat
+PipeWire.NET.Media.VideoCursor.Height : UInt32
+PipeWire.NET.Media.VideoCursor.HotspotX : Int32
+PipeWire.NET.Media.VideoCursor.HotspotY : Int32
+PipeWire.NET.Media.VideoCursor.Id : UInt32
+PipeWire.NET.Media.VideoCursor.Pixels : ReadOnlySpan<Byte>
+PipeWire.NET.Media.VideoCursor.Stride : Int32
+PipeWire.NET.Media.VideoCursor.Width : UInt32
+PipeWire.NET.Media.VideoCursor.X : Int32
+PipeWire.NET.Media.VideoCursor.Y : Int32
 PipeWire.NET.Media.VideoFrame
-PipeWire.NET.Media.VideoFrame..ctor(ReadOnlySpan<Byte>, Int32, Int32, Int32, PixelFormat, UInt64, PipeWireBufferType, Int64, UInt32, Int64, VideoColorInfo, Int64, Int64, Int64, UInt64, ReadOnlySpan<VideoPlane>, Nullable<VideoSyncTimeline>)
+PipeWire.NET.Media.VideoFrame..ctor(ReadOnlySpan<Byte>, Int32, Int32, Int32, PixelFormat, UInt64, PipeWireBufferType, Int64, UInt32, Int64, VideoColorInfo, Int64, Int64, Int64, UInt64, ReadOnlySpan<VideoPlane>, Nullable<VideoSyncTimeline>, Nullable<VideoRegion>, SpaMetaVideotransformValue, ReadOnlySpan<VideoRegion>, VideoCursor, Boolean)
 PipeWire.NET.Media.VideoFrame.BufferType : PipeWireBufferType
 PipeWire.NET.Media.VideoFrame.CaptureClockNs : Nullable<Int64>
 PipeWire.NET.Media.VideoFrame.Clone()
 PipeWire.NET.Media.VideoFrame.Color : VideoColorInfo
+PipeWire.NET.Media.VideoFrame.Crop : Nullable<VideoRegion>
+PipeWire.NET.Media.VideoFrame.Cursor : VideoCursor
+PipeWire.NET.Media.VideoFrame.Damage : ReadOnlySpan<VideoRegion>
 PipeWire.NET.Media.VideoFrame.Data : ReadOnlySpan<Byte>
 PipeWire.NET.Media.VideoFrame.DelayNs : Int64
+PipeWire.NET.Media.VideoFrame.DrmFourcc : UInt32
 PipeWire.NET.Media.VideoFrame.DuplicateFd()
 PipeWire.NET.Media.VideoFrame.Fd : Int64
 PipeWire.NET.Media.VideoFrame.Format : PixelFormat
+PipeWire.NET.Media.VideoFrame.HasCursor : Boolean
 PipeWire.NET.Media.VideoFrame.Height : Int32
 PipeWire.NET.Media.VideoFrame.IsFdBacked : Boolean
 PipeWire.NET.Media.VideoFrame.MapOffset : UInt32
@@ -905,6 +1321,7 @@ PipeWire.NET.Media.VideoFrame.PresentationTimeNs : Nullable<Int64>
 PipeWire.NET.Media.VideoFrame.SequenceNumber : UInt64
 PipeWire.NET.Media.VideoFrame.Stride : Int32
 PipeWire.NET.Media.VideoFrame.SyncTimeline : Nullable<VideoSyncTimeline>
+PipeWire.NET.Media.VideoFrame.Transform : SpaMetaVideotransformValue
 PipeWire.NET.Media.VideoFrame.Width : Int32
 PipeWire.NET.Media.VideoPlane
 PipeWire.NET.Media.VideoPlane..ctor(Int64, UInt32, Int32, UInt32)
@@ -918,6 +1335,17 @@ PipeWire.NET.Media.VideoPlane.Offset : UInt32
 PipeWire.NET.Media.VideoPlane.Size : UInt32
 PipeWire.NET.Media.VideoPlane.Stride : Int32
 PipeWire.NET.Media.VideoPlane.ToString()
+PipeWire.NET.Media.VideoRegion
+PipeWire.NET.Media.VideoRegion..ctor(Int32, Int32, UInt32, UInt32)
+PipeWire.NET.Media.VideoRegion.Deconstruct(Int32&, Int32&, UInt32&, UInt32&)
+PipeWire.NET.Media.VideoRegion.Equals(Object)
+PipeWire.NET.Media.VideoRegion.Equals(VideoRegion)
+PipeWire.NET.Media.VideoRegion.GetHashCode()
+PipeWire.NET.Media.VideoRegion.Height : UInt32
+PipeWire.NET.Media.VideoRegion.ToString()
+PipeWire.NET.Media.VideoRegion.Width : UInt32
+PipeWire.NET.Media.VideoRegion.X : Int32
+PipeWire.NET.Media.VideoRegion.Y : Int32
 PipeWire.NET.Media.VideoSyncTimeline
 PipeWire.NET.Media.VideoSyncTimeline..ctor(UInt32, UInt64, UInt64)
 PipeWire.NET.Media.VideoSyncTimeline.AcquirePoint : UInt64

@@ -261,4 +261,50 @@ public sealed class PipeWireAudioOutput : IAsyncDisposable
 
         core.SetControl(id, values, cancellationToken);
     }
+
+    /// <summary>The graph clock as of the last cycle, or null before the graph offers it.</summary>
+    /// <remarks>
+    /// Two streams on one context are driven by the same clock, so their clocks are directly
+    /// comparable - which is what lets audio and video be lined up against each other.
+    /// </remarks>
+    public PipeWireGraphClock? GraphClock => _core?.GraphClock;
+
+    /// <summary>What the graph's resampler is doing for this stream, or null if none is.</summary>
+    public PipeWireRateMatch? RateMatch => _core?.RateMatch;
+
+    /// <summary>
+    /// Applies a rate correction to this stream, 1.0 being none.
+    /// </summary>
+    /// <remarks>
+    /// For bridging the graph clock to one this library does not own - a network transport, another
+    /// device. The upstream pattern is to derive the correction from how far the queue is from its
+    /// target, smooth it, and apply it here; see PipeWire's own rtp and tunnel modules. Applying an
+    /// unsmoothed correction makes the drift worse rather than better.
+    /// </remarks>
+    public void SetRate(double rate) => _core?.SetRate(rate);
+
+    /// <summary>
+    /// Announces the latency this stream adds, so the rest of the graph can compensate.
+    /// </summary>
+    /// <remarks>
+    /// Anything holding a queue - a network transport, an encoder - adds delay that nothing else
+    /// can see. Left unannounced it becomes drift between this stream and everything it is meant
+    /// to stay in sync with. Pass the process latency too when the delay is per-cycle rather than
+    /// fixed; PipeWire's own transport modules announce both.
+    /// </remarks>
+    public void AnnounceLatency(PipeWireLatency latency, PipeWireProcessLatency? processLatency = null)
+    {
+        ArgumentNullException.ThrowIfNull(latency);
+        _core?.AnnounceLatency(latency, processLatency);
+    }
+
+    /// <summary>
+    /// Plays out what is queued and waits until the daemon says it has finished.
+    /// </summary>
+    /// <remarks>
+    /// The difference between stopping and ending: disposing a stream drops whatever is still
+    /// queued, which truncates the tail of the audio. This waits for it.
+    /// </remarks>
+    public Task DrainAsync(CancellationToken cancellationToken = default) =>
+        _core?.DrainAsync(cancellationToken) ?? Task.CompletedTask;
 }

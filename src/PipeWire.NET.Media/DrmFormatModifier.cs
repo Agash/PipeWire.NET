@@ -1,3 +1,5 @@
+using PipeWire.NET.Drm;
+
 namespace PipeWire.NET.Media;
 
 /// <summary>
@@ -13,8 +15,8 @@ public static class DrmFormatModifier
     /// carries no negotiated modifier (host-memory path), and offered by a consumer that accepts any
     /// implicit-modifier layout the producer chooses.
     /// </summary>
-    public const ulong Invalid = 0x00ff_ffff_ffff_ffffUL;
+    public const ulong Invalid = DrmFourcc.DRM_FORMAT_MOD_INVALID;
 
     /// <summary><c>DRM_FORMAT_MOD_LINEAR</c> - plain, untiled, uncompressed memory layout.</summary>
-    public const ulong Linear = 0UL;
+    public const ulong Linear = DrmFourcc.DRM_FORMAT_MOD_LINEAR;
 }

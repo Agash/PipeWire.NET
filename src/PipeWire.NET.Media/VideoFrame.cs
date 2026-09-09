@@ -39,6 +39,14 @@ public readonly ref partial struct VideoFrame
     /// <param name="syncTimeline">
     /// The frame's explicit synchronisation points, or null when it carries none.
     /// </param>
+    /// <param name="crop">The visible region, or null when the whole buffer is visible.</param>
+    /// <param name="transform">How the image is oriented; <see cref="SpaMetaVideotransformValue.None"/> if upright.</param>
+    /// <param name="damage">
+    /// Regions that changed since the previous frame. Empty means the producer said nothing, which
+    /// is not the same as nothing having changed - treat it as the whole frame.
+    /// </param>
+    /// <param name="cursor">The pointer, when the producer sent it.</param>
+    /// <param name="hasCursor">Whether <paramref name="cursor"/> holds anything.</param>
     public VideoFrame(
         ReadOnlySpan<byte> data,
         int stride,
@@ -56,8 +64,18 @@ public readonly ref partial struct VideoFrame
         long delayNs = 0,
         ulong modifier = DrmFormatModifier.Invalid,
         ReadOnlySpan<VideoPlane> planes = default,
-        VideoSyncTimeline? syncTimeline = null)
+        VideoSyncTimeline? syncTimeline = null,
+        VideoRegion? crop = null,
+        SpaMetaVideotransformValue transform = SpaMetaVideotransformValue.None,
+        ReadOnlySpan<VideoRegion> damage = default,
+        VideoCursor cursor = default,
+        bool hasCursor = false)
     {
+        Cursor    = cursor;
+        HasCursor = hasCursor;
+        Crop      = crop;
+        Transform = transform;
+        Damage    = damage;
         Data               = data;
         Stride             = stride;
         Width              = width;
@@ -159,11 +177,47 @@ public readonly ref partial struct VideoFrame
     public ulong Modifier { get; }
 
     /// <summary>
+    /// DRM fourcc for <see cref="Format"/>, or <see cref="DrmFormat.Invalid"/> when the format has no
+    /// DRM equivalent. The pixel-layout half of a dmabuf description; <see cref="Modifier"/> is the
+    /// other half, and an importer needs both.
+    /// </summary>
+    public uint DrmFourcc => DrmFormat.FromPixelFormat(Format);
+
+    /// <summary>
     /// Per-plane DMA-BUF layout (fd/offset/stride/size). Empty for a host-memory frame; for a
     /// DMA-BUF frame this carries every plane (NV12 = 2, packed = 1, plus any modifier aux planes).
     /// Valid only for the duration of the <see cref="PipeWireVideoCapture.FrameReady"/> handler.
     /// </summary>
     public ReadOnlySpan<VideoPlane> Planes { get; }
+
+    /// <summary>
+    /// The pointer, valid only when <see cref="HasCursor"/> is true.
+    /// </summary>
+    /// <remarks>
+    /// A screencast sends this instead of painting the pointer into the frame, so a consumer can
+    /// draw it separately - and a transport can forward it far more cheaply than a whole frame,
+    /// since it changes on every mouse move rather than on every repaint.
+    /// </remarks>
+    public VideoCursor Cursor { get; }
+
+    /// <summary>Whether this frame carried pointer information.</summary>
+    public bool HasCursor { get; }
+
+    /// <summary>The visible region, or null when the whole buffer is visible.</summary>
+    public VideoRegion? Crop { get; }
+
+    /// <summary>How the image is oriented.</summary>
+    public SpaMetaVideotransformValue Transform { get; }
+
+    /// <summary>
+    /// Regions that changed since the previous frame.
+    /// </summary>
+    /// <remarks>
+    /// Empty means the producer did not say, which a consumer must treat as the whole frame having
+    /// changed. Forwarding only these regions is the difference between sending a strip and sending
+    /// a screen.
+    /// </remarks>
+    public ReadOnlySpan<VideoRegion> Damage { get; }
 
     /// <summary>The frame's explicit synchronisation points, or null when it carries none.</summary>
     /// <remarks>

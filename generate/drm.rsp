@@ -1,0 +1,38 @@
+# ClangSharpPInvokeGenerator response file for the DRM format constants.
+#
+# Separate from pipewire.rsp for one reason: these constants are #define macros
+# (DRM_FORMAT_NV12 and friends expand through fourcc_code()), so emitting them needs
+# --generate macro-bindings. That switch is fatal on the PipeWire header set, which uses
+# CompoundLiteralExpr macros ClangSharp 21 cannot translate - see the note in pipewire.rsp.
+# drm_fourcc.h has no such macros, so it generates cleanly on its own.
+#
+# --file is deliberately absent: generate.sh supplies the single composite root. Naming it
+# here as well makes it a second root, and ClangSharp then emits every declaration twice.
+#
+# These are kernel uapi: the values are ABI and never change. They are the pixel-layout
+# (fourcc) and tiling-layout (modifier) halves of a dmabuf description. PipeWire negotiates
+# the modifier through SPA_FORMAT_VIDEO_modifier but does not itself declare these values,
+# which is why they come from libdrm rather than the PipeWire headers.
+
+--traverse
+/usr/include/libdrm/drm_fourcc.h
+--include-directory
+/usr/include/libdrm
+
+--namespace
+PipeWire.NET.Drm
+--method-class-name
+DrmFourcc
+
+--generate
+macro-bindings
+
+--config
+file=single
+codegen=preview
+types=unix
+
+# drm_fourcc.h also declares one static inline helper. This header is traversed for its constants
+# only; a translated function body is untested surface that the mapping in DrmFormat does not use.
+--exclude
+drm_fourcc_canonicalize_nvidia_format_mod

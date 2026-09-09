@@ -57,6 +57,7 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
     private readonly ILogger _logger;
     private PipeWireStreamCore? _core;
     private ulong _sequence;
+    private PulledVideoFrame? _latest;
 
     // Boxed and swapped whole rather than mutated in place. The format is written by the loop
     // thread in OnFormat and read from NegotiatedModifier on whatever thread the caller is on; a
@@ -80,6 +81,9 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
     private bool _explicitSyncRequested;
     private PixelFormat _modifierFormat;
     private bool _modifierFixated;
+
+    /// <summary>How many damage regions to make room for; more than this and the rest are dropped.</summary>
+    private const int DamageRegions = 8;
 
     /// <summary>Cleared by a consumer promising to signal the release point.</summary>
     private const uint SyncUnscheduledRelease = 1u << 0;
@@ -236,8 +240,139 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Whether to keep the most recent frame for <see cref="TryGetFrame"/>. Off by default.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Turning this on makes every cycle copy its bytes (host memory) or duplicate its descriptors
+    /// (dmabuf), which is the cost of a frame outliving the callback that delivered it. Leave it off
+    /// for a consumer that does its work in <see cref="FrameReady"/>.
+    /// </para>
+    /// <para>
+    /// Only the newest frame is kept. A puller slower than the producer sees the current frame and
+    /// misses the ones in between, which is what a live sender wants: a late frame is worth less
+    /// than a current one, and queueing them would trade latency for content nobody will show.
+    /// </para>
+    /// </remarks>
+    public bool KeepLatestFrame { get; set; }
+
+    /// <summary>
+    /// Takes the most recent frame, if one has arrived since the last call.
+    /// </summary>
+    /// <param name="frame">
+    /// The frame, which the caller owns and must dispose. Null when none is available.
+    /// </param>
+    /// <returns>True when a frame was taken.</returns>
+    /// <remarks>
+    /// <para>
+    /// The pull counterpart to <see cref="FrameReady"/>, for a consumer running on its own clock
+    /// rather than the graph's. Requires <see cref="KeepLatestFrame"/>; without it this always
+    /// returns false, rather than silently starting to allocate.
+    /// </para>
+    /// <para>
+    /// Taking a frame clears it, so two calls with no cycle in between return the frame once. Safe
+    /// to call from any thread.
+    /// </para>
+    /// <para>
+    /// One caveat for dmabuf frames under explicit sync: duplicating the descriptors keeps the
+    /// memory mapped, but the release point is still signalled at the end of the cycle it arrived
+    /// on, because withholding it would stall the producer. A producer that recycles immediately can
+    /// therefore overwrite a held frame. Pull dmabuf frames from a producer using implicit sync, or
+    /// consume them within the cycle via <see cref="FrameReady"/>.
+    /// </para>
+    /// </remarks>
+    public bool TryGetFrame(out PulledVideoFrame? frame)
+    {
+        frame = Interlocked.Exchange(ref _latest, null);
+        return frame is not null;
+    }
+
     /// <inheritdoc/>
-    public ValueTask DisposeAsync() => _core?.DisposeAsync() ?? ValueTask.CompletedTask;
+    public async ValueTask DisposeAsync()
+    {
+        if (_core is not null)
+            await _core.DisposeAsync().ConfigureAwait(false);
+
+        // After the loop is gone, so no cycle can install another one behind us.
+        Interlocked.Exchange(ref _latest, null)?.Dispose();
+    }
+
+    /// <summary>
+    /// Takes ownership of a frame so it can outlive the cycle, and installs it as the current one.
+    /// </summary>
+    /// <remarks>
+    /// Runs on the loop thread, which is the only place the buffer's memory and descriptors are
+    /// valid, so the copy and the duplication both have to happen here rather than in
+    /// <see cref="TryGetFrame"/>. The frame it displaces is disposed, because a puller slower than
+    /// the producer would otherwise leak one descriptor set per cycle.
+    /// </remarks>
+    private void StoreLatest(in VideoFrame frame)
+    {
+        PulledVideoFrame pulled;
+        try
+        {
+            pulled = Take(frame);
+        }
+        catch (IOException ex)
+        {
+            // Duplicating a descriptor failed, which on this path means the process is out of them.
+            // The cycle itself is still fine, so carry on delivering to FrameReady and let the
+            // puller see no new frame rather than tearing down the stream.
+            LogFrameCaptureFailed(ex);
+            return;
+        }
+
+        Interlocked.Exchange(ref _latest, pulled)?.Dispose();
+    }
+
+    /// <summary>Copies a borrowed frame into one that owns everything it points at.</summary>
+    private static PulledVideoFrame Take(in VideoFrame frame)
+    {
+        ImmutableArray<PulledVideoPlane> planes = ImmutableArray<PulledVideoPlane>.Empty;
+
+        if (frame.IsFdBacked && !frame.Planes.IsEmpty)
+        {
+            var builder = ImmutableArray.CreateBuilder<PulledVideoPlane>(frame.Planes.Length);
+            try
+            {
+                foreach (VideoPlane plane in frame.Planes)
+                {
+                    builder.Add(new PulledVideoPlane(
+                        plane.DuplicateFd(), plane.Offset, plane.Stride, plane.Size));
+                }
+            }
+            catch
+            {
+                // Partway through, so the descriptors already duplicated are ours and nobody else
+                // will ever see them. Close them before letting the failure out.
+                foreach (PulledVideoPlane done in builder)
+                    done.Descriptor.Dispose();
+                throw;
+            }
+
+            planes = builder.MoveToImmutable();
+        }
+
+        return new PulledVideoFrame(
+            pixels: planes.IsEmpty ? [.. frame.Data] : ImmutableArray<byte>.Empty,
+            planes: planes,
+            stride: frame.Stride,
+            width: frame.Width,
+            height: frame.Height,
+            format: frame.Format,
+            drmFourcc: frame.DrmFourcc,
+            modifier: frame.Modifier,
+            sequenceNumber: frame.SequenceNumber,
+            bufferType: frame.BufferType,
+            color: frame.Color,
+            presentationTimeNs: frame.PresentationTimeNs,
+            captureClockNs: frame.CaptureClockNs,
+            mediaClockNs: frame.MediaClockNs,
+            delayNs: frame.DelayNs,
+            crop: frame.Crop,
+            transform: frame.Transform);
+    }
 
     private unsafe void OnBuffer(spa_data* d, pw_buffer* buf, in PipeWireStreamCore.StreamClock clock)
     {
@@ -292,6 +427,11 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
         // handler a frame whose geometry is zero or, worse, the previous negotiation's.
         if (fmt.Width <= 0 || fmt.Height <= 0) return;
 
+        // Read on the loop thread while the buffer is still ours; the spans die with it.
+        Span<VideoRegion> damage = stackalloc VideoRegion[DamageRegions];
+        int damageCount = SpaFormatPod.ReadDamage(spaBuf, damage);
+        bool hasCursor = SpaFormatPod.TryFindCursor(spaBuf, out VideoCursor cursor);
+
         var frame = new VideoFrame(
             pixels, d->chunk->stride, fmt.Width, fmt.Height, fmt.Format, ++_sequence,
             bufferType: bufferType,
@@ -306,7 +446,12 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
             planes: planes[..planeCount],
             syncTimeline: SpaFormatPod.TryFindSyncTimeline(spaBuf, out SpaFormatPod.SyncTimeline t)
                 ? new VideoSyncTimeline(t.Flags, t.AcquirePoint, t.ReleasePoint)
-                : null);
+                : null,
+            crop: SpaFormatPod.FindCrop(spaBuf),
+            transform: SpaFormatPod.FindTransform(spaBuf),
+            damage: damage[..damageCount],
+            cursor: hasCursor ? cursor : default,
+            hasCursor: hasCursor);
 
         // Explicit sync, when the producer negotiated it: wait for the acquire point before the
         // app reads a byte, and promise-then-signal the release point once the handler returns.
@@ -325,6 +470,9 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
             if (timeline.ReleasePoint != 0)
                 releaseFd = foundReleaseFd;
         }
+
+        if (KeepLatestFrame)
+            StoreLatest(frame);
 
         FrameReady?.Invoke(this, frame);
 
@@ -409,21 +557,37 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
             LogFixationRefused(rc);
         }
 
-        Span<byte> meta = stackalloc byte[64];
-        int ml = SpaFormatPod.WriteHeaderMetaParam(meta);
+        // One buffer with the pods laid end to end, because seven params is past what the
+        // fixed-arity overload takes. Each pod starts 8-byte aligned, as SPA requires, and carries
+        // its own size so the other side can walk them.
+        Span<byte> pods = stackalloc byte[8192];
+        int used = 0, podCount = 0;
 
-        // A second Meta object rather than a field in the first: each ParamMeta names one meta type,
-        // so asking for two is two objects.
-        Span<byte> syncMeta = stackalloc byte[64];
-        int sml = _explicitSyncRequested ? SpaFormatPod.WriteSyncTimelineMetaParam(syncMeta) : 0;
+        static int Align(int n) => (n + 7) & ~7;
+
+        used += Align(SpaFormatPod.WriteHeaderMetaParam(pods[used..])); podCount++;
+
+        // Each ParamMeta names one meta type, so asking for several is several objects.
+        if (_explicitSyncRequested)
+        {
+            used += Align(SpaFormatPod.WriteSyncTimelineMetaParam(pods[used..]));
+            podCount++;
+        }
+
+        // Crop, damage, orientation and the pointer. All advisory - a producer may attach none of
+        // them - but a consumer that never asks is guaranteed to get none, and then has to treat
+        // every frame as fully changed, upright, and with the cursor already painted in.
+        used += Align(SpaFormatPod.WriteCropMetaParam(pods[used..])); podCount++;
+        used += Align(SpaFormatPod.WriteDamageMetaParam(pods[used..], DamageRegions)); podCount++;
+        used += Align(SpaFormatPod.WriteTransformMetaParam(pods[used..])); podCount++;
+        used += Align(SpaFormatPod.WriteCursorMetaParam(pods[used..])); podCount++;
 
         int stride = SpaFormatPod.VideoStride(fmt.Format, fmt.Width);
         int size = SpaFormatPod.VideoImageSize(fmt.Format, fmt.Width, fmt.Height);
         if (size <= 0)
         {
             // Geometry not known yet.
-            if (sml > 0) core.RequestParamsFromCallback(meta[..ml], syncMeta[..sml]);
-            else core.RequestParamsFromCallback(meta[..ml]);
+            core.RequestParamsFromCallback(pods[..used], podCount);
             return;
         }
 
@@ -449,8 +613,12 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
 
         LogRequestedBuffers(blocks, blockSize, stride, SpaFormatPod.VideoCaptureDataTypeMask);
 
-        if (sml > 0) core.RequestParamsFromCallback(buffers[..bl], meta[..ml], syncMeta[..sml]);
-        else core.RequestParamsFromCallback(buffers[..bl], meta[..ml]);
+        // The buffers param goes first, then everything staged above.
+        Span<byte> all = stackalloc byte[8192];
+        buffers[..bl].CopyTo(all);
+        int allUsed = Align(bl);
+        pods[..used].CopyTo(all[allUsed..]);
+        core.RequestParamsFromCallback(all[..(allUsed + used)], podCount + 1);
     }
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "negotiated format {Format} {Width}x{Height} modifier=0x{Modifier:x} needsFixation={NeedsFixation}")]
@@ -464,6 +632,9 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "the daemon refused the modifier fixation ({Result}); it will be retried on the next negotiation")]
     private partial void LogFixationRefused(int result);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "could not take a copy of the frame for TryGetFrame; the puller will not see this one")]
+    private partial void LogFrameCaptureFailed(Exception exception);
 
     /// <summary>Waits until the stream is negotiated and running.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
@@ -521,5 +692,41 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
             ?? throw new InvalidOperationException("Connect before setting a control.");
 
         core.SetControl(id, values, cancellationToken);
+    }
+
+    /// <summary>The graph clock as of the last cycle, or null before the graph offers it.</summary>
+    /// <remarks>
+    /// Two streams on one context are driven by the same clock, so their clocks are directly
+    /// comparable - which is what lets audio and video be lined up against each other.
+    /// </remarks>
+    public PipeWireGraphClock? GraphClock => _core?.GraphClock;
+
+    /// <summary>What the graph's resampler is doing for this stream, or null if none is.</summary>
+    public PipeWireRateMatch? RateMatch => _core?.RateMatch;
+
+    /// <summary>
+    /// Applies a rate correction to this stream, 1.0 being none.
+    /// </summary>
+    /// <remarks>
+    /// For bridging the graph clock to one this library does not own - a network transport, another
+    /// device. The upstream pattern is to derive the correction from how far the queue is from its
+    /// target, smooth it, and apply it here; see PipeWire's own rtp and tunnel modules. Applying an
+    /// unsmoothed correction makes the drift worse rather than better.
+    /// </remarks>
+    public void SetRate(double rate) => _core?.SetRate(rate);
+
+    /// <summary>
+    /// Announces the latency this stream adds, so the rest of the graph can compensate.
+    /// </summary>
+    /// <remarks>
+    /// Anything holding a queue - a network transport, an encoder - adds delay that nothing else
+    /// can see. Left unannounced it becomes drift between this stream and everything it is meant
+    /// to stay in sync with. Pass the process latency too when the delay is per-cycle rather than
+    /// fixed; PipeWire's own transport modules announce both.
+    /// </remarks>
+    public void AnnounceLatency(PipeWireLatency latency, PipeWireProcessLatency? processLatency = null)
+    {
+        ArgumentNullException.ThrowIfNull(latency);
+        _core?.AnnounceLatency(latency, processLatency);
     }
 }

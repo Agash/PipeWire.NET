@@ -360,4 +360,46 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
             waited += step;
         }
     }
+
+    [TestMethod]
+    public async Task TwoStreamsOnOneContext_SeeTheSameGraphClock()
+    {
+        // The premise A/V sync rests on: streams driven by one graph share its clock, so their
+        // timestamps are on the same timeline. Before io_changed was wired there was no way to
+        // ask, and a consumer had to assume it.
+        RequireLinux();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-clock", cts.Token);
+
+        await using (ctx)
+        await using (reg)
+        {
+            await using var output = new PipeWireAudioOutput(ctx, "pwnet_clock_out");
+            output.FillSamples += (_, _, _, _, _) => 0;
+            output.Connect(autoConnect: false);
+
+            await WaitForAsync(reg, g => g.Nodes.Any(n => n.NodeName == "pwnet_clock_out"), cts.Token);
+
+            await using var capture = new PipeWireAudioCapture(ctx, "pwnet-clock-in");
+            capture.FrameReady += (_, _) => { };
+            capture.Connect(output.NodeId!.Value);
+
+            // The area arrives with the first cycle, not with the connect.
+            PipeWireGraphClock? producer = null, consumer = null;
+            for (int i = 0; i < 100 && (producer is null || consumer is null); i++)
+            {
+                await Task.Delay(50, cts.Token);
+                producer ??= output.GraphClock;
+                consumer ??= capture.GraphClock;
+            }
+
+            Assert.IsNotNull(producer, "the producer never received SPA_IO_Position");
+            Assert.IsNotNull(consumer, "the consumer never received SPA_IO_Position");
+
+            Assert.IsTrue(producer!.Value.RateDen > 0, "a clock with no rate says nothing");
+            Assert.AreEqual(producer!.Value.RateDen, consumer!.Value.RateDen,
+                "two streams on one graph must be on one clock rate");
+            Assert.IsTrue(producer!.Value.Duration > 0, "the quantum must be a real number of frames");
+        }
+    }
 }
