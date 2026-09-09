@@ -773,12 +773,20 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         if (_loopHandle is not null && _started)
             Native.pw_thread_loop_stop(_loopHandle.Loop);
 
+        // Unlink the connection watch before the core goes, not after. The hook is a node in the
+        // core's own listener list, so unlinking it writes through the neighbouring links - and
+        // those live inside the pw_core that pw_core_disconnect frees. Doing it afterwards is a
+        // write into freed memory, which corrupts the allocator rather than failing: it surfaces
+        // later, on an unrelated thread, as a segfault or "malloc(): unaligned tcache chunk".
+        //
+        // Being unable to dispatch is not the same as being safe to unlink, which is what the
+        // previous ordering here assumed. gstpipewiredeviceprovider removes its core listener
+        // while it still holds the core, then releases it.
+        ReleaseConnectionWatch();
+
         // Releases the connection only once every proxy holding it has gone. Disconnecting while
         // proxies are still registered makes PipeWire log "leaked proxy" and abandon each one.
-        // After the core is gone and the loop is stopped, so the daemon cannot be dispatching
-        // into the events table while it is freed.
         _coreHandle?.Dispose();
-        ReleaseConnectionWatch();
         _coreHandle = null;
 
         // Releases only once the core - and through it every proxy - has gone.

@@ -122,6 +122,22 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
                 Native.pw_thread_loop_lock(loop);
                 try
                 {
+                    // Detach before destroying, and do both under the loop lock. pw_proxy_destroy
+                    // does not unlink listeners: it marks the proxy a zombie so no further events
+                    // are emitted, then unrefs. The proxy can outlive that call - destroy itself
+                    // takes another reference when it defers through pw_core_destroy - and the
+                    // hook stays linked in its listener list until the last reference goes. Freeing
+                    // this hook's memory while it is still linked leaves the list pointing into
+                    // freed memory, and the walk that happens when the proxy is finally released
+                    // runs on the loop thread, which is where it crashes.
+                    //
+                    // Upstream treats removal as the caller's job: a debug build warns "leaked
+                    // listener" for any hook still linked at free time, gstpipewiredeviceprovider
+                    // removes then destroys, and wireplumber's proxy does the same with the write
+                    // ordered by this same lock.
+                    if (_hook is not null)
+                        Native.spa_hook_remove(_hook);
+
                     Native.pw_proxy_destroy(proxy);
                 }
                 finally
@@ -145,8 +161,8 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
                 _loopReferenced = false;
             }
 
-            // After the destroy, never before: destroying the proxy is what detaches the listener,
-            // so until that has run the daemon can still dispatch through this table.
+            // After spa_hook_remove above, which is what actually detaches the listener; the
+            // destroy only stops events being emitted. Freeing earlier would unlink nothing.
             if (_hook is not null)
             {
                 NativeMemory.Free(_hook);
