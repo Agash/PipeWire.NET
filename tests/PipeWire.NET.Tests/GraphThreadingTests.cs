@@ -14,11 +14,14 @@ namespace PipeWire.NET.Tests;
 /// do from a handler therefore has to be safe to do while that lock is held, and these tests pin
 /// which operations those are rather than leaving it to be discovered in an application.
 /// </remarks>
+[ExpectsLibraryError("handler threw")]
+[ExpectsLibraryError("stream error")]
+[ExpectsLibraryError("ParameterChanged handler")]
 [TestClass]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class GraphThreadingTests
+public sealed class GraphThreadingTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
 

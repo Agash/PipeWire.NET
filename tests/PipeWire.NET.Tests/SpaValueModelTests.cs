@@ -10,7 +10,7 @@ namespace PipeWire.NET.Tests;
 /// </summary>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class SpaValueModelTests
+public sealed class SpaValueModelTests : PipeWireTestBase
 {
     // ------------------------------------------------------------------ structural equality
 

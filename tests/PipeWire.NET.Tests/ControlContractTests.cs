@@ -18,7 +18,7 @@ namespace PipeWire.NET.Tests;
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class ControlContractTests
+public sealed class ControlContractTests : PipeWireTestBase
 {
     // ------------------------------------------------------------------ the pods the helpers build
 

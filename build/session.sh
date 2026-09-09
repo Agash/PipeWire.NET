@@ -51,6 +51,29 @@ pwnet_session_start() {
     fi
   fi
 
+  # A session sharing a machine with a desktop session cannot have its sound cards: the desktop
+  # holds them, and WirePlumber answers that by retrying the open in a loop that starves the whole
+  # session, not just audio. PWNET_SESSION_NO_HARDWARE gives this session a profile with no
+  # hardware at all, so the tests that need a card skip for a true reason and the rest run clean.
+  if [ "${PWNET_SESSION_NO_HARDWARE:-0}" = "1" ]; then
+    mkdir -p "$XDG_CONFIG_HOME/wireplumber/wireplumber.conf.d"
+    cat > "$XDG_CONFIG_HOME/wireplumber/wireplumber.conf.d/50-pwnet-no-hardware.conf" <<'PWNETCONF'
+wireplumber.profiles = {
+  pwnet-no-hardware = {
+    inherits = [ base ]
+    metadata.sm-settings = required
+    metadata.sm-objects = required
+    policy.standard = required
+    hardware.audio = disabled
+    hardware.bluetooth = disabled
+  }
+}
+PWNETCONF
+    PWNET_WP_ARGS="--profile pwnet-no-hardware"
+  else
+    PWNET_WP_ARGS=""
+  fi
+
   pipewire > "$PWNET_SESSION_LOG_DIR/pipewire.log" 2>&1 &
   PWNET_PW_PID=$!
 
@@ -88,14 +111,18 @@ pwnet_session_start() {
   # Only now, with the socket proven to answer. WirePlumber exits rather than retries when it
   # cannot reach PipeWire at startup, so starting the two together is a race the loaded machine
   # loses: "Failed to connect to PipeWire" and a session that answers pw-cli but manages nothing.
-  wireplumber > "$PWNET_SESSION_LOG_DIR/wireplumber.log" 2>&1 &
+  # Unquoted on purpose: empty must expand to no argument at all, not to one empty argument.
+  # shellcheck disable=SC2086
+  wireplumber $PWNET_WP_ARGS > "$PWNET_SESSION_LOG_DIR/wireplumber.log" 2>&1 &
   PWNET_WP_PID=$!
 
   # pipewire answering is only half the session: the tests need WirePlumber managing it
   # (linking streams, default metadata), and a WirePlumber that died on startup looks
   # exactly like a healthy one to pw-cli. Wait for its client global instead.
   for ((i = 1; i <= 80; i++)); do
-    if pw-dump 2>/dev/null | grep -q '"application.name": "WirePlumber"'; then
+    # Prefix, not an exact match: WirePlumber appends the profile name when one is selected, so
+    # a session started with --profile reports "WirePlumber (name)" here.
+    if pw-dump 2>/dev/null | grep -q '"application.name": "WirePlumber'; then
       echo "wireplumber up after $i attempt(s)"
       return 0
     fi

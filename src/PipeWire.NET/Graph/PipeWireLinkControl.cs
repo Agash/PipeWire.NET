@@ -60,6 +60,15 @@ public sealed partial class PipeWireLinkControl : IDisposable, IAsyncDisposable
     /// <summary>The global id of the link this is bound to.</summary>
     public uint LinkId { get; }
 
+    /// <summary>
+    /// Where an <c>info</c> event's properties go, set by the registry that made this object.
+    /// </summary>
+    /// <remarks>
+    /// The registry global carries the four endpoint ids and little else; the rest of a link's
+    /// properties only arrive here.
+    /// </remarks>
+    internal Action<uint, PipeWireProperties>? PropertiesObserved { get; set; }
+
     /// <summary>What the link is currently doing.</summary>
     /// <remarks>
     /// <see cref="PipeWireLinkState.Init"/> until the first info event arrives, which is what
@@ -163,6 +172,9 @@ public sealed partial class PipeWireLinkControl : IDisposable, IAsyncDisposable
 
             self._snapshot = snapshot;
             self._ready.TrySetResult();
+
+            if (self.PropertiesObserved is { } observer && info->props is not null)
+                observer(self.LinkId, PipeWireProperties.From(info->props));
 
             self.LogState(self.LinkId, snapshot.State, snapshot.Error);
             SafeCallback.Raise(self.StateChanged, h => h(self), ex => self.LogHandlerFaulted(ex));

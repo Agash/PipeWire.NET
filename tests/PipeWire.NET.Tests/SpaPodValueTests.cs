@@ -11,7 +11,7 @@ namespace PipeWire.NET.Tests;
 /// </summary>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class SpaPodValueTests
+public sealed class SpaPodValueTests : PipeWireTestBase
 {
     private static SpaObject Props(params SpaProperty[] properties) =>
         new(SpaType.ObjectProps, SpaParamType.Props, [.. properties]);

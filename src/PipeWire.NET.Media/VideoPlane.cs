@@ -26,13 +26,13 @@ namespace PipeWire.NET.Media;
 /// <param name="Size">Plane size in bytes, or 0 when the producer did not report it.</param>
 public readonly record struct VideoPlane(long Fd, uint Offset, int Stride, uint Size)
 {
-    /// <summary>A private copy of <see cref="Fd"/> that the caller owns and must close.</summary>
-    /// <returns>A new descriptor, or -1 when this plane is not fd-backed.</returns>
+    /// <summary>A private copy of <see cref="Fd"/>, owned by the caller.</summary>
+    /// <returns>A new descriptor, invalid when this plane is not fd-backed.</returns>
     /// <exception cref="IOException">The kernel refused to duplicate the descriptor.</exception>
     /// <remarks>
     /// The per-plane counterpart to <see cref="VideoFrame.DuplicateFd"/>, which duplicates the
     /// first plane only. Planes of a planar format may be backed by different descriptors, so an
     /// importer taking ownership of each one needs a copy of each one.
     /// </remarks>
-    public int DuplicateFd() => Descriptors.Duplicate(Fd);
+    public SafeDescriptorHandle DuplicateFd() => Descriptors.Duplicate(Fd);
 }

@@ -14,7 +14,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class PipeWireLogTests
+public sealed class PipeWireLogTests : PipeWireTestBase
 {
     private static void RequireLinux()
     {

@@ -13,14 +13,14 @@ namespace PipeWire.NET.Graph;
 [SupportedOSPlatform("linux")]
 public sealed record PipeWireSecurityContext : IPipeWireObject
 {
-    /// <param name="Id">PipeWire global id.</param>
-    /// <param name="Permissions">What this client may do with the object.</param>
-    /// <param name="InterfaceVersion">The interface version the daemon announced.</param>
     internal PipeWireSecurityContext(
         uint Id,
         PipeWirePermissions Permissions,
-        uint InterfaceVersion)
+        uint InterfaceVersion,
+        PipeWireProperties? Properties = null)
     {
+        this.Properties = Properties ?? PipeWireProperties.Empty;
+        this.ObjectSerial = this.Properties.Serial;
         this.Id = Id;
         this.Permissions = Permissions;
         this.InterfaceVersion = InterfaceVersion;
@@ -37,5 +37,11 @@ public sealed record PipeWireSecurityContext : IPipeWireObject
 
     /// <inheritdoc/>
     public uint InterfaceVersion { get; }
+
+    /// <inheritdoc/>
+    public PipeWireProperties Properties { get; }
+
+    /// <inheritdoc/>
+    public ulong? ObjectSerial { get; }
 
 }

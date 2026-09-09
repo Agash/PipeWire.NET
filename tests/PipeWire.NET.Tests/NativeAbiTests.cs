@@ -18,7 +18,7 @@ namespace PipeWire.NET.Tests;
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed unsafe class NativeAbiTests
+public sealed unsafe class NativeAbiTests : PipeWireTestBase
 {
     [TestMethod]
     public void EventTables_StartWithTheirVersionField()

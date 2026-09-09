@@ -12,7 +12,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class FilterTests
+public sealed class FilterTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(25);
 

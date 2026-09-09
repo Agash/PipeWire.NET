@@ -19,7 +19,7 @@ namespace PipeWire.NET.Tests;
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed unsafe class SpaDictBuilderTests
+public sealed unsafe class SpaDictBuilderTests : PipeWireTestBase
 {
     /// <summary>Reads a built dictionary back the way the parser does, so both agree.</summary>
     private static string? Read(ref spa_dict dict, ReadOnlySpan<byte> key)

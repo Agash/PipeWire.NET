@@ -1,4 +1,7 @@
 using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+using PipeWire.NET;
+using PipeWire.NET.Interop;
 
 namespace PipeWire.NET.Media;
 
@@ -7,24 +10,34 @@ internal static partial class Descriptors
 {
     /// <summary>Duplicates <paramref name="fd"/>, or returns -1 when it is not a descriptor.</summary>
     /// <exception cref="IOException">The kernel refused to duplicate it.</exception>
-    internal static int Duplicate(long fd)
+    /// <remarks>
+    /// Close-on-exec, so a dmabuf a caller kept does not turn up in a process it spawns later.
+    /// <c>dup</c> would not set it.
+    /// </remarks>
+    internal static SafeDescriptorHandle Duplicate(long fd)
     {
-        if (fd < 0) return -1;
+        if (fd < 0) return new SafeDescriptorHandle();
 
         // Range-checked before the narrowing cast. A descriptor is an int on Linux, so a value
         // outside that range did not come from the kernel and truncating it names a different file.
         if (fd > int.MaxValue)
             throw new IOException($"descriptor {fd} is not a file descriptor this process can hold.");
 
-        int copy = Dup((int)fd);
-        if (copy < 0)
-            throw new IOException($"dup of descriptor {fd} failed with errno {Marshal.GetLastPInvokeError()}.");
+        if (!OperatingSystem.IsLinux())
+            throw new PlatformNotSupportedException("descriptors are a Linux concept here.");
 
-        return copy;
+        try
+        {
+            using SafeFileHandle copy = FdInterop.DuplicateWithCloseOnExec((int)fd);
+            var owned = new SafeDescriptorHandle((int)copy.DangerousGetHandle());
+            copy.SetHandleAsInvalid();
+            return owned;
+        }
+        catch (PipeWireInteropException e)
+        {
+            throw new IOException($"dup of descriptor {fd} failed with errno {-e.Result}.", e);
+        }
     }
-
-    [LibraryImport("libc", EntryPoint = "dup", SetLastError = true)]
-    private static partial int Dup(int fd);
 
     // - eventfd timelines for explicit sync (sys/eventfd.h). A timeline descriptor behaves like a
     // semaphore counter: write adds, read waits for nonzero and takes. The acquire timeline is
@@ -44,11 +57,15 @@ internal static partial class Descriptors
         return fd;
     }
 
-    /// <summary>Signals a timeline (adds one), or closes nothing on failure: points are advisory.</summary>
+    /// <summary>Signals a timeline (adds one).</summary>
+    /// <remarks>
+    /// Retried on EINTR: nothing waiting on a timeline times out, so a dropped signal is a peer
+    /// that waits forever.
+    /// </remarks>
     internal static unsafe void SignalEventfd(int fd)
     {
         ulong one = 1;
-        _ = Write(fd, &one, 8);
+        while (Write(fd, &one, 8) < 0 && Marshal.GetLastPInvokeError() == EIntr) { }
     }
 
     /// <summary>Waits for a timeline to become nonzero and takes one count.</summary>
@@ -59,7 +76,7 @@ internal static partial class Descriptors
     internal static unsafe void WaitEventfd(int fd)
     {
         ulong taken;
-        _ = Read(fd, &taken, 8);
+        while (Read(fd, &taken, 8) < 0 && Marshal.GetLastPInvokeError() == EIntr) { }
     }
 
     internal static void CloseEventfd(int fd)
@@ -70,10 +87,13 @@ internal static partial class Descriptors
     [LibraryImport("libc", EntryPoint = "eventfd", SetLastError = true)]
     private static partial int Eventfd(uint initval, int flags);
 
-    [LibraryImport("libc", EntryPoint = "read")]
+    /// <summary><c>EINTR</c>: interrupted by a signal, so the call is retried rather than lost.</summary>
+    private const int EIntr = 4;
+
+    [LibraryImport("libc", EntryPoint = "read", SetLastError = true)]
     private static unsafe partial nint Read(int fd, void* buf, nuint count);
 
-    [LibraryImport("libc", EntryPoint = "write")]
+    [LibraryImport("libc", EntryPoint = "write", SetLastError = true)]
     private static unsafe partial nint Write(int fd, void* buf, nuint count);
 
     [LibraryImport("libc", EntryPoint = "close")]

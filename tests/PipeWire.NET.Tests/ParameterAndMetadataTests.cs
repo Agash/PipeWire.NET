@@ -14,7 +14,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class ParameterAndMetadataTests
+public sealed class ParameterAndMetadataTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(20);
 
@@ -166,7 +166,7 @@ public sealed class ParameterAndMetadataTests
             Assert.IsFalse(control.CanRead(SpaParamType.EnumProfile),
                 "a node must not advertise a device parameter");
 
-            await Assert.ThrowsExactlyAsync<PipeWireException>(
+            await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
                 async () => await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token));
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);

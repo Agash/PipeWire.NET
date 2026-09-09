@@ -19,7 +19,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class MetadataProtocolTests
+public sealed class MetadataProtocolTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
 
@@ -75,7 +75,7 @@ public sealed class MetadataProtocolTests
                 try
                 {
                     try { await store.SetAsync(key, "once", cancellationToken: cts.Token); }
-                    catch (PipeWireException) { Assert.Inconclusive("cannot write metadata here."); }
+                    catch (PipeWireException e) { Assert.Inconclusive($"cannot write metadata here: {e.Message}"); }
 
                     // Long enough for an echo to arrive if one is coming. A barrier does not order
                     // the session manager's hop, so this waits rather than syncing.
@@ -197,6 +197,14 @@ public sealed class MetadataProtocolTests
             await using (consumer)
             {
                 await consumer!.ReadyAsync(cts.Token);
+
+                // ReadyAsync orders this connection and no other. The provider writes on its own,
+                // so its entries reach the daemon and come back on a hop no barrier here waits
+                // for, and the first burst can legitimately land before they do. The clear below
+                // is waited for the same way, for the same reason.
+                for (int attempt = 0; attempt < 80 && consumer.Get("a") is null; attempt++)
+                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+
                 Assert.AreEqual("1", consumer.Get("a"), "the consumer never received the entries");
 
                 // pw-metadata with no key clears everything for the subject, from a third process.
@@ -275,7 +283,7 @@ public sealed class MetadataProtocolTests
 
                 try { await write; }
                 catch (OperationCanceledException) { /* the point of the test */ }
-                catch (PipeWireException) { Assert.Inconclusive("cannot write metadata here."); }
+                catch (PipeWireException e) { Assert.Inconclusive($"cannot write metadata here: {e.Message}"); }
 
                 // Whatever happened, the store and the daemon must agree. Reading back through a
                 // fresh barrier is the arbiter: if the write landed the value is there, and if it

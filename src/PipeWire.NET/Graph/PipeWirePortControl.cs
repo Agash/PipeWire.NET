@@ -151,7 +151,11 @@ public sealed partial class PipeWirePortControl : PipeWireParameterObject
         try
         {
             if (info is not null)
-                FromUserData<PipeWirePortControl>(data)?.OnInfo(info->@params, info->n_params);
+                if (FromUserData<PipeWirePortControl>(data) is { } self)
+                {
+                    self.OnInfo(info->@params, info->n_params);
+                    self.OnInfoProperties(info->props);
+                }
         }
         catch
         {

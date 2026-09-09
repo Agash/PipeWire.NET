@@ -22,7 +22,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("RequiresDaemon")]
 [TestCategory("RequiresGpu")]
 [SupportedOSPlatform("linux")]
-public sealed class DmaBufLifetimeTests
+public sealed class DmaBufLifetimeTests : PipeWireTestBase
 {
     private const int Width = 320;
     private const int Height = 240;
@@ -98,7 +98,9 @@ public sealed class DmaBufLifetimeTests
 
         capture.Connect(nodeId!.Value, [PixelFormat.Bgra], modifiers: [modifier]);
 
-        using var driver = new Timer(_ => { if (streaming) output.TriggerFrame(); }, null, 100, 33);
+        // Not driven from here. This node is not the graph's driver, and pw_stream_trigger_process
+        // on a node that is not one reaches the real driver as RequestProcess, which an audio
+        // adapter refuses - once per call, logged as an error. The consumer drives the graph.
         await Task.Delay(TimeSpan.FromSeconds(3));
 
         return (Volatile.Read(ref frames), Volatile.Read(ref dmaBufFrames), [.. indexes]);

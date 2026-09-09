@@ -19,7 +19,7 @@ namespace PipeWire.NET.Tests;
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class RegistryParsingTests
+public sealed class RegistryParsingTests : PipeWireTestBase
 {
 
     // ------------------------------------------------------------------ ports
@@ -31,7 +31,7 @@ public sealed class RegistryParsingTests
         fixed (spa_dict* d = &dict.Dict)
         {
             Assert.IsFalse(PipeWireGlobalParser.TryParsePort(
-                42, PipeWirePermissions.Read, 3, d,
+                42, PipeWirePermissions.Read, 3, PipeWireProperties.From(d),
                 out PipeWirePort? port, out string reason, out _),
                 "a port with no owning node cannot be filed anywhere");
 
@@ -51,7 +51,7 @@ public sealed class RegistryParsingTests
         using var dict = new NativeDict(("node.id", nodeId), ("port.direction", "out"));
         fixed (spa_dict* d = &dict.Dict)
             Assert.IsFalse(
-                PipeWireGlobalParser.TryParsePort(42, PipeWirePermissions.Read, 3, d, out _, out _, out _),
+                PipeWireGlobalParser.TryParsePort(42, PipeWirePermissions.Read, 3, PipeWireProperties.From(d), out _, out _, out _),
                 $"node.id '{nodeId}' should not have parsed");
     }
 
@@ -68,7 +68,7 @@ public sealed class RegistryParsingTests
         PipeWirePort? port;
         fixed (spa_dict* d = &dict.Dict)
             Assert.IsTrue(PipeWireGlobalParser.TryParsePort(
-                42, PipeWirePermissions.Read, 3, d, out port, out _, out _),
+                42, PipeWirePermissions.Read, 3, PipeWireProperties.From(d), out port, out _, out _),
                 $"node.id '{nodeId}' states 7 clearly enough");
 
         Assert.AreEqual(7u, port!.NodeId);
@@ -91,7 +91,7 @@ public sealed class RegistryParsingTests
         fixed (spa_dict* d = &dict.Dict)
         {
             Assert.IsFalse(PipeWireGlobalParser.TryParsePort(
-                42, PipeWirePermissions.Read, 3, d, out _, out string reason, out _),
+                42, PipeWirePermissions.Read, 3, PipeWireProperties.From(d), out _, out string reason, out _),
                 $"direction '{direction}' should not have parsed");
             StringAssert.Contains(reason, "direction");
         }
@@ -106,12 +106,14 @@ public sealed class RegistryParsingTests
     {
         using var dict = new NativeDict(
             ("node.id", "7"), ("port.direction", direction),
-            ("port.name", "capture_FL"), ("port.monitor", "true"), ("port.exclusive", "1"));
+            ("port.name", "capture_FL"), ("port.monitor", "true"), ("port.id", "3"),
+            ("port.control", "true"), ("format.dsp", "32 bit float mono audio"),
+            ("audio.channel", "FL"), ("port.alias", "alsa:capture_FL"), ("port.group", "stream.0"));
 
         PipeWirePort? port;
         fixed (spa_dict* d = &dict.Dict)
             Assert.IsTrue(PipeWireGlobalParser.TryParsePort(
-                42, PipeWirePermissions.Read | PipeWirePermissions.Write, 3, d, out port, out _, out _));
+                42, PipeWirePermissions.Read | PipeWirePermissions.Write, 3, PipeWireProperties.From(d), out port, out _, out _));
 
         Assert.IsNotNull(port);
         Assert.AreEqual(42u, port!.PortId);
@@ -119,9 +121,58 @@ public sealed class RegistryParsingTests
         Assert.AreEqual(expected, port.PortDirection);
         Assert.AreEqual("capture_FL", port.PortName);
         Assert.IsTrue(port.Monitor);
-        Assert.IsTrue(port.Exclusive);
+        Assert.AreEqual(3u, port.PortIndex);
+        Assert.IsTrue(port.IsControl);
+        Assert.AreEqual("32 bit float mono audio", port.DspFormat);
+        Assert.AreEqual("FL", port.AudioChannel);
+        Assert.AreEqual("alsa:capture_FL", port.Alias);
+        Assert.AreEqual("stream.0", port.PortGroup);
         Assert.AreEqual(3u, port.InterfaceVersion);
         Assert.IsTrue(port.Permissions.HasFlag(PipeWirePermissions.Write));
+    }
+
+    [TestMethod]
+    public unsafe void AControlPortSpeltEitherWay_ReadsAsAControlPort()
+    {
+        // PipeWire's own adapter control ports set port.control and keep the direction as in or
+        // out, so reading the direction alone misses exactly the ports that matter. The JACK-style
+        // direction is the other spelling and has to count too.
+        using var flagged = new NativeDict(("node.id", "7"), ("port.direction", "in"), ("port.control", "true"));
+        using var directed = new NativeDict(("node.id", "7"), ("port.direction", "control"));
+        using var neither = new NativeDict(("node.id", "7"), ("port.direction", "in"));
+
+        PipeWirePort? a, b, c;
+        fixed (spa_dict* d = &flagged.Dict)
+            PipeWireGlobalParser.TryParsePort(1, PipeWirePermissions.None, 3, PipeWireProperties.From(d), out a, out _, out _);
+        fixed (spa_dict* d = &directed.Dict)
+            PipeWireGlobalParser.TryParsePort(2, PipeWirePermissions.None, 3, PipeWireProperties.From(d), out b, out _, out _);
+        fixed (spa_dict* d = &neither.Dict)
+            PipeWireGlobalParser.TryParsePort(3, PipeWirePermissions.None, 3, PipeWireProperties.From(d), out c, out _, out _);
+
+        Assert.IsTrue(a!.IsControl, "port.control must count");
+        Assert.IsTrue(b!.IsControl, "port.direction=control must count");
+        Assert.IsFalse(c!.IsControl);
+        Assert.AreEqual(PipeWirePortDirection.In, a.PortDirection,
+            "a control port keeps the direction it reported");
+    }
+
+    [TestMethod]
+    public unsafe void EveryObjectCarriesItsSerialAndItsRawProperties()
+    {
+        // object.serial is on every global and is never reused, unlike the id. Anything the
+        // library does not model has to stay reachable, or a caller is stuck until a release.
+        using var dict = new NativeDict(
+            ("node.name", "n"), ("object.serial", "8814"), ("some.module.key", "kept"));
+
+        PipeWireNode node;
+        fixed (spa_dict* d = &dict.Dict)
+            node = PipeWireGlobalParser.ParseNode(5, PipeWirePermissions.None, 3, PipeWireProperties.From(d));
+
+        Assert.AreEqual(8814ul, node.ObjectSerial);
+        Assert.AreEqual("kept", node.Properties["some.module.key"]);
+        Assert.AreEqual("n", node.Properties[PipeWireNames.NodeName],
+            "a modelled property stays readable through the dictionary too");
+        Assert.IsNull(node.Properties.GetValueOrDefault("not.sent"));
     }
 
     [TestMethod]
@@ -131,12 +182,13 @@ public sealed class RegistryParsingTests
         PipeWirePort? port;
         fixed (spa_dict* d = &dict.Dict)
             Assert.IsTrue(PipeWireGlobalParser.TryParsePort(
-                42, PipeWirePermissions.None, 3, d, out port, out _, out _));
+                42, PipeWirePermissions.None, 3, PipeWireProperties.From(d), out port, out _, out _));
 
         Assert.IsNotNull(port);
         Assert.IsNull(port!.PortName);
         Assert.IsFalse(port.Monitor, "an absent port.monitor is false, matching spa_atob");
-        Assert.IsFalse(port.Exclusive);
+        Assert.IsNull(port.PortIndex);
+        Assert.IsFalse(port.IsControl);
     }
 
     [TestMethod]
@@ -154,7 +206,7 @@ public sealed class RegistryParsingTests
         PipeWirePort? port;
         fixed (spa_dict* d = &dict.Dict)
             Assert.IsTrue(PipeWireGlobalParser.TryParsePort(
-                42, PipeWirePermissions.None, 3, d, out port, out _, out _));
+                42, PipeWirePermissions.None, 3, PipeWireProperties.From(d), out port, out _, out _));
 
         Assert.AreEqual(expected, port!.Monitor, $"port.monitor '{raw}'");
     }
@@ -181,7 +233,7 @@ public sealed class RegistryParsingTests
         fixed (spa_dict* d = &dict.Dict)
         {
             Assert.IsFalse(PipeWireGlobalParser.TryParseLink(
-                99, PipeWirePermissions.Read, 3, d,
+                99, PipeWirePermissions.Read, 3, PipeWireProperties.From(d),
                 out PipeWireLink? link, out string reason, out _),
                 $"a link without {omit} describes no route");
 
@@ -199,7 +251,7 @@ public sealed class RegistryParsingTests
 
         fixed (spa_dict* d = &dict.Dict)
             Assert.IsFalse(PipeWireGlobalParser.TryParseLink(
-                99, PipeWirePermissions.Read, 3, d, out _, out _, out string? offending));
+                99, PipeWirePermissions.Read, 3, PipeWireProperties.From(d), out _, out _, out string? offending));
     }
 
     [TestMethod]
@@ -212,7 +264,7 @@ public sealed class RegistryParsingTests
         PipeWireLink? link;
         fixed (spa_dict* d = &dict.Dict)
             Assert.IsTrue(PipeWireGlobalParser.TryParseLink(
-                99, PipeWirePermissions.Read, 3, d, out link, out _, out _));
+                99, PipeWirePermissions.Read, 3, PipeWireProperties.From(d), out link, out _, out _));
 
         Assert.IsNotNull(link);
         Assert.AreEqual(99u, link!.LinkId);
@@ -233,7 +285,7 @@ public sealed class RegistryParsingTests
         using var dict = new NativeDict();
         PipeWireNode node;
         fixed (spa_dict* d = &dict.Dict)
-            node = PipeWireGlobalParser.ParseNode(5, PipeWirePermissions.Read, 3, d);
+            node = PipeWireGlobalParser.ParseNode(5, PipeWirePermissions.Read, 3, PipeWireProperties.From(d));
 
         Assert.AreEqual(5u, node.NodeId);
         Assert.IsNull(node.NodeName);
@@ -251,7 +303,7 @@ public sealed class RegistryParsingTests
 
         PipeWireNode node;
         fixed (spa_dict* d = &dict.Dict)
-            node = PipeWireGlobalParser.ParseNode(5, PipeWirePermissions.Read, 3, d);
+            node = PipeWireGlobalParser.ParseNode(5, PipeWirePermissions.Read, 3, PipeWireProperties.From(d));
 
         Assert.AreEqual("alsa_output.pci", node.NodeName);
         Assert.AreEqual("Speakers", node.Description);
@@ -262,6 +314,36 @@ public sealed class RegistryParsingTests
     }
 
     [TestMethod]
+    public unsafe void ANodeADeviceProvides_NamesThatDevice()
+    {
+        using var dict = new NativeDict(("device.id", "42"), ("media.class", "Audio/Sink"));
+        PipeWireNode node;
+        fixed (spa_dict* d = &dict.Dict)
+            node = PipeWireGlobalParser.ParseNode(5, PipeWirePermissions.Read, 3, PipeWireProperties.From(d));
+
+        Assert.AreEqual(42u, node.DeviceId);
+    }
+
+    [TestMethod]
+    public unsafe void ANodeNoDeviceProvides_ReportsNoDevice()
+    {
+        // An application stream has no device.id at all, and a malformed one is no better than a
+        // missing one: guessing an owner would attribute a stream to a card that never made it.
+        using var dict = new NativeDict(("media.class", "Stream/Output/Audio"));
+        PipeWireNode stream;
+        fixed (spa_dict* d = &dict.Dict)
+            stream = PipeWireGlobalParser.ParseNode(5, PipeWirePermissions.Read, 3, PipeWireProperties.From(d));
+
+        using var garbage = new NativeDict(("device.id", "not-a-number"));
+        PipeWireNode unparsable;
+        fixed (spa_dict* d = &garbage.Dict)
+            unparsable = PipeWireGlobalParser.ParseNode(6, PipeWirePermissions.Read, 3, PipeWireProperties.From(d));
+
+        Assert.IsNull(stream.DeviceId);
+        Assert.IsNull(unparsable.DeviceId);
+    }
+
+    [TestMethod]
     public unsafe void APropertyWithANullValue_ReadsAsAbsentAndDoesNotStopTheRest()
     {
         // spa_dict_item.value may be null. That must not be dereferenced, and must not abandon the
@@ -269,7 +351,7 @@ public sealed class RegistryParsingTests
         using var dict = new NativeDict(("node.name", null), ("media.class", "Audio/Sink"));
         PipeWireNode node;
         fixed (spa_dict* d = &dict.Dict)
-            node = PipeWireGlobalParser.ParseNode(5, PipeWirePermissions.Read, 3, d);
+            node = PipeWireGlobalParser.ParseNode(5, PipeWirePermissions.Read, 3, PipeWireProperties.From(d));
 
         Assert.IsNull(node.NodeName);
         Assert.AreEqual("Audio/Sink", node.MediaClass, "later properties must still be read");
@@ -282,7 +364,7 @@ public sealed class RegistryParsingTests
         using var dict = new NativeDict(("node.n", "short"), ("node.name", "full"));
         PipeWireNode node;
         fixed (spa_dict* d = &dict.Dict)
-            node = PipeWireGlobalParser.ParseNode(5, PipeWirePermissions.Read, 3, d);
+            node = PipeWireGlobalParser.ParseNode(5, PipeWirePermissions.Read, 3, PipeWireProperties.From(d));
 
         Assert.AreEqual("full", node.NodeName, "a prefix key must not satisfy the lookup");
         Assert.IsNull(node.NodeNick);
@@ -295,7 +377,7 @@ public sealed class RegistryParsingTests
         using var dict = new NativeDict(("node.name", "first"), ("node.name", "second"));
         PipeWireNode node;
         fixed (spa_dict* d = &dict.Dict)
-            node = PipeWireGlobalParser.ParseNode(5, PipeWirePermissions.Read, 3, d);
+            node = PipeWireGlobalParser.ParseNode(5, PipeWirePermissions.Read, 3, PipeWireProperties.From(d));
 
         Assert.AreEqual("first", node.NodeName);
     }
@@ -306,18 +388,18 @@ public sealed class RegistryParsingTests
     public unsafe void AnEmptyDictAndALyingItemCount_AreBothTolerated()
     {
         var empty = new spa_dict { flags = 0, n_items = 0, items = null };
-        Assert.IsNull(PipeWireGlobalParser.ParseNode(1, PipeWirePermissions.None, 3, &empty).NodeName);
+        Assert.IsNull(PipeWireGlobalParser.ParseNode(1, PipeWirePermissions.None, 3, PipeWireProperties.From(&empty)).NodeName);
 
         // n_items claiming four entries behind a null pointer is the shape a corrupted message takes.
         var lying = new spa_dict { flags = 0, n_items = 4, items = null };
-        Assert.IsNull(PipeWireGlobalParser.ParseNode(2, PipeWirePermissions.None, 3, &lying).NodeName,
+        Assert.IsNull(PipeWireGlobalParser.ParseNode(2, PipeWirePermissions.None, 3, PipeWireProperties.From(&lying)).NodeName,
             "a null items array must read as no properties, not be dereferenced");
     }
 
     [TestMethod]
     public unsafe void ANullPropertyDictionary_IsTolerated()
     {
-        PipeWireNode node = PipeWireGlobalParser.ParseNode(1, PipeWirePermissions.None, 3, null);
+        PipeWireNode node = PipeWireGlobalParser.ParseNode(1, PipeWirePermissions.None, 3, PipeWireProperties.From(null));
         Assert.AreEqual(1u, node.NodeId, "props may be null; the node still exists");
         Assert.IsNull(node.NodeName);
     }
@@ -339,7 +421,7 @@ public sealed class RegistryParsingTests
                 items[1].value = (sbyte*)pv;
 
                 var dict = new spa_dict { flags = 0, n_items = 2, items = items };
-                PipeWireNode node = PipeWireGlobalParser.ParseNode(1, PipeWirePermissions.None, 3, &dict);
+                PipeWireNode node = PipeWireGlobalParser.ParseNode(1, PipeWirePermissions.None, 3, PipeWireProperties.From(&dict));
                 Assert.AreEqual("kept", node.NodeName, "a null key must be skipped, not crash the walk");
             }
         }
@@ -363,9 +445,9 @@ public sealed class RegistryParsingTests
                 using var dict = new NativeDict((k, v));
                 fixed (spa_dict* d = &dict.Dict)
                 {
-                    _ = PipeWireGlobalParser.ParseNode(1, PipeWirePermissions.None, 3, d);
-                    _ = PipeWireGlobalParser.TryParsePort(1, PipeWirePermissions.None, 3, d, out _, out _, out _);
-                    _ = PipeWireGlobalParser.TryParseLink(1, PipeWirePermissions.None, 3, d, out _, out _, out _);
+                    _ = PipeWireGlobalParser.ParseNode(1, PipeWirePermissions.None, 3, PipeWireProperties.From(d));
+                    _ = PipeWireGlobalParser.TryParsePort(1, PipeWirePermissions.None, 3, PipeWireProperties.From(d), out _, out _, out _);
+                    _ = PipeWireGlobalParser.TryParseLink(1, PipeWirePermissions.None, 3, PipeWireProperties.From(d), out _, out _, out _);
                 }
             }
     }

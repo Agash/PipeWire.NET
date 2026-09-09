@@ -20,6 +20,36 @@ internal sealed class ConsoleTestLoggerFactory : ILoggerFactory
 
     private static readonly LogLevel MinimumLevel = ReadMinimumLevel();
 
+    /// <summary>Errors logged while collection is on, from whichever thread logged them.</summary>
+    /// <remarks>
+    /// Static, not per-thread: the library logs from the loop thread, so a collection scoped to
+    /// the thread running the test would never see the entries worth failing on. Tests in this
+    /// assembly run sequentially, which is what makes one shared list correct.
+    /// </remarks>
+    private static readonly List<string> Errors = [];
+
+    private static bool _collecting;
+
+    /// <summary>Starts collecting library errors, discarding anything from before.</summary>
+    public static void StartCollectingErrors()
+    {
+        lock (Errors)
+        {
+            Errors.Clear();
+            _collecting = true;
+        }
+    }
+
+    /// <summary>Stops collecting and returns what arrived.</summary>
+    public static IReadOnlyList<string> StopCollectingErrors()
+    {
+        lock (Errors)
+        {
+            _collecting = false;
+            return [.. Errors];
+        }
+    }
+
     public void AddProvider(ILoggerProvider provider) { }
 
     public ILogger CreateLogger(string categoryName) => new ConsoleTestLogger(categoryName);
@@ -41,6 +71,18 @@ internal sealed class ConsoleTestLoggerFactory : ILoggerFactory
         public bool IsEnabled(LogLevel logLevel) => logLevel >= MinimumLevel;
 
         public void Log<TState>(LogLevel level, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter) => Console.Error.WriteLine($"[{level}] {category}: {formatter(state, exception)}");
+            Func<TState, Exception?, string> formatter)
+        {
+            string line = $"[{level}] {category}: {formatter(state, exception)}";
+            if (level >= LogLevel.Error)
+            {
+                lock (Errors)
+                {
+                    if (_collecting) Errors.Add(line);
+                }
+            }
+
+            Console.Error.WriteLine(line);
+        }
     }
 }

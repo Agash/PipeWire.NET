@@ -19,7 +19,7 @@ namespace PipeWire.NET.Tests;
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed unsafe class HostileInputTests
+public sealed unsafe class HostileInputTests : PipeWireTestBase
 {
     // - Daemon strings -
 
@@ -221,9 +221,10 @@ public sealed unsafe class HostileInputTests
         fixed (byte* p = pod)
         {
             Assert.IsTrue(PipeWireProfilerReader.TryParseReport(
-                (spa_pod*)p, out SpaObject? report, out int size));
+                (spa_pod*)p, out System.Collections.Immutable.ImmutableArray<SpaObject> reports, out int size));
             Assert.AreEqual(pod.Length, size);
-            Assert.AreEqual(expected, report);
+            Assert.HasCount(1, reports);
+            Assert.AreEqual(expected, reports[0]);
         }
     }
 
@@ -330,7 +331,7 @@ public sealed unsafe class HostileInputTests
         PipeWireException.ThrowIfFailed(0, "op");
         PipeWireException.ThrowIfFailed(3, "op");
 
-        PipeWireException thrown = Assert.ThrowsExactly<PipeWireException>(
+        PipeWireException thrown = Assert.ThrowsExactly<PipeWireInteropException>(
             () => PipeWireException.ThrowIfFailed(-2, "op", 7));
         Assert.AreEqual(-2, thrown.Result);
         Assert.AreEqual("op", thrown.Operation);
@@ -399,10 +400,10 @@ public sealed unsafe class HostileInputTests
         Assert.AreEqual(-1, Native.pw_metadata_clear((pw_metadata*)obj));
 
         // Creating is not reportable as -1: there is no call to fail, so it throws ENOSYS.
-        PipeWireException refused = Assert.ThrowsExactly<PipeWireException>(
+        PipeWireException refused = Assert.ThrowsExactly<PipeWireInteropException>(
             () => Native.pw_core_get_registry((pw_core*)obj, 0, 0));
         Assert.AreEqual(-38, refused.Result);
-        refused = Assert.ThrowsExactly<PipeWireException>(
+        refused = Assert.ThrowsExactly<PipeWireInteropException>(
             () => Native.pw_core_create_object((pw_core*)obj, null, null, 0, null, 0));
         Assert.AreEqual(-38, refused.Result);
 

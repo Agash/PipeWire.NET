@@ -1,4 +1,5 @@
 using Microsoft.Win32.SafeHandles;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -19,7 +20,7 @@ namespace PipeWire.NET.Tests;
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed unsafe class NativeHelperTests
+public sealed unsafe class NativeHelperTests : PipeWireTestBase
 {
     [TestMethod]
     public void AnAsyncResult_IsRecognisedAndItsSequenceExtracted()
@@ -155,20 +156,13 @@ public sealed unsafe class NativeHelperTests
             long fd = file.DangerousGetHandle();
 
             var plane = new VideoPlane(fd, Offset: 0, Stride: 4, Size: 1);
-            int copy = plane.DuplicateFd();
+            using SafeDescriptorHandle copy = plane.DuplicateFd();
 
-            try
-            {
-                Assert.IsTrue(copy >= 0, "dup of a live descriptor failed");
-                Assert.AreNotEqual((int)fd, copy, "dup returned the descriptor it was given");
+            Assert.IsFalse(copy.IsInvalid, "dup of a live descriptor failed");
+            Assert.AreNotEqual((int)fd, copy.Descriptor, "dup returned the descriptor it was given");
 
-                file.Dispose();
-                Assert.IsTrue(Fcntl(copy, FGetFd) >= 0, "the copy did not outlive the original");
-            }
-            finally
-            {
-                if (copy >= 0) Close(copy);
-            }
+            file.Dispose();
+            Assert.IsTrue(Fcntl(copy.Descriptor, FGetFd) >= 0, "the copy did not outlive the original");
         }
         finally
         {
@@ -181,7 +175,8 @@ public sealed unsafe class NativeHelperTests
     {
         // Host-memory frames carry -1, and a caller looping over planes should not have to
         // special-case them before asking.
-        Assert.AreEqual(-1, new VideoPlane(-1, 0, 0, 0).DuplicateFd());
+        using SafeDescriptorHandle none = new VideoPlane(-1, 0, 0, 0).DuplicateFd();
+        Assert.IsTrue(none.IsInvalid);
     }
 
     [TestMethod]
@@ -215,6 +210,45 @@ public sealed unsafe class NativeHelperTests
         {
             File.Delete(path);
         }
+    }
+
+    /// <summary>
+    /// <c>SO_ACCEPTCONN</c> and <c>SOL_SOCKET</c> are hardcoded numbers, and a wrong one fails
+    /// closed: getsockopt errors, every descriptor reads as not listening, and the security
+    /// context refuses sockets that are perfectly good. Runs on both architectures the build
+    /// targets, which is the point of checking it here rather than against a daemon.
+    /// </summary>
+    [TestMethod]
+    public void IsListeningSocket_TellsListeningSocketsFromEverythingElse()
+    {
+        if (!OperatingSystem.IsLinux())
+            Assert.Inconclusive("descriptors are a Linux concept here.");
+
+        string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        using (var listening = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified))
+        {
+            listening.Bind(new UnixDomainSocketEndPoint(path));
+            listening.Listen(1);
+            Assert.IsTrue(FdInterop.IsListeningSocket((int)listening.SafeHandle.DangerousGetHandle()),
+                "a listening socket must read as one, or the constants are wrong for this architecture");
+        }
+        File.Delete(path);
+
+        using (var unbound = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified))
+        {
+            Assert.IsFalse(FdInterop.IsListeningSocket((int)unbound.SafeHandle.DangerousGetHandle()),
+                "a socket that never listened is not a listening socket");
+        }
+
+        string file = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        using (var stream = new FileStream(file, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1,
+                                           FileOptions.DeleteOnClose))
+        {
+            Assert.IsFalse(FdInterop.IsListeningSocket((int)stream.SafeFileHandle.DangerousGetHandle()),
+                "a regular file is not a socket at all");
+        }
+
+        Assert.IsFalse(FdInterop.IsListeningSocket(-1), "a descriptor that cannot exist is not listening");
     }
 
     private const int FGetFd = 1;

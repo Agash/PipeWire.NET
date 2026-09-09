@@ -396,7 +396,7 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
             Volatile.Write(ref _subscribed, parameters.ToArray());
 
         if (rc < 0)
-            throw new PipeWireException("subscribe_params", rc);
+            throw new PipeWireInteropException("subscribe_params", rc);
     }
 
     /// <summary>
@@ -458,6 +458,28 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
         Volatile.Write(ref _parameters, described);
 
         SafeCallback.Raise(InfoChanged, h => h(this), OnHandlerFaulted);
+    }
+
+    /// <summary>
+    /// Where an <c>info</c> event's properties go, set by the registry that made this object.
+    /// </summary>
+    /// <remarks>
+    /// A registry global carries a filtered copy of an object's properties; the rest only arrive
+    /// on the info event of a bound proxy. Handing them back is what lets the registry replace its
+    /// record with a complete one, so a caller reads the fuller object from the graph rather than
+    /// having to take the event apart itself.
+    /// </remarks>
+    internal Action<uint, PipeWireProperties>? PropertiesObserved { get; set; }
+
+    /// <summary>Files the properties from one <c>info</c> event, from the loop thread.</summary>
+    private protected unsafe void OnInfoProperties(spa_dict* properties)
+    {
+        Action<uint, PipeWireProperties>? observer = PropertiesObserved;
+        if (observer is null || properties is null) return;
+
+        // A native callback frame, so nothing may escape it.
+        try { observer(Id, PipeWireProperties.From(properties)); }
+        catch (Exception ex) { OnHandlerFaulted(ex); }
     }
 
     /// <summary>Reports a subscriber that threw, where the logger is in scope.</summary>

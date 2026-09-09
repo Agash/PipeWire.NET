@@ -194,7 +194,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         if (exported is null)
         {
             ReleaseNative();
-            throw new PipeWireException(
+            throw new PipeWireInteropException(
                 "pw_core_export",
                 -38,
                 daemonMessage:

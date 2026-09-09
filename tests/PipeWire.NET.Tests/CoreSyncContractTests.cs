@@ -18,7 +18,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class CoreSyncContractTests
+public sealed class CoreSyncContractTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
 
@@ -54,7 +54,7 @@ public sealed class CoreSyncContractTests
         await using (ctx)
         await using (registry)
         {
-            PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireException>(
+            PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
                 async () => await registry.DestroyGlobalAsync(NoSuchGlobal, cts.Token));
 
             Assert.IsTrue(refused.Result < 0, $"a refusal must carry the daemon's code, got {refused.Result}");
@@ -214,7 +214,7 @@ public sealed class CoreSyncContractTests
                 // A parameter a node does not have. The daemon refuses the request and reports it
                 // out of band on the error stream, carrying the request's own sequence number -
                 // which is the only thing tying the failure to the caller waiting on it.
-                await Assert.ThrowsExactlyAsync<PipeWireException>(
+                await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
                     async () => await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token));
 
                 // An error must fault only the request it belongs to. A read of a parameter the
@@ -243,7 +243,7 @@ public sealed class CoreSyncContractTests
 
             // An id the daemon has never issued. This one it does refuse, out of band on the error
             // stream, and that refusal has to reach the caller rather than being lost.
-            PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireException>(
+            PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
                 async () => await registry.DestroyGlobalAsync(NoSuchGlobal, cts.Token));
 
             // The point of the type: a caller can tell what failed and why without parsing text.

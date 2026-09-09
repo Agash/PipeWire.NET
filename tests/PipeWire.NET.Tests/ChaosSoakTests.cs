@@ -24,9 +24,28 @@ namespace PipeWire.NET.Tests;
 [TestClass]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
+[TestCategory("Soak")]
 [SupportedOSPlatform("linux")]
-public sealed class ChaosSoakTests
+public sealed class ChaosSoakTests : PipeWireTestBase
 {
+    /// <summary>
+    /// How long an actor waits between operations.
+    /// </summary>
+    /// <remarks>
+    /// Every node and link this test makes is a graph change the session manager has to process,
+    /// and it does real policy work per object where the daemon only has to accept the request.
+    /// Left to run flat out, the actors below outrun it: the daemon buffers the events it owes
+    /// the session manager, that buffer reaches hundreds of megabytes, and the daemon then spends
+    /// its main loop flushing it and starves every other client on the socket - including the
+    /// pw-cli and pw-dump this test itself shells out to.
+    /// <para>
+    /// The point of the test is several actors changing one graph at once, which this preserves.
+    /// Running unbounded does not test more concurrency, it just denies the session to everything
+    /// else, so the pause is what keeps the result about the library.
+    /// </para>
+    /// </remarks>
+    private static readonly TimeSpan ActorPause = TimeSpan.FromMilliseconds(25);
+
     private static readonly TimeSpan Budget = TimeSpan.FromMinutes(3);
 
     private static void RequireLinux()
@@ -330,7 +349,7 @@ public sealed class ChaosSoakTests
         HashSet<string> socketsBefore = SocketInodes();
 
         var faults = new ConcurrentQueue<string>();
-        var created = new ConcurrentBag<uint>();
+        var created = new ConcurrentBag<ulong>();
 
         (PipeWireContext ctxA, PipeWireRegistry a) = await ConnectAsync("pwnet-soak-a", cts.Token);
         (PipeWireContext ctxB, PipeWireRegistry b) = await ConnectAsync("pwnet-soak-b", cts.Token);
@@ -355,17 +374,18 @@ public sealed class ChaosSoakTests
 
             // Everything this test made, gone, so the census compares like with like. One barrier
             // for the batch - and only for what is still alive: the maker destroys as it goes, so
-            // nearly every id collected above is already dead, and re-sending destroys for all of
-            // them would flood the daemon with refusals. The name guard matters because ids
-            // recycle: one of ours may already name another test's node, which is not ours to
-            // destroy.
-            var createdIds = new HashSet<uint>(created);
+            // nearly all of them are already dead, and re-sending destroys for the rest would
+            // flood the daemon with refusals.
+            //
+            // Matched on serial and destroyed by the id that carries it. An id collected here is
+            // very likely to have been handed to something else by now, and destroying on that
+            // alone reaches into another test's graph; a serial cannot be confused that way, which
+            // is why the name check this used to need is gone.
+            var createdSerials = new HashSet<ulong>(created);
             var live = new HashSet<uint>();
             foreach (PipeWireNode n in a.Current.Nodes)
             {
-                if (n.NodeName is not null
-                    && n.NodeName.StartsWith("pwnet_soak", StringComparison.Ordinal)
-                    && createdIds.Contains(n.NodeId))
+                if (n.ObjectSerial is { } serial && createdSerials.Contains(serial))
                     live.Add(n.NodeId);
             }
 
@@ -433,15 +453,20 @@ public sealed class ChaosSoakTests
     }
 
     private static async Task MakeAndBreakAsync(
-        PipeWireRegistry registry, ConcurrentBag<uint> created, ConcurrentQueue<string> faults, CancellationToken ct)
+        PipeWireRegistry registry, ConcurrentBag<ulong> created, ConcurrentQueue<string> faults, CancellationToken ct)
     {
         try
         {
             while (!ct.IsCancellationRequested)
             {
+                await Task.Delay(ActorPause, ct);
+
+                // No media.class: these are made and unmade continuously, and presenting each one
+                // to the session manager as a routable sink is what fills its event queue with
+                // activations it can never finish.
                 PipeWireNode node = await registry.CreateVirtualNode("Soak")
-                    .WithName(Unique("pwnet_soak")).ExecuteAsync(ct);
-                created.Add(node.NodeId);
+                    .WithName(Unique("pwnet_soak")).WithMediaClass("").ExecuteAsync(ct);
+                if (node.ObjectSerial is { } serial) created.Add(serial);
 
                 // ENOENT anywhere in here is the object having gone already, and under a soak
                 // against a live session manager that is legitimate: WirePlumber destroys nodes
@@ -479,6 +504,8 @@ public sealed class ChaosSoakTests
         {
             while (!ct.IsCancellationRequested)
             {
+                await Task.Delay(ActorPause, ct);
+
                 PipeWireGraphSnapshot graph = registry.Current;
 
                 foreach (PipeWireNode node in graph.Nodes.Take(6))
@@ -509,6 +536,8 @@ public sealed class ChaosSoakTests
         {
             while (!ct.IsCancellationRequested)
             {
+                await Task.Delay(ActorPause, ct);
+
                 PipeWireGraphSnapshot graph = registry.Current;
 
                 PipeWirePort? output = graph.Ports.FirstOrDefault(p => p.PortDirection == PipeWirePortDirection.Out);

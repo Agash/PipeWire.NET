@@ -14,11 +14,13 @@ namespace PipeWire.NET.Tests;
 /// Every test here asserts the same underlying property - the library fails cleanly rather than
 /// hanging, corrupting, or aborting the process.
 /// </remarks>
+[ExpectsLibraryError("handler threw")]
+[ExpectsLibraryError("ParameterChanged handler")]
 [TestClass]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class HostileControlTests
+public sealed class HostileControlTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
 
@@ -471,7 +473,7 @@ public sealed class HostileControlTests
                 string key = $"pwnet.test.concurrent.{Environment.ProcessId}";
 
                 try { await store.SetAsync(key, "seed", cancellationToken: cts.Token); }
-                catch (PipeWireException) { Assert.Inconclusive("cannot write metadata here."); }
+                catch (PipeWireException e) { Assert.Inconclusive($"cannot write metadata here: {e.Message}"); }
 
                 // Ten writers to one key. Each waits for an echo, and the echoes are not
                 // distinguishable per writer - so the property being tested is that none of them
@@ -543,7 +545,7 @@ public sealed class HostileControlTests
                 string key = $"pwnet.test.burst.{Environment.ProcessId}";
 
                 try { await store.SetAsync(key, "seed", cancellationToken: cts.Token); }
-                catch (InvalidOperationException) { Assert.Inconclusive("cannot write metadata here."); }
+                catch (InvalidOperationException e) { Assert.Inconclusive($"cannot write metadata here: {e.Message}"); }
 
                 // The store echoes every change back, and those echoes lag the sync that reports a
                 // write as processed. Under a burst, the echo of an older value lands after a newer
@@ -608,7 +610,7 @@ public sealed class HostileControlTests
                 };
 
                 try { await mine.SetAsync(key, "from-a", cancellationToken: cts.Token); }
-                catch (InvalidOperationException) { Assert.Inconclusive("cannot write metadata here."); }
+                catch (InvalidOperationException e) { Assert.Inconclusive($"cannot write metadata here: {e.Message}"); }
 
                 Assert.AreEqual("from-a", mine.Get(key));
 

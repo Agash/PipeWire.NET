@@ -15,7 +15,7 @@ namespace PipeWire.NET.Tests;
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class SpaPodChoiceTests
+public sealed class SpaPodChoiceTests : PipeWireTestBase
 {
     private static byte[] Pod(SpaType type, ReadOnlySpan<byte> body)
     {

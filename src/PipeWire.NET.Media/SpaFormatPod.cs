@@ -275,14 +275,6 @@ internal static class SpaFormatPod
         _                  => PipeWireBufferType.Unknown,
     };
 
-    /// <summary>
-    /// Finds the presentation timestamp (ns) from a buffer's SPA_META_Header, or -1 if absent.
-    /// </summary>
-    /// <remarks>
-    /// Video producers populate this; PipeWire audio typically does NOT carry a per-buffer
-    /// header PTS (audio timing is derived from the graph clock + sample position), so audio
-    /// frames usually report -1 here.
-    /// </remarks>
     /// <summary>The most metadata entries a buffer will be walked for.</summary>
     /// <remarks>
     /// A bound on someone else's count. The buffer struct belongs to the pool, so <c>n_metas</c> is
@@ -292,6 +284,14 @@ internal static class SpaFormatPod
     /// </remarks>
     private const uint MaxMetasWalked = 64;
 
+    /// <summary>
+    /// Finds the presentation timestamp (ns) from a buffer's SPA_META_Header, or -1 if absent.
+    /// </summary>
+    /// <remarks>
+    /// Video producers populate this; PipeWire audio typically does NOT carry a per-buffer
+    /// header PTS (audio timing is derived from the graph clock + sample position), so audio
+    /// frames usually report -1 here.
+    /// </remarks>
     internal static unsafe long FindPresentationTimeNs(spa_buffer* buf)
     {
         if (buf is null || buf->metas is null) return -1;

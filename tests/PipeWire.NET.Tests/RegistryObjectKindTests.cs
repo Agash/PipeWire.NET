@@ -11,7 +11,7 @@ namespace PipeWire.NET.Tests;
 /// </summary>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed unsafe class RegistryObjectKindTests
+public sealed unsafe class RegistryObjectKindTests : PipeWireTestBase
 {
     // Property sets taken from a live session (pw-cli ls), not invented: a Device global really does
     // carry device.name and media.class, and a Module global really does carry only module.name.
@@ -143,12 +143,12 @@ public sealed unsafe class RegistryObjectKindTests
     private static PipeWireDevice ParseDevice(NativeDict dict, uint id)
     {
         fixed (spa_dict* d = &dict.Dict)
-            return PipeWireGlobalParser.ParseDevice(id, PipeWirePermissions.None, 3, d);
+            return PipeWireGlobalParser.ParseDevice(id, PipeWirePermissions.None, 3, PipeWireProperties.From(d));
     }
 
     private static PipeWireClient ParseClient(NativeDict dict, uint id)
     {
         fixed (spa_dict* d = &dict.Dict)
-            return PipeWireGlobalParser.ParseClient(id, PipeWirePermissions.None, 3, d);
+            return PipeWireGlobalParser.ParseClient(id, PipeWirePermissions.None, 3, PipeWireProperties.From(d));
     }
 }

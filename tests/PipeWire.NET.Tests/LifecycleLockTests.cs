@@ -17,7 +17,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class LifecycleLockTests
+public sealed class LifecycleLockTests : PipeWireTestBase
 {
     private static readonly TimeSpan JoinBudget = TimeSpan.FromSeconds(15);
 

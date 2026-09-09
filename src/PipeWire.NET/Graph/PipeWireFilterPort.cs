@@ -55,26 +55,21 @@ public sealed unsafe class PipeWireFilterPort
     /// <para>
     /// Call only from inside the process callback. An input port's span holds what arrived; an
     /// output port's is where the result goes, and leaving it untouched emits whatever was there.
+    /// Outside the callback there is no buffer for the cycle and this returns empty; after the
+    /// filter is disposed it throws.
     /// </para>
     /// <para>
     /// An empty span is normal, not an error: a port with nothing connected to it, or one the graph
     /// skipped this cycle, has no buffer. Writing to it is simply not possible, so a filter has to
     /// check rather than assume.
     /// </para>
-    /// </remarks>
-    /// <exception cref="ObjectDisposedException">The filter that owns this port has been disposed.</exception>
-    /// <exception cref="InvalidOperationException">The port carries MIDI/control sequences, not audio.</exception>
-    /// <remarks>
-    /// <para>
-    /// Valid only inside the owning filter's process callback, and only while that filter is alive.
-    /// Outside the callback there is no buffer for the cycle and this returns empty; after the
-    /// filter is disposed it throws.
-    /// </para>
     /// <para>
     /// The span belongs to the cycle, not to the caller. Storing it and reading after the callback
     /// returns reads a buffer the graph has taken back.
     /// </para>
     /// </remarks>
+    /// <exception cref="ObjectDisposedException">The filter that owns this port has been disposed.</exception>
+    /// <exception cref="InvalidOperationException">The port carries MIDI/control sequences, not audio.</exception>
     public Span<float> GetSamples(uint sampleCount)
     {
         // The port data belongs to the filter and dies with it. Without this the pointer is simply

@@ -18,16 +18,21 @@ namespace PipeWire.NET.Graph;
 [SupportedOSPlatform("linux")]
 public sealed record PipeWireMetadataObject : IPipeWireObject
 {
-    /// <param name="Id">PipeWire global id.</param>
-    /// <param name="Permissions">What this client may do with the object.</param>
-    /// <param name="InterfaceVersion">The interface version the daemon announced.</param>
-    /// <param name="MetadataName">Which store this is, such as <c>default</c> or <c>settings</c>.</param>
     internal PipeWireMetadataObject(
         uint Id,
         PipeWirePermissions Permissions,
         uint InterfaceVersion,
-        string? MetadataName)
+        string? MetadataName,
+        uint? ClientId = null,
+        uint? FactoryId = null,
+        uint? ModuleId = null,
+        PipeWireProperties? Properties = null)
     {
+        this.Properties = Properties ?? PipeWireProperties.Empty;
+        this.ObjectSerial = this.Properties.Serial;
+        this.ClientId = ClientId;
+        this.FactoryId = FactoryId;
+        this.ModuleId = ModuleId;
         this.Id = Id;
         this.Permissions = Permissions;
         this.InterfaceVersion = InterfaceVersion;
@@ -45,6 +50,21 @@ public sealed record PipeWireMetadataObject : IPipeWireObject
 
     /// <inheritdoc/>
     public uint InterfaceVersion { get; }
+
+    /// <inheritdoc/>
+    public PipeWireProperties Properties { get; }
+
+    /// <inheritdoc/>
+    public ulong? ObjectSerial { get; }
+
+    /// <summary>The client that owns this store.</summary>
+    public uint? ClientId { get; }
+
+    /// <summary>The factory that made this store.</summary>
+    public uint? FactoryId { get; }
+
+    /// <summary>The module that provides this store.</summary>
+    public uint? ModuleId { get; }
 
     /// <summary>Which store this is, such as <c>default</c> or <c>settings</c>.</summary>
     public string? MetadataName { get; }

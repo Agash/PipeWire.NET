@@ -16,7 +16,8 @@ namespace PipeWire.NET;
 /// <c>catch (InvalidOperationException)</c> written to contain a local bug also swallows a
 /// permission refusal or a dropped connection.
 /// </remarks>
-public sealed class PipeWireException : Exception
+/// <remarks>The base of the hierarchy: catch this to mean anything PipeWire.</remarks>
+public class PipeWireException : Exception
 {
     /// <param name="operation">The native call, such as <c>pw_core_sync</c>.</param>
     /// <param name="result">The result code, negative for a failure and normally a negative errno.</param>
@@ -81,7 +82,7 @@ public sealed class PipeWireException : Exception
     /// <summary>Throws if <paramref name="result"/> reports a failure.</summary>
     internal static void ThrowIfFailed(int result, string operation, uint? objectId = null)
     {
-        if (result < 0) throw new PipeWireException(operation, result, objectId);
+        if (result < 0) throw new PipeWireInteropException(operation, result, objectId);
     }
 
     private static string Describe(string operation, int result, uint? objectId, string? daemonMessage)

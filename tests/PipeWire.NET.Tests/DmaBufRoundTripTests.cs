@@ -20,7 +20,7 @@ namespace PipeWire.NET.Tests;
 [TestClass]
 [TestCategory("RequiresGStreamer")]
 [SupportedOSPlatform("linux")]
-public sealed class DmaBufRoundTripTests
+public sealed class DmaBufRoundTripTests : PipeWireTestBase
 {
     [TestMethod]
     [TestCategory("Integration")]
@@ -88,8 +88,9 @@ public sealed class DmaBufRoundTripTests
             };
             capture.Connect(nodeId.Value, [PixelFormat.Bgra], modifiers: [modifier]);
 
-            // DRIVER producer: pace it at ~30fps once streaming so the consumer sees a steady frame flow.
-            using var driver = new Timer(_ => { if (streaming) output.TriggerFrame(); }, null, 100, 33);
+            // Not driven from here. This node is not the graph's driver, and pw_stream_trigger_process
+            // on a node that is not one reaches the real driver as RequestProcess, which an audio
+            // adapter refuses - once per call, logged as an error. The consumer drives the graph.
 
             await Task.Delay(TimeSpan.FromSeconds(4));
 

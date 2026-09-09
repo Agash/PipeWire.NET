@@ -19,7 +19,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class LinkStateTests
+public sealed class LinkStateTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
 
@@ -232,7 +232,7 @@ public sealed class LinkStateTests
                 ImmutableArray<SpaObject> supported = await port.EnumerateSupportedFormatsAsync(cts.Token);
                 if (supported.IsEmpty) Assert.Inconclusive("the port reported no format to try setting.");
 
-                await Assert.ThrowsExactlyAsync<PipeWireException>(
+                await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
                     async () => await port.SetParameterAsync(SpaParamType.Format, supported[0], cts.Token));
             }
 

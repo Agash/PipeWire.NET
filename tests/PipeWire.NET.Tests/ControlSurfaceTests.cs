@@ -18,7 +18,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class ControlSurfaceTests
+public sealed class ControlSurfaceTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(40);
 
@@ -206,12 +206,21 @@ public sealed class ControlSurfaceTests
             CollectionAssert.AreEqual(
                 new[] { SpaParamType.Props }, control.SubscribedParameters.ToArray());
 
+            // Completed by the event that carries the value written below, not by whichever Props
+            // object arrives first. The subscription and the eight enumerations below share one
+            // event, so latching the first one can capture a read's answer - the volume before the
+            // write - and report it as the change. Waiting for the written value still fails if no
+            // event ever carries it, which is the property under test.
             var changed = new TaskCompletionSource<SpaObject>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
             control.ParameterChanged += (_, value) =>
             {
-                if (value.ObjectType == SpaType.ObjectProps)
+                if (value.ObjectType == SpaType.ObjectProps
+                    && value[SpaProp.Volume] is SpaFloat v
+                    && Math.Abs(v.Value - 0.5f) < 0.0001f)
+                {
                     changed.TrySetResult(value);
+                }
             };
 
             // No writer is active, so every concurrent read must file under its own key and all

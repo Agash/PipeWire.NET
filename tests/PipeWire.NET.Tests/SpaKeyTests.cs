@@ -15,7 +15,7 @@ namespace PipeWire.NET.Tests;
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class SpaKeyTests
+public sealed class SpaKeyTests : PipeWireTestBase
 {
     [TestMethod]
     public void EveryKeyEnum_ConvertsToItsOwnNumericValue()

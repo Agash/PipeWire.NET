@@ -20,16 +20,6 @@ namespace PipeWire.NET.Graph;
 [SupportedOSPlatform("linux")]
 public sealed record PipeWireClient : IPipeWireObject
 {
-    /// <param name="Id">PipeWire global id.</param>
-    /// <param name="Permissions">What this client may do with the object.</param>
-    /// <param name="InterfaceVersion">The interface version the daemon announced.</param>
-    /// <param name="ApplicationName">What the application calls itself. Self-reported, so not an identity to trust.</param>
-    /// <param name="ProcessId">The process id the daemon read from the socket.</param>
-    /// <param name="UserId">The user id the daemon read from the socket.</param>
-    /// <param name="GroupId">The group id the daemon read from the socket.</param>
-    /// <param name="Access">How it connected, such as <c>portal</c> or <c>flatpak</c>. Decides what it may see.</param>
-    /// <param name="Protocol">The protocol it speaks, normally <c>protocol-native</c>.</param>
-    /// <param name="ModuleId">The module serving the connection, where the daemon said.</param>
     internal PipeWireClient(
         uint Id,
         PipeWirePermissions Permissions,
@@ -40,8 +30,19 @@ public sealed record PipeWireClient : IPipeWireObject
         uint? GroupId,
         string? Access,
         string? Protocol,
-        uint? ModuleId)
+        uint? ModuleId,
+        string? SecuritySocket = null,
+        string? SecurityLabel = null,
+        string? SecurityAppId = null,
+        string? SecurityInstanceId = null,
+        PipeWireProperties? Properties = null)
     {
+        this.Properties = Properties ?? PipeWireProperties.Empty;
+        this.ObjectSerial = this.Properties.Serial;
+        this.SecuritySocket = SecuritySocket;
+        this.SecurityLabel = SecurityLabel;
+        this.SecurityAppId = SecurityAppId;
+        this.SecurityInstanceId = SecurityInstanceId;
         this.Id = Id;
         this.Permissions = Permissions;
         this.InterfaceVersion = InterfaceVersion;
@@ -65,6 +66,31 @@ public sealed record PipeWireClient : IPipeWireObject
 
     /// <inheritdoc/>
     public uint InterfaceVersion { get; }
+
+    /// <inheritdoc/>
+    public PipeWireProperties Properties { get; }
+
+    /// <inheritdoc/>
+    public ulong? ObjectSerial { get; }
+
+    /// <summary>Which socket the client connected on (<c>pipewire.sec.socket</c>).</summary>
+    public string? SecuritySocket { get; }
+
+    /// <summary>The client's security label (<c>pipewire.sec.label</c>), set by the protocol.</summary>
+    public string? SecurityLabel { get; }
+
+    /// <summary>
+    /// The sandboxed application's id (<c>pipewire.sec.app-id</c>), set for a client that reached
+    /// the daemon through a security context.
+    /// </summary>
+    /// <remarks>
+    /// Present for a Flatpak or portal peer and null for an ordinary one, so it is what tells a
+    /// sandboxed client from an unconfined one.
+    /// </remarks>
+    public string? SecurityAppId { get; }
+
+    /// <summary>The sandbox instance the client belongs to (<c>pipewire.sec.instance-id</c>).</summary>
+    public string? SecurityInstanceId { get; }
 
     /// <summary>What the application calls itself. Self-reported, so not an identity to trust.</summary>
     public string? ApplicationName { get; }

@@ -16,7 +16,7 @@ namespace PipeWire.NET.Tests;
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class LatencyAndTagTests
+public sealed class LatencyAndTagTests : PipeWireTestBase
 {
     // ------------------------------------------------------------------ latency
 
@@ -235,12 +235,12 @@ public sealed class LatencyAndTagTests
 
         Console.Error.WriteLine($"tags: {tags.Length}");
 
-        PipeWireException latencyRefused = await Assert.ThrowsExactlyAsync<PipeWireException>(
+        PipeWireException latencyRefused = await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
             () => control.SetProcessLatencyAsync(new PipeWireProcessLatency(Quantum: 128f), cts.Token));
         Assert.IsTrue(latencyRefused.Result < 0, "a refusal must carry the daemon's code");
         Console.Error.WriteLine($"process latency write refused: {latencyRefused.Message}");
 
-        PipeWireException tagRefused = await Assert.ThrowsExactlyAsync<PipeWireException>(
+        PipeWireException tagRefused = await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
             () => control.SetTagAsync(
                 new PipeWireTag(SpaDirection.Output,
                     ImmutableArray.Create(new KeyValuePair<string, string>("pwnet", "live"))),

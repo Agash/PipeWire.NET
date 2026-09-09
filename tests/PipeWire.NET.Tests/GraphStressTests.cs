@@ -15,8 +15,21 @@ namespace PipeWire.NET.Tests;
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class GraphStressTests
+public sealed class GraphStressTests : PipeWireTestBase
 {
+    /// <summary>
+    /// How long to wait between creating an object and creating the next one.
+    /// </summary>
+    /// <remarks>
+    /// The session manager binds every new object and calls methods on it to activate and link it.
+    /// Destroying one immediately means those calls land on an object the daemon has already
+    /// dropped, which it answers with ENOENT "unknown resource". Enough of those and WirePlumber
+    /// ends up with its core socket removed from its event loop: still running, no longer reading,
+    /// and new clients then wait forever for permissions it never grants. Leak accounting is what
+    /// these tests are for, and it does not need the churn to be unbounded to be honest.
+    /// </remarks>
+    private static readonly TimeSpan ChurnPause = TimeSpan.FromMilliseconds(25);
+
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
 
     private static void RequireLinux()
@@ -46,8 +59,64 @@ public sealed class GraphStressTests
     }
 
     /// <summary>Open file descriptors for this process; the cheapest leak detector on Linux.</summary>
-    private static int OpenFileDescriptors() =>
-        Directory.GetFileSystemEntries($"/proc/{Environment.ProcessId}/fd").Length;
+    /// <summary>
+    /// Descriptors that could plausibly be ours: sockets, memfds, eventfds, pipes.
+    /// </summary>
+    /// <remarks>
+    /// Counting every descriptor counts the runtime too. The CLR maps assemblies lazily, so the
+    /// first test to touch one adds two descriptors that have nothing to do with the graph, and a
+    /// leak check with a tolerance small enough to be useful then fails on whichever test happened
+    /// to trigger the load. What PipeWire hands a client is a socket, a memfd for buffer memory, or
+    /// an eventfd, so those are what this counts; a mapped file never is.
+    /// </remarks>
+    private static int OpenFileDescriptors()
+    {
+        int ours = 0;
+        foreach (string entry in Directory.GetFileSystemEntries($"/proc/{Environment.ProcessId}/fd"))
+        {
+            string? target;
+            try
+            {
+                // Racing a descriptor being closed is not a failure: it is one fewer to count.
+                target = File.ResolveLinkTarget(entry, returnFinalTarget: false)?.FullName;
+            }
+            catch (IOException) { continue; }
+            catch (UnauthorizedAccessException) { continue; }
+
+            if (target is null) continue;
+            if (target.StartsWith("socket:", StringComparison.Ordinal)
+                || target.StartsWith("pipe:", StringComparison.Ordinal)
+                || target.StartsWith("anon_inode:", StringComparison.Ordinal)
+                || target.Contains("memfd:", StringComparison.Ordinal))
+            {
+                ours++;
+            }
+        }
+
+        return ours;
+    }
+
+    /// <summary>What every open descriptor points at, for telling a leak's kind from its count.</summary>
+    /// <remarks>
+    /// A count says something was retained; the targets say what. Reading the link can race a
+    /// descriptor being closed underneath us, which is not an error worth failing a test over.
+    /// </remarks>
+    private static string[] OpenDescriptorTargets()
+    {
+        var seen = new List<string>();
+        foreach (string entry in Directory.GetFileSystemEntries($"/proc/{Environment.ProcessId}/fd"))
+        {
+            try
+            {
+                string? target = File.ResolveLinkTarget(entry, returnFinalTarget: false)?.FullName;
+                seen.Add(target ?? entry);
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+
+        return [.. seen];
+    }
 
     [TestMethod]
     [DataRow(200)]
@@ -116,15 +185,21 @@ public sealed class GraphStressTests
             GC.Collect();
 
             int fdsBefore = OpenFileDescriptors();
+            string[] targetsBefore = OpenDescriptorTargets();
             long heapBefore = GC.GetTotalMemory(forceFullCollection: true);
 
             const int Iterations = 60;
             for (int i = 0; i < Iterations; i++)
             {
-                PipeWireNode node = await registry.CreateVirtualNodeAsync(
-                    $"Churn {i}", $"pwnet_churn_{i}", cts.Token);
+                // No media.class: see the storm test. A node that lives for a few milliseconds
+                // has no business being offered to the session manager as something to route to.
+                PipeWireNode node = await registry.CreateVirtualNode($"Churn {i}")
+                                                  .WithName($"pwnet_churn_{i}")
+                                                  .WithMediaClass("")
+                                                  .ExecuteAsync(cts.Token);
                 await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
                 await WaitForAsync(registry, g => g.GetNode(node.NodeId) is null, cts.Token);
+                await Task.Delay(ChurnPause, cts.Token);
             }
 
             GC.Collect();
@@ -136,6 +211,27 @@ public sealed class GraphStressTests
 
             Console.Error.WriteLine(
                 $"churn x{Iterations}: fds {fdsBefore} -> {fdsAfter}, heap {heapBefore} -> {heapAfter}");
+
+            if (fdsAfter > fdsBefore + 2)
+            {
+                // Named, not just counted. Which descriptors survived says whether this is a
+                // buffer memfd the daemon sent, a socket for a connection that was not closed, or
+                // an eventfd from a loop that outlived its object.
+                var before = new Dictionary<string, int>(StringComparer.Ordinal);
+                foreach (string t in targetsBefore)
+                    before[t] = before.GetValueOrDefault(t) + 1;
+
+                var after = new Dictionary<string, int>(StringComparer.Ordinal);
+                foreach (string t in OpenDescriptorTargets())
+                    after[t] = after.GetValueOrDefault(t) + 1;
+
+                foreach ((string target, int count) in after)
+                {
+                    int was = before.GetValueOrDefault(target);
+                    if (count > was)
+                        Console.Error.WriteLine($"fd-leak: {target} {was} -> {count}");
+                }
+            }
 
             Assert.IsTrue(fdsAfter <= fdsBefore + 2,
                 $"file descriptors grew {fdsBefore} -> {fdsAfter} over {Iterations} create/destroy cycles");

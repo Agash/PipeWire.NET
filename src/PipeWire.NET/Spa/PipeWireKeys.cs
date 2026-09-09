@@ -20,12 +20,17 @@ internal static class PipeWireKeys
     public static ReadOnlySpan<byte> FactoryName => "factory.name"u8;
     public static ReadOnlySpan<byte> ObjectLinger => "object.linger"u8;
 
+    public static ReadOnlySpan<byte> ObjectSerial => "object.serial"u8;
+    public static ReadOnlySpan<byte> PrioritySession => "priority.session"u8;
+    public static ReadOnlySpan<byte> PriorityDriver => "priority.driver"u8;
+
     public static ReadOnlySpan<byte> NodeId => "node.id"u8;
     public static ReadOnlySpan<byte> NodeName => "node.name"u8;
     public static ReadOnlySpan<byte> NodeNick => "node.nick"u8;
     public static ReadOnlySpan<byte> NodeDescription => "node.description"u8;
     public static ReadOnlySpan<byte> MediaClass => "media.class"u8;
 
+    public static ReadOnlySpan<byte> DeviceId => "device.id"u8;
     public static ReadOnlySpan<byte> DeviceName => "device.name"u8;
     public static ReadOnlySpan<byte> DeviceDescription => "device.description"u8;
     public static ReadOnlySpan<byte> DeviceNick => "device.nick"u8;
@@ -39,6 +44,10 @@ internal static class PipeWireKeys
     public static ReadOnlySpan<byte> SecurityPid => "pipewire.sec.pid"u8;
     public static ReadOnlySpan<byte> SecurityUid => "pipewire.sec.uid"u8;
     public static ReadOnlySpan<byte> SecurityGid => "pipewire.sec.gid"u8;
+    public static ReadOnlySpan<byte> SecuritySocket => "pipewire.sec.socket"u8;
+    public static ReadOnlySpan<byte> SecurityLabel => "pipewire.sec.label"u8;
+    public static ReadOnlySpan<byte> SecurityAppId => "pipewire.sec.app-id"u8;
+    public static ReadOnlySpan<byte> SecurityInstanceId => "pipewire.sec.instance-id"u8;
     public static ReadOnlySpan<byte> Access => "pipewire.access"u8;
     public static ReadOnlySpan<byte> Protocol => "pipewire.protocol"u8;
 
@@ -61,7 +70,14 @@ internal static class PipeWireKeys
     public static ReadOnlySpan<byte> PortName => "port.name"u8;
     public static ReadOnlySpan<byte> PortDirection => "port.direction"u8;
     public static ReadOnlySpan<byte> PortMonitor => "port.monitor"u8;
-    public static ReadOnlySpan<byte> PortExclusive => "port.exclusive"u8;
+    public static ReadOnlySpan<byte> PortIndex => "port.id"u8;
+    public static ReadOnlySpan<byte> PortControl => "port.control"u8;
+    public static ReadOnlySpan<byte> PortPhysical => "port.physical"u8;
+    public static ReadOnlySpan<byte> PortTerminal => "port.terminal"u8;
+    public static ReadOnlySpan<byte> PortAlias => "port.alias"u8;
+    public static ReadOnlySpan<byte> PortGroup => "port.group"u8;
+    public static ReadOnlySpan<byte> FormatDsp => "format.dsp"u8;
+    public static ReadOnlySpan<byte> AudioChannel => "audio.channel"u8;
 
     public static ReadOnlySpan<byte> LinkOutputNode => "link.output.node"u8;
     public static ReadOnlySpan<byte> LinkOutputPort => "link.output.port"u8;

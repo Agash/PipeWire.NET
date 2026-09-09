@@ -13,16 +13,53 @@ namespace PipeWire.NET.Graph;
 [SupportedOSPlatform("linux")]
 public static class PipeWireGraphExtensions
 {
+    extension(IPipeWireObject held)
+    {
+        /// <summary>
+        /// Whether <paramref name="graph"/> still holds this exact object, rather than a different
+        /// one that has since been given the same id.
+        /// </summary>
+        /// <param name="graph">The graph to look in.</param>
+        /// <remarks>
+        /// PipeWire hands out the lowest free id, so an id observed twice may be two unrelated
+        /// objects: switch a card's profile, or restart a stream, and the ids come back attached to
+        /// something else. Comparing the id alone cannot tell those apart, and acting on the answer
+        /// is how a stale reference becomes a write to the wrong object. The serial can, because it
+        /// is never reused.
+        /// <para>
+        /// Falls back to comparing the kind when the daemon sent no serial, which is weaker but is
+        /// all there is to go on.
+        /// </para>
+        /// </remarks>
+        public bool IsStillIn(PipeWireGraphSnapshot graph)
+        {
+            ArgumentNullException.ThrowIfNull(graph);
+
+            if (!graph.TryGetObject(held.Id, out IPipeWireObject? current)) return false;
+            if (held.ObjectSerial is { } mine && current.ObjectSerial is { } theirs)
+                return mine == theirs;
+
+            return held.Kind == current.Kind;
+        }
+    }
+
     extension(PipeWirePort port)
     {
-        /// <summary>True for a data input (<c>port.direction=in</c>).</summary>
-        public bool IsDataInput => port.PortDirection is PipeWirePortDirection.In;
+        /// <summary>
+        /// True for a port that carries media into its node.
+        /// </summary>
+        /// <remarks>
+        /// A control port is excluded even though it faces the same way. An adapter's control port
+        /// reports <c>port.direction=in</c> like any other input, but negotiates
+        /// application/control, so linking media to it fails format negotiation with EINVAL rather
+        /// than being refused. Picking "the first input port" is the normal way to find a link
+        /// endpoint, and it has to not find that one.
+        /// </remarks>
+        public bool IsDataInput => port.PortDirection is PipeWirePortDirection.In && !port.IsControl;
 
-        /// <summary>True for a data output (<c>port.direction=out</c>).</summary>
-        public bool IsDataOutput => port.PortDirection is PipeWirePortDirection.Out;
-
-        /// <summary>True for a control port (<c>port.direction=control</c>).</summary>
-        public bool IsControl => port.PortDirection is PipeWirePortDirection.Control;
+        /// <summary>True for a port that carries media out of its node.</summary>
+        /// <remarks>Excludes control ports, for the reason on the data input above.</remarks>
+        public bool IsDataOutput => port.PortDirection is PipeWirePortDirection.Out && !port.IsControl;
 
         /// <summary>True for a notification port (<c>port.direction=notify</c>).</summary>
         public bool IsNotify => port.PortDirection is PipeWirePortDirection.Notify;

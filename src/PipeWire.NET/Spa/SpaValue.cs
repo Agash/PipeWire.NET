@@ -310,13 +310,6 @@ public sealed record SpaChoice(SpaChoiceType Kind, SpaType ChildType, ImmutableA
     public ImmutableArray<SpaValue> Alternatives { get; init; } =
         Arity(Kind, SpaArray.Coherent(ChildType, Alternatives, nameof(Alternatives)));
 
-    /// <summary>Checks the count against what the kind means.</summary>
-    /// <remarks>
-    /// The kind is what tells a reader how to interpret the positions: Range is default, min, max
-    /// and Step adds a step, so a Range holding two entries has no min or no max and there is no way
-    /// to tell which. Nothing downstream can detect that - the daemon reads position 1 as the
-    /// minimum whatever is there - so the count is checked where the caller is still in scope.
-    /// </remarks>
     /// <summary>How many values the kind means, or 0 for the kinds that are lists.</summary>
     internal static int RequiredCount(SpaChoiceType kind) => kind switch
     {
@@ -327,6 +320,12 @@ public sealed record SpaChoice(SpaChoiceType Kind, SpaType ChildType, ImmutableA
     };
 
     /// <summary>Whether a count is one the kind can mean. The parser's form of the check.</summary>
+    /// <remarks>
+    /// The kind is what tells a reader how to interpret the positions: Range is default, min, max
+    /// and Step adds a step, so a Range holding two entries has no min or no max and there is no way
+    /// to tell which. Nothing downstream can detect that - the daemon reads position 1 as the
+    /// minimum whatever is there - so the count is checked where the caller is still in scope.
+    /// </remarks>
     internal static bool CountFitsKind(SpaChoiceType kind, int count)
     {
         int required = RequiredCount(kind);

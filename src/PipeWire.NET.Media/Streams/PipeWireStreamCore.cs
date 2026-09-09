@@ -78,6 +78,9 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     private readonly PipeWireContext _ctx;
     private readonly ILogger _logger;
     private readonly string _streamName;
+
+    /// <summary>The node this stream asked to be linked to, for reporting a failure against it.</summary>
+    private uint _targetNodeId;
     private bool _firstBufferLogged;
     private readonly BufferHandler _onBuffer;
     private readonly StateHandler? _onState;
@@ -237,6 +240,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         span?.SetTag("pipewire.stream.name", _streamName);
         span?.SetTag("pipewire.stream.direction", direction.ToString());
         span?.SetTag("pipewire.target.node", targetNodeId);
+        _targetNodeId = targetNodeId;
 
         using (_ctx.Lock())
         {
@@ -256,7 +260,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
                     _stream, direction, targetNodeId, flags, offers, fallbackPod.IsEmpty ? 1u : 2u);
             }
             if (rc < 0)
-                throw new PipeWireException("pw_stream_connect", rc);
+                throw new PipeWireInteropException("pw_stream_connect", rc);
         }
     }
 
@@ -506,8 +510,9 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
                 break;
 
             case PipeWireStreamState.Error:
-                _streaming.TrySetException(new PipeWireException(
-                    $"stream '{_streamName}' failed to connect: {_lastError ?? "no reason reported"}"));
+                _streaming.TrySetException(new PipeWireRequestRefusedException(
+                    "pw_stream_connect", 0, _targetNodeId,
+                    _lastError ?? $"stream '{_streamName}' reported no reason"));
                 break;
 
             default:
@@ -618,7 +623,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             fixed (byte* p = pod)
             {
                 int rc = Native.pw_stream_set_param(stream, (uint)SpaParamType.Props, (spa_pod*)p);
-                if (rc < 0) throw new PipeWireException("pw_stream_set_param", rc);
+                if (rc < 0) throw new PipeWireInteropException("pw_stream_set_param", rc);
             }
         }
     }
@@ -748,6 +753,13 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             // happens, so a pointer read after it can be null where the one before it was not.
             pw_stream* stream = _stream;
             if (_disposed || stream is null) return;
+
+            // Only a driving stream may trigger. Upstream routes the request to whichever node is
+            // actually driving the graph, and asking a node that does not implement RequestProcess
+            // - an audio adapter, typically - produces an error per call, so a caller pacing at
+            // frame rate turns into an error per frame in the daemon's log for no effect. Whether
+            // this stream drives is the daemon's answer, not ours: it depends on the graph.
+            if (!Native.pw_stream_is_driving(stream)) return;
 
             Native.pw_stream_trigger_process(stream);
         }

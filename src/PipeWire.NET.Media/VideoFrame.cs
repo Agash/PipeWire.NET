@@ -228,5 +228,5 @@ public readonly ref partial struct VideoFrame
     /// This is the first plane's descriptor. A planar format whose planes are backed by different
     /// descriptors needs <see cref="VideoPlane.DuplicateFd"/> per plane; see <see cref="Planes"/>.
     /// </remarks>
-    public int DuplicateFd() => Descriptors.Duplicate(Fd);
+    public SafeDescriptorHandle DuplicateFd() => Descriptors.Duplicate(Fd);
 }

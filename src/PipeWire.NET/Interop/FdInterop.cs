@@ -75,7 +75,7 @@ internal static partial class FdInterop
     {
         int duplicate = fcntl(fd, FDupfdCloexec, LowestDuplicate);
         if (duplicate < 0)
-            throw new PipeWireException("fcntl(F_DUPFD_CLOEXEC)", -Marshal.GetLastPInvokeError());
+            throw new PipeWireInteropException("fcntl(F_DUPFD_CLOEXEC)", -Marshal.GetLastPInvokeError());
 
         return new SafeFileHandle(duplicate, ownsHandle: true);
     }
@@ -100,7 +100,30 @@ internal static partial class FdInterop
         }
     }
 
-    /// <summary>Runs <paramref name="use"/> on both descriptors, holding a reference to each.</summary>
-    internal static T Borrow<T>(SafeHandle first, SafeHandle second, Func<int, int, T> use) =>
-        Borrow(first, a => Borrow(second, b => use(a, b)));
+    /// <summary>
+    /// Awaits <paramref name="use"/> on both descriptors, holding a reference to each until it
+    /// completes.
+    /// </summary>
+    /// <remarks>
+    /// Separate from the synchronous overload because a delegate returning a task returns at its
+    /// first await, and releasing there would leave the descriptors unheld for the part of the
+    /// operation that actually uses them.
+    /// </remarks>
+    internal static async Task BorrowAsync(SafeHandle first, SafeHandle second, Func<int, int, Task> use)
+    {
+        bool firstHeld = false;
+        bool secondHeld = false;
+        try
+        {
+            first.DangerousAddRef(ref firstHeld);
+            second.DangerousAddRef(ref secondHeld);
+            await use((int)first.DangerousGetHandle(), (int)second.DangerousGetHandle())
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            if (secondHeld) second.DangerousRelease();
+            if (firstHeld) first.DangerousRelease();
+        }
+    }
 }

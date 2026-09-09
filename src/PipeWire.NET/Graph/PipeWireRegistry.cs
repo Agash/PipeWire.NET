@@ -175,8 +175,12 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // Weak, for the reason given in BoundProxy: a strong handle here roots the registry
         // through its own listener, so an undisposed registry could never be finalized.
         _selfHandle = GCHandle.Alloc(this, GCHandleType.Weak);
+        _ctx.ConnectionLost += OnConnectionLost;
         InitializeNative();
     }
+
+    private void OnConnectionLost(PipeWireConnectionClosedException fault) =>
+        FailEveryPublishWaiter(fault);
 
     private unsafe void InitializeNative()
     {
@@ -196,7 +200,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                     _registryOwner = new PipeWireProxyHandle(
                         (pw_proxy*)registry, _ctx.LoopOwner, _ctx.CoreOwner);
                 if (registry is null)
-                    throw new PipeWireException("pw_core_get_registry", -12);   // ENOMEM
+                    throw new PipeWireInteropException("pw_core_get_registry", -12);   // ENOMEM
 
                 _events = (pw_registry_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_registry_events));
                 _events->version       = Native.PW_VERSION_REGISTRY_EVENTS;
@@ -215,7 +219,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                 int rc = Native.pw_registry_add_listener(registry, _hook, _events,
                     (void*)GCHandle.ToIntPtr(_selfHandle));
                 if (rc < 0)
-                    throw new PipeWireException("pw_registry_add_listener", rc);
+                    throw new PipeWireInteropException("pw_registry_add_listener", rc);
             }
         }
         catch
@@ -397,6 +401,24 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             waiters.CompleteAll(published);
     }
 
+    /// <summary>
+    /// Fails everyone still waiting for an object, because the connection that would have
+    /// delivered it is gone.
+    /// </summary>
+    /// <remarks>
+    /// A publish waiter is a promise the daemon keeps by announcing the global. Once the
+    /// connection is dead no announcement is coming, and leaving the waiters in place turns a
+    /// dead connection into a hang that only the caller's own token ends.
+    /// </remarks>
+    private void FailEveryPublishWaiter(PipeWireConnectionClosedException fault)
+    {
+        foreach (uint id in _awaitingPublish.Keys)
+        {
+            if (_awaitingPublish.TryRemove(id, out PublishWaiters? waiters))
+                waiters.FailAll(fault);
+        }
+    }
+
     /// <summary>Fails everyone waiting for an id whose global arrived but could not be used.</summary>
     /// <remarks>
     /// A global the daemon sent and this library could not parse is still an answer. Dropping it
@@ -408,8 +430,8 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     {
         if (_awaitingPublish.TryRemove(id, out PublishWaiters? waiters))
         {
-            waiters.FailAll(new PipeWireException(
-                $"object {id} was published but could not be read: {reason}", -22));
+            waiters.FailAll(new PipeWireInteropException(
+                "bind", -22, id, reason));
         }
     }
 
@@ -420,6 +442,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     private async Task<T> AwaitPublishedAsync<T>(
         uint id, Func<uint, T?> lookup, CancellationToken cancellationToken) where T : class, IPipeWireObject
     {
+        // A connection already known to be gone cannot announce anything, so waiting on it is a
+        // hang with extra steps. The refusal names the fault that ended it.
+        if (_ctx.ConnectionFault is { } dead) throw dead;
+
         // A registry that is already gone will never publish anything, and `bound` can arrive after
         // disposal, so this has to be checked here rather than only when disposal runs.
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -453,7 +479,17 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         {
             try
             {
-                return (T)await waiter.Task.ConfigureAwait(false);
+                IPipeWireObject published = await waiter.Task.ConfigureAwait(false);
+                if (published is T typed) return typed;
+
+                // Ids recycle. Between the daemon answering with this id and the global arriving,
+                // the object can be destroyed and the number handed to something else, so the
+                // publish that satisfies this waiter is not always what was created. That is a
+                // lost race rather than a broken invariant, and it is reported as one.
+                throw new PipeWireException(
+                    "create", -2, id,
+                    $"global {id} arrived as {published.Kind} rather than {typeof(T).Name}; "
+                    + "the id was reused before the new object was observed");
             }
             finally
             {
@@ -1186,7 +1222,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         PipeWireNode node = Current.GetNode(nodeId)
             ?? throw new ArgumentException($"{nodeId} is not a node in the current graph.", nameof(nodeId));
 
-        return PipeWireNodeControl.Bind(_ctx, RegistryHandle, nodeId, node.InterfaceVersion, _logger);
+        PipeWireNodeControl control =
+            PipeWireNodeControl.Bind(_ctx, RegistryHandle, nodeId, node.InterfaceVersion, _logger);
+        control.PropertiesObserved = EnrichGlobal;
+        return control;
     }
 
     /// <summary>
@@ -1202,7 +1241,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         PipeWireDevice device = Current.GetDevice(deviceId)
             ?? throw new ArgumentException($"{deviceId} is not a device in the current graph.", nameof(deviceId));
 
-        return PipeWireDeviceControl.Bind(_ctx, RegistryHandle, deviceId, device.InterfaceVersion, _logger);
+        PipeWireDeviceControl control =
+            PipeWireDeviceControl.Bind(_ctx, RegistryHandle, deviceId, device.InterfaceVersion, _logger);
+        control.PropertiesObserved = EnrichGlobal;
+        return control;
     }
 
     /// <summary>
@@ -1245,7 +1287,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         PipeWirePort port = Current.GetPort(portId)
             ?? throw new ArgumentException($"{portId} is not a port in the current graph.", nameof(portId));
 
-        return PipeWirePortControl.Bind(_ctx, RegistryHandle, portId, port.InterfaceVersion, _logger);
+        PipeWirePortControl control =
+            PipeWirePortControl.Bind(_ctx, RegistryHandle, portId, port.InterfaceVersion, _logger);
+        control.PropertiesObserved = EnrichGlobal;
+        return control;
     }
 
     /// <summary>
@@ -1318,7 +1363,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         PipeWireLink link = Current.GetLink(linkId)
             ?? throw new ArgumentException($"{linkId} is not a link in the current graph.", nameof(linkId));
 
-        return PipeWireLinkControl.Bind(_ctx, RegistryHandle, linkId, link.InterfaceVersion, _logger);
+        PipeWireLinkControl control =
+            PipeWireLinkControl.Bind(_ctx, RegistryHandle, linkId, link.InterfaceVersion, _logger);
+        control.PropertiesObserved = EnrichGlobal;
+        return control;
     }
 
     /// <summary>
@@ -1380,21 +1428,21 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         IPipeWireObject? parsed = null;
 
         if      (kind.SequenceEqual(PipeWireKeys.InterfaceDevice))
-            parsed = PipeWireGlobalParser.ParseDevice(id, permissions, version, props);
+            parsed = PipeWireGlobalParser.ParseDevice(id, permissions, version, PipeWireProperties.From(props));
         else if (kind.SequenceEqual(PipeWireKeys.InterfaceClient))
-            parsed = PipeWireGlobalParser.ParseClient(id, permissions, version, props);
+            parsed = PipeWireGlobalParser.ParseClient(id, permissions, version, PipeWireProperties.From(props));
         else if (kind.SequenceEqual(PipeWireKeys.InterfaceFactory))
-            parsed = PipeWireGlobalParser.ParseFactory(id, permissions, version, props);
+            parsed = PipeWireGlobalParser.ParseFactory(id, permissions, version, PipeWireProperties.From(props));
         else if (kind.SequenceEqual(PipeWireKeys.InterfaceModule))
-            parsed = PipeWireGlobalParser.ParseModule(id, permissions, version, props);
+            parsed = PipeWireGlobalParser.ParseModule(id, permissions, version, PipeWireProperties.From(props));
         else if (kind.SequenceEqual(PipeWireKeys.InterfaceMetadata))
-            parsed = PipeWireGlobalParser.ParseMetadata(id, permissions, version, props);
+            parsed = PipeWireGlobalParser.ParseMetadata(id, permissions, version, PipeWireProperties.From(props));
         else if (kind.SequenceEqual(PipeWireKeys.InterfaceCore))
-            parsed = PipeWireGlobalParser.ParseCore(id, permissions, version, props);
+            parsed = PipeWireGlobalParser.ParseCore(id, permissions, version, PipeWireProperties.From(props));
         else if (kind.SequenceEqual(PipeWireKeys.InterfaceProfiler))
-            parsed = new PipeWireProfiler(id, permissions, version);
+            parsed = new PipeWireProfiler(id, permissions, version, PipeWireProperties.From(props));
         else if (kind.SequenceEqual(PipeWireKeys.InterfaceSecurityContext))
-            parsed = new PipeWireSecurityContext(id, permissions, version);
+            parsed = new PipeWireSecurityContext(id, permissions, version, PipeWireProperties.From(props));
 
         if (parsed is null)
         {
@@ -1407,6 +1455,155 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         Publish();
         CompletePublishWaiter(id, parsed);
         RaiseGraphChanged();
+    }
+
+    /// <summary>
+    /// Fetches the properties a module only reveals to a client that binds it, and folds them into
+    /// the graph.
+    /// </summary>
+    /// <param name="moduleId">The module to read.</param>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <returns>The module as the graph now holds it, with its bind-only properties filled in.</returns>
+    /// <remarks>
+    /// A module's registry global carries <c>module.name</c> and nothing else, so
+    /// <see cref="PipeWireModule.Description"/>, <see cref="PipeWireModule.Author"/> and
+    /// <see cref="PipeWireModule.ModuleVersion"/> are null until this has run for that module. It is not
+    /// done during enumeration because it costs a proxy and a round trip per module for data most
+    /// callers never read.
+    /// </remarks>
+    /// <exception cref="ArgumentException">The id is not a module in the current graph.</exception>
+    /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
+    public async Task<PipeWireModule> ReadModuleDetailsAsync(
+        uint moduleId, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (Current.GetModule(moduleId) is not { } module)
+            throw new ArgumentException($"{moduleId} is not a module in the current graph.", nameof(moduleId));
+
+        PipeWireModuleReader reader = BindModuleReader(moduleId, module.InterfaceVersion);
+        try
+        {
+            PipeWireProperties full = await reader.Properties
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            EnrichGlobal(moduleId, full);
+        }
+        finally
+        {
+            reader.Dispose();
+        }
+
+        // Read back rather than returning what was built: the enrichment is what the rest of the
+        // graph sees, and handing back anything else would let the two disagree.
+        return Current.GetModule(moduleId) ?? module;
+    }
+
+    private unsafe PipeWireModuleReader BindModuleReader(uint moduleId, uint version) =>
+        PipeWireModuleReader.Bind(_ctx, RegistryHandle, moduleId, version);
+
+    /// <summary>
+    /// Replaces a stored object with one built from its full properties.
+    /// </summary>
+    /// <param name="id">The global whose properties arrived.</param>
+    /// <param name="observed">The properties an <c>info</c> event delivered.</param>
+    /// <remarks>
+    /// <para>
+    /// A registry global carries a filtered copy of an object's properties - <c>impl-node.c</c> and
+    /// friends list which keys travel that way - and the rest only reach a client that binds the
+    /// object. This is where those are folded in, so the graph holds the fuller object rather than
+    /// leaving the caller to take the event apart.
+    /// </para>
+    /// <para>
+    /// Runs on the loop thread and does nothing if the object is gone or if the merge changes
+    /// nothing, so a chatty daemon re-sending the same info does not churn the snapshot.
+    /// </para>
+    /// </remarks>
+    private void EnrichGlobal(uint id, PipeWireProperties observed)
+    {
+        if (_disposed || observed.Count == 0) return;
+
+        bool replaced;
+        if (_sources.TryGetValue(id, out PipeWireNode? node))
+        {
+            replaced = TryReplace(node.Properties, merged =>
+                _sources[id] = PipeWireGlobalParser.ParseNode(
+                    id, node.Permissions, node.InterfaceVersion, merged));
+        }
+        else if (_ports.TryGetValue(id, out PipeWirePort? port))
+        {
+            replaced = TryReplace(port.Properties, merged =>
+            {
+                if (PipeWireGlobalParser.TryParsePort(
+                        id, port.Permissions, port.InterfaceVersion, merged,
+                        out PipeWirePort? rebuilt, out _, out _))
+                    _ports[id] = rebuilt!;
+            });
+        }
+        else if (_links.TryGetValue(id, out PipeWireLink? link))
+        {
+            replaced = TryReplace(link.Properties, merged =>
+            {
+                if (PipeWireGlobalParser.TryParseLink(
+                        id, link.Permissions, link.InterfaceVersion, merged,
+                        out PipeWireLink? rebuilt, out _, out _))
+                    _links[id] = rebuilt!;
+            });
+        }
+        else if (_objects.TryGetValue(id, out IPipeWireObject? other))
+        {
+            replaced = TryReplace(other.Properties, merged =>
+            {
+                if (RebuildOther(other, merged) is { } rebuilt) _objects[id] = rebuilt;
+            });
+        }
+        else
+        {
+            return;
+        }
+
+        if (!replaced) return;
+
+        Publish();
+        RaiseGraphChanged();
+
+        bool TryReplace(PipeWireProperties existing, Action<PipeWireProperties> store)
+        {
+            // Ids are reused. Between the bind that asked for this info and the info arriving, the
+            // object can have gone and its id been handed to something else, and folding one
+            // object's properties into another's record would be worse than not enriching at all.
+            // Serials are never reused, so a disagreement here settles it.
+            if (existing.Serial is { } held && observed.Serial is { } arrived && held != arrived)
+                return false;
+
+            PipeWireProperties merged = existing.MergedWith(observed);
+            if (ReferenceEquals(merged, existing)) return false;
+
+            store(merged);
+            return true;
+        }
+    }
+
+    /// <summary>Rebuilds one of the non-graph objects from merged properties.</summary>
+    private static IPipeWireObject? RebuildOther(IPipeWireObject existing, PipeWireProperties merged)
+    {
+        uint id = existing.Id;
+        PipeWirePermissions permissions = existing.Permissions;
+        uint version = existing.InterfaceVersion;
+
+        return existing.Kind switch
+        {
+            PipeWireObjectKind.Device => PipeWireGlobalParser.ParseDevice(id, permissions, version, merged),
+            PipeWireObjectKind.Client => PipeWireGlobalParser.ParseClient(id, permissions, version, merged),
+            PipeWireObjectKind.Factory => PipeWireGlobalParser.ParseFactory(id, permissions, version, merged),
+            PipeWireObjectKind.Module => PipeWireGlobalParser.ParseModule(id, permissions, version, merged),
+            PipeWireObjectKind.Metadata => PipeWireGlobalParser.ParseMetadata(id, permissions, version, merged),
+            PipeWireObjectKind.Core => PipeWireGlobalParser.ParseCore(id, permissions, version, merged),
+            PipeWireObjectKind.Profiler => new PipeWireProfiler(id, permissions, version, merged),
+            PipeWireObjectKind.SecurityContext => new PipeWireSecurityContext(id, permissions, version, merged),
+            _ => null,
+        };
     }
 
     // - Native callbacks -
@@ -1452,7 +1649,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
     private unsafe void AddNode(uint id, PipeWirePermissions permissions, uint version, spa_dict* props)
     {
-        PipeWireNode source = PipeWireGlobalParser.ParseNode(id, permissions, version, props);
+        PipeWireNode source = PipeWireGlobalParser.ParseNode(id, permissions, version, PipeWireProperties.From(props));
         string? name = source.NodeName;
         string? mediaClass = source.MediaClass;
 
@@ -1471,7 +1668,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     private unsafe void AddPort(uint id, PipeWirePermissions permissions, uint version, spa_dict* props)
     {
         if (!PipeWireGlobalParser.TryParsePort(
-                id, permissions, version, props,
+                id, permissions, version, PipeWireProperties.From(props),
                 out PipeWirePort? parsed, out string reason, out string? offending))
         {
             LogPortSkipped(id, reason, offending);
@@ -1492,7 +1689,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     private unsafe void AddLink(uint id, PipeWirePermissions permissions, uint version, spa_dict* props)
     {
         if (!PipeWireGlobalParser.TryParseLink(
-                id, permissions, version, props,
+                id, permissions, version, PipeWireProperties.From(props),
                 out PipeWireLink? parsed, out string reason, out string? offending))
         {
             LogLinkSkipped(id, reason, offending);
@@ -1574,10 +1771,6 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             self.LogHandlerFaulted("global_remove", ex);
         }
     }
-
-    // - spa_dict helpers -
-
-
 
     // - Diagnostics (source-generated, level-gated). Enabled via the logger factory passed to
     //   PipeWireContext; silent by default. -

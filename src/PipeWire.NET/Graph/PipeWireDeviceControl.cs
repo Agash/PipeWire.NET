@@ -67,19 +67,36 @@ public sealed partial class PipeWireDeviceControl : PipeWireParameterObject
     /// <see cref="EnumerateProfilesAsync"/>.
     /// </summary>
     /// <param name="index">The profile index.</param>
+    /// <param name="save">
+    /// Whether the session manager should remember this profile for the device, so it survives a
+    /// reboot. Off by default: persisting is right for a choice a person made and wrong for one a
+    /// program made on its own, and only the caller knows which this is.
+    /// </param>
     /// <param name="cancellationToken">
     /// Abandons the wait. The request is already on its way, so cancelling does not recall
     /// it: the daemon can still apply the change after this throws.
     /// </param>
     /// <remarks>
+    /// <para>
     /// Destructive to the graph: the nodes the old profile provided are removed and the new
     /// profile's appear, so anything holding node ids across this call must re-resolve them.
+    /// </para>
+    /// <para>
+    /// Let the card settle on the new profile before switching it again. Two profile changes in
+    /// quick succession strand the intermediate profile's nodes in the graph for the rest of the
+    /// session; that is the daemon's behaviour, not this library's, and waiting for the new nodes
+    /// to appear is what avoids it.
+    /// </para>
     /// </remarks>
-    public Task SetProfileAsync(int index, CancellationToken cancellationToken = default) =>
+    public Task SetProfileAsync(
+        int index, bool save = false, CancellationToken cancellationToken = default) =>
         SetParameterAsync(
             SpaParamType.Profile,
             new SpaObject(SpaType.ObjectParamProfile, SpaParamType.Profile,
-                [new SpaProperty(SpaParamProfile.Index, 0, new SpaInt(index))]),
+            [
+                new SpaProperty(SpaParamProfile.Index, 0, new SpaInt(index)),
+                new SpaProperty(SpaParamProfile.Save, 0, new SpaBool(save)),
+            ]),
             cancellationToken);
 
     /// <summary>Every route the device offers: its jacks, speakers and microphones.</summary>
@@ -101,18 +118,24 @@ public sealed partial class PipeWireDeviceControl : PipeWireParameterObject
     /// <param name="devicePort">
     /// Which of the device's ports to apply it to, from the route's <c>devices</c> property.
     /// </param>
+    /// <param name="save">
+    /// Whether the session manager should remember this route for the device, so it survives a
+    /// reboot. Off by default, for the same reason as on <see cref="SetProfileAsync"/>.
+    /// </param>
     /// <param name="cancellationToken">
     /// Abandons the wait. The request is already on its way, so cancelling does not recall
     /// it: the daemon can still apply the change after this throws.
     /// </param>
     public Task SetRouteAsync(
-        int routeIndex, int devicePort, CancellationToken cancellationToken = default) =>
+        int routeIndex, int devicePort, bool save = false,
+        CancellationToken cancellationToken = default) =>
         SetParameterAsync(
             SpaParamType.Route,
             new SpaObject(SpaType.ObjectParamRoute, SpaParamType.Route,
             [
                 new SpaProperty(SpaParamRoute.Index, 0, new SpaInt(routeIndex)),
                 new SpaProperty(SpaParamRoute.Device, 0, new SpaInt(devicePort)),
+                new SpaProperty(SpaParamRoute.Save, 0, new SpaBool(save)),
             ]),
             cancellationToken);
 
@@ -201,7 +224,11 @@ public sealed partial class PipeWireDeviceControl : PipeWireParameterObject
         try
         {
             if (info is not null)
-                FromUserData<PipeWireDeviceControl>(data)?.OnInfo(info->@params, info->n_params);
+                if (FromUserData<PipeWireDeviceControl>(data) is { } self)
+                {
+                    self.OnInfo(info->@params, info->n_params);
+                    self.OnInfoProperties(info->props);
+                }
         }
         catch
         {

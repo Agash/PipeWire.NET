@@ -18,11 +18,14 @@ namespace PipeWire.NET.Tests;
 /// down. A native binding that only behaves when used correctly is a binding that crashes in
 /// production.
 /// </remarks>
+[ExpectsLibraryError("handler threw")]
+[ExpectsLibraryError("stream error")]
+[ExpectsLibraryError("ParameterChanged handler")]
 [TestClass]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class HostileConditionsTests
+public sealed class HostileConditionsTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(40);
 
@@ -337,21 +340,36 @@ public sealed class HostileConditionsTests
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-        // Every id this test creates, so what is asserted at the end is this test's residue rather
-        // than the session's population. A session manager adds and removes its own nodes
-        // throughout, so comparing the total count against a baseline measures the session,
-        // not the library.
-        var mine = new ConcurrentBag<uint>();
+        // Every serial this test creates, so what is asserted at the end is this test's residue
+        // rather than the session's population. Serials, not ids: the daemon hands out the lowest
+        // free id, so under this churn an id is recycled within moments and a check keyed on one
+        // cannot tell our node from whatever took its place. A serial is never reused.
+        var mine = new ConcurrentBag<ulong>();
 
         // Eight concurrent workers, each churning. The daemon reuses ids aggressively under this,
         // which is exactly the condition that breaks a cache keyed on them.
+        //
+        // Paced, because the session manager binds each new node and calls methods on it to
+        // activate and link it. Destroying one the instant it appears puts those calls on an
+        // object the daemon has already dropped, answered with ENOENT "unknown resource"; enough
+        // of them and WirePlumber ends up no longer reading its core socket at all, which starves
+        // every client that connects afterwards. The concurrency and the id reuse are the point
+        // here and both survive the pause.
         Task[] workers = [.. Enumerable.Range(0, 8).Select(w => Task.Run(async () =>
         {
             for (int i = 0; i < 10; i++)
             {
+                await Task.Delay(TimeSpan.FromMilliseconds(25), cts.Token);
+
+                // No media.class. The session manager reads that as a routable endpoint and builds
+                // a session item for it, then tries to link it - and these nodes exist for a few
+                // milliseconds, so it never finds a target and every one of them ends as an
+                // aborted activation. Nothing here needs the node to be a sink.
                 PipeWireNode n = await reg.CreateVirtualNode($"Storm {w}-{i}")
-                                          .WithName($"pwnet_hc_storm_{w}_{i}").ExecuteAsync(cts.Token);
-                mine.Add(n.NodeId);
+                                          .WithName($"pwnet_hc_storm_{w}_{i}")
+                                          .WithMediaClass("").ExecuteAsync(cts.Token);
+                Assert.IsNotNull(n.ObjectSerial, "a created node arrived without a serial");
+                mine.Add(n.ObjectSerial!.Value);
                 Assert.IsNotNull(reg.Current.GetNode(n.NodeId), "a created node was not in the graph");
                 await reg.DestroyGlobalAsync(n.NodeId, cts.Token);
             }
@@ -359,21 +377,19 @@ public sealed class HostileConditionsTests
 
         await Task.WhenAll(workers);
 
-        // Everything we made must be gone. By name: the daemon reuses ids aggressively under
-        // churn, including for the session manager's own nodes, so a resolved id is only ours
-        // when its name says so. A present-but-nameless node is given a beat to gain its
-        // properties first, since that is the one shape the name check above cannot see.
-        PipeWireGraphSnapshot end = await WaitForAsync(
-            reg,
-            g => !g.Nodes.Any(n => n.NodeName?.StartsWith("pwnet_hc_storm_", StringComparison.Ordinal) == true),
-            cts.Token);
+        // Everything we made must be gone, decided by serial. The name check this used to do was
+        // a stand-in for identity while ids were all there was: it could not tell a node of ours
+        // from a session-manager node that had taken the same id, and it had to treat a nameless
+        // node as possibly ours because properties can arrive after the global does. Neither
+        // caveat survives a serial.
+        await WaitForAsync(reg, g => StillOurs(g, mine).Length == 0, cts.Token);
 
-        uint[] left = OursOrNameless(reg, mine);
+        ulong[] left = StillOurs(reg.Current, mine);
         for (int attempt = 0; attempt < 20 && left.Length > 0; attempt++)
         {
             await Task.Delay(TimeSpan.FromMilliseconds(100), cts.Token);
             await reg.WaitForInitialEnumerationAsync(cts.Token);
-            left = OursOrNameless(reg, mine);
+            left = StillOurs(reg.Current, mine);
         }
 
         Assert.IsEmpty(left,
@@ -381,20 +397,13 @@ public sealed class HostileConditionsTests
     }
 
     /// <summary>Ids this test created that still resolve to one of its nodes, or to no name.</summary>
-    private static uint[] OursOrNameless(PipeWireRegistry registry, ConcurrentBag<uint> mine)
+    /// <summary>The nodes this test made that are still in the graph, by serial.</summary>
+    private static ulong[] StillOurs(PipeWireGraphSnapshot graph, ConcurrentBag<ulong> mine)
     {
-        var left = new HashSet<uint>();
-        foreach (uint id in mine)
-        {
-            if (registry.Current.GetNode(id) is not { } node) continue;
-            if (node.NodeName is null
-                || node.NodeName.StartsWith("pwnet_hc_storm_", StringComparison.Ordinal))
-            {
-                left.Add(id);
-            }
-        }
-
-        return [.. left];
+        var ours = new HashSet<ulong>(mine);
+        return [.. graph.Nodes
+            .Where(n => n.ObjectSerial is { } serial && ours.Contains(serial))
+            .Select(n => n.ObjectSerial!.Value)];
     }
 
     // ------------------------------------------------------------------ losing the daemon
@@ -415,7 +424,6 @@ public sealed class HostileConditionsTests
         PipeWireNode node = await reg.CreateVirtualNode("Doomed")
                                      .WithName("pwnet_hc_kicked_node").ExecuteAsync(cts.Token);
         Assert.IsNotNull(reg.Current.GetNode(node.NodeId));
-
         uint? clientId = await FindOurClientIdAsync(AppName, cts.Token);
         if (clientId is null)
             Assert.Inconclusive("could not identify our own client object to disconnect");
@@ -429,17 +437,31 @@ public sealed class HostileConditionsTests
         PipeWireGraphSnapshot lastKnown = reg.Current;
         Assert.IsNotNull(lastKnown, "the last snapshot must survive the connection dying");
 
-        // Mutations must fail rather than appear to succeed against a dead connection.
+        // Mutations must fail rather than appear to succeed against a dead connection, and they
+        // must do it promptly. A deadline of its own is what makes that testable: given only the
+        // test's budget, a request that hangs forever ends as a cancellation, and catching that
+        // alongside the real refusals reports a hang as a pass. Silence is the outcome this test
+        // exists to catch, so it has to be told apart from a refusal rather than share its handler.
+        using var prompt = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+        prompt.CancelAfter(TimeSpan.FromSeconds(10));
+
+        long startedTicks = Environment.TickCount64;
         try
         {
-            await reg.CreateVirtualNode("After").WithName("pwnet_hc_after").ExecuteAsync(cts.Token);
+            await reg.CreateVirtualNode("After").WithName("pwnet_hc_after").ExecuteAsync(prompt.Token);
+            Assert.Fail("a create on a destroyed connection reported success");
         }
         catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException
-                                      or OperationCanceledException or TimeoutException)
+                                      or TimeoutException or PipeWireException)
         {
-            // Any definite failure is fine. Silence would not be.
+            // A definite refusal, which is the point.
         }
-
+        catch (OperationCanceledException) when (!cts.IsCancellationRequested)
+        {
+            Assert.Fail(
+                $"a create on a destroyed connection was still outstanding after "
+                + $"{(Environment.TickCount64 - startedTicks) / 1000.0:F1}s rather than failing");
+        }
         // And disposal after the connection is gone must still be clean.
         await reg.DisposeAsync();
     }

@@ -122,6 +122,7 @@ internal static unsafe partial class Native
     internal const uint PW_VERSION_LINK             = 3;
     internal const uint PW_VERSION_LINK_EVENTS      = 0;
     internal const uint PW_VERSION_MODULE           = 3;
+    internal const uint PW_VERSION_MODULE_EVENTS    = 0;
     internal const uint PW_VERSION_NODE             = 3;
     internal const uint PW_VERSION_PORT             = 3;
     internal const uint PW_VERSION_PORT_EVENTS      = 0;
@@ -193,7 +194,7 @@ internal static unsafe partial class Native
     {
         GetInterface(core, out pw_core_methods* methods, out void* data);
         if (methods is null || methods->get_registry is null)
-            throw new PipeWireException("pw_core_get_registry", -38);   // ENOSYS
+            throw new PipeWireInteropException("pw_core_get_registry", -38);   // ENOSYS
         return methods->get_registry(data, version, userDataSize);
     }
 
@@ -235,7 +236,7 @@ internal static unsafe partial class Native
     {
         GetInterface(core, out pw_core_methods* methods, out void* data);
         if (methods is null || methods->create_object is null)
-            throw new PipeWireException("pw_core_create_object", -38);  // ENOSYS
+            throw new PipeWireInteropException("pw_core_create_object", -38);  // ENOSYS
         return (pw_proxy*)methods->create_object(data, factoryName, type, version, props, userDataSize);
     }
 
@@ -300,6 +301,17 @@ internal static unsafe partial class Native
         if (methods is null || methods->bind is null)
             return null;
         return (pw_proxy*)methods->bind(data, id, type, version, userDataSize);
+    }
+
+    // - Module -
+
+    internal static int pw_module_add_listener(
+        pw_module* module, spa_hook* listener, pw_module_events* events, void* data)
+    {
+        GetInterface(module, out pw_module_methods* methods, out void* userData);
+        if (methods is null || methods->add_listener is null)
+            return -1;
+        return methods->add_listener(userData, listener, events, data);
     }
 
     // - Node -

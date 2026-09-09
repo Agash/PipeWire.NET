@@ -15,7 +15,7 @@ namespace PipeWire.NET.Tests;
 /// </summary>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class ConversionBoundaryTests
+public sealed class ConversionBoundaryTests : PipeWireTestBase
 {
     // ---------------------------------------------------------------- media class
 
@@ -462,7 +462,8 @@ public sealed class ConversionBoundaryTests
             [1, 2, 3, 4], stride: 4, width: 1, height: 1, format: PixelFormat.Bgra,
             sequenceNumber: 0);
         Assert.IsFalse(frame.IsFdBacked);
-        Assert.AreEqual(-1, frame.DuplicateFd());
+        using SafeDescriptorHandle none = frame.DuplicateFd();
+        Assert.IsTrue(none.IsInvalid);
     }
 
     [TestMethod]

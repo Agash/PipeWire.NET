@@ -17,8 +17,17 @@ public sealed record PipeWireLink : IPipeWireObject
         uint LinkOutputNode,
         uint LinkOutputPort,
         PipeWirePermissions Permissions = PipeWirePermissions.None,
-        uint InterfaceVersion = 0)
+        uint InterfaceVersion = 0,
+        bool IsPassive = false,
+        uint? FactoryId = null,
+        uint? ClientId = null,
+        PipeWireProperties? Properties = null)
     {
+        this.Properties = Properties ?? PipeWireProperties.Empty;
+        this.ObjectSerial = this.Properties.Serial;
+        this.IsPassive = IsPassive;
+        this.FactoryId = FactoryId;
+        this.ClientId = ClientId;
         this.Permissions = Permissions;
         this.InterfaceVersion = InterfaceVersion;
         this.LinkId = LinkId;
@@ -39,6 +48,27 @@ public sealed record PipeWireLink : IPipeWireObject
 
     /// <inheritdoc/>
     public uint InterfaceVersion { get; }
+
+    /// <inheritdoc/>
+    public PipeWireProperties Properties { get; }
+
+    /// <inheritdoc/>
+    public ulong? ObjectSerial { get; }
+
+    /// <summary>
+    /// True when the link does not by itself keep its nodes running (<c>link.passive</c>).
+    /// </summary>
+    /// <remarks>
+    /// A passive link carries data when something else already drives the graph, and does not
+    /// count as a reason to start it. Monitor and metering links are made this way.
+    /// </remarks>
+    public bool IsPassive { get; }
+
+    /// <summary>The factory that made this link.</summary>
+    public uint? FactoryId { get; }
+
+    /// <summary>The client that asked for this link.</summary>
+    public uint? ClientId { get; }
 
     /// <summary>The PipeWire global id of this link.</summary>
     public uint LinkId { get; }

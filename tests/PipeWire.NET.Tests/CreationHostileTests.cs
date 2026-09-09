@@ -16,7 +16,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class CreationHostileTests
+public sealed class CreationHostileTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
 
@@ -221,7 +221,12 @@ public sealed class CreationHostileTests
                     .WithName(Unique("pwnet_reuse_next")).ExecuteAsync(cts.Token);
 
                 created.Add(next.NodeId);
-                reused = next.NodeId == first.NodeId;
+
+                // The id coming back is not on its own proof of reuse - it is proof only when the
+                // serial differs, since that is what says this is a different object rather than
+                // the same one still around.
+                reused = next.NodeId == first.NodeId
+                         && next.ObjectSerial != first.ObjectSerial;
             }
 
             foreach (uint id in created)
@@ -235,6 +240,11 @@ public sealed class CreationHostileTests
 
             Assert.AreEqual(firstName, held.GetNode(first.NodeId)?.NodeName,
                 "a held snapshot changed when the daemon reused the id it recorded");
+
+            // And the snapshot's own answer to "is this still that object". The id resolves in
+            // both, so only the serial can tell them apart, which is the whole reason it is read.
+            Assert.IsFalse(held.GetNode(first.NodeId)!.IsStillIn(registry.Current),
+                "the object the snapshot recorded must not read as still present once its id was reused");
         }
     }
 

@@ -13,14 +13,15 @@ namespace PipeWire.NET.Tests;
 /// </summary>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class GraphModelTests
+public sealed class GraphModelTests : PipeWireTestBase
 {
     private static PipeWireGraphSnapshot Build(
         PipeWireNode[]? nodes = null, PipeWirePort[]? ports = null, PipeWireLink[]? links = null) =>
         new(1, nodes ?? [], ports ?? [], links ?? []);
 
-    private static PipeWirePort Port(uint id, uint nodeId, PipeWirePortDirection dir) =>
-        new(id, nodeId, $"p{id}", dir, Monitor: false, Exclusive: false);
+    private static PipeWirePort Port(
+        uint id, uint nodeId, PipeWirePortDirection dir, bool control = false) =>
+        new(id, nodeId, $"p{id}", dir, Monitor: false, IsControl: control);
 
     [TestMethod]
     public void GetPortsForNode_ReturnsOnlyThatNodesPorts()
@@ -172,8 +173,28 @@ public sealed class GraphModelTests
 
         Assert.IsFalse(control.IsDataInput, "a control port is not a data input");
         Assert.IsFalse(notify.IsDataOutput, "a notify port is not a data output");
-        Assert.IsTrue(control.IsControl);
         Assert.IsTrue(notify.IsNotify);
+    }
+
+    [TestMethod]
+    public void AControlPortFacingIn_IsNotOfferedAsADataInput()
+    {
+        // An adapter's control port reports port.direction=in, so anything picking the first
+        // input port as a link endpoint picks it and the link fails negotiation with EINVAL.
+        var control = Port(1, 1, PipeWirePortDirection.In, control: true);
+        var audio = Port(2, 1, PipeWirePortDirection.In);
+
+        Assert.IsFalse(control.IsDataInput, "a control port is not a data input");
+        Assert.IsTrue(audio.IsDataInput);
+        Assert.IsTrue(control.IsControl);
+
+        PipeWireGraphSnapshot graph = Build(
+            nodes: [new(1, "a", null, null)], ports: [control, audio]);
+
+        Assert.IsTrue(graph.CanSendTo(graph.Nodes[0]));
+        Assert.IsFalse(
+            Build(nodes: [new(1, "a", null, null)], ports: [control]).CanSendTo(new(1, "a", null, null)),
+            "a node whose only input is a control port cannot be sent media");
     }
 
     [TestMethod]

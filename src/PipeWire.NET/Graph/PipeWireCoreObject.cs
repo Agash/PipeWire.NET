@@ -12,13 +12,6 @@ namespace PipeWire.NET.Graph;
 [SupportedOSPlatform("linux")]
 public sealed record PipeWireCoreObject : IPipeWireObject
 {
-    /// <param name="Id">PipeWire global id.</param>
-    /// <param name="Permissions">What this client may do with the object.</param>
-    /// <param name="InterfaceVersion">The interface version the daemon announced.</param>
-    /// <param name="CoreName">The daemon instance name, such as <c>pipewire-0</c>.</param>
-    /// <param name="CoreVersion">The daemon version string.</param>
-    /// <param name="HostName">The host the daemon runs on.</param>
-    /// <param name="UserName">The user it runs as.</param>
     internal PipeWireCoreObject(
         uint Id,
         PipeWirePermissions Permissions,
@@ -26,8 +19,11 @@ public sealed record PipeWireCoreObject : IPipeWireObject
         string? CoreName,
         string? CoreVersion,
         string? HostName,
-        string? UserName)
+        string? UserName,
+        PipeWireProperties? Properties = null)
     {
+        this.Properties = Properties ?? PipeWireProperties.Empty;
+        this.ObjectSerial = this.Properties.Serial;
         this.Id = Id;
         this.Permissions = Permissions;
         this.InterfaceVersion = InterfaceVersion;
@@ -48,6 +44,12 @@ public sealed record PipeWireCoreObject : IPipeWireObject
 
     /// <inheritdoc/>
     public uint InterfaceVersion { get; }
+
+    /// <inheritdoc/>
+    public PipeWireProperties Properties { get; }
+
+    /// <inheritdoc/>
+    public ulong? ObjectSerial { get; }
 
     /// <summary>The daemon instance name, such as <c>pipewire-0</c>.</summary>
     public string? CoreName { get; }

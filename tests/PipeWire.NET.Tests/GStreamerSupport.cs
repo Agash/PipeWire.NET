@@ -15,8 +15,8 @@ internal sealed class GstTestSource : IAsyncDisposable
 {
     private const string GstLaunch = "/usr/bin/gst-launch-1.0";
 
-    private readonly Process _proc;
-    private GstTestSource(Process proc) => _proc = proc;
+    private readonly Process[] _procs;
+    private GstTestSource(params Process[] procs) => _procs = procs;
 
     /// <summary>
     /// The registry id of the node this producer published, so a consumer can target it directly
@@ -106,11 +106,46 @@ internal sealed class GstTestSource : IAsyncDisposable
     /// single pipeline they share one clock, so the two PipeWire nodes carry coherent
     /// presentation timestamps - the basis for A/V sync.
     /// </summary>
+    /// <summary>Starts a video and an audio producer, each in its own gst process.</summary>
+    /// <remarks>
+    /// One process per sink, deliberately. Two <c>pipewiresink mode=provide</c> branches in a
+    /// single gst-launch never both get driven - both nodes reach the graph and then sit
+    /// suspended, delivering nothing - while the same two as separate processes behave exactly
+    /// like every other single-sink producer here.
+    /// <para>
+    /// This costs the test nothing it was actually asserting. The clock the legs share is
+    /// PipeWire's graph clock, which every node in a driver group is stamped from whoever
+    /// published it, so splitting the processes leaves the shared-clock property intact.
+    /// </para>
+    /// </remarks>
     public static async Task<GstTestSource> StartTwoAsync(
         PipeWireContext ctx,
         (string Head, string Node) video,
         (string Head, string Node) audio,
         TimeSpan? timeout = null)
+    {
+        Process videoProc = StartBranch(video.Head, video.Node, "Video/Source");
+        Process audioProc = StartBranch(audio.Head, audio.Node, "Audio/Source");
+
+        var source = new GstTestSource(videoProc, audioProc);
+        try
+        {
+            var t = timeout ?? TimeSpan.FromSeconds(10);
+            if (await WaitForNodeAsync(ctx, video.Node, t) is null ||
+                await WaitForNodeAsync(ctx, audio.Node, t) is null)
+            {
+                string err = await videoProc.StandardError.ReadToEndAsync()
+                           + await audioProc.StandardError.ReadToEndAsync();
+                await source.DisposeAsync();
+                throw new InvalidOperationException(
+                    $"gst A/V nodes did not appear. stderr:{Environment.NewLine}{err}");
+            }
+            return source;
+        }
+        catch { await source.DisposeAsync(); throw; }
+    }
+
+    private static Process StartBranch(string head, string node, string mediaClass)
     {
         var psi = new ProcessStartInfo(GstLaunch)
         {
@@ -119,24 +154,9 @@ internal sealed class GstTestSource : IAsyncDisposable
             UseShellExecute = false,
         };
         psi.ArgumentList.Add("-q");
-        AppendBranch(psi, video.Head, video.Node, "Video/Source");
-        AppendBranch(psi, audio.Head, audio.Node, "Audio/Source");
-
-        var proc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start gst-launch-1.0.");
-        var source = new GstTestSource(proc);
-        try
-        {
-            var t = timeout ?? TimeSpan.FromSeconds(10);
-            if (await WaitForNodeAsync(ctx, video.Node, t) is null ||
-                await WaitForNodeAsync(ctx, audio.Node, t) is null)
-            {
-                string err = await proc.StandardError.ReadToEndAsync();
-                await source.DisposeAsync();
-                throw new InvalidOperationException($"gst A/V nodes did not appear. stderr:\n{err}");
-            }
-            return source;
-        }
-        catch { await source.DisposeAsync(); throw; }
+        AppendBranch(psi, head, node, mediaClass);
+        return Process.Start(psi)
+            ?? throw new InvalidOperationException("Failed to start gst-launch-1.0.");
     }
 
     private static void AppendBranch(ProcessStartInfo psi, string head, string node, string mediaClass)
@@ -166,10 +186,12 @@ internal sealed class GstTestSource : IAsyncDisposable
     {
         try
         {
-            if (!_proc.HasExited) _proc.Kill(entireProcessTree: true);
-            await _proc.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(3));
+            foreach (Process p in _procs)
+                if (!p.HasExited) p.Kill(entireProcessTree: true);
+            foreach (Process p in _procs)
+                await p.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(3));
         }
         catch { /* best-effort teardown */ }
-        finally { _proc.Dispose(); }
+        finally { foreach (Process p in _procs) p.Dispose(); }
     }
 }

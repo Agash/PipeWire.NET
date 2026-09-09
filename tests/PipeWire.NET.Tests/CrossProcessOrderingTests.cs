@@ -20,7 +20,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class CrossProcessOrderingTests
+public sealed class CrossProcessOrderingTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
 
@@ -62,7 +62,7 @@ public sealed class CrossProcessOrderingTests
                 string key = Unique("pwnet.xproc.self");
 
                 try { await store.SetAsync(key, "v", cancellationToken: cts.Token); }
-                catch (PipeWireException) { Assert.Inconclusive("cannot write metadata here."); }
+                catch (PipeWireException e) { Assert.Inconclusive($"cannot write metadata here: {e.Message}"); }
 
                 Assert.AreEqual("v", store.Get(key), "a client cannot read back its own write");
 
@@ -107,7 +107,7 @@ public sealed class CrossProcessOrderingTests
                         async () =>
                         {
                             try { await writer.SetAsync(key, "v", cancellationToken: cts.Token); }
-                            catch (PipeWireException) { Assert.Inconclusive("cannot write metadata here."); }
+                            catch (PipeWireException e) { Assert.Inconclusive($"cannot write metadata here: {e.Message}"); }
 
                             await reader.ReadyAsync(cts.Token);
 

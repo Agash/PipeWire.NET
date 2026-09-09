@@ -14,7 +14,7 @@ namespace PipeWire.NET.Tests;
 /// cheap to catch here and expensive to catch after a release.
 /// </remarks>
 [TestClass]
-public sealed class PublicSurfaceTests
+public sealed class PublicSurfaceTests : PipeWireTestBase
 {
     private static readonly Assembly[] Shipped =
     [

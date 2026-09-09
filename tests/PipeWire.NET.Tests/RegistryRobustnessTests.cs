@@ -13,11 +13,13 @@ namespace PipeWire.NET.Tests;
 /// Surviving is necessary but not sufficient: each one goes on to prove that later events were
 /// still delivered, because a loop that silently stopped dispatching would otherwise look healthy.
 /// </remarks>
+[ExpectsLibraryError("handler threw")]
+[ExpectsLibraryError("ParameterChanged handler")]
 [TestClass]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class RegistryRobustnessTests
+public sealed class RegistryRobustnessTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
 

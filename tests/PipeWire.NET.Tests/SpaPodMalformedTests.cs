@@ -17,7 +17,7 @@ namespace PipeWire.NET.Tests;
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class SpaPodMalformedTests
+public sealed class SpaPodMalformedTests : PipeWireTestBase
 {
     /// <summary>Builds a pod header that claims <paramref name="declared"/> body bytes.</summary>
     private static byte[] Pod(SpaType type, uint declared, int actualBodyBytes)
@@ -360,9 +360,10 @@ public sealed class SpaPodMalformedTests
     [TestMethod]
     public void AnObjectBodyEndingMidProperty_IsDeclinedRatherThanTruncated()
     {
-        // The property loop stops as soon as fewer than a header remains, so a body cut short used
-        // to parse as a valid object missing its last property. Downstream that reads as a producer
-        // that simply did not offer it, which is indistinguishable from a real negotiation result.
+        // The property loop stops as soon as fewer than a header remains, so a body cut short could
+        // otherwise parse as a valid object missing its last property. Downstream that reads as a
+        // producer that simply did not offer it, which is indistinguishable from a real negotiation
+        // result.
         Span<byte> buffer = stackalloc byte[256];
         var builder = new SpaPodBuilder(buffer);
 
@@ -390,9 +391,9 @@ public sealed class SpaPodMalformedTests
     public void AMalformedChoiceDeclined_LeavesTheReaderWhereItFoundIt()
     {
         // The caller falls back to a plain typed read on the same reader when a choice is declined,
-        // so a decline that moved the position does not fail: it reads the wrong bytes as the
-        // value. Only the not-a-choice branch used to restore, so a malformed choice corrupted
-        // whatever was read next.
+        // so a decline that moves the position does not fail loudly: it silently reads the wrong
+        // bytes as the value. The position has to be restored on decline, the same as for a plain
+        // not-a-choice value, or a malformed choice corrupts whatever is read next.
         foreach (int truncateTo in (int[])[8, 12, 16, 20])
         {
             var body = new List<byte>();

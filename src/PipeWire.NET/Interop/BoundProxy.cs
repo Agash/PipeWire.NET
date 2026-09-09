@@ -190,7 +190,7 @@ internal sealed unsafe class BoundProxy : IDisposable
                     (IntPtr)proxy, (IntPtr)hook, (IntPtr)events, GCHandle.ToIntPtr(self));
 
                 if (rc < 0)
-                    throw new PipeWireException("add_listener", rc);
+                    throw new PipeWireInteropException("add_listener", rc);
             }
 
             return bound;

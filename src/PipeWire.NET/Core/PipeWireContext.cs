@@ -2,6 +2,7 @@ using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using PipeWire.NET.Interop;
@@ -55,6 +56,28 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     private readonly string _name;
     private volatile bool          _started;
     private volatile bool          _disposed;
+
+    // The connection's own listener, distinct from the per-request one a round trip attaches.
+    // A connection can die between requests - the daemon destroys our client, or the socket goes -
+    // and with only per-request listeners nothing is watching at that moment, so the death is
+    // never recorded and the next request queues onto a socket that will never answer.
+    private unsafe pw_core_events* _watchEvents;
+    private unsafe spa_hook* _watchHook;
+    private GCHandle _watchSelf;
+    private PipeWireConnectionClosedException? _fault;
+
+    /// <summary>
+    /// The fault that ended this connection, or null while it is usable.
+    /// </summary>
+    /// <remarks>
+    /// Set once, from the loop thread, and read from anywhere. A request issued after this is set
+    /// cannot be answered, so the honest outcome is to refuse it rather than let the caller wait
+    /// for a reply that is not coming.
+    /// </remarks>
+    internal PipeWireConnectionClosedException? ConnectionFault => Volatile.Read(ref _fault);
+
+    /// <summary>Raised once, on the loop thread, when the connection is lost.</summary>
+    internal event Action<PipeWireConnectionClosedException>? ConnectionLost;
 
     /// <summary>
     /// The logger factory streams created against this context use for diagnostics. Defaults to
@@ -112,7 +135,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
             loop = Native.pw_thread_loop_new((sbyte*)n, null);
 
         if (loop is null)
-            throw new PipeWireException("pw_thread_loop_new", -12);     // ENOMEM
+            throw new PipeWireInteropException("pw_thread_loop_new", -12);     // ENOMEM
 
         _loopHandle = new PipeWireLoopHandle(loop);
 
@@ -125,7 +148,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         {
             _loopHandle.Dispose();
             _loopHandle = null;
-            throw new PipeWireException("pw_context_new", -12);         // ENOMEM
+            throw new PipeWireInteropException("pw_context_new", -12);         // ENOMEM
         }
 
         _contextHandle = new PipeWireContextHandle(context, _loopHandle);
@@ -341,7 +364,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     {
         pw_thread_loop* loop = LoopHandle;
         if (Native.pw_thread_loop_start(loop) < 0)
-            throw new PipeWireException("pw_thread_loop_start", -11);   // EAGAIN
+            throw new PipeWireInteropException("pw_thread_loop_start", -11);   // EAGAIN
 
         // The loop thread is live from here, but _started is only set once this returns and disposal
         // gates pw_thread_loop_stop on it - so a throw below would strand the thread.
@@ -380,7 +403,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
 
                 pw_properties* props = Native.pw_properties_new_dict(&native);
                 if (props is null)
-                    throw new PipeWireException("pw_properties_new_dict", -12);   // ENOMEM
+                    throw new PipeWireInteropException("pw_properties_new_dict", -12);   // ENOMEM
 
                 core = connectFd < 0
                     ? Native.pw_context_connect(_contextHandle!.Context, props, user_data_size: 0)
@@ -397,11 +420,11 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
                 // descriptor is still open and its SafeFileHandle is still the owner - ordinary
                 // disposal closes it. A raw descriptor stays the caller's; nothing here closes it.
                 throw connectFd < 0
-                    ? new PipeWireException(
+                    ? new PipeWireConnectFailedException(
                         "pw_context_connect", -2,   // ENOENT
                         objectId: null,
                         "ensure the PipeWire daemon is running (pipewire.service / wireplumber.service)")
-                    : new PipeWireException(
+                    : new PipeWireConnectFailedException(
                         "pw_context_connect_fd", -2,   // ENOENT
                         objectId: null,
                         "the fd must be a connected PipeWire socket (as returned by a portal "
@@ -418,6 +441,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
             duplicate?.SetHandleAsInvalid();
 
             _coreHandle = new PipeWireCoreHandle(core, _loopHandle!, _contextHandle!);
+            WatchConnection(core);
         }
         catch
         {
@@ -603,6 +627,95 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         return ValueTask.CompletedTask;
     }
 
+    /// <summary>Attaches the connection-lifetime core listener.</summary>
+    /// <remarks>
+    /// Failure to attach is not fatal to the connection: it costs the prompt refusal below, and a
+    /// caller waiting on its own token is a worse outcome than a context that works but reports a
+    /// death late. It is logged by the caller of the request that eventually fails.
+    /// </remarks>
+    private unsafe void WatchConnection(pw_core* core)
+    {
+        _watchSelf = GCHandle.Alloc(this, GCHandleType.Weak);
+        _watchEvents = (pw_core_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_core_events));
+        _watchEvents->version = Native.PW_VERSION_CORE_EVENTS;
+        _watchEvents->error = &OnConnectionError;
+        _watchHook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
+
+        if (Native.pw_core_add_listener(core, _watchHook, _watchEvents, (void*)GCHandle.ToIntPtr(_watchSelf)) >= 0)
+            return;
+
+        ReleaseConnectionWatch();
+    }
+
+    /// <summary>Unlinks the connection listener and frees what it owns, in that order.</summary>
+    /// <remarks>
+    /// The hook is a node in the core's listener list, so freeing it while it is still linked
+    /// leaves the daemon dispatching into memory that has been handed back. It has to be removed
+    /// from the list first, and that touches loop-owned state, so it happens under the loop lock.
+    /// </remarks>
+    private unsafe void ReleaseConnectionWatch()
+    {
+        if (_watchHook is not null)
+        {
+            if (_loopHandle is { IsInvalid: false } loop)
+            {
+                Native.pw_thread_loop_lock(loop.Loop);
+                try { Native.spa_hook_remove(_watchHook); }
+                finally { Native.pw_thread_loop_unlock(loop.Loop); }
+            }
+            else
+            {
+                // No loop left to take: it has been stopped and torn down, so nothing can be
+                // dispatching through the hook any more and unlinking it would touch freed state.
+                Native.spa_hook_remove(_watchHook);
+            }
+
+            NativeMemory.Free(_watchHook);
+            _watchHook = null;
+        }
+
+        if (_watchEvents is not null) { NativeMemory.Free(_watchEvents); _watchEvents = null; }
+        if (_watchSelf.IsAllocated) _watchSelf.Free();
+    }
+
+    /// <summary>The daemon reporting an error against the connection, from the loop thread.</summary>
+    /// <remarks>
+    /// Only transport errnos end the connection. A refusal - EACCES on a denied write, ENOENT for
+    /// an object that is gone - is an answer, and the connection carries on serving.
+    /// </remarks>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void OnConnectionError(void* data, uint id, int seq, int res, sbyte* message)
+    {
+        // A native callback frame: an escaping exception aborts the process.
+        try
+        {
+            if (data is null) return;
+            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireContext self) return;
+            if (!IsConnectionFatal(res)) return;
+
+            var fault = new PipeWireConnectionClosedException(
+                "connection", res, id, message is null ? null : DaemonText.String(message));
+
+            // First one wins: the errno that ended it is the useful one, and a closing connection
+            // can report several.
+            if (Interlocked.CompareExchange(ref self._fault, fault, null) is not null) return;
+
+            SafeCallback.Raise(self.ConnectionLost, h => h(fault), _ => { });
+        }
+        catch (Exception)
+        {
+            // Deliberately not logged: this frame has no logger, and the fault it failed to record
+            // surfaces as the request that never gets refused.
+        }
+    }
+
+    /// <inheritdoc cref="CoreSync.IsConnectionFatal"/>
+    private static bool IsConnectionFatal(int result) => result is
+        -32 or    // EPIPE
+        -103 or   // ECONNABORTED
+        -104 or   // ECONNRESET
+        -107;     // ENOTCONN
+
     private void DisposeCore()
     {
         // Checked before anything is marked or released. Stopping the loop joins its thread, so
@@ -632,6 +745,8 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         // and one of them taking the gate would deadlock against this method still holding it.
         _shutdown.Cancel();
 
+        // The listener's memory is freed once the loop is stopped; see the release below.
+
         // Wait out admitted operations before tearing the loop down. Every in-library scope is
         // method-local and short, a round trip holds no scope while it waits, and the shutdown
         // above releases every waiter - so this ends as soon as in-flight work does.
@@ -660,7 +775,10 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
 
         // Releases the connection only once every proxy holding it has gone. Disconnecting while
         // proxies are still registered makes PipeWire log "leaked proxy" and abandon each one.
+        // After the core is gone and the loop is stopped, so the daemon cannot be dispatching
+        // into the events table while it is freed.
         _coreHandle?.Dispose();
+        ReleaseConnectionWatch();
         _coreHandle = null;
 
         // Releases only once the core - and through it every proxy - has gone.

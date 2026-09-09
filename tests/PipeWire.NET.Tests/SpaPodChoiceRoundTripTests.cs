@@ -15,7 +15,7 @@ namespace PipeWire.NET.Tests;
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class SpaPodChoiceRoundTripTests
+public sealed class SpaPodChoiceRoundTripTests : PipeWireTestBase
 {
     private delegate void BuildOne(ref SpaPodBuilder builder);
 

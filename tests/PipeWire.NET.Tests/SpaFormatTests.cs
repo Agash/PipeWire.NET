@@ -13,7 +13,7 @@ namespace PipeWire.NET.Tests;
 /// </summary>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class SpaFormatTests
+public sealed class SpaFormatTests : PipeWireTestBase
 {
     // ---------------------------------------------------------------- format round trips
 

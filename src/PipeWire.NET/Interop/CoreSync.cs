@@ -144,6 +144,12 @@ internal sealed class CoreSync : IDisposable
 
     private unsafe void Start()
     {
+        // The connection's death is announced once, when it happens. A round trip started after
+        // that attaches its listener to a core that will never speak again, so there is no event
+        // left to fault it and it would wait for its caller's token instead. The context records
+        // the fault when it arrives; this is where a later request learns of it.
+        if (_ctx.ConnectionFault is { } dead) throw dead;
+
         AllocateListener();
 
         using (_ctx.Lock())
@@ -153,11 +159,11 @@ internal sealed class CoreSync : IDisposable
             // arrive, and only its cancellation token ever ends it.
             int added = Native.pw_core_add_listener(_ctx.CoreHandle, _hook, _events, (void*)GCHandle.ToIntPtr(_self));
             if (added < 0)
-                throw new PipeWireException("pw_core_add_listener", added);
+                throw new PipeWireInteropException("pw_core_add_listener", added);
 
             _seq = Native.pw_core_sync(_ctx.CoreHandle, Native.PW_ID_CORE, 0);
             if (_seq < 0)
-                throw new PipeWireException("pw_core_sync", _seq);
+                throw new PipeWireInteropException("pw_core_sync", _seq);
         }
     }
 
@@ -171,20 +177,20 @@ internal sealed class CoreSync : IDisposable
             // before there is somebody listening.
             int added = Native.pw_core_add_listener(_ctx.CoreHandle, _hook, _events, (void*)GCHandle.ToIntPtr(_self));
             if (added < 0)
-                throw new PipeWireException("pw_core_add_listener", added);
+                throw new PipeWireInteropException("pw_core_add_listener", added);
 
             _carriesRequest = true;
 
             int rc = request();
             if (rc < 0)
-                throw new PipeWireException("request", rc);
+                throw new PipeWireRequestRefusedException("request", rc);
 
             if (Native.SPA_RESULT_IS_ASYNC(rc))
                 _watchedSeq = Native.SPA_RESULT_ASYNC_SEQ(rc);
 
             _seq = Native.pw_core_sync(_ctx.CoreHandle, Native.PW_ID_CORE, 0);
             if (_seq < 0)
-                throw new PipeWireException("pw_core_sync", _seq);
+                throw new PipeWireInteropException("pw_core_sync", _seq);
         }
     }
 
@@ -221,22 +227,30 @@ internal sealed class CoreSync : IDisposable
             if (data is null) return;
             if (GCHandle.FromIntPtr((nint)data).Target is not CoreSync self) return;
 
-            // A barrier owns no request, so nothing on this stream is its to report.
+            string text = DaemonText.String(message) ?? $"code {res}";
+
+            // A dead connection is never going to deliver a done, so it fails every round trip in
+            // flight, a barrier included. The code is what says the connection is gone; the id only
+            // says which object the error is about, and the daemon reports refusals against the
+            // core as readily as against anything else.
+            if (IsConnectionFatal(res))
+            {
+                self._done.TrySetException(
+                    new PipeWireConnectionClosedException("request", res, id, text));
+                return;
+            }
+
+            // Past here it is an answer to a request, so a barrier has nothing to report.
             if (!self._carriesRequest) return;
 
             int watched = self._watchedSeq;
-            if (watched != NoWatchedSequence)
+
+            // Compared with the async bit masked off at both ends: the value handed to us came from
+            // a request's return code, and what arrives here carries the tag.
+            if (watched != NoWatchedSequence
+                && Native.SPA_RESULT_ASYNC_SEQ(seq) != Native.SPA_RESULT_ASYNC_SEQ(watched))
             {
-                // Compared with the async bit masked off at both ends: the value handed to us came
-                // from a request's return code, and what arrives here carries the tag. An error on
-                // the core itself is not correlated by sequence at all and is fatal to the
-                // connection, so the round trip must fail on it rather than wait for a done that is
-                // no longer coming.
-                if (id != Native.PW_ID_CORE
-                    && Native.SPA_RESULT_ASYNC_SEQ(seq) != Native.SPA_RESULT_ASYNC_SEQ(watched))
-                {
-                    return;
-                }
+                return;
             }
 
             // A request that completed synchronously - destroying a global, updating permissions -
@@ -244,9 +258,7 @@ internal sealed class CoreSync : IDisposable
             // error in this window is taken as its own. Two such requests overlapping on one
             // connection can cross-attribute; reporting the wrong operation beats the alternative,
             // which is a refused operation returning success.
-            string text = DaemonText.String(message) ?? $"code {res}";
-
-            self._done.TrySetException(new PipeWireException("request", res, id, text));
+            self._done.TrySetException(new PipeWireRequestRefusedException("request", res, id, text));
         }
         catch (Exception)
         {
@@ -254,6 +266,19 @@ internal sealed class CoreSync : IDisposable
             // failed, and this frame cannot let anything escape.
         }
     }
+
+    /// <summary>Whether a result code means the connection itself is gone.</summary>
+    /// <remarks>
+    /// The unambiguous transport errnos only. A refusal carries its own code - EACCES for a denied
+    /// write, ENOENT for an object that is not there - and those leave the connection working.
+    /// EBADF is deliberately absent: it also means a descriptor the caller passed was bad, which
+    /// is a refusal.
+    /// </remarks>
+    private static bool IsConnectionFatal(int result) => result is
+        -32 or    // EPIPE
+        -103 or   // ECONNABORTED
+        -104 or   // ECONNRESET
+        -107;     // ENOTCONN
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnDone(void* data, uint id, int seq)

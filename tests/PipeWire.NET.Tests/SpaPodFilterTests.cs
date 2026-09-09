@@ -11,7 +11,7 @@ namespace PipeWire.NET.Tests;
 /// Pure managed matching over parsed values, so these run anywhere: no daemon, no GPU.
 /// </remarks>
 [TestClass]
-public sealed class SpaPodFilterTests
+public sealed class SpaPodFilterTests : PipeWireTestBase
 {
     private static SpaObject Obj(params SpaProperty[] props) =>
         new(SpaType.ObjectProps, SpaParamType.Props, [.. props]);

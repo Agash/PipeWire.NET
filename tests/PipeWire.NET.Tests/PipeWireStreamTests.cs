@@ -10,7 +10,7 @@ using PipeWire.NET.Media.Streams;
 namespace PipeWire.NET.Tests;
 
 [TestClass]
-public sealed class SpaPodBuilderTests
+public sealed class SpaPodBuilderTests : PipeWireTestBase
 {
     [TestMethod]
     public void Build_FormatObject_RoundtripsThroughReader()
@@ -98,7 +98,7 @@ public sealed class SpaPodBuilderTests
 }
 
 [TestClass]
-public sealed class VideoFrameTests
+public sealed class VideoFrameTests : PipeWireTestBase
 {
     [TestMethod]
     public void Ctor_PreservesAllFields()
@@ -116,7 +116,7 @@ public sealed class VideoFrameTests
 }
 
 [TestClass]
-public sealed class GeneratedAbiTests
+public sealed class GeneratedAbiTests : PipeWireTestBase
 {
     // Hand-verified against libpipewire-0.3-dev 1.0.5 on x86_64 Linux.
     // If PipeWire bumps any of these struct sizes, regenerate bindings and update these.
@@ -168,7 +168,7 @@ public sealed class GeneratedAbiTests
 }
 
 [TestClass]
-public sealed class MetadataMappingTests
+public sealed class MetadataMappingTests : PipeWireTestBase
 {
     [TestMethod]
     public void ColorMappers_MapSpaValuesCorrectly()
@@ -271,7 +271,7 @@ public sealed class MetadataMappingTests
 }
 
 [TestClass]
-public sealed class ModifierNegotiationTests
+public sealed class ModifierNegotiationTests : PipeWireTestBase
 {
     // Two sample DRM format modifiers (values are opaque 64-bit tokens; the test only checks the wire
     // round-trip, not their meaning). Linear plus an AMD GFX9 tiled-ish token exercise multi-value.
@@ -388,7 +388,7 @@ public sealed class ModifierNegotiationTests
 }
 
 [TestClass]
-public sealed class DmaBufOutputTests
+public sealed class DmaBufOutputTests : PipeWireTestBase
 {
     [TestMethod]
     public void PlaneCount_MatchesFormatLayout()
@@ -443,7 +443,7 @@ public sealed class DmaBufOutputTests
 // These P/Invoke into libpipewire, so they can only run on Linux. SupportedOSPlatform is a
 // compile-time hint and does not stop the runner, so state the runtime condition too.
 [OSCondition(OperatingSystems.Linux)]
-public sealed class NativeLibraryResolutionTests
+public sealed class NativeLibraryResolutionTests : PipeWireTestBase
 {
     [TestMethod]
     [TestCategory("Integration")]
@@ -784,7 +784,7 @@ public sealed class NativeLibraryResolutionTests
 }
 
 [TestClass]
-public sealed class StreamGuardTests
+public sealed class StreamGuardTests : PipeWireTestBase
 {
     // Every guard on the stream wrappers answers from local state: none of these reach the
     // daemon, so all of them are checked against streams that were never connected.

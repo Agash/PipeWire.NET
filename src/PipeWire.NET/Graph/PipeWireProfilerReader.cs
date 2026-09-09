@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -45,6 +46,11 @@ public sealed partial class PipeWireProfilerReader : IDisposable, IAsyncDisposab
     internal static unsafe PipeWireProfilerReader Bind(
         PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger)
     {
+        // The profiler's protocol marshal lives in a module the client loads for itself; without
+        // it pw_proxy_new has nothing to build the proxy with and the bind returns null. Neither
+        // client.conf nor the daemon supplies it, which is why pw-top loads it by name too.
+        EnsureProfilerModule(ctx);
+
         var reader = new PipeWireProfilerReader(ctx, id, logger);
         reader._bound = BoundProxy.Bind(
             ctx, registry, id, Native.PW_TYPE_INTERFACE_PROFILER, version, Native.PW_VERSION_PROFILER,
@@ -60,6 +66,18 @@ public sealed partial class PipeWireProfilerReader : IDisposable, IAsyncDisposab
             reader);
 
         return reader;
+    }
+
+    /// <summary>Loads the profiler extension module into this context, once.</summary>
+    /// <remarks>Loading it twice is harmless; the module refcounts.</remarks>
+    private static unsafe void EnsureProfilerModule(PipeWireContext ctx)
+    {
+        ReadOnlySpan<byte> name = "libpipewire-module-profiler\0"u8;
+        using (ctx.Lock())
+        {
+            fixed (byte* n = name)
+                _ = Native.pw_context_load_module(ctx.ContextHandle, (sbyte*)n, null, null);
+        }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -82,10 +100,15 @@ public sealed partial class PipeWireProfilerReader : IDisposable, IAsyncDisposab
 
         try
         {
-            if (TryParseReport(pod, out SpaObject? report, out int size))
-                self.Raise(report);
+            if (TryParseReport(pod, out ImmutableArray<SpaObject> reports, out int size))
+            {
+                foreach (SpaObject report in reports)
+                    self.Raise(report);
+            }
             else
+            {
                 self.LogUnparsedReport(size);
+            }
         }
         catch (Exception ex)
         {
@@ -95,21 +118,22 @@ public sealed partial class PipeWireProfilerReader : IDisposable, IAsyncDisposab
         }
     }
 
-    /// <summary>Reads one profiler report off a native pod.</summary>
+    /// <summary>Reads the Profiler objects out of one report pod.</summary>
     /// <param name="pod">The pod the daemon handed the callback.</param>
-    /// <param name="report">The report, when this returns true.</param>
+    /// <param name="reports">The objects it carried, when this returns true.</param>
     /// <param name="size">The pod's total size, for diagnostics when this returns false.</param>
-    /// <returns>Whether <paramref name="pod"/> parsed as an object pod.</returns>
+    /// <returns>Whether <paramref name="pod"/> parsed and carried at least one object.</returns>
     /// <remarks>
-    /// Split from the callback so hostile pods are testable without a daemon: the size in the
-    /// header is the daemon's word, and a wrong one must refuse rather than span.
+    /// A report is a struct of Profiler objects, one per driver in the cycle, and a bare object is
+    /// accepted too. Split from the callback so hostile pods are testable without a daemon: the
+    /// size in the header is the daemon's word, and a wrong one must refuse rather than span.
     /// </remarks>
     internal static unsafe bool TryParseReport(
         spa_pod* pod,
-        [NotNullWhen(true)] out SpaObject? report,
+        out ImmutableArray<SpaObject> reports,
         out int size)
     {
-        report = null;
+        reports = [];
         size = 0;
 
         if (pod is null) return false;
@@ -125,13 +149,23 @@ public sealed partial class PipeWireProfilerReader : IDisposable, IAsyncDisposab
         size = 8 + (int)pod->size;
         var bytes = new ReadOnlySpan<byte>(pod, size);
 
-        if (SpaPod.TryParse(bytes, out SpaValue? value) && value is SpaObject parsed)
-        {
-            report = parsed;
-            return true;
-        }
+        if (!SpaPod.TryParse(bytes, out SpaValue? value)) return false;
 
-        return false;
+        switch (value)
+        {
+            case SpaObject single:
+                reports = [single];
+                return true;
+
+            case SpaStruct outer:
+                ImmutableArray<SpaObject> found =
+                    [.. outer.Fields.OfType<SpaObject>()];
+                reports = found;
+                return found.Length > 0;
+
+            default:
+                return false;
+        }
     }
 
     private void Raise(SpaObject report)

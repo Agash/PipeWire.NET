@@ -16,17 +16,6 @@ namespace PipeWire.NET.Graph;
 [SupportedOSPlatform("linux")]
 public sealed record PipeWireDevice : IPipeWireObject
 {
-    /// <param name="Id">PipeWire global id.</param>
-    /// <param name="Permissions">What this client may do with the object.</param>
-    /// <param name="InterfaceVersion">The interface version the daemon announced.</param>
-    /// <param name="DeviceName">Stable name, such as <c>alsa_card.pci-0000_e4_00.1</c>.</param>
-    /// <param name="Description">Human-readable name as the device reports it.</param>
-    /// <param name="Nick">Short display name, where the device offers one.</param>
-    /// <param name="Api">Which backend owns it: <c>alsa</c>, <c>v4l2</c>, <c>bluez5</c>, <c>libcamera</c>.</param>
-    /// <param name="MediaClass">What it carries, such as <c>Audio/Device</c> or <c>Video/Device</c>.</param>
-    /// <param name="ObjectPath">The path its backend identifies it by.</param>
-    /// <param name="FactoryId">The factory that created it, where the daemon said.</param>
-    /// <param name="ClientId">The client that created it, where the daemon said.</param>
     internal PipeWireDevice(
         uint Id,
         PipeWirePermissions Permissions,
@@ -38,8 +27,13 @@ public sealed record PipeWireDevice : IPipeWireObject
         string? MediaClass,
         string? ObjectPath,
         uint? FactoryId,
-        uint? ClientId)
+        uint? ClientId,
+        uint? ModuleId = null,
+        PipeWireProperties? Properties = null)
     {
+        this.Properties = Properties ?? PipeWireProperties.Empty;
+        this.ObjectSerial = this.Properties.Serial;
+        this.ModuleId = ModuleId;
         this.Id = Id;
         this.Permissions = Permissions;
         this.InterfaceVersion = InterfaceVersion;
@@ -64,6 +58,15 @@ public sealed record PipeWireDevice : IPipeWireObject
 
     /// <inheritdoc/>
     public uint InterfaceVersion { get; }
+
+    /// <inheritdoc/>
+    public PipeWireProperties Properties { get; }
+
+    /// <inheritdoc/>
+    public ulong? ObjectSerial { get; }
+
+    /// <summary>The module that provides this device.</summary>
+    public uint? ModuleId { get; }
 
     /// <summary>Stable name, such as <c>alsa_card.pci-0000_e4_00.1</c>.</summary>
     public string? DeviceName { get; }

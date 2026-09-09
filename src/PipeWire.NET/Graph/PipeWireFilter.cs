@@ -331,8 +331,14 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
 
         using (_ctx.Lock())
         {
+            // Skipped unless this filter is the one driving. Upstream sends the request on to
+            // whichever node actually drives, and a node that does not implement RequestProcess
+            // answers ENOTSUP and the daemon logs it - once per call, so a caller triggering at
+            // frame rate fills the log and changes nothing.
+            if (!Native.pw_filter_is_driving(_handle.Filter)) return;
+
             int rc = Native.pw_filter_trigger_process(_handle.Filter);
-            if (rc < 0) throw new PipeWireException("pw_filter_trigger_process", rc);
+            if (rc < 0) throw new PipeWireInteropException("pw_filter_trigger_process", rc);
         }
     }
 
@@ -354,7 +360,7 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
         using (_ctx.Lock())
         {
             int rc = Native.pw_filter_set_active(_handle.Filter, active);
-            if (rc < 0) throw new PipeWireException("pw_filter_set_active", rc);
+            if (rc < 0) throw new PipeWireInteropException("pw_filter_set_active", rc);
         }
     }
 

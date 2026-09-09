@@ -162,7 +162,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
                     _ctx.ContextHandle, (sbyte*)n, Native.pw_properties_new_dict(&dict), 0);
 
             if (impl is null)
-                throw new PipeWireException("pw_context_create_metadata", -12);
+                throw new PipeWireInteropException("pw_context_create_metadata", -12);
 
             _handle = new PipeWireImplMetadataHandle(impl, _ctx.LoopOwner);
 
@@ -184,7 +184,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
             {
                 int rc = Native.pw_impl_metadata_register(impl, Native.pw_properties_new_dict(&dict));
                 if (rc < 0)
-                    throw new PipeWireException("pw_impl_metadata_register", rc);
+                    throw new PipeWireInteropException("pw_impl_metadata_register", rc);
             }
 
             // Register publishes the global in this client's own context; exporting is what pushes
@@ -211,7 +211,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
                 pw_metadata* implementation = Native.pw_impl_metadata_get_implementation(impl);
 
                 if (implementation is null)
-                    throw new PipeWireException("pw_impl_metadata_get_implementation", -22);
+                    throw new PipeWireInteropException("pw_impl_metadata_get_implementation", -22);
 
                 fixed (byte* t = typeUtf8)
                 {
@@ -300,7 +300,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
                     type is null ? null : (sbyte*)t,
                     value is null ? null : (sbyte*)v);
 
-                if (rc < 0) throw new PipeWireException("pw_impl_metadata_set_property", rc);
+                if (rc < 0) throw new PipeWireInteropException("pw_impl_metadata_set_property", rc);
             }
         }
     }

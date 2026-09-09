@@ -32,7 +32,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("RequiresDaemon")]
 [DoNotParallelize]
 [SupportedOSPlatform("linux")]
-public sealed class PenHarness
+public sealed class PenHarness : PipeWireTestBase
 {
     private static readonly object Gate = new();
 

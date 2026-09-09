@@ -2,7 +2,9 @@ PipeWire.NET.Graph.IPipeWireObject
 PipeWire.NET.Graph.IPipeWireObject.Id : UInt32
 PipeWire.NET.Graph.IPipeWireObject.InterfaceVersion : UInt32
 PipeWire.NET.Graph.IPipeWireObject.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.IPipeWireObject.ObjectSerial : Nullable<UInt64>
 PipeWire.NET.Graph.IPipeWireObject.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.IPipeWireObject.Properties : PipeWireProperties
 PipeWire.NET.Graph.PipeWireClient
 PipeWire.NET.Graph.PipeWireClient.Access : String
 PipeWire.NET.Graph.PipeWireClient.ApplicationName : String
@@ -14,9 +16,15 @@ PipeWire.NET.Graph.PipeWireClient.Id : UInt32
 PipeWire.NET.Graph.PipeWireClient.InterfaceVersion : UInt32
 PipeWire.NET.Graph.PipeWireClient.Kind : PipeWireObjectKind
 PipeWire.NET.Graph.PipeWireClient.ModuleId : Nullable<UInt32>
+PipeWire.NET.Graph.PipeWireClient.ObjectSerial : Nullable<UInt64>
 PipeWire.NET.Graph.PipeWireClient.Permissions : PipeWirePermissions
 PipeWire.NET.Graph.PipeWireClient.ProcessId : Nullable<Int32>
+PipeWire.NET.Graph.PipeWireClient.Properties : PipeWireProperties
 PipeWire.NET.Graph.PipeWireClient.Protocol : String
+PipeWire.NET.Graph.PipeWireClient.SecurityAppId : String
+PipeWire.NET.Graph.PipeWireClient.SecurityInstanceId : String
+PipeWire.NET.Graph.PipeWireClient.SecurityLabel : String
+PipeWire.NET.Graph.PipeWireClient.SecuritySocket : String
 PipeWire.NET.Graph.PipeWireClient.ToString()
 PipeWire.NET.Graph.PipeWireClient.UserId : Nullable<UInt32>
 PipeWire.NET.Graph.PipeWireClientControl
@@ -37,7 +45,9 @@ PipeWire.NET.Graph.PipeWireCoreObject.HostName : String
 PipeWire.NET.Graph.PipeWireCoreObject.Id : UInt32
 PipeWire.NET.Graph.PipeWireCoreObject.InterfaceVersion : UInt32
 PipeWire.NET.Graph.PipeWireCoreObject.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireCoreObject.ObjectSerial : Nullable<UInt64>
 PipeWire.NET.Graph.PipeWireCoreObject.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireCoreObject.Properties : PipeWireProperties
 PipeWire.NET.Graph.PipeWireCoreObject.ToString()
 PipeWire.NET.Graph.PipeWireCoreObject.UserName : String
 PipeWire.NET.Graph.PipeWireDevice
@@ -53,17 +63,20 @@ PipeWire.NET.Graph.PipeWireDevice.Id : UInt32
 PipeWire.NET.Graph.PipeWireDevice.InterfaceVersion : UInt32
 PipeWire.NET.Graph.PipeWireDevice.Kind : PipeWireObjectKind
 PipeWire.NET.Graph.PipeWireDevice.MediaClass : String
+PipeWire.NET.Graph.PipeWireDevice.ModuleId : Nullable<UInt32>
 PipeWire.NET.Graph.PipeWireDevice.Nick : String
 PipeWire.NET.Graph.PipeWireDevice.ObjectPath : String
+PipeWire.NET.Graph.PipeWireDevice.ObjectSerial : Nullable<UInt64>
 PipeWire.NET.Graph.PipeWireDevice.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireDevice.Properties : PipeWireProperties
 PipeWire.NET.Graph.PipeWireDevice.ToString()
 PipeWire.NET.Graph.PipeWireDeviceControl
 PipeWire.NET.Graph.PipeWireDeviceControl.EnumerateProfilesAsync(CancellationToken)
 PipeWire.NET.Graph.PipeWireDeviceControl.EnumerateRoutesAsync(CancellationToken)
 PipeWire.NET.Graph.PipeWireDeviceControl.GetActiveRoutesAsync(CancellationToken)
 PipeWire.NET.Graph.PipeWireDeviceControl.GetProfileAsync(CancellationToken)
-PipeWire.NET.Graph.PipeWireDeviceControl.SetProfileAsync(Int32, CancellationToken)
-PipeWire.NET.Graph.PipeWireDeviceControl.SetRouteAsync(Int32, Int32, CancellationToken)
+PipeWire.NET.Graph.PipeWireDeviceControl.SetProfileAsync(Int32, Boolean, CancellationToken)
+PipeWire.NET.Graph.PipeWireDeviceControl.SetRouteAsync(Int32, Int32, Boolean, CancellationToken)
 PipeWire.NET.Graph.PipeWireDeviceControl.SetRouteVolumeAsync(Int32, Int32, ReadOnlySpan<Single>, Boolean, Boolean, CancellationToken)
 PipeWire.NET.Graph.PipeWireDeviceProvider
 PipeWire.NET.Graph.PipeWireDeviceProvider.Create(PipeWireContext, String, String, IReadOnlyDictionary<SpaParamType, ImmutableArray<SpaObject>>, IReadOnlyDictionary<String, String>)
@@ -86,7 +99,9 @@ PipeWire.NET.Graph.PipeWireFactory.Id : UInt32
 PipeWire.NET.Graph.PipeWireFactory.InterfaceVersion : UInt32
 PipeWire.NET.Graph.PipeWireFactory.Kind : PipeWireObjectKind
 PipeWire.NET.Graph.PipeWireFactory.ModuleId : Nullable<UInt32>
+PipeWire.NET.Graph.PipeWireFactory.ObjectSerial : Nullable<UInt64>
 PipeWire.NET.Graph.PipeWireFactory.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireFactory.Properties : PipeWireProperties
 PipeWire.NET.Graph.PipeWireFactory.ToString()
 PipeWire.NET.Graph.PipeWireFactory.TypeName : String
 PipeWire.NET.Graph.PipeWireFactory.TypeVersion : Nullable<UInt32>
@@ -121,8 +136,8 @@ PipeWire.NET.Graph.PipeWireGraphExtensions.GetEndpoints(PipeWireGraphSnapshot, P
 PipeWire.NET.Graph.PipeWireGraphExtensions.GetNodeForPort(PipeWireGraphSnapshot, PipeWirePort)
 PipeWire.NET.Graph.PipeWireGraphExtensions.GetPortsForNode(PipeWireGraphSnapshot, UInt32, PipeWirePortDirection)
 PipeWire.NET.Graph.PipeWireGraphExtensions.GetVideoSources(PipeWireGraphSnapshot)
+PipeWire.NET.Graph.PipeWireGraphExtensions.IsStillIn(IPipeWireObject, PipeWireGraphSnapshot)
 PipeWire.NET.Graph.PipeWireGraphExtensions.get_CanInvokeMethods(IPipeWireObject)
-PipeWire.NET.Graph.PipeWireGraphExtensions.get_IsControl(PipeWirePort)
 PipeWire.NET.Graph.PipeWireGraphExtensions.get_IsDataInput(PipeWirePort)
 PipeWire.NET.Graph.PipeWireGraphExtensions.get_IsDataOutput(PipeWirePort)
 PipeWire.NET.Graph.PipeWireGraphExtensions.get_IsNotify(PipeWirePort)
@@ -174,18 +189,23 @@ PipeWire.NET.Graph.PipeWireLatency.MinRate : Int32
 PipeWire.NET.Graph.PipeWireLatency.ToParameter()
 PipeWire.NET.Graph.PipeWireLatency.ToString()
 PipeWire.NET.Graph.PipeWireLink
+PipeWire.NET.Graph.PipeWireLink.ClientId : Nullable<UInt32>
 PipeWire.NET.Graph.PipeWireLink.Equals(Object)
 PipeWire.NET.Graph.PipeWireLink.Equals(PipeWireLink)
+PipeWire.NET.Graph.PipeWireLink.FactoryId : Nullable<UInt32>
 PipeWire.NET.Graph.PipeWireLink.GetHashCode()
 PipeWire.NET.Graph.PipeWireLink.Id : UInt32
 PipeWire.NET.Graph.PipeWireLink.InterfaceVersion : UInt32
+PipeWire.NET.Graph.PipeWireLink.IsPassive : Boolean
 PipeWire.NET.Graph.PipeWireLink.Kind : PipeWireObjectKind
 PipeWire.NET.Graph.PipeWireLink.LinkId : UInt32
 PipeWire.NET.Graph.PipeWireLink.LinkInputNode : UInt32
 PipeWire.NET.Graph.PipeWireLink.LinkInputPort : UInt32
 PipeWire.NET.Graph.PipeWireLink.LinkOutputNode : UInt32
 PipeWire.NET.Graph.PipeWireLink.LinkOutputPort : UInt32
+PipeWire.NET.Graph.PipeWireLink.ObjectSerial : Nullable<UInt64>
 PipeWire.NET.Graph.PipeWireLink.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireLink.Properties : PipeWireProperties
 PipeWire.NET.Graph.PipeWireLink.ToString()
 PipeWire.NET.Graph.PipeWireLinkControl
 PipeWire.NET.Graph.PipeWireLinkControl.Dispose()
@@ -218,14 +238,19 @@ PipeWire.NET.Graph.PipeWireMetadataEntry.ToString()
 PipeWire.NET.Graph.PipeWireMetadataEntry.Type : String
 PipeWire.NET.Graph.PipeWireMetadataEntry.Value : String
 PipeWire.NET.Graph.PipeWireMetadataObject
+PipeWire.NET.Graph.PipeWireMetadataObject.ClientId : Nullable<UInt32>
 PipeWire.NET.Graph.PipeWireMetadataObject.Equals(Object)
 PipeWire.NET.Graph.PipeWireMetadataObject.Equals(PipeWireMetadataObject)
+PipeWire.NET.Graph.PipeWireMetadataObject.FactoryId : Nullable<UInt32>
 PipeWire.NET.Graph.PipeWireMetadataObject.GetHashCode()
 PipeWire.NET.Graph.PipeWireMetadataObject.Id : UInt32
 PipeWire.NET.Graph.PipeWireMetadataObject.InterfaceVersion : UInt32
 PipeWire.NET.Graph.PipeWireMetadataObject.Kind : PipeWireObjectKind
 PipeWire.NET.Graph.PipeWireMetadataObject.MetadataName : String
+PipeWire.NET.Graph.PipeWireMetadataObject.ModuleId : Nullable<UInt32>
+PipeWire.NET.Graph.PipeWireMetadataObject.ObjectSerial : Nullable<UInt64>
 PipeWire.NET.Graph.PipeWireMetadataObject.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireMetadataObject.Properties : PipeWireProperties
 PipeWire.NET.Graph.PipeWireMetadataObject.ToString()
 PipeWire.NET.Graph.PipeWireMetadataProvider
 PipeWire.NET.Graph.PipeWireMetadataProvider.Clear()
@@ -271,12 +296,78 @@ PipeWire.NET.Graph.PipeWireModule.InterfaceVersion : UInt32
 PipeWire.NET.Graph.PipeWireModule.Kind : PipeWireObjectKind
 PipeWire.NET.Graph.PipeWireModule.ModuleName : String
 PipeWire.NET.Graph.PipeWireModule.ModuleVersion : String
+PipeWire.NET.Graph.PipeWireModule.ObjectSerial : Nullable<UInt64>
 PipeWire.NET.Graph.PipeWireModule.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireModule.Properties : PipeWireProperties
 PipeWire.NET.Graph.PipeWireModule.ToString()
+PipeWire.NET.Graph.PipeWireNames
+PipeWire.NET.Graph.PipeWireNames.Access = String
+PipeWire.NET.Graph.PipeWireNames.ApplicationName = String
+PipeWire.NET.Graph.PipeWireNames.AudioChannel = String
+PipeWire.NET.Graph.PipeWireNames.AudioPosition = String
+PipeWire.NET.Graph.PipeWireNames.ClientId = String
+PipeWire.NET.Graph.PipeWireNames.CoreName = String
+PipeWire.NET.Graph.PipeWireNames.CoreVersion = String
+PipeWire.NET.Graph.PipeWireNames.DeviceApi = String
+PipeWire.NET.Graph.PipeWireNames.DeviceDescription = String
+PipeWire.NET.Graph.PipeWireNames.DeviceId = String
+PipeWire.NET.Graph.PipeWireNames.DeviceName = String
+PipeWire.NET.Graph.PipeWireNames.DeviceNick = String
+PipeWire.NET.Graph.PipeWireNames.FactoryId = String
+PipeWire.NET.Graph.PipeWireNames.FactoryName = String
+PipeWire.NET.Graph.PipeWireNames.FactoryTypeName = String
+PipeWire.NET.Graph.PipeWireNames.FactoryTypeVersion = String
+PipeWire.NET.Graph.PipeWireNames.FormatDsp = String
+PipeWire.NET.Graph.PipeWireNames.HostName = String
+PipeWire.NET.Graph.PipeWireNames.LinkInputNode = String
+PipeWire.NET.Graph.PipeWireNames.LinkInputPort = String
+PipeWire.NET.Graph.PipeWireNames.LinkOutputNode = String
+PipeWire.NET.Graph.PipeWireNames.LinkOutputPort = String
+PipeWire.NET.Graph.PipeWireNames.LinkPassive = String
+PipeWire.NET.Graph.PipeWireNames.MediaClass = String
+PipeWire.NET.Graph.PipeWireNames.MetadataName = String
+PipeWire.NET.Graph.PipeWireNames.ModuleArguments = String
+PipeWire.NET.Graph.PipeWireNames.ModuleAuthor = String
+PipeWire.NET.Graph.PipeWireNames.ModuleDescription = String
+PipeWire.NET.Graph.PipeWireNames.ModuleFilename = String
+PipeWire.NET.Graph.PipeWireNames.ModuleId = String
+PipeWire.NET.Graph.PipeWireNames.ModuleName = String
+PipeWire.NET.Graph.PipeWireNames.ModuleVersion = String
+PipeWire.NET.Graph.PipeWireNames.NodeDescription = String
+PipeWire.NET.Graph.PipeWireNames.NodeId = String
+PipeWire.NET.Graph.PipeWireNames.NodeName = String
+PipeWire.NET.Graph.PipeWireNames.NodeNick = String
+PipeWire.NET.Graph.PipeWireNames.ObjectLinger = String
+PipeWire.NET.Graph.PipeWireNames.ObjectPath = String
+PipeWire.NET.Graph.PipeWireNames.ObjectSerial = String
+PipeWire.NET.Graph.PipeWireNames.PortAlias = String
+PipeWire.NET.Graph.PipeWireNames.PortControl = String
+PipeWire.NET.Graph.PipeWireNames.PortDirection = String
+PipeWire.NET.Graph.PipeWireNames.PortGroup = String
+PipeWire.NET.Graph.PipeWireNames.PortIndex = String
+PipeWire.NET.Graph.PipeWireNames.PortMonitor = String
+PipeWire.NET.Graph.PipeWireNames.PortName = String
+PipeWire.NET.Graph.PipeWireNames.PortPhysical = String
+PipeWire.NET.Graph.PipeWireNames.PortTerminal = String
+PipeWire.NET.Graph.PipeWireNames.PriorityDriver = String
+PipeWire.NET.Graph.PipeWireNames.PrioritySession = String
+PipeWire.NET.Graph.PipeWireNames.Protocol = String
+PipeWire.NET.Graph.PipeWireNames.SecurityAppId = String
+PipeWire.NET.Graph.PipeWireNames.SecurityGid = String
+PipeWire.NET.Graph.PipeWireNames.SecurityInstanceId = String
+PipeWire.NET.Graph.PipeWireNames.SecurityLabel = String
+PipeWire.NET.Graph.PipeWireNames.SecurityPid = String
+PipeWire.NET.Graph.PipeWireNames.SecuritySocket = String
+PipeWire.NET.Graph.PipeWireNames.SecurityUid = String
+PipeWire.NET.Graph.PipeWireNames.UserName = String
 PipeWire.NET.Graph.PipeWireNode
+PipeWire.NET.Graph.PipeWireNode.ClientId : Nullable<UInt32>
 PipeWire.NET.Graph.PipeWireNode.Description : String
+PipeWire.NET.Graph.PipeWireNode.DeviceId : Nullable<UInt32>
+PipeWire.NET.Graph.PipeWireNode.DriverPriority : Nullable<Int32>
 PipeWire.NET.Graph.PipeWireNode.Equals(Object)
 PipeWire.NET.Graph.PipeWireNode.Equals(PipeWireNode)
+PipeWire.NET.Graph.PipeWireNode.FactoryId : Nullable<UInt32>
 PipeWire.NET.Graph.PipeWireNode.Flow : PipeWireMediaFlow
 PipeWire.NET.Graph.PipeWireNode.GetHashCode()
 PipeWire.NET.Graph.PipeWireNode.Id : UInt32
@@ -287,7 +378,11 @@ PipeWire.NET.Graph.PipeWireNode.MediaClass : String
 PipeWire.NET.Graph.PipeWireNode.NodeId : UInt32
 PipeWire.NET.Graph.PipeWireNode.NodeName : String
 PipeWire.NET.Graph.PipeWireNode.NodeNick : String
+PipeWire.NET.Graph.PipeWireNode.ObjectPath : String
+PipeWire.NET.Graph.PipeWireNode.ObjectSerial : Nullable<UInt64>
 PipeWire.NET.Graph.PipeWireNode.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireNode.Properties : PipeWireProperties
+PipeWire.NET.Graph.PipeWireNode.SessionPriority : Nullable<Int32>
 PipeWire.NET.Graph.PipeWireNode.ToString()
 PipeWire.NET.Graph.PipeWireNodeControl
 PipeWire.NET.Graph.PipeWireNodeControl.EnumerateFormatsAsync(CancellationToken)
@@ -379,19 +474,29 @@ PipeWire.NET.Graph.PipeWirePermissions.Read = PipeWirePermissions
 PipeWire.NET.Graph.PipeWirePermissions.Write = PipeWirePermissions
 PipeWire.NET.Graph.PipeWirePermissions.value__ = UInt32
 PipeWire.NET.Graph.PipeWirePort
+PipeWire.NET.Graph.PipeWirePort.Alias : String
+PipeWire.NET.Graph.PipeWirePort.AudioChannel : String
+PipeWire.NET.Graph.PipeWirePort.DspFormat : String
 PipeWire.NET.Graph.PipeWirePort.Equals(Object)
 PipeWire.NET.Graph.PipeWirePort.Equals(PipeWirePort)
-PipeWire.NET.Graph.PipeWirePort.Exclusive : Boolean
 PipeWire.NET.Graph.PipeWirePort.GetHashCode()
 PipeWire.NET.Graph.PipeWirePort.Id : UInt32
 PipeWire.NET.Graph.PipeWirePort.InterfaceVersion : UInt32
+PipeWire.NET.Graph.PipeWirePort.IsControl : Boolean
+PipeWire.NET.Graph.PipeWirePort.IsPhysical : Boolean
+PipeWire.NET.Graph.PipeWirePort.IsTerminal : Boolean
 PipeWire.NET.Graph.PipeWirePort.Kind : PipeWireObjectKind
 PipeWire.NET.Graph.PipeWirePort.Monitor : Boolean
 PipeWire.NET.Graph.PipeWirePort.NodeId : UInt32
+PipeWire.NET.Graph.PipeWirePort.ObjectPath : String
+PipeWire.NET.Graph.PipeWirePort.ObjectSerial : Nullable<UInt64>
 PipeWire.NET.Graph.PipeWirePort.Permissions : PipeWirePermissions
 PipeWire.NET.Graph.PipeWirePort.PortDirection : PipeWirePortDirection
+PipeWire.NET.Graph.PipeWirePort.PortGroup : String
 PipeWire.NET.Graph.PipeWirePort.PortId : UInt32
+PipeWire.NET.Graph.PipeWirePort.PortIndex : Nullable<UInt32>
 PipeWire.NET.Graph.PipeWirePort.PortName : String
+PipeWire.NET.Graph.PipeWirePort.Properties : PipeWireProperties
 PipeWire.NET.Graph.PipeWirePort.ToString()
 PipeWire.NET.Graph.PipeWirePortConfig
 PipeWire.NET.Graph.PipeWirePortConfig..ctor(SpaDirection, SpaParamPortConfigMode, Boolean, Boolean, SpaObject)
@@ -438,13 +543,25 @@ PipeWire.NET.Graph.PipeWireProfiler.GetHashCode()
 PipeWire.NET.Graph.PipeWireProfiler.Id : UInt32
 PipeWire.NET.Graph.PipeWireProfiler.InterfaceVersion : UInt32
 PipeWire.NET.Graph.PipeWireProfiler.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireProfiler.ObjectSerial : Nullable<UInt64>
 PipeWire.NET.Graph.PipeWireProfiler.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireProfiler.Properties : PipeWireProperties
 PipeWire.NET.Graph.PipeWireProfiler.ToString()
 PipeWire.NET.Graph.PipeWireProfilerReader
 PipeWire.NET.Graph.PipeWireProfilerReader.Dispose()
 PipeWire.NET.Graph.PipeWireProfilerReader.DisposeAsync()
 PipeWire.NET.Graph.PipeWireProfilerReader.Id : UInt32
 PipeWire.NET.Graph.PipeWireProfilerReader.ProfileReceived event
+PipeWire.NET.Graph.PipeWireProperties
+PipeWire.NET.Graph.PipeWireProperties.ContainsKey(String)
+PipeWire.NET.Graph.PipeWireProperties.Count : Int32
+PipeWire.NET.Graph.PipeWireProperties.Empty : PipeWireProperties
+PipeWire.NET.Graph.PipeWireProperties.GetEnumerator()
+PipeWire.NET.Graph.PipeWireProperties.GetValueOrDefault(String)
+PipeWire.NET.Graph.PipeWireProperties.Item : String
+PipeWire.NET.Graph.PipeWireProperties.Keys : IEnumerable<String>
+PipeWire.NET.Graph.PipeWireProperties.TryGetValue(String, String&)
+PipeWire.NET.Graph.PipeWireProperties.Values : IEnumerable<String>
 PipeWire.NET.Graph.PipeWireRegistry
 PipeWire.NET.Graph.PipeWireRegistry+GraphChangedHandler
 PipeWire.NET.Graph.PipeWireRegistry+GraphChangedHandler..ctor(Object, IntPtr)
@@ -482,6 +599,7 @@ PipeWire.NET.Graph.PipeWireRegistry.NodeRemoved event
 PipeWire.NET.Graph.PipeWireRegistry.Nodes : IReadOnlyCollection<PipeWireNode>
 PipeWire.NET.Graph.PipeWireRegistry.PortAdded event
 PipeWire.NET.Graph.PipeWireRegistry.PortRemoved event
+PipeWire.NET.Graph.PipeWireRegistry.ReadModuleDetailsAsync(UInt32, CancellationToken)
 PipeWire.NET.Graph.PipeWireRegistry.RemoveLinkAsync(PipeWireLink, CancellationToken)
 PipeWire.NET.Graph.PipeWireRegistry.RemoveLinkAsync(UInt32, CancellationToken)
 PipeWire.NET.Graph.PipeWireRegistry.WaitForInitialEnumerationAsync(CancellationToken)
@@ -493,7 +611,9 @@ PipeWire.NET.Graph.PipeWireSecurityContext.GetHashCode()
 PipeWire.NET.Graph.PipeWireSecurityContext.Id : UInt32
 PipeWire.NET.Graph.PipeWireSecurityContext.InterfaceVersion : UInt32
 PipeWire.NET.Graph.PipeWireSecurityContext.Kind : PipeWireObjectKind
+PipeWire.NET.Graph.PipeWireSecurityContext.ObjectSerial : Nullable<UInt64>
 PipeWire.NET.Graph.PipeWireSecurityContext.Permissions : PipeWirePermissions
+PipeWire.NET.Graph.PipeWireSecurityContext.Properties : PipeWireProperties
 PipeWire.NET.Graph.PipeWireSecurityContext.ToString()
 PipeWire.NET.Graph.PipeWireSecurityContextControl
 PipeWire.NET.Graph.PipeWireSecurityContextControl.CreateAsync(SafeHandle, SafeHandle, IReadOnlyDictionary<String, String>, CancellationToken)
@@ -814,6 +934,21 @@ PipeWire.NET.Media.VideoTransferFunction.Gamma22 = VideoTransferFunction
 PipeWire.NET.Media.VideoTransferFunction.Srgb = VideoTransferFunction
 PipeWire.NET.Media.VideoTransferFunction.Unknown = VideoTransferFunction
 PipeWire.NET.Media.VideoTransferFunction.value__ = Int32
+PipeWire.NET.PipeWireConnectFailedException
+PipeWire.NET.PipeWireConnectFailedException..ctor()
+PipeWire.NET.PipeWireConnectFailedException..ctor(String)
+PipeWire.NET.PipeWireConnectFailedException..ctor(String, Exception)
+PipeWire.NET.PipeWireConnectFailedException..ctor(String, Int32, Nullable<UInt32>, String)
+PipeWire.NET.PipeWireConnectionClosedException
+PipeWire.NET.PipeWireConnectionClosedException..ctor()
+PipeWire.NET.PipeWireConnectionClosedException..ctor(String)
+PipeWire.NET.PipeWireConnectionClosedException..ctor(String, Exception)
+PipeWire.NET.PipeWireConnectionClosedException..ctor(String, Int32, Nullable<UInt32>, String)
+PipeWire.NET.PipeWireConnectionException
+PipeWire.NET.PipeWireConnectionException..ctor()
+PipeWire.NET.PipeWireConnectionException..ctor(String)
+PipeWire.NET.PipeWireConnectionException..ctor(String, Exception)
+PipeWire.NET.PipeWireConnectionException..ctor(String, Int32, Nullable<UInt32>, String)
 PipeWire.NET.PipeWireContext
 PipeWire.NET.PipeWireContext+LoopLock
 PipeWire.NET.PipeWireContext+LoopLock.Dispose()
@@ -861,6 +996,11 @@ PipeWire.NET.PipeWireFilterState.Paused = PipeWireFilterState
 PipeWire.NET.PipeWireFilterState.Streaming = PipeWireFilterState
 PipeWire.NET.PipeWireFilterState.Unconnected = PipeWireFilterState
 PipeWire.NET.PipeWireFilterState.value__ = Int32
+PipeWire.NET.PipeWireInteropException
+PipeWire.NET.PipeWireInteropException..ctor()
+PipeWire.NET.PipeWireInteropException..ctor(String)
+PipeWire.NET.PipeWireInteropException..ctor(String, Exception)
+PipeWire.NET.PipeWireInteropException..ctor(String, Int32, Nullable<UInt32>, String)
 PipeWire.NET.PipeWireLinkState
 PipeWire.NET.PipeWireLinkState.Active = PipeWireLinkState
 PipeWire.NET.PipeWireLinkState.Allocating = PipeWireLinkState
@@ -902,6 +1042,11 @@ PipeWire.NET.PipeWireNodeState.Idle = PipeWireNodeState
 PipeWire.NET.PipeWireNodeState.Running = PipeWireNodeState
 PipeWire.NET.PipeWireNodeState.Suspended = PipeWireNodeState
 PipeWire.NET.PipeWireNodeState.value__ = Int32
+PipeWire.NET.PipeWireRequestRefusedException
+PipeWire.NET.PipeWireRequestRefusedException..ctor()
+PipeWire.NET.PipeWireRequestRefusedException..ctor(String)
+PipeWire.NET.PipeWireRequestRefusedException..ctor(String, Exception)
+PipeWire.NET.PipeWireRequestRefusedException..ctor(String, Int32, Nullable<UInt32>, String)
 PipeWire.NET.PipeWireStreamFlags
 PipeWire.NET.PipeWireStreamFlags.AllocBuffers = PipeWireStreamFlags
 PipeWire.NET.PipeWireStreamFlags.Async = PipeWireStreamFlags
@@ -925,6 +1070,11 @@ PipeWire.NET.PipeWireStreamState.Paused = PipeWireStreamState
 PipeWire.NET.PipeWireStreamState.Streaming = PipeWireStreamState
 PipeWire.NET.PipeWireStreamState.Unconnected = PipeWireStreamState
 PipeWire.NET.PipeWireStreamState.value__ = Int32
+PipeWire.NET.SafeDescriptorHandle
+PipeWire.NET.SafeDescriptorHandle..ctor()
+PipeWire.NET.SafeDescriptorHandle..ctor(Int32)
+PipeWire.NET.SafeDescriptorHandle.Descriptor : Int32
+PipeWire.NET.SafeDescriptorHandle.IsInvalid : Boolean
 PipeWire.NET.Spa.SpaArray
 PipeWire.NET.Spa.SpaArray..ctor(SpaType, ImmutableArray<SpaValue>)
 PipeWire.NET.Spa.SpaArray.ChildType : SpaType

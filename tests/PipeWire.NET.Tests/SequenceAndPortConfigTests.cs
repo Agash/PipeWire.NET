@@ -17,7 +17,7 @@ namespace PipeWire.NET.Tests;
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class SequenceAndPortConfigTests
+public sealed class SequenceAndPortConfigTests : PipeWireTestBase
 {
     // ------------------------------------------------------------------ the sequence writer
 

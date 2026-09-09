@@ -13,7 +13,7 @@ namespace PipeWire.NET.Tests;
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class MetadataReconcilerTests
+public sealed class MetadataReconcilerTests : PipeWireTestBase
 {
     private const uint Subject = 0;
     private const string Key = "k";

@@ -12,7 +12,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class RegistryObjectKindLiveTests
+public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(15);
 
@@ -80,6 +80,69 @@ public sealed class RegistryObjectKindLiveTests
     }
 
     [TestMethod]
+    public async Task AModulesDetails_ArriveOnlyOnceItIsBound()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var context = new PipeWireContext("pwnet-module-details", ConsoleTestLoggerFactory.Instance);
+        await context.StartAsync(cts.Token);
+        await using var registry = new PipeWireRegistry(context);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+
+        // A module's registry global carries module.name and object.serial, and nothing else. The
+        // rest is on the info event of a bound proxy, which is why these read as null until asked
+        // for; a session always has modules, so there is nothing conditional about this.
+        PipeWireModule bare = registry.Current.Modules.First(m => m.ModuleName is not null);
+        Assert.IsNull(bare.Description, "a module's description is not in its registry global");
+        Assert.IsNull(bare.Author);
+        Assert.IsNull(bare.ModuleVersion);
+
+        PipeWireModule full = await registry.ReadModuleDetailsAsync(bare.Id, cts.Token);
+
+        Assert.AreEqual(bare.ModuleName, full.ModuleName, "it must still be the same module");
+        Assert.IsNotNull(full.Description, "binding must have filled the description in");
+        Assert.IsNotNull(full.Properties.GetValueOrDefault(PipeWireNames.ModuleFilename),
+            "the module's filename is on the info event and nowhere else");
+
+        Assert.AreSame(full, registry.Current.GetModule(bare.Id),
+            "the graph must hold the enriched module, not just the caller");
+        Assert.IsTrue(bare.IsStillIn(registry.Current),
+            "enriching an object must not read as the id having been reused");
+    }
+
+    [TestMethod]
+    public async Task EveryObjectInTheGraph_CarriesASerialThatIsUniqueToIt()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var context = new PipeWireContext("pwnet-serials", ConsoleTestLoggerFactory.Instance);
+        await context.StartAsync(cts.Token);
+        await using var registry = new PipeWireRegistry(context);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+
+        PipeWireGraphSnapshot graph = registry.Current;
+        IPipeWireObject[] all =
+        [
+            .. graph.Nodes, .. graph.Ports, .. graph.Links,
+            .. graph.Devices, .. graph.Clients, .. graph.Modules, .. graph.Factories,
+        ];
+
+        Assert.IsGreaterThan(0, all.Length, "an empty graph proves nothing");
+
+        List<IPipeWireObject> without = [.. all.Where(o => o.ObjectSerial is null)];
+        Assert.AreEqual(0, without.Count,
+            "every global carries object.serial: "
+            + string.Join(", ", without.Select(o => $"{o.Kind} {o.Id}")));
+
+        // The point of the serial. Ids are unique among live objects too, so this only shows the
+        // serial is usable as an identity; that it is not reused is what the id cannot promise.
+        Assert.AreEqual(all.Length, all.Select(o => o.ObjectSerial).Distinct().Count(),
+            "two live objects reported the same serial");
+    }
+
+    [TestMethod]
     public async Task ADeviceBackedNode_NamesADeviceThatIsInTheGraph()
     {
         RequireLinux();
@@ -136,7 +199,8 @@ public sealed class RegistryObjectKindLiveTests
             // refuses on a session that reserves it for something else. Its answer is not this
             // library's contract.
             Assert.Inconclusive(
-                $"the daemon refused to bind its profiler; it reports permissions {profiler!.Permissions}.");
+                $"the daemon refused to bind its profiler (permissions {profiler!.Permissions}): "
+                + $"{e.GetType().Name}: {e.Message}");
             return;
         }
 
@@ -150,15 +214,15 @@ public sealed class RegistryObjectKindLiveTests
 
         Assert.AreEqual(profiler.Id, reader.Id);
 
+        // Shorter than the class budget, so running out of patience is reported as such rather
+        // than arriving as the budget's own cancellation.
         try
         {
             await arrived.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
         }
-        catch (TimeoutException)
+        catch (Exception e) when (e is TimeoutException or OperationCanceledException)
         {
-            // A session with nothing running has no cycles to report on, and whether this one does
-            // is the machine's business rather than this library's.
-            Assert.Inconclusive("the daemon produced no profiler report within 10s.");
+            Assert.Inconclusive("no profiler report arrived while the graph was being driven.");
         }
 
         Assert.IsTrue(reports.TryDequeue(out Spa.SpaObject? first));

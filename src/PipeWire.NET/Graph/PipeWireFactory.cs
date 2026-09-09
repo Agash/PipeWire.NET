@@ -12,13 +12,6 @@ namespace PipeWire.NET.Graph;
 [SupportedOSPlatform("linux")]
 public sealed record PipeWireFactory : IPipeWireObject
 {
-    /// <param name="Id">PipeWire global id.</param>
-    /// <param name="Permissions">What this client may do with the object.</param>
-    /// <param name="InterfaceVersion">The interface version the daemon announced.</param>
-    /// <param name="FactoryName">The name to pass when creating an object, such as <c>adapter</c> or <c>link-factory</c>.</param>
-    /// <param name="TypeName">The interface it produces, such as <c>PipeWire:Interface:Node</c>.</param>
-    /// <param name="TypeVersion">The version of that interface it produces.</param>
-    /// <param name="ModuleId">The module that registered it, where the daemon said.</param>
     internal PipeWireFactory(
         uint Id,
         PipeWirePermissions Permissions,
@@ -26,8 +19,11 @@ public sealed record PipeWireFactory : IPipeWireObject
         string? FactoryName,
         string? TypeName,
         uint? TypeVersion,
-        uint? ModuleId)
+        uint? ModuleId,
+        PipeWireProperties? Properties = null)
     {
+        this.Properties = Properties ?? PipeWireProperties.Empty;
+        this.ObjectSerial = this.Properties.Serial;
         this.Id = Id;
         this.Permissions = Permissions;
         this.InterfaceVersion = InterfaceVersion;
@@ -48,6 +44,12 @@ public sealed record PipeWireFactory : IPipeWireObject
 
     /// <inheritdoc/>
     public uint InterfaceVersion { get; }
+
+    /// <inheritdoc/>
+    public PipeWireProperties Properties { get; }
+
+    /// <inheritdoc/>
+    public ulong? ObjectSerial { get; }
 
     /// <summary>The name to pass when creating an object, such as <c>adapter</c> or <c>link-factory</c>.</summary>
     public string? FactoryName { get; }

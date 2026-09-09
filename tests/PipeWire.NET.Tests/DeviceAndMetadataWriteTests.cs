@@ -18,7 +18,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class DeviceAndMetadataWriteTests
+public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(25);
 
@@ -149,7 +149,7 @@ public sealed class DeviceAndMetadataWriteTests
             ImmutableArray<SpaObject> after;
             try
             {
-                await control.SetRouteAsync(index.Value, device.Value, cts.Token);
+                await control.SetRouteAsync(index.Value, device.Value, cancellationToken: cts.Token);
                 after = await control.GetActiveRoutesAsync(cts.Token);
             }
             catch (PipeWireException e) when (e.Result == -2)
@@ -276,9 +276,9 @@ public sealed class DeviceAndMetadataWriteTests
                     await store.SetAsync(key, "hello", subject: PipeWireMetadataStore.SubjectCore,
                         cancellationToken: cts.Token);
                 }
-                catch (PipeWireException)
+                catch (PipeWireException e)
                 {
-                    Assert.Inconclusive("this client may not write metadata on this daemon.");
+                    Assert.Inconclusive($"this client may not write metadata on this daemon: {e.Message}");
                 }
 
                 Assert.AreEqual("hello", store.Get(key));
@@ -332,9 +332,9 @@ public sealed class DeviceAndMetadataWriteTests
                 {
                     await store.SetDefaultAudioSinkAsync(currentName!, cts.Token);
                 }
-                catch (PipeWireException)
+                catch (PipeWireException e)
                 {
-                    Assert.Inconclusive("this client may not write metadata on this daemon.");
+                    Assert.Inconclusive($"this client may not write metadata on this daemon: {e.Message}");
                 }
 
                 await store.ReadyAsync(cts.Token);
@@ -371,9 +371,9 @@ public sealed class DeviceAndMetadataWriteTests
                     await store.SetAsync(key, $$"""{ "name": "{{awkward.Replace("\\", "\\\\").Replace("\"", "\\\"")}}" }""",
                         "Spa:String:JSON", PipeWireMetadataStore.SubjectCore, cts.Token);
                 }
-                catch (PipeWireException)
+                catch (PipeWireException e)
                 {
-                    Assert.Inconclusive("this client may not write metadata on this daemon.");
+                    Assert.Inconclusive($"this client may not write metadata on this daemon: {e.Message}");
                 }
 
                 string? raw = store.Get(key);
@@ -447,17 +447,46 @@ public sealed class DeviceAndMetadataWriteTests
             // restore to. Like the route test, this treats a withdrawn card as the session's
             // instability rather than a halfway-applied write.
             bool cardGone = false;
+
+            // The nodes this card provides right now. A profile change replaces this whole set, so
+            // it is both what must disappear on the way out and what must come back on the way in.
+            List<uint> CardNodes() =>
+                [.. registry.Current.Nodes.Where(n => n.DeviceId == card.Id).Select(n => n.Id)];
+
+            List<uint> before = CardNodes();
             try
             {
                 // Switching a profile is the most destructive thing this library can do to a graph:
                 // the nodes the old profile provided are removed and the new profile's appear. Any
                 // node id held across it is stale, which is the trap worth proving.
-                await control.SetProfileAsync(candidates[0], cts.Token);
+                await control.SetProfileAsync(candidates[0], cancellationToken: cts.Token);
                 await registry.WaitForInitialEnumerationAsync(cts.Token);
 
                 SpaObject? now = await control.GetProfileAsync(cts.Token);
                 Assert.AreEqual(candidates[0], ((SpaInt)now![SpaParamProfile.Index]!).Value,
                     "the card did not switch profile");
+
+                // A profile that offers different endpoints exchanges the card's nodes rather than
+                // adding to them, so an id held across the switch is stale.
+                //
+                // Waiting for the set to settle is required, not just tidy: flipping a card back
+                // before its new profile has settled strands that profile's nodes for the rest of
+                // the session. That is the daemon's behaviour, not this library's - two bare
+                // `pw-cli set-param <dev> Profile` calls back to back reproduce it, and the same
+                // pair with a settle between them does not.
+                List<uint> settled = [];
+                for (int attempt = 0; attempt < 60; attempt++)
+                {
+                    List<uint> seen = CardNodes();
+                    if (seen.Count > 0 && !seen.Intersect(before).Any() && seen.SequenceEqual(settled))
+                        break;
+                    settled = seen;
+                    await Task.Delay(100, cts.Token);
+                }
+
+                Assert.IsFalse(before.Intersect(CardNodes()).Any(),
+                    "the old profile's nodes are still on the card after the switch: "
+                    + string.Join(", ", before.Intersect(CardNodes())));
 
                 // The device is still coherent afterwards: it still enumerates, and its routes are
                 // the new profile's rather than a mixture.
@@ -480,7 +509,7 @@ public sealed class DeviceAndMetadataWriteTests
                 {
                     try
                     {
-                        await control.SetProfileAsync(originalIndex, CancellationToken.None);
+                        await control.SetProfileAsync(originalIndex, cancellationToken: CancellationToken.None);
                         await registry.WaitForInitialEnumerationAsync(CancellationToken.None);
                     }
                     catch (PipeWireException)
@@ -496,6 +525,24 @@ public sealed class DeviceAndMetadataWriteTests
                 SpaObject? restored = await control.GetProfileAsync(cts.Token);
                 Assert.AreEqual(originalIndex, ((SpaInt)restored![SpaParamProfile.Index]!).Value,
                     "the original profile must have been restored");
+
+                // Teardown is not synchronous with the profile write, so the set is given time to
+                // settle before anything is claimed about it.
+                List<uint> stale = [];
+                for (int attempt = 0; attempt < 40; attempt++)
+                {
+                    stale = [.. CardNodes().Except(before)];
+                    if (stale.Count == 0) break;
+                    await Task.Delay(100, cts.Token);
+                }
+
+                // The half this test is named for. Restoring the index while the other profile's
+                // nodes stay on the card is not a restore: they remain as candidate sinks and
+                // sources for everything that runs afterwards, which is how they went unnoticed
+                // while this test asserted the profile index alone.
+                Assert.AreEqual(0, stale.Count,
+                    "nodes the other profile added outlived the switch back: "
+                    + string.Join(", ", stale));
             }
         }
     }

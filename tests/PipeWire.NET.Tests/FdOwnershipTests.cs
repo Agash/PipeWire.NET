@@ -36,7 +36,7 @@ namespace PipeWire.NET.Tests;
 // first real occupants of the workflow's Integration-without-a-daemon step.
 [TestCategory("Integration")]
 [SupportedOSPlatform("linux")]
-public sealed partial class FdOwnershipTests
+public sealed partial class FdOwnershipTests : PipeWireTestBase
 {
     [TestMethod]
     public async Task StartAsync_BorrowOnly_LeavesTheCallerHandleUsableAndLeaksNoDuplicate()
@@ -116,7 +116,7 @@ public sealed partial class FdOwnershipTests
         // held before, or its absence.
         using (ScopedNativeEnv remote = ScopedNativeEnv.Override("PIPEWIRE_REMOTE", "fd-ownership-test-absent"))
         {
-            await Assert.ThrowsExactlyAsync<PipeWireException>(() => context.StartAsync());
+            await Assert.ThrowsExactlyAsync<PipeWireConnectFailedException>(() => context.StartAsync());
         }
 
         // The failed attempt fell back to Created rather than wedging the context: a start over

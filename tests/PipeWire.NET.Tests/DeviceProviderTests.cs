@@ -15,11 +15,13 @@ namespace PipeWire.NET.Tests;
 /// pointer. These check that the daemon actually accepts the export, reads the device's parameters
 /// back through the ordinary client path, and that the session survives it.
 /// </remarks>
+[ExpectsLibraryError("handler threw")]
+[ExpectsLibraryError("ParameterChanged handler")]
 [TestClass]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class DeviceProviderTests
+public sealed class DeviceProviderTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(40);
 
@@ -51,6 +53,13 @@ public sealed class DeviceProviderTests
     ];
 
     /// <summary>Two routes, so the device has ports to select as well as profiles.</summary>
+    /// <remarks>
+    /// Every route carries <c>direction</c> and <c>available</c>, as a real card's do. Omitting
+    /// availability is not a harmless simplification: WirePlumber caches it per route and logs the
+    /// transition when it changes, and its message concatenates the value without checking it, so
+    /// a route that never reports one throws inside the session manager's route policy and takes
+    /// the event hook down with it.
+    /// </remarks>
     private static ImmutableArray<SpaObject> Routes() =>
     [
         new SpaObject(SpaType.ObjectParamRoute, SpaParamType.EnumRoute,
@@ -59,6 +68,9 @@ public sealed class DeviceProviderTests
             new SpaProperty((uint)SpaParamRoute.Name, 0, new SpaString("speaker")),
             new SpaProperty((uint)SpaParamRoute.Description, 0, new SpaString("Speaker")),
             new SpaProperty((uint)SpaParamRoute.Priority, 0, new SpaInt(100)),
+            new SpaProperty((uint)SpaParamRoute.Direction, 0, new SpaId((uint)SpaDirection.Output)),
+            new SpaProperty((uint)SpaParamRoute.Available, 0,
+                            new SpaId((uint)SpaParamAvailability.Yes)),
         ]),
         new SpaObject(SpaType.ObjectParamRoute, SpaParamType.EnumRoute,
         [
@@ -66,6 +78,9 @@ public sealed class DeviceProviderTests
             new SpaProperty((uint)SpaParamRoute.Name, 0, new SpaString("headphone")),
             new SpaProperty((uint)SpaParamRoute.Description, 0, new SpaString("Headphones")),
             new SpaProperty((uint)SpaParamRoute.Priority, 0, new SpaInt(50)),
+            new SpaProperty((uint)SpaParamRoute.Direction, 0, new SpaId((uint)SpaDirection.Output)),
+            new SpaProperty((uint)SpaParamRoute.Available, 0,
+                            new SpaId((uint)SpaParamAvailability.Unknown)),
         ]),
     ];
 
@@ -107,7 +122,6 @@ public sealed class DeviceProviderTests
             Assert.IsTrue(registry.Current.Nodes.Length > 0, "the session stopped answering");
         }
 
-        // Disposal withdraws it.
         await WaitForAsync(registry, g => !g.Devices.Any(d => d.DeviceName == name), cts.Token);
     }
 
@@ -528,7 +542,7 @@ public sealed class DeviceProviderTests
         await using PipeWireDeviceControl control = readerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
 
-        PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireException>(
+        PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
             () => control.EnumerateParametersAsync(SpaParamType.EnumRoute, cts.Token));
         Assert.AreEqual(-2, refused.Result);
     }
@@ -569,7 +583,7 @@ public sealed class DeviceProviderTests
 
         await using PipeWireDeviceControl control = writerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
-        await control.SetProfileAsync(1, cts.Token);
+        await control.SetProfileAsync(1, cancellationToken: cts.Token);
 
         bool arrived = false;
         for (int attempt = 0; attempt < 150 && !arrived; attempt++)
@@ -723,10 +737,10 @@ public sealed class DeviceProviderTests
 
         // The active routes are a different parameter this device does not serve: asking for
         // them is refused rather than answered empty.
-        await Assert.ThrowsExactlyAsync<PipeWireException>(
+        await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
             () => control.GetActiveRoutesAsync(cts.Token));
 
-        await control.SetRouteAsync(1, 0, cts.Token);
+        await control.SetRouteAsync(1, 0, cancellationToken: cts.Token);
 
         bool arrived = false;
         for (int attempt = 0; attempt < 150 && !arrived; attempt++)

@@ -16,7 +16,7 @@ namespace PipeWire.NET.Tests;
 [TestClass]
 [TestCategory("RequiresGStreamer")]
 [SupportedOSPlatform("linux")]
-public sealed class GStreamerIntegrationTests
+public sealed class GStreamerIntegrationTests : PipeWireTestBase
 {
     [TestMethod]
     [TestCategory("Integration")]

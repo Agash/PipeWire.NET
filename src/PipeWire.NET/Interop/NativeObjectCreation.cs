@@ -76,6 +76,12 @@ internal sealed class NativeObjectCreation : IDisposable
         CancellationToken cancellationToken,
         Action<uint>? onBound = null)
     {
+        // A connection the daemon has already taken away answers nothing: bound and the probe sync
+        // both wait on a socket that is closed, and the caller would sit there until its own token
+        // fired. The context records the death when it is announced; refusing here is what turns
+        // that into an error instead of a hang.
+        if (ctx.ConnectionFault is { } dead) throw dead;
+
         // The native setup is synchronous so the spans never cross an await.
         var pending = new NativeObjectCreation(ctx);
         try
@@ -191,7 +197,7 @@ internal sealed class NativeObjectCreation : IDisposable
             }
 
             if (_proxy == IntPtr.Zero)
-                throw new PipeWireException("pw_core_create_object", -12);  // ENOMEM
+                throw new PipeWireInteropException("pw_core_create_object", -12);  // ENOMEM
 
             // The core reports an error against the proxy it happened on, so the id has to be
             // known before any error can arrive or an error belonging to somebody else cannot be
@@ -297,7 +303,7 @@ internal sealed class NativeObjectCreation : IDisposable
         {
             if (!self._bound.Task.IsCompleted)
             {
-                self._bound.TrySetException(new PipeWireException(
+                self._bound.TrySetException(new PipeWireRequestRefusedException(
                     "create",
                     self._lastCoreResult != 0 ? self._lastCoreResult : -22, // EINVAL
                     objectId: null,
@@ -349,9 +355,9 @@ internal sealed class NativeObjectCreation : IDisposable
         // Errors about our own proxy fail us. Everything else on this stream belongs to another
         // object, including the core's own: a client racing a removal makes the daemon answer
         // "unknown resource" against the core, which is not fatal to the connection and has nothing
-        // to do with whatever creation happens to be in flight. Acting on those failed unrelated
-        // creations under concurrent use. The text is kept so a creation that does turn out to have
-        // failed can say why.
+        // to do with whatever creation happens to be in flight. Treating those as failures would
+        // fail unrelated creations racing this one. The text is kept so a creation that does turn
+        // out to have failed can say why.
         if (id != self._proxyId)
         {
             self._lastCoreResult = res;
@@ -359,7 +365,7 @@ internal sealed class NativeObjectCreation : IDisposable
             return;
         }
 
-        var error = new PipeWireException("create", res, id, text);
+        var error = new PipeWireRequestRefusedException("create", res, id, text);
         self._bound.TrySetException(error);
         self._synced.TrySetException(error);
     }
@@ -374,7 +380,7 @@ internal sealed class NativeObjectCreation : IDisposable
         // message. Creation fails for reasons a caller acts on differently: a refused permission is
         // worth reporting to a user, a format that cannot be negotiated is worth trying differently,
         // and telling them apart should not mean parsing a sentence.
-        var error = new PipeWireException("create", res, objectId, text);
+        var error = new PipeWireRequestRefusedException("create", res, objectId, text);
         self._bound.TrySetException(error);
         self._synced.TrySetException(error);
     }

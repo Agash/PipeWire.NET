@@ -2,6 +2,11 @@ name: build
 
 on:
   workflow_dispatch:
+    inputs:
+      run_skew:
+        description: Also run the daemon version skew jobs
+        type: boolean
+        default: false
   push:
     branches: [main]
     tags: ["v*"]
@@ -360,6 +365,9 @@ jobs:
 
   daemon_version_skew:
     name: Daemon skew (PipeWire ${{ matrix.os }})
+    # Opt-in. What each daemon version supports does not change because this repository changed,
+    # so the answer is re-checked when a version moves at either end, not on every push.
+    if: inputs.run_skew
     # Explicitly non-gating, and separate from the required job for that reason: the bindings are
     # generated against whatever headers were installed, so an older daemon is expected to lack
     # interfaces this library binds. What this job is for is knowing which ones, deliberately,

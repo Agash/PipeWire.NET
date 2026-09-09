@@ -18,7 +18,7 @@ namespace PipeWire.NET.Tests;
 [TestClass]
 [TestCategory("RequiresGStreamer")]
 [SupportedOSPlatform("linux")]
-public sealed class ExplicitSyncTests
+public sealed class ExplicitSyncTests : PipeWireTestBase
 {
     [TestMethod]
     [TestCategory("Integration")]
@@ -98,7 +98,9 @@ public sealed class ExplicitSyncTests
             capture.Connect(nodeId.Value, [PixelFormat.Bgra], modifiers: [modifier],
                 requestExplicitSync: true);
 
-            using var driver = new Timer(_ => { if (streaming) output.TriggerFrame(); }, null, 100, 33);
+            // Not driven from here. This node is not the graph's driver, and pw_stream_trigger_process
+        // on a node that is not one reaches the real driver as RequestProcess, which an audio
+        // adapter refuses - once per call, logged as an error. The consumer drives the graph.
 
             await Task.Delay(TimeSpan.FromSeconds(6));
 

@@ -226,7 +226,7 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
             await roundTrip.ConfigureAwait(false);
             _reconciler.Settle(subject, key);
         }
-        catch (PipeWireException)
+        catch (PipeWireRequestRefusedException)
         {
             // A refusal, not a cancellation. The value was applied optimistically and the daemon
             // said no, so nothing will ever correct it: no echo is coming for a write that did not

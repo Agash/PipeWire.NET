@@ -22,7 +22,7 @@ namespace PipeWire.NET.Tests;
 /// </remarks>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class SpaPodHardeningTests
+public sealed class SpaPodHardeningTests : PipeWireTestBase
 {
     /// <summary>A pod header followed by exactly the body bytes given.</summary>
     private static byte[] Pod(SpaType type, ReadOnlySpan<byte> body)
@@ -304,7 +304,8 @@ public sealed class SpaPodHardeningTests
     [TestMethod]
     public void AnIdReadAsAWronglySizedEnum_NamesBothTypesRatherThanTheReinterpret()
     {
-        // The id side reached BitCast and threw a NotSupportedException naming neither type.
+        // The id side would otherwise reach a raw BitCast and throw a NotSupportedException naming
+        // neither type, which is not something a caller can act on.
         Assert.ThrowsExactly<ArgumentException>(() => _ = SpaIdValue.FromRaw(1).As<ByteWide>());
     }
 

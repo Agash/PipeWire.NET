@@ -35,7 +35,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
-public sealed class PermissionRefusalTests
+public sealed class PermissionRefusalTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
 
@@ -93,7 +93,7 @@ public sealed class PermissionRefusalTests
                     new[] { new PipeWireObjectPermission(store.Id, PipeWirePermissions.None) }, cts.Token);
             }
 
-            PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireException>(
+            PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
                 () => store.SetAsync(key, "v2", cancellationToken: cts.Token));
 
             Assert.IsTrue(refused.Result < 0, "a refusal must carry the daemon's code");
@@ -176,7 +176,7 @@ public sealed class PermissionRefusalTests
                 new[] { new PipeWireObjectPermission(factory!.Id, PipeWirePermissions.None) }, cts.Token);
         }
 
-        PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireException>(
+        PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
             () => registry.CreateVirtualNode("Denied").WithName(Unique("pwnet_denied")).ExecuteAsync(cts.Token));
 
         Assert.IsTrue(refused.Result < 0, "a refusal must carry the daemon's code");

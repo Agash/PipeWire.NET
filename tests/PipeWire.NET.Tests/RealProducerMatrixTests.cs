@@ -21,7 +21,7 @@ namespace PipeWire.NET.Tests;
 [TestCategory("RequiresDaemon")]
 [TestCategory("RequiresGStreamer")]
 [SupportedOSPlatform("linux")]
-public sealed class RealProducerMatrixTests
+public sealed class RealProducerMatrixTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(45);
 

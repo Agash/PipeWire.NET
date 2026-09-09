@@ -88,9 +88,9 @@ public sealed partial class PipeWireSecurityContextControl : IDisposable, IAsync
         if (closeFd.IsInvalid)
             throw new ArgumentException("the handle does not carry a valid descriptor", nameof(closeFd));
 
-        // Both are only read here: the daemon receives copies over the socket and closes those,
-        // never these.
-        return FdInterop.Borrow(listenFd, closeFd,
+        // Held for the whole round trip, not just the call that starts it: the daemon receives
+        // copies over the socket and closes those, never these.
+        return FdInterop.BorrowAsync(listenFd, closeFd,
             (listen, close) => CreateAsync(listen, close, properties, cancellationToken));
     }
 

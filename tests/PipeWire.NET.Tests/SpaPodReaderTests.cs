@@ -12,7 +12,7 @@ namespace PipeWire.NET.Tests;
 /// </summary>
 [TestClass]
 [SupportedOSPlatform("linux")]
-public sealed class SpaPodReaderTests
+public sealed class SpaPodReaderTests : PipeWireTestBase
 {
     // --- pod construction helpers -------------------------------------------------------
 
