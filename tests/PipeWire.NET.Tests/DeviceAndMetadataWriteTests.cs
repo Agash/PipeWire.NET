@@ -173,8 +173,13 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
+            // Lowest id, not "whichever came first". Enumeration order is not stable across
+            // processes, so an unordered pick makes two runs exercise different cards, and a
+            // machine with more than one ALSA card then passes or fails on which it landed on.
             PipeWireDevice? card = registry.Current.Devices
-                .FirstOrDefault(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal));
+                .Where(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal))
+                .OrderBy(d => d.Id)
+                .FirstOrDefault();
 
             if (card is null)
                 Assert.Inconclusive("this session has no ALSA card.");
@@ -220,8 +225,13 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
+            // Lowest id, not "whichever came first". Enumeration order is not stable across
+            // processes, so an unordered pick makes two runs exercise different cards, and a
+            // machine with more than one ALSA card then passes or fails on which it landed on.
             PipeWireDevice? card = registry.Current.Devices
-                .FirstOrDefault(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal));
+                .Where(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal))
+                .OrderBy(d => d.Id)
+                .FirstOrDefault();
 
             if (card is null)
                 Assert.Inconclusive("this session has no ALSA card.");
@@ -420,8 +430,13 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
+            // Lowest id, not "whichever came first". Enumeration order is not stable across
+            // processes, so an unordered pick makes two runs exercise different cards, and a
+            // machine with more than one ALSA card then passes or fails on which it landed on.
             PipeWireDevice? card = registry.Current.Devices
-                .FirstOrDefault(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal));
+                .Where(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal))
+                .OrderBy(d => d.Id)
+                .FirstOrDefault();
             if (card is null)
                 Assert.Inconclusive("this session has no ALSA card.");
 
@@ -471,7 +486,20 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                     .Where(n => n.DeviceId == card.Id && n.ObjectSerial is not null)
                     .Select(n => n.ObjectSerial!.Value)];
 
+            // Names, for the restore half. Serials answer "are these the same node instances",
+            // which is the right question on the way out and the wrong one on the way back: a
+            // profile round-trip destroys the original profile's nodes and creates them again,
+            // and serials are monotonic and never reused, so a perfectly restored card comes back
+            // with the same names under new serials. Comparing serials there reports every
+            // restored node as a leftover, and no amount of waiting clears it.
+            List<string> CardNodeNames() =>
+                [.. registry.Current.Nodes
+                    .Where(n => n.DeviceId == card.Id && n.NodeName is not null)
+                    .Select(n => n.NodeName!)
+                    .OrderBy(n => n, StringComparer.Ordinal)];
+
             List<ulong> before = CardNodes();
+            List<string> beforeNames = CardNodeNames();
             try
             {
                 // Switching a profile is the most destructive thing this library can do to a graph:
@@ -492,12 +520,26 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 // the session. That is the daemon's behaviour, not this library's - two bare
                 // `pw-cli set-param <dev> Profile` calls back to back reproduce it, and the same
                 // pair with a settle between them does not.
+                // Stable across several consecutive samples, not just two. A single unchanged
+                // 100ms sample is not settled: the daemon creates the new profile's nodes over
+                // more than one cycle, so a reading taken between two of them looks identical to
+                // a finished one. Flipping back on that reading is what strands nodes, and it is
+                // why this loop failed intermittently when it required one repeat.
                 List<ulong> settled = [];
-                for (int attempt = 0; attempt < 60; attempt++)
+                int stableSamples = 0;
+                for (int attempt = 0; attempt < 100; attempt++)
                 {
                     List<ulong> seen = CardNodes();
                     if (seen.Count > 0 && !seen.Intersect(before).Any() && seen.SequenceEqual(settled))
-                        break;
+                    {
+                        if (++stableSamples >= 5)
+                            break;
+                    }
+                    else
+                    {
+                        stableSamples = 0;
+                    }
+
                     settled = seen;
                     await Task.Delay(100, cts.Token);
                 }
@@ -546,10 +588,10 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
 
                 // Teardown is not synchronous with the profile write, so the set is given time to
                 // settle before anything is claimed about it.
-                List<ulong> stale = [];
-                for (int attempt = 0; attempt < 40; attempt++)
+                List<string> stale = [];
+                for (int attempt = 0; attempt < 100; attempt++)
                 {
-                    stale = [.. CardNodes().Except(before)];
+                    stale = [.. CardNodeNames().Except(beforeNames)];
                     if (stale.Count == 0) break;
                     await Task.Delay(100, cts.Token);
                 }
@@ -605,20 +647,20 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             bool cardGone = false;
             try
             {
-                // A distinctive value, so reading it back cannot accidentally match what was there.
-                float[] test = [.. restore.Select(_ => 0.37f)];
-                await control.SetRouteVolumeAsync(
-                    index, device, test, originalMute, save: false, cts.Token);
-
-                // Polled rather than read once. The write is answered when the daemon has taken
-                // it, not when the card's route params have been re-read, and a route set that is
-                // still settling - a profile change recreates every route on the card - answers
-                // with the value it had before. The assertion is unchanged: it still has to reach
-                // the value that was written.
+                // The write is retried, not just the read. The session manager keeps its own
+                // stored volume for a device and reapplies it whenever the routes change or a
+                // stream arrives, so a value written once can be overwritten before it can be
+                // read back - which is a policy engine doing its job, not the write failing.
+                // Retrying makes the test ask what it means to ask: can a write reach the
+                // hardware mixer at all.
                 SpaObject? changed = null;
                 float first = float.NaN;
-                for (int attempt = 0; attempt < 50; attempt++)
+                for (int attempt = 0; attempt < 10; attempt++)
                 {
+                    float[] test = [.. restore.Select(_ => 0.37f)];
+                    await control.SetRouteVolumeAsync(
+                        index, device, test, originalMute, save: false, cts.Token);
+
                     ImmutableArray<SpaObject> after = await control.GetActiveRoutesAsync(cts.Token);
                     changed = after.FirstOrDefault(r =>
                         r[SpaParamRoute.Index] is SpaInt i && i.Value == index);

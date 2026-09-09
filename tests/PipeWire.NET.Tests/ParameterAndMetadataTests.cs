@@ -104,9 +104,28 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             ImmutableArray<float> channels = await control.GetChannelVolumesAsync(cts.Token);
             Assert.AreEqual(2, channels.Length, "a stereo node has two channel volumes");
 
-            await control.SetChannelVolumesAsync([0.4f, 0.6f], cts.Token);
+            // The write is retried, not just the read. The session manager keeps its own stored
+            // volume per node.name and reapplies it when a stream arrives or the graph changes, so
+            // a value written once can be overwritten before it can be read back - a policy engine
+            // doing its job, not the write failing. Reading in a loop would converge on the
+            // restored value and call it correct; rewriting asks what the test means to ask.
+            ImmutableArray<float> after = [];
+            for (int attempt = 0; attempt < 10; attempt++)
+            {
+                await control.SetChannelVolumesAsync([0.4f, 0.6f], cts.Token);
 
-            ImmutableArray<float> after = await control.GetChannelVolumesAsync(cts.Token);
+                after = await control.GetChannelVolumesAsync(cts.Token);
+                if (after.Length == 2
+                    && Math.Abs(after[0] - 0.4f) <= 0.01f
+                    && Math.Abs(after[1] - 0.6f) <= 0.01f)
+                {
+                    break;
+                }
+
+                await Task.Delay(100, cts.Token);
+            }
+
+            Assert.AreEqual(2, after.Length, "a stereo node has two channel volumes");
             Assert.AreEqual(0.4f, after[0], 0.01f);
             Assert.AreEqual(0.6f, after[1], 0.01f);
 
