@@ -14,3 +14,7 @@ namespace PipeWire.NET.Interop;
 internal partial struct pw_data_loop
 {
 }
+
+internal partial struct pw_data_loop
+{
+}

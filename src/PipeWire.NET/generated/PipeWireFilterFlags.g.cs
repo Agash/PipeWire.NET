@@ -14,6 +14,7 @@ using PipeWire.NET.Interop;
 namespace PipeWire.NET;
 
 [NativeTypeName("unsigned int")]
+[System.Flags]
 public enum PipeWireFilterFlags : uint
 {
     None = 0,

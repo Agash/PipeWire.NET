@@ -33,19 +33,13 @@ internal static partial class FdInterop
     /// <summary><c>SO_ACCEPTCONN</c>: non-zero when the socket is listening.</summary>
     private const int SoAcceptConn = 30;
 
-    [LibraryImport("libc", SetLastError = true)]
-    private static partial int fcntl(int fd, int cmd, int arg);
-
-    [LibraryImport("libc", SetLastError = true)]
-    private static unsafe partial int getsockopt(int fd, int level, int optname, int* optval, int* optlen);
-
     /// <summary>Whether <paramref name="fd"/> is a socket that is listening for connections.</summary>
     /// <remarks>False for a non-socket (<c>ENOTSOCK</c>) as well as for a connected socket.</remarks>
     internal static unsafe bool IsListeningSocket(int fd)
     {
         int listening = 0;
         int size = sizeof(int);
-        if (getsockopt(fd, SolSocket, SoAcceptConn, &listening, &size) < 0)
+        if (NativeConstants.getsockopt(fd, NativeConstants.SOL_SOCKET, NativeConstants.SO_ACCEPTCONN, &listening, &size) < 0)
             return false;
 
         return listening != 0;
@@ -73,7 +67,7 @@ internal static partial class FdInterop
     /// </remarks>
     internal static SafeFileHandle DuplicateWithCloseOnExec(int fd)
     {
-        int duplicate = fcntl(fd, FDupfdCloexec, LowestDuplicate);
+        int duplicate = NativeConstants.fcntl(fd, NativeConstants.F_DUPFD_CLOEXEC, LowestDuplicate);
         if (duplicate < 0)
             throw new PipeWireInteropException("fcntl(F_DUPFD_CLOEXEC)", -Marshal.GetLastPInvokeError());
 

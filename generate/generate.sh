@@ -303,8 +303,9 @@ if [ "$REFRESH_NAMES" = "1" ]; then
       print "# Enum members keep the upstream spelling where that IS the idiomatic name - a pixel"
       print "# format is I420 - and are Pascal-cased where the member names a state, mode or flag."
       print "#"
-      print "# Absent is what cannot be generated: SpaPodPropFlag, SpaDataFlag and the PW_KEY_*"
-      print "# strings are #define macros, and macro binding generation is fatal on this header set."
+      print "# Only C enums are named here. Upstream #define families - the PW_KEY_* strings and the"
+      print "# SPA_*_FLAG_* / *_CHANGE_MASK_* bits - come out of the separate constants pass and are"
+      print "# lifted into PipeWireKeys and the [Flags] enums in SpaFlags.g.cs at the end of generate.sh."
       print ""
       for (i = 1; i <= n; i++) {
         name = order[i]
@@ -474,45 +475,285 @@ for f in "$WORK"/*.cs; do
   # keeps public methods and every signature naming an internal struct is then a CS0050/CS0051.
   # Their effective accessibility is already internal because the container bounds it, so this only
   # makes the declaration say what is already true.
-  sed -i 's/^\(\s*\)public static extern /internal static extern /' "$OUT/${base}.g.cs"
+  # The backreference puts the indentation back. Without it every extern line loses its leading
+  # whitespace, which is a whole-file diff on each regeneration that hides the real change.
+  sed -i 's/^\(\s*\)public static extern /\1internal static extern /' "$OUT/${base}.g.cs"
+
+  # ClangSharp emits every C enum as a plain enum, so a bitmask like pw_stream_flags reaches C# as
+  # something the compiler and the debugger treat as a single value: ToString prints a number for
+  # any combination, and nothing marks `Autoconnect | MapBuffers` as intended. The C side does not
+  # mark bitmasks either, so it is read off the initialisers - two or more members written as a
+  # shift (1 << n) is a bitmask. Hex initialisers are deliberately not the signal: SPA uses them for
+  # range starts (SPA_TYPE_START = 0x10000), and flagging those would be wrong.
+  if [ "$(grep -cE '^\s+[A-Za-z_][A-Za-z0-9_]* = .*<<' "$OUT/${base}.g.cs")" -ge 2 ]; then
+    sed -i -E 's/^((public|internal) enum [A-Za-z_][A-Za-z0-9_]*)/[System.Flags]\n\1/' "$OUT/${base}.g.cs"
+    echo "$base" >> "$WORK/flags-enums.txt"
+  fi
 done
 
-# Second pass: the DRM format constants.
+# The flagged set is reviewed, not merely accepted: a new bitmask from a header bump should be seen
+# by someone who can confirm it really is one, rather than slipping through as a side effect.
+EXPECTED_FLAGS="PipeWireFilterFlags PipeWireFilterPortFlags PipeWireMemblockFlags PipeWireMemmapFlags PipeWireStreamFlags SpaVideoChromaSite SpaVideoFlags SpaVideoMultiviewFlags"
+ACTUAL_FLAGS=$(sort -u "$WORK/flags-enums.txt" 2>/dev/null | tr '\n' ' ' | sed 's/ $//')
+if [ "$ACTUAL_FLAGS" != "$EXPECTED_FLAGS" ]; then
+  echo "ERROR: the set of enums marked [Flags] changed. Confirm each is a bitmask, then update EXPECTED_FLAGS:"
+  echo "  expected: $EXPECTED_FLAGS"
+  echo "  actual:   $ACTUAL_FLAGS"
+  exit 1
+fi
+
+# Second pass: everything macro-shaped, plus the few libc declarations this library needs.
 #
-# Separate invocation because it needs --generate macro-bindings, which is fatal on the
-# PipeWire header set (see generate/drm.rsp). Kernel uapi, so the values are stable ABI;
-# regenerating is about not hand-transcribing 300 fourcc codes, not about drift.
-if [ ! -f /usr/include/libdrm/drm_fourcc.h ]; then
-  echo "ERROR: drm_fourcc.h not found at /usr/include/libdrm/."
-  echo "Install: sudo apt-get install libdrm-dev"
-  exit 1
-fi
-
-# Its own preamble: the DRM output is a single file, and in single-file mode the generator emits
-# no using directives, so the NativeTypeName attribute on every constant would not resolve.
+# Split from the ABI pass because emitting macros needs --generate macro-bindings, and that leaves
+# diagnostics behind from macros ClangSharp cannot translate. The ABI pass fails on any diagnostic
+# at all, which is what catches a type landing in the wrong namespace; keeping the noisy work here
+# lets that guard stay absolute while this one tolerates exactly one known class.
+#
+# The old comment claiming macro-bindings is fatal on the PipeWire headers was wrong - it exits 0.
+# The reason to split is the noise, not a failure. See generate/constants.rsp.
 {
-  cat "$WORK/header.txt"
+  sed 's/from libpipewire-0.3 headers/from the libpipewire-0.3, libdrm and libc headers/' "$WORK/header.txt"
   printf '\nusing PipeWire.NET.Interop;\n'
-} > "$WORK/header-drm.txt"
+} > "$WORK/header-constants.txt"
 
-"$TOOL" "@$REPO_ROOT/generate/drm.rsp" \
-  --file "$REPO_ROOT/generate/drm_composite.h" \
-  --header-file "$WORK/header-drm.txt" \
+"$TOOL" "@$REPO_ROOT/generate/constants.rsp" \
+  --file "$REPO_ROOT/generate/constants_composite.h" \
+  --header-file "$WORK/header-constants.txt" \
   --resource-directory "$CLANG_RESOURCE_DIR" \
-  --output "$WORK/DrmFourcc.cs" 2>&1 | tee "$WORK/gen-drm.log"
+  --output "$WORK/NativeConstants.cs" 2>&1 | tee "$WORK/gen-constants.log"
 
-DRM_EXIT=${PIPESTATUS[0]}
-if [ $DRM_EXIT -ne 0 ]; then
-  echo "DRM generator failed with exit $DRM_EXIT."
-  exit $DRM_EXIT
-fi
-if grep -qi "^Warning:" "$WORK/gen-drm.log"; then
-  echo "ERROR: the DRM generator warned. Fix it rather than committing the output:"
-  grep -i "^Warning:" "$WORK/gen-drm.log"
+CONST_EXIT=${PIPESTATUS[0]}
+
+# Two known classes, and only those. Function-like macros take arguments, so they are not
+# constants and there is nothing here that wants them - drm_fourcc.h's AMD_FMT_MOD_SET and the
+# BROADCOM column-height helpers are the whole of that class. 'Const' is glibc's
+# __attribute_const__ on gnu_dev_makedev/major/minor: an optimiser hint that the result depends only
+# on the arguments, with nothing a binding could carry, so dropping it loses nothing. Anything else
+# in the log is a real diagnostic and fails the run.
+CONST_OTHER=$(grep -i "warning\|error" "$WORK/gen-constants.log" \
+  | grep -v "Function like macro definition records are not supported" \
+  | grep -v "Unsupported attribute: 'Const'" \
+  | grep -v "^Processing " || true)
+
+if [ -n "$CONST_OTHER" ]; then
+  echo "ERROR: the constants generator reported an unexpected diagnostic:"
+  echo "$CONST_OTHER"
   exit 1
 fi
 
-cp "$WORK/DrmFourcc.cs" "$OUT/DrmFourcc.g.cs"
+if [ ! -s "$WORK/NativeConstants.cs" ]; then
+  echo "ERROR: the constants generator produced no output (exit $CONST_EXIT)."
+  exit 1
+fi
+
+# A cheap tripwire on the allowlist: if a --include glob stops matching because a header moved or a
+# family was renamed, the file still generates and simply omits them, which nothing else notices.
+for family in PW_KEY_ PW_VERSION_ PW_TYPE_INTERFACE_ DRM_FORMAT_; do
+  n=$(grep -oE "${family}[A-Za-z_0-9]+" "$WORK/NativeConstants.cs" | sort -u | wc -l)
+  if [ "$n" -lt 9 ]; then
+    echo "ERROR: only $n ${family}* constants were generated; the allowlist or a traversed header moved."
+    exit 1
+  fi
+done
+
+# C writes octal with a leading zero (PW_PERM_R is 0400) and ClangSharp copies the literal across
+# unchanged. C# has no octal literal and reads a leading zero as nothing, so 0400 compiles - as
+# decimal 400 instead of 256. Nothing fails; every permission built from it is simply wrong. So the
+# initialisers are rewritten to hex here, and the run stops if any leading-zero literal survives.
+# The NativeTypeName strings keep their octal on purpose: they quote the C source, they are not math.
+python3 - "$WORK/NativeConstants.cs" <<'PY'
+import io, re, sys
+
+path = sys.argv[1]
+lines = io.open(path, encoding='utf-8').read().split('\n')
+octal = re.compile(r'(?<![\w.x])0([0-7]+)(?![\w.])')
+fixed = 0
+for i, line in enumerate(lines):
+    m = re.match(r'(\s*public const \w+ \w+ = )(.*)$', line)
+    if not m:
+        continue
+    new = octal.sub(lambda t: hex(int(t.group(1), 8)), m.group(2))
+    if new != m.group(2):
+        lines[i] = m.group(1) + new
+        fixed += 1
+io.open(path, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines))
+
+left = [l.strip() for l in lines if re.match(r'\s*public const ', l) and octal.search(l.split('=', 1)[1])]
+if left:
+    print('ERROR: leading-zero literals remain in constant initialisers:')
+    print('\n'.join(left))
+    sys.exit(1)
+print(f"Rewrote {fixed} octal initialisers to hex")
+PY
+
+cp "$WORK/NativeConstants.cs" "$OUT/NativeConstants.g.cs"
+
+
+# A third pass for spa/pod/filter.h was tried and removed; see HANDOFF for the measurements.
+# Short version: ClangSharp translates filter.h's own bodies fine, but they call 41 symbols from a
+# closure that runs through spa/pod/builder.h, which has 42 compound-literal constructs ClangSharp
+# cannot translate. generate/podfilter.rsp is kept for whoever picks it up.
+
+# The string-valued constants again, as `const string`.
+#
+# ClangSharp renders a string macro as a UTF-8 span, which is the right shape for handing a key to
+# a spa_dict without transcoding, and the wrong one for everything else: PipeWireProperties is keyed
+# by string, so a caller reading a property off a graph object needs the same key as a string. There
+# is no generator option for that, and hand-writing a second copy is what let the old list drift to
+# 59 of 192 entries.
+#
+# So it is derived from the generated file rather than written: same literals, transposed into the
+# other representation. No names are invented here - the identifier is carried across unchanged -
+# which is what keeps this a mechanical step rather than a second source of truth.
+python3 - "$WORK/NativeConstants.cs" "$OUT/PipeWireKeys.g.cs" "$WORK/header.txt" <<'PY'
+import io, re, sys
+
+src, out_path, header_path = sys.argv[1], sys.argv[2], sys.argv[3]
+text = io.open(src, encoding='utf-8').read()
+
+pattern = re.compile(
+    r'ReadOnlySpan<byte>\s+(PW_KEY_[A-Za-z_0-9]+|SPA_KEY_[A-Za-z_0-9]+|PW_TYPE_INTERFACE_[A-Za-z_0-9]+)\s*=>\s*"([^"]*)"u8;')
+
+seen = {}
+for name, value in pattern.findall(text):
+    seen.setdefault(name, value)
+
+if len(seen) < 100:
+    raise SystemExit(f"only {len(seen)} string constants found; the generated shape changed")
+
+header = io.open(header_path, encoding='utf-8').read().rstrip('\n')
+lines = [header, '']
+lines.append('namespace PipeWire.NET.Graph;')
+lines.append('')
+lines.append('/// <summary>')
+lines.append('/// PipeWire property keys and interface type names, as strings.')
+lines.append('/// </summary>')
+lines.append('/// <remarks>')
+lines.append('/// Derived from the generated UTF-8 spans in <c>NativeConstants</c>, which is the form the')
+lines.append('/// native side wants. These are the same values as <see cref="string"/>, for reading a')
+lines.append('/// property off a graph object - <c>PipeWireProperties</c> is keyed by string.')
+lines.append('/// </remarks>')
+lines.append('public static partial class PipeWireKeys')
+lines.append('{')
+
+for name in sorted(seen):
+    lines.append(f'    /// <summary><c>{seen[name]}</c></summary>')
+    lines.append(f'    public const string {name} = "{seen[name]}";')
+    lines.append('')
+if lines and lines[-1] == '':
+    lines.pop()
+lines.append('}')
+
+io.open(out_path, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines) + '\n')
+print(f"Derived {len(seen)} string constants into {out_path}")
+PY
+
+# Flag families that upstream spells as #define rather than as an enum. The macro pass emits them as
+# loose NativeConstants, which is the right form for nothing: a node flag and a param-info flag are
+# both a bare uint there, so passing one where the other belongs compiles - and that is exactly how
+# SPA_NODE_FLAG_RT came to be announced as SPA_NODE_FLAG_OUT_PORT_CONFIG from a hand copy.
+#
+# So each family becomes a [Flags] enum whose members are initialised *from* the generated constant,
+# never from a number, which keeps this a transposition rather than a second source of truth. The
+# underlying type is the one of the struct field the family is stored in (spa_node_info.flags is a
+# uint64_t, spa_param_info.flags a uint32_t). Member names are the macro suffix Pascal-cased; the one
+# addition is a zero None where upstream has none, because a flags enum without one has no name for
+# "nothing set".
+python3 - "$WORK/NativeConstants.cs" "$OUT" "$WORK/header.txt" "$REPO_ROOT/generate/constants.rsp" <<'PY'
+import io, re, sys, os
+
+src, out_dir, header_path, rsp_path = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+text = io.open(src, encoding='utf-8').read()
+
+# Upstream's own member documentation: the /**< ... */ after each #define, from the headers the
+# constants pass traverses. Lifted rather than written so the docs cannot drift from the header.
+headers = [l.strip() for l in io.open(rsp_path, encoding='utf-8')
+           if l.strip().startswith('/usr/include/') and l.strip().endswith('.h')]
+docs = {}
+for h in headers:
+    if not os.path.exists(h):
+        continue
+    body = io.open(h, encoding='utf-8', errors='replace').read()
+    for m in re.finditer(r'#define\s+([A-Z][A-Z0-9_]*)[^\n]*?/\*\*<(.*?)\*/', body, re.S):
+        # Continuation lines of a C block comment start with ' * '; that star is layout, not text.
+        docs.setdefault(m.group(1), ' '.join(re.sub(r'\n\s*\*(?!/)', ' ', m.group(2)).split()))
+
+S, G = 'PipeWire.NET.Spa', 'PipeWire.NET.Graph'
+# (macro prefix, enum, underlying, access, namespace, stored in, renames, excluded macros)
+families = [
+    ('SPA_NODE_FLAG_',                 'SpaNodeFlags',              'ulong', 'internal', S, 'spa_node_info.flags', {}, ()),
+    ('SPA_NODE_CHANGE_MASK_',          'SpaNodeChangeMask',         'ulong', 'internal', S, 'spa_node_info.change_mask', {}, ()),
+    ('SPA_PORT_FLAG_',                 'SpaPortFlags',              'ulong', 'internal', S, 'spa_port_info.flags', {}, ()),
+    ('SPA_PORT_CHANGE_MASK_',          'SpaPortChangeMask',         'ulong', 'internal', S, 'spa_port_info.change_mask', {}, ()),
+    ('SPA_PARAM_INFO_',                'SpaParamInfoFlags',         'uint',  'public',   S, 'spa_param_info.flags', {'READWRITE': 'ReadWrite'}, ()),
+    ('SPA_POD_PROP_FLAG_',             'SpaPodPropFlags',           'uint',  'public',   S, 'spa_pod_prop.flags', {}, ()),
+    ('SPA_DATA_FLAG_',                 'SpaDataFlags',              'uint',  'internal', S, 'spa_data.flags', {'READWRITE': 'ReadWrite'}, ()),
+    ('SPA_CHUNK_FLAG_',                'SpaChunkFlags',             'int',   'internal', S, 'spa_chunk.flags', {}, ()),
+    ('SPA_META_HEADER_FLAG_',          'SpaMetaHeaderFlags',        'uint',  'internal', S, 'spa_meta_header.flags', {}, ()),
+    ('SPA_META_SYNC_TIMELINE_',        'SpaMetaSyncTimelineFlags',  'uint',  'public',   S, 'spa_meta_sync_timeline.flags', {}, ()),
+    ('SPA_DEVICE_CHANGE_MASK_',        'SpaDeviceChangeMask',       'ulong', 'internal', S, 'spa_device_info.change_mask', {}, ()),
+    ('SPA_DEVICE_OBJECT_CHANGE_MASK_', 'SpaDeviceObjectChangeMask', 'ulong', 'internal', S, 'spa_device_object_info.change_mask', {}, ()),
+    ('SPA_IO_CLOCK_FLAG_',             'SpaIoClockFlags',           'uint',  'internal', S, 'spa_io_clock.flags', {}, ()),
+    ('SPA_IO_VIDEO_SIZE_',             'SpaIoVideoSizeFlags',       'uint',  'internal', S, 'spa_io_video_size.flags', {}, ()),
+    ('SPA_IO_SEGMENT_FLAG_',           'SpaIoSegmentFlags',         'uint',  'internal', S, 'spa_io_segment.flags', {}, ()),
+    ('SPA_IO_SEGMENT_BAR_FLAG_',       'SpaIoSegmentBarFlags',      'uint',  'internal', S, 'spa_io_segment_bar.flags', {}, ()),
+    ('SPA_IO_SEGMENT_VIDEO_FLAG_',     'SpaIoSegmentVideoFlags',    'uint',  'internal', S, 'spa_io_segment_video.flags', {}, ()),
+    ('SPA_STATUS_',                    'SpaStatus',                 'int',   'internal', S, 'spa_io_buffers.status', {}, ()),
+    # The single letters are upstream's spelling; the names are the ones this library has always
+    # used for them. PW_PERM_INVALID is a sentinel meaning "no such permission set", not a bit.
+    ('PW_PERM_',                       'PipeWirePermissions',       'uint',  'public',   G, 'pw_permission.permissions',
+        {'R': 'Read', 'W': 'Write', 'X': 'Execute', 'M': 'Metadata', 'L': 'Link', 'RW': 'ReadWrite',
+         'RWX': 'ReadWriteExecute', 'RWXM': 'ReadWriteExecuteMetadata',
+         'RWXML': 'ReadWriteExecuteMetadataLink', 'ALL': 'All'},
+        ('PW_PERM_INVALID',)),
+]
+
+
+def pascal(suffix):
+    return ''.join(p[:1].upper() + p[1:].lower() for p in suffix.split('_') if p)
+
+
+def xml(s):
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+
+header = io.open(header_path, encoding='utf-8').read().rstrip('\n')
+by_ns = {}
+for prefix, name, underlying, access, ns, field, renames, excluded in families:
+    consts = [(m, v) for m, v in re.findall(r'public const \w+ (' + prefix + r'[A-Z0-9_]+) = ([^;]+);', text)
+              if m not in excluded]
+    if not consts:
+        raise SystemExit(f"no {prefix}* constants found; the generated shape changed")
+    out = by_ns.setdefault(ns, [])
+    out.append('/// <summary>Upstream <c>' + prefix + '*</c>, stored in <c>' + field + '</c>.</summary>')
+    out.append('[System.Flags]')
+    out.append(f'{access} enum {name} : {underlying}')
+    out.append('{')
+    members = [(renames.get(m[len(prefix):], pascal(m[len(prefix):])), m, v.strip()) for m, v in consts]
+    if not any(v in ('0', '(0)') for _, _, v in members):
+        out.append('    /// <summary>No flag set.</summary>')
+        out.append('    None = 0,')
+        out.append('')
+    for member, macro, _ in members:
+        doc = f': {xml(docs[macro])}' if macro in docs else ''
+        out.append(f'    /// <summary><c>{macro}</c>{doc}</summary>')
+        out.append(f'    {member} = unchecked(({underlying})PipeWire.NET.Interop.NativeConstants.{macro}),')
+        out.append('')
+    if out[-1] == '':
+        out.pop()
+    out.append('}')
+    out.append('')
+
+files = {S: 'SpaFlags.g.cs', G: 'PipeWireFlags.g.cs'}
+for ns, body in by_ns.items():
+    if body and body[-1] == '':
+        body.pop()
+    path = os.path.join(out_dir, files[ns])
+    io.open(path, 'w', encoding='utf-8', newline='\n').write(
+        '\n'.join([header, '', f'namespace {ns};', ''] + body) + '\n')
+print(f"Derived {len(families)} flag enums into {', '.join(files[ns] for ns in by_ns)}")
+PY
+
 
 printf '%s
 ' "$HEADER_VERSION" > "$PINNED_FILE"

@@ -9,26 +9,25 @@
 #pragma warning disable CA1720 // Identifiers should not contain type names
 #pragma warning disable CA1815 // Override Equals and operator equals on value types
 
-using PipeWire.NET.Interop;
+namespace PipeWire.NET.Interop;
 
-namespace PipeWire.NET;
-
-[NativeTypeName("unsigned int")]
-[System.Flags]
-public enum PipeWireStreamFlags : uint
+internal unsafe partial struct spa_port_info
 {
-    None = 0,
-    Autoconnect = (1 << 0),
-    Inactive = (1 << 1),
-    MapBuffers = (1 << 2),
-    Driver = (1 << 3),
-    RtProcess = (1 << 4),
-    NoConvert = (1 << 5),
-    Exclusive = (1 << 6),
-    DontReconnect = (1 << 7),
-    AllocBuffers = (1 << 8),
-    Trigger = (1 << 9),
-    Async = (1 << 10),
-    EarlyProcess = (1 << 11),
-    RtTriggerDone = (1 << 12),
+    [NativeTypeName("uint64_t")]
+    public ulong change_mask;
+
+    [NativeTypeName("uint64_t")]
+    public ulong flags;
+
+    [NativeTypeName("struct spa_fraction")]
+    public spa_fraction rate;
+
+    [NativeTypeName("const struct spa_dict *")]
+    public spa_dict* props;
+
+    [NativeTypeName("struct spa_param_info *")]
+    public spa_param_info* @params;
+
+    [NativeTypeName("uint32_t")]
+    public uint n_params;
 }

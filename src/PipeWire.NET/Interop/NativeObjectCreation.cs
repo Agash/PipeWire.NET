@@ -35,7 +35,7 @@ internal sealed class NativeObjectCreation : IDisposable
     // Written by the thread that starts the creation and read by the loop thread in the callbacks
     // below. The native loop mutex orders them in practice, but nothing in the .NET memory model
     // knows about it, so the accesses say so themselves.
-    private volatile uint    _proxyId = Native.SPA_ID_INVALID;
+    private volatile uint    _proxyId = NativeConstants.SPA_ID_INVALID;
 
     // The daemon reports a refused creation on the core rather than on a proxy that was never
     // bound, but the core stream carries every client's errors. Kept as the reason to quote if this
@@ -173,13 +173,13 @@ internal sealed class NativeObjectCreation : IDisposable
         void* data = (void*)GCHandle.ToIntPtr(_self);
 
         _proxyEvents = (pw_proxy_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_proxy_events));
-        _proxyEvents->version = Native.PW_VERSION_PROXY_EVENTS;
+        _proxyEvents->version = NativeConstants.PW_VERSION_PROXY_EVENTS;
         _proxyEvents->bound   = &OnBound;
         _proxyEvents->error   = &OnProxyError;
         _proxyHook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
 
         _coreEvents = (pw_core_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_core_events));
-        _coreEvents->version = Native.PW_VERSION_CORE_EVENTS;
+        _coreEvents->version = NativeConstants.PW_VERSION_CORE_EVENTS;
         _coreEvents->done    = &OnDone;
         _coreEvents->error   = &OnCoreError;
         _coreHook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
@@ -197,7 +197,7 @@ internal sealed class NativeObjectCreation : IDisposable
             }
 
             if (_proxy == IntPtr.Zero)
-                throw new PipeWireInteropException("pw_core_create_object", -12);  // ENOMEM
+                throw new PipeWireInteropException("pw_core_create_object", -NativeConstants.ENOMEM);
 
             // The core reports an error against the proxy it happened on, so the id has to be
             // known before any error can arrive or an error belonging to somebody else cannot be
@@ -212,7 +212,7 @@ internal sealed class NativeObjectCreation : IDisposable
     {
         using (_ctx.Lock())
         {
-            _probeSeq = Native.pw_core_sync(_ctx.CoreHandle, Native.PW_ID_CORE, 0);
+            _probeSeq = Native.pw_core_sync(_ctx.CoreHandle, NativeConstants.PW_ID_CORE, 0);
             _probed = true;
         }
     }
@@ -220,7 +220,7 @@ internal sealed class NativeObjectCreation : IDisposable
     private unsafe void RequestSync()
     {
         using (_ctx.Lock())
-            _syncSeq = Native.pw_core_sync(_ctx.CoreHandle, Native.PW_ID_CORE, 0);
+            _syncSeq = Native.pw_core_sync(_ctx.CoreHandle, NativeConstants.PW_ID_CORE, 0);
     }
 
     /// <summary>The sequence number a probe has not been issued under.</summary>
@@ -294,7 +294,7 @@ internal sealed class NativeObjectCreation : IDisposable
     private static unsafe void OnDoneCore(void* data, uint id, int seq)
     {
         if (FromData(data) is not { } self) return;
-        if (id != Native.PW_ID_CORE) return;
+        if (id != NativeConstants.PW_ID_CORE) return;
 
         // The daemon has processed everything sent before the probe. If the object had been
         // created, bound would already have arrived, because events are ordered. So a probe that
@@ -305,7 +305,7 @@ internal sealed class NativeObjectCreation : IDisposable
             {
                 self._bound.TrySetException(new PipeWireRequestRefusedException(
                     "create",
-                    self._lastCoreResult != 0 ? self._lastCoreResult : -22, // EINVAL
+                    self._lastCoreResult != 0 ? self._lastCoreResult : -NativeConstants.EINVAL,
                     objectId: null,
                     self._lastCoreMessage ?? "the daemon did not create the object"));
             }

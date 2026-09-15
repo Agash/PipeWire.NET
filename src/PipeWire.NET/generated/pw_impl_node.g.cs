@@ -14,3 +14,7 @@ namespace PipeWire.NET.Interop;
 internal partial struct pw_impl_node
 {
 }
+
+internal partial struct pw_impl_node
+{
+}

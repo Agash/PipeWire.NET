@@ -2,14 +2,13 @@
 //
 // Why this file lives outside generated/: generate/generate.sh wipes the
 // generated/ directory on each regeneration. Anything we hand-write must live
-// elsewhere. We keep the same `PipeWire.NET.Generated` namespace and the same
+// elsewhere. We keep the same `PipeWire.NET.Interop` namespace and the same
 // `static partial class Native` so the rest of this assembly sees these symbols seamlessly
-// alongside generated declarations (e.g. `Native.PW_VERSION_STREAM_EVENTS`).
+// alongside generated declarations (e.g. `Native.pw_stream_new`).
 //
-// Contents:
-//   - PW_VERSION_* and PW_ID_* macro constants. ClangSharp 21 cannot translate
-//     function-like macros + CompoundLiteralExpr macros like PW_MAP_RANGE_INIT
-//     prevent generate-macro-bindings from running at all.
+// Contents: what cannot be generated. The PW_VERSION_* interface versions and the PW_ID_* /
+// SPA_ID_INVALID sentinels used to be copied here; they are generated now (NativeConstants), and the
+// copy held one version name upstream never had.
 //   - SPA interface VTBL dispatch helpers (pw_core_get_registry,
 //     pw_registry_add_listener) - these are C macros, not exported symbols.
 //
@@ -25,126 +24,6 @@ namespace PipeWire.NET.Interop;
 
 internal static unsafe partial class Native
 {
-    // - Property keys (pipewire/keys.h) -
-    // These are #define string macros; ClangSharp can't emit them without
-    // generate-macro-bindings (fatal on this header set - see pipewire.rsp).
-    // Hand-declared here. Most are stable across 0.3.x and 1.x; any that are not
-    // carry a note naming the version that introduced them.
-
-    /// <summary><c>factory.name</c> - name of a factory to use for node creation.</summary>
-    internal const string PW_KEY_FACTORY_NAME   = "factory.name";
-    /// <summary><c>media.class</c> - node media class (e.g. "Video/Source").</summary>
-    internal const string PW_KEY_MEDIA_CLASS    = "media.class";
-    /// <summary><c>media.type</c> - "Video" / "Audio".</summary>
-    internal const string PW_KEY_MEDIA_TYPE     = "media.type";
-    /// <summary><c>media.category</c> - "Capture" / "Playback" / "Duplex".</summary>
-    internal const string PW_KEY_MEDIA_CATEGORY = "media.category";
-    /// <summary><c>media.role</c> - "Camera" / "Music" / "Screen" / ...</summary>
-    internal const string PW_KEY_MEDIA_ROLE     = "media.role";
-    /// <summary><c>node.id</c> - node identifier.</summary>
-    internal const string PW_KEY_NODE_ID        = "node.id";
-    /// <summary><c>node.name</c> - stable node name.</summary>
-    internal const string PW_KEY_NODE_NAME      = "node.name";
-    /// <summary><c>node.description</c> - human-readable node name.</summary>
-    internal const string PW_KEY_NODE_DESCRIPTION = "node.description";
-    /// <summary><c>node.nick</c> - short display name.</summary>
-    internal const string PW_KEY_NODE_NICK      = "node.nick";
-    /// <summary><c>port.name</c> - stable port name.</summary>
-    internal const string PW_KEY_PORT_NAME      = "port.name";
-    /// <summary><c>port.direction</c> - port direction.</summary>
-    internal const string PW_KEY_PORT_DIRECTION = "port.direction";
-    /// <summary><c>port.monitor</c> - if this is a monitor port.</summary>
-    internal const string PW_KEY_PORT_MONITOR   = "port.monitor";
-    /// <summary><c>port.exclusive</c> - link this port only once. Since PipeWire 1.6.0.</summary>
-    internal const string PW_KEY_PORT_EXCLUSIVE = "port.exclusive";
-    /// <summary><c>link.input.node</c> - the node a link feeds into.</summary>
-    internal const string PW_KEY_LINK_INPUT_NODE  = "link.input.node";
-    /// <summary><c>link.input.port</c> - the port a link feeds into.</summary>
-    internal const string PW_KEY_LINK_INPUT_PORT  = "link.input.port";
-    /// <summary><c>link.output.node</c> - the node a link starts from.</summary>
-    internal const string PW_KEY_LINK_OUTPUT_NODE = "link.output.node";
-    /// <summary><c>link.output.port</c> - the port a link starts from.</summary>
-    internal const string PW_KEY_LINK_OUTPUT_PORT = "link.output.port";
-    /// <summary><c>object.linger</c> - keep the object alive after this client disconnects.</summary>
-    internal const string PW_KEY_OBJECT_LINGER    = "object.linger";
-    /// <summary><c>link.passive</c> - the link does not keep its endpoints active when idle.</summary>
-    internal const string PW_KEY_LINK_PASSIVE     = "link.passive";
-    /// <summary><c>target.object</c> - bind a stream to a specific node by serial/name.</summary>
-    internal const string PW_KEY_TARGET_OBJECT  = "target.object";
-
-    // - SPA property keys (spa/param/audio/raw.h, spa/support/plugin.h) -
-    // Distinct namespace from PW_KEY_*: these have no pipewire/keys.h equivalent.
-
-    /// <summary><c>audio.position</c> - channel layout, e.g. "[ FL FR ]".</summary>
-    internal const string SPA_KEY_AUDIO_POSITION = "audio.position";
-
-    // - Interface type ids -
-
-    internal const string PW_TYPE_INFO_INTERFACE_BASE = "PipeWire:Interface:";
-    internal const string PW_TYPE_INTERFACE_NODE = PW_TYPE_INFO_INTERFACE_BASE + "Node";
-    internal const string PW_TYPE_INTERFACE_PORT = PW_TYPE_INFO_INTERFACE_BASE + "Port";
-    internal const string PW_TYPE_INTERFACE_LINK = PW_TYPE_INFO_INTERFACE_BASE + "Link";
-    internal const string PW_TYPE_INTERFACE_DEVICE = PW_TYPE_INFO_INTERFACE_BASE + "Device";
-    internal const string PW_TYPE_INTERFACE_CLIENT = PW_TYPE_INFO_INTERFACE_BASE + "Client";
-    internal const string PW_TYPE_INTERFACE_FACTORY = PW_TYPE_INFO_INTERFACE_BASE + "Factory";
-    internal const string PW_TYPE_INTERFACE_MODULE = PW_TYPE_INFO_INTERFACE_BASE + "Module";
-    internal const string PW_TYPE_INTERFACE_METADATA = PW_TYPE_INFO_INTERFACE_BASE + "Metadata";
-    internal const string PW_TYPE_INTERFACE_PROFILER = PW_TYPE_INFO_INTERFACE_BASE + "Profiler";
-    internal const string PW_TYPE_INTERFACE_SECURITY_CONTEXT = PW_TYPE_INFO_INTERFACE_BASE + "SecurityContext";
-
-    // - Sentinel ids -
-
-    /// <summary>Wildcard node id - passed to pw_stream_connect to let the daemon auto-select.</summary>
-    internal const uint PW_ID_ANY  = 0xFFFFFFFFu;
-
-    /// <summary>The well-known id of the PipeWire core object.</summary>
-    internal const uint PW_ID_CORE = 0u;
-
-    /// <summary>Placeholder ID for when a proxy id could not be fetched.</summary>
-    internal const uint SPA_ID_INVALID = 0xffffffffu;
-
-    // - Interface versions (struct pw_*_methods.version / pw_*_events.version) -
-
-    internal const uint PW_VERSION_CLIENT          = 3;
-    internal const uint PW_VERSION_CLIENT_EVENTS   = 0;
-    internal const uint PW_VERSION_CLIENT_METHODS  = 0;
-    internal const uint PW_VERSION_CONTEXT_EVENTS  = 1;
-    internal const uint PW_VERSION_CONTROL_EVENTS  = 0;
-    internal const uint PW_VERSION_CORE            = 4;
-    internal const uint PW_VERSION_CORE_EVENTS     = 1;
-    internal const uint PW_VERSION_CORE_METHODS    = 0;
-    internal const uint PW_VERSION_REGISTRY         = 3;
-    internal const uint PW_VERSION_REGISTRY_EVENTS  = 0;
-    internal const uint PW_VERSION_REGISTRY_METHODS = 0;
-    internal const uint PW_VERSION_DEVICE           = 3;
-    internal const uint PW_VERSION_DEVICE_EVENTS    = 0;
-    internal const uint PW_VERSION_FACTORY          = 3;
-    internal const uint PW_VERSION_FACTORY_EVENTS   = 0;
-    internal const uint PW_VERSION_GLOBAL_EVENTS    = 0;
-    internal const uint PW_VERSION_LINK             = 3;
-    internal const uint PW_VERSION_LINK_EVENTS      = 0;
-    internal const uint PW_VERSION_MODULE           = 3;
-    internal const uint PW_VERSION_MODULE_EVENTS    = 0;
-    internal const uint PW_VERSION_NODE             = 3;
-    internal const uint PW_VERSION_PORT             = 3;
-    internal const uint PW_VERSION_PORT_EVENTS      = 0;
-    internal const uint PW_VERSION_PROXY_EVENTS     = 1;
-    internal const uint PW_VERSION_STREAM_EVENTS    = 2;
-    internal const uint PW_VERSION_FILTER_EVENTS    = 1;
-    internal const uint PW_VERSION_NODE_EVENTS      = 0;
-    internal const uint PW_VERSION_NODE_METHODS     = 0;
-    internal const uint PW_VERSION_DEVICE_METHODS   = 0;
-    internal const uint PW_VERSION_CLIENT_METHODS2  = 0;
-    internal const uint PW_VERSION_METADATA         = 3;
-    internal const uint PW_VERSION_IMPL_METADATA_EVENTS = 0;
-    internal const uint PW_VERSION_PROFILER         = 3;
-    internal const uint PW_VERSION_PROFILER_EVENTS  = 0;
-    internal const uint PW_VERSION_SECURITY_CONTEXT = 3;
-    internal const uint PW_VERSION_METADATA_EVENTS  = 0;
-    internal const uint PW_VERSION_METADATA_METHODS = 0;
-    internal const uint PW_VERSION_DATA_LOOP_EVENTS = 0;
-    internal const uint PW_VERSION_MAIN_LOOP_EVENTS = 0;
-
     // - SPA interface dispatch -
     // The PipeWire C API exposes many methods as macros that dispatch through
     // an SPA interface VTBL (struct spa_interface { spa_callbacks { funcs, data } }).
@@ -167,26 +46,98 @@ internal static unsafe partial class Native
         userData = iface->cb.data;
     }
 
+    // - Loop control -
+    //
+    // pw_loop_get_fd and friends are PW_API_LOOP_IMPL: static inlines that dispatch through the
+    // loop's spa_loop_control interface. The generator is set to funcs-with-body=false, so it
+    // cannot emit them and they are dispatched here instead - the same walk as every other SPA
+    // method above, over the now-generated spa_loop_control_methods vtable.
+
     /// <summary>
-    /// SPA encodes "request accepted, answer comes later" in the return value rather than in a
-    /// separate channel: bit 30 set means the low 30 bits are the request's sequence number.
+    /// The descriptor that becomes readable when the loop has work pending.
     /// </summary>
     /// <remarks>
-    /// This is why testing a method result for <c>0</c> or for <c>&lt; 0</c> proves nothing about an
-    /// asynchronous request - a queued call returns neither. The outcome arrives on the core's
-    /// <c>done</c> or <c>error</c> event carrying the same sequence number.
+    /// What lets a host application drive this loop from its own event loop instead of leaving it
+    /// to a thread of its own: poll this alongside everything else the host already waits on, and
+    /// call <see cref="pw_loop_iterate"/> with a zero timeout when it signals. Upstream's
+    /// <c>gmain</c> example wraps exactly this fd in a GSource.
     /// </remarks>
-    internal const int SPA_ASYNC_BIT = 1 << 30;
+    internal static int pw_loop_get_fd(pw_loop* loop)
+    {
+        if (loop is null || loop->control is null) return -1;
+        GetInterface(loop->control, out spa_loop_control_methods* m, out void* data);
+        return m is null || m->get_fd is null ? -1 : m->get_fd(data);
+    }
 
-    /// <summary>Mask selecting the sequence number out of an async result.</summary>
-    internal const int SPA_ASYNC_SEQ_MASK = SPA_ASYNC_BIT - 1;
+    /// <summary>Dispatches whatever the loop has ready, waiting up to <paramref name="timeoutMs"/>.</summary>
+    /// <remarks>A zero timeout is the non-blocking form a host loop uses after the fd signalled.</remarks>
+    internal static int pw_loop_iterate(pw_loop* loop, int timeoutMs)
+    {
+        if (loop is null || loop->control is null) return -1;
+        GetInterface(loop->control, out spa_loop_control_methods* m, out void* data);
+        return m is null || m->iterate is null ? -1 : m->iterate(data, timeoutMs);
+    }
+
+    /// <summary>Claims the loop for the calling thread. Paired with <see cref="pw_loop_leave"/>.</summary>
+    /// <remarks>
+    /// SPA requires enter and leave once each from the thread that will iterate, so the loop knows
+    /// which thread its callbacks run on. Skipping it makes every "am I on the loop thread" check
+    /// inside PipeWire answer wrongly.
+    /// </remarks>
+    internal static void pw_loop_enter(pw_loop* loop)
+    {
+        if (loop is null || loop->control is null) return;
+        GetInterface(loop->control, out spa_loop_control_methods* m, out void* data);
+        if (m is not null && m->enter is not null) m->enter(data);
+    }
+
+    /// <inheritdoc cref="pw_loop_enter"/>
+    internal static void pw_loop_leave(pw_loop* loop)
+    {
+        if (loop is null || loop->control is null) return;
+        GetInterface(loop->control, out spa_loop_control_methods* m, out void* data);
+        if (m is not null && m->leave is not null) m->leave(data);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="func"/> with the loop's lock held, so it cannot overlap that loop's
+    /// own callbacks. Synchronous: <paramref name="func"/> has returned when this does.
+    /// </summary>
+    /// <returns>What <paramref name="func"/> returned, or <c>-ENOTSUP</c> if the loop has no
+    /// <c>locked</c> method.</returns>
+    /// <remarks>
+    /// How upstream changes state a realtime callback reads. <c>spa_node.port_set_io</c> may be
+    /// called while the node is running, and its contract says the change is "normally done by
+    /// synchronizing the port io updates with the data processing loop"; audioconvert does exactly
+    /// that with <c>spa_loop_locked(this->data_loop, do_set_port_io, ...)</c>. Safe from any thread.
+    /// </remarks>
+    internal static int pw_loop_locked(
+        pw_loop* loop,
+        delegate* unmanaged[Cdecl]<spa_loop*, bool, uint, void*, nuint, void*, int> func,
+        void* userData)
+    {
+        if (loop is null || loop->loop is null) return -NativeConstants.EOPNOTSUPP;
+        GetInterface(loop->loop, out spa_loop_methods* m, out void* data);
+        if (m is null || m->locked is null) return -NativeConstants.EOPNOTSUPP;
+
+        return m->locked(data, func, NativeConstants.SPA_ID_INVALID, null, 0, userData);
+    }
 
     /// <summary>True when a result is a queued request rather than a completed one.</summary>
+    /// <remarks>
+    /// SPA encodes "request accepted, answer comes later" in the return value rather than in a
+    /// separate channel: <c>SPA_ASYNC_BIT</c> set means the low bits are the request's sequence
+    /// number. This is why testing a method result for <c>0</c> or for <c>&lt; 0</c> proves nothing
+    /// about an asynchronous request - a queued call returns neither. The outcome arrives on the
+    /// core's <c>done</c> or <c>error</c> event carrying the same sequence number.
+    /// Hand-written because upstream spells it as a function-like macro, which cannot be generated;
+    /// the constants it tests are the generated ones.
+    /// </remarks>
     internal static bool SPA_RESULT_IS_ASYNC(int result) =>
-        (result & ~SPA_ASYNC_SEQ_MASK) == SPA_ASYNC_BIT;
+        (result & NativeConstants.SPA_ASYNC_MASK) == NativeConstants.SPA_ASYNC_BIT;
 
     /// <summary>The sequence number carried by an async result.</summary>
-    internal static int SPA_RESULT_ASYNC_SEQ(int result) => result & SPA_ASYNC_SEQ_MASK;
+    internal static int SPA_RESULT_ASYNC_SEQ(int result) => result & NativeConstants.SPA_ASYNC_SEQ_MASK;
 
     /// <summary>
     /// Calls <c>pw_core_methods.get_registry</c> via SPA interface dispatch.
@@ -196,7 +147,7 @@ internal static unsafe partial class Native
     {
         GetInterface(core, out pw_core_methods* methods, out void* data);
         if (methods is null || methods->get_registry is null)
-            throw new PipeWireInteropException("pw_core_get_registry", -38);   // ENOSYS
+            throw new PipeWireInteropException("pw_core_get_registry", -NativeConstants.ENOSYS);
         return methods->get_registry(data, version, userDataSize);
     }
 
@@ -238,7 +189,7 @@ internal static unsafe partial class Native
     {
         GetInterface(core, out pw_core_methods* methods, out void* data);
         if (methods is null || methods->create_object is null)
-            throw new PipeWireInteropException("pw_core_create_object", -38);  // ENOSYS
+            throw new PipeWireInteropException("pw_core_create_object", -NativeConstants.ENOSYS);
         return (pw_proxy*)methods->create_object(data, factoryName, type, version, props, userDataSize);
     }
 
@@ -558,7 +509,7 @@ internal static unsafe partial class Native
     /// <remarks>
     /// Entries are strings, not pods - which is why the metadata interface needs none of the POD
     /// machinery the parameter interfaces do. The subject is the id the entry is about, and
-    /// <see cref="PW_ID_CORE"/> is the subject for daemon-wide settings such as the default sink.
+    /// <see cref="NativeConstants.PW_ID_CORE"/> is the subject for daemon-wide settings such as the default sink.
     /// </remarks>
     internal static int pw_metadata_set_property(
         pw_metadata* metadata, uint subject, sbyte* key, sbyte* type, sbyte* value)
@@ -592,8 +543,27 @@ internal static unsafe partial class Native
     /// quiet, and the peer waits for a negotiation that will never finish.
     /// </para>
     /// </remarks>
-    [DllImport("libpipewire-0.3", EntryPoint = "pw_stream_set_error", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport("libpipewire-0.3", EntryPoint = "pw_stream_set_error", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern unsafe int pw_stream_set_error_raw(pw_stream* stream, int res, sbyte* error);
+
+    /// <summary>
+    /// Puts the filter into the error state and tells the daemon why.
+    /// </summary>
+    /// <remarks>
+    /// Variadic in C for the same reason as the stream version, and skipped by the generator for
+    /// the same reason. A filter that cannot proceed and says nothing leaves its peers waiting on
+    /// a graph cycle that will not come.
+    /// </remarks>
+    [DllImport("libpipewire-0.3", EntryPoint = "pw_filter_set_error", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern unsafe int pw_filter_set_error_raw(pw_filter* filter, int res, sbyte* error);
+
+    /// <summary>Reports a filter error, with the message escaped so it cannot be read as a format.</summary>
+    internal static unsafe int pw_filter_set_error(pw_filter* filter, int res, string message)
+    {
+        byte[] utf8 = System.Text.Encoding.UTF8.GetBytes(message.Replace("%", "%%") + '\0');
+        fixed (byte* p = utf8)
+            return pw_filter_set_error_raw(filter, res, (sbyte*)p);
+    }
 
     /// <summary>Reports a stream error, with the message escaped so it cannot be read as a format.</summary>
     internal static unsafe int pw_stream_set_error(pw_stream* stream, int res, string message)
@@ -630,5 +600,51 @@ internal static unsafe partial class Native
 
         if (hook->removed is not null)
             hook->removed(hook);
+    }
+
+    /// <summary>Adds a timer source to a loop, returning null when the loop cannot be dispatched.</summary>
+    internal static unsafe spa_source* spa_loop_utils_add_timer(
+        spa_loop_utils* utils, delegate* unmanaged[Cdecl]<void*, ulong, void> func, void* data)
+    {
+        spa_loop_utils_methods* m = LoopUtilsMethods(utils);
+        if (m is null || m->add_timer is null) return null;
+        return m->add_timer(utils->iface.cb.data, func, data);
+    }
+
+    /// <summary>Arms or disarms a timer source.</summary>
+    /// <returns>0 on success, a negative errno otherwise.</returns>
+    internal static unsafe int spa_loop_utils_update_timer(
+        spa_loop_utils* utils, spa_source* source, PosixTimespec* value, PosixTimespec* interval, bool absolute)
+    {
+        spa_loop_utils_methods* m = LoopUtilsMethods(utils);
+        if (m is null || m->update_timer is null) return -NativeConstants.EOPNOTSUPP;
+        return m->update_timer(utils->iface.cb.data, source, value, interval, absolute);
+    }
+
+    /// <summary>Destroys a source previously added to a loop.</summary>
+    internal static unsafe void spa_loop_utils_destroy_source(spa_loop_utils* utils, spa_source* source)
+    {
+        spa_loop_utils_methods* m = LoopUtilsMethods(utils);
+        if (m is null || m->destroy_source is null) return;
+        m->destroy_source(utils->iface.cb.data, source);
+    }
+
+    /// <summary>
+    /// The dispatch table, or null when it is missing or announces a layout this does not know.
+    /// </summary>
+    /// <remarks>
+    /// The table's layout is generated from spa/support/loop.h, which is only correct for the
+    /// version it was generated against. A future PipeWire that inserts a member would leave every
+    /// later slot naming a different function - a jump through a wrong pointer rather than anything
+    /// that fails cleanly - so an unknown version is refused, which turns that into a no-op.
+    /// </remarks>
+    private static unsafe spa_loop_utils_methods* LoopUtilsMethods(spa_loop_utils* utils)
+    {
+        if (utils is null) return null;
+
+        var m = (spa_loop_utils_methods*)utils->iface.cb.funcs;
+        if (m is null || m->version != NativeConstants.SPA_VERSION_LOOP_UTILS_METHODS) return null;
+
+        return m;
     }
 }

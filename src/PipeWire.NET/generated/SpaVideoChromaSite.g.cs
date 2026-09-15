@@ -14,6 +14,7 @@ using PipeWire.NET.Interop;
 namespace PipeWire.NET.Spa;
 
 [NativeTypeName("unsigned int")]
+[System.Flags]
 public enum SpaVideoChromaSite : uint
 {
     Unknown = 0,

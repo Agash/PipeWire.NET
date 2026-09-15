@@ -136,7 +136,7 @@ internal sealed class CoreSync : IDisposable
         // The handle is freed on the completion path, which always runs.
         _self = GCHandle.Alloc(this, GCHandleType.Normal);
         _events = (pw_core_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_core_events));
-        _events->version = Native.PW_VERSION_CORE_EVENTS;
+        _events->version = NativeConstants.PW_VERSION_CORE_EVENTS;
         _events->done = &OnDone;
         _events->error = &OnError;
         _hook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
@@ -161,7 +161,7 @@ internal sealed class CoreSync : IDisposable
             if (added < 0)
                 throw new PipeWireInteropException("pw_core_add_listener", added);
 
-            _seq = Native.pw_core_sync(_ctx.CoreHandle, Native.PW_ID_CORE, 0);
+            _seq = Native.pw_core_sync(_ctx.CoreHandle, NativeConstants.PW_ID_CORE, 0);
             if (_seq < 0)
                 throw new PipeWireInteropException("pw_core_sync", _seq);
         }
@@ -188,7 +188,7 @@ internal sealed class CoreSync : IDisposable
             if (Native.SPA_RESULT_IS_ASYNC(rc))
                 _watchedSeq = Native.SPA_RESULT_ASYNC_SEQ(rc);
 
-            _seq = Native.pw_core_sync(_ctx.CoreHandle, Native.PW_ID_CORE, 0);
+            _seq = Native.pw_core_sync(_ctx.CoreHandle, NativeConstants.PW_ID_CORE, 0);
             if (_seq < 0)
                 throw new PipeWireInteropException("pw_core_sync", _seq);
         }
@@ -275,10 +275,10 @@ internal sealed class CoreSync : IDisposable
     /// is a refusal.
     /// </remarks>
     private static bool IsConnectionFatal(int result) => result is
-        -32 or    // EPIPE
-        -103 or   // ECONNABORTED
-        -104 or   // ECONNRESET
-        -107;     // ENOTCONN
+        -NativeConstants.EPIPE or
+        -NativeConstants.ECONNABORTED or
+        -NativeConstants.ECONNRESET or
+        -NativeConstants.ENOTCONN;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnDone(void* data, uint id, int seq)
@@ -287,7 +287,7 @@ internal sealed class CoreSync : IDisposable
         {
             if (data is null) return;
             if (GCHandle.FromIntPtr((nint)data).Target is CoreSync self &&
-                id == Native.PW_ID_CORE && seq == self._seq)
+                id == NativeConstants.PW_ID_CORE && seq == self._seq)
                 self._done.TrySetResult();
         }
         catch (Exception)

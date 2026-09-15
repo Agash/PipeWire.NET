@@ -12,6 +12,7 @@
 namespace PipeWire.NET.Interop;
 
 [NativeTypeName("unsigned int")]
+[System.Flags]
 internal enum PipeWireMemmapFlags : uint
 {
     None = 0,

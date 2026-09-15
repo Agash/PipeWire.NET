@@ -770,6 +770,47 @@ internal static unsafe partial class Native
     internal static extern bool pw_thread_loop_in_thread([NativeTypeName("struct pw_thread_loop *")] pw_thread_loop* loop);
 
     [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("struct pw_data_loop *")]
+    internal static extern pw_data_loop* pw_data_loop_new([NativeTypeName("const struct spa_dict *")] spa_dict* props);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_data_loop_add_listener([NativeTypeName("struct pw_data_loop *")] pw_data_loop* loop, [NativeTypeName("struct spa_hook *")] spa_hook* listener, [NativeTypeName("const struct pw_data_loop_events *")] pw_data_loop_events* events, void* data);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_data_loop_wait([NativeTypeName("struct pw_data_loop *")] pw_data_loop* loop, int timeout);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_data_loop_exit([NativeTypeName("struct pw_data_loop *")] pw_data_loop* loop);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("struct pw_loop *")]
+    internal static extern pw_loop* pw_data_loop_get_loop([NativeTypeName("struct pw_data_loop *")] pw_data_loop* loop);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("const char *")]
+    internal static extern sbyte* pw_data_loop_get_name([NativeTypeName("struct pw_data_loop *")] pw_data_loop* loop);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("const char *")]
+    internal static extern sbyte* pw_data_loop_get_class([NativeTypeName("struct pw_data_loop *")] pw_data_loop* loop);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_data_loop_destroy([NativeTypeName("struct pw_data_loop *")] pw_data_loop* loop);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_data_loop_start([NativeTypeName("struct pw_data_loop *")] pw_data_loop* loop);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_data_loop_stop([NativeTypeName("struct pw_data_loop *")] pw_data_loop* loop);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("_Bool")]
+    internal static extern bool pw_data_loop_in_thread([NativeTypeName("struct pw_data_loop *")] pw_data_loop* loop);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_data_loop_invoke([NativeTypeName("struct pw_data_loop *")] pw_data_loop* loop, [NativeTypeName("spa_invoke_func_t")] delegate* unmanaged[Cdecl]<spa_loop*, bool, uint, void*, nuint, void*, int> func, [NativeTypeName("uint32_t")] uint seq, [NativeTypeName("const void *")] void* data, [NativeTypeName("size_t")] nuint size, [NativeTypeName("_Bool")] bool block, void* user_data);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void pw_init(int* argc, [NativeTypeName("char **[]")] sbyte*** argv);
 
     [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -826,6 +867,116 @@ internal static unsafe partial class Native
     internal static extern int pw_unload_spa_handle([NativeTypeName("struct spa_handle *")] spa_handle* handle);
 
     [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("struct pw_resource *")]
+    internal static extern pw_resource* pw_resource_new([NativeTypeName("struct pw_impl_client *")] pw_impl_client* client, [NativeTypeName("uint32_t")] uint id, [NativeTypeName("uint32_t")] uint permissions, [NativeTypeName("const char *")] sbyte* type, [NativeTypeName("uint32_t")] uint version, [NativeTypeName("size_t")] nuint user_data_size);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_resource_destroy([NativeTypeName("struct pw_resource *")] pw_resource* resource);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_resource_remove([NativeTypeName("struct pw_resource *")] pw_resource* resource);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("struct pw_impl_client *")]
+    internal static extern pw_impl_client* pw_resource_get_client([NativeTypeName("struct pw_resource *")] pw_resource* resource);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("uint32_t")]
+    internal static extern uint pw_resource_get_id([NativeTypeName("struct pw_resource *")] pw_resource* resource);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("uint32_t")]
+    internal static extern uint pw_resource_get_permissions([NativeTypeName("struct pw_resource *")] pw_resource* resource);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("const char *")]
+    internal static extern sbyte* pw_resource_get_type([NativeTypeName("struct pw_resource *")] pw_resource* resource, [NativeTypeName("uint32_t *")] uint* version);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("struct pw_protocol *")]
+    internal static extern pw_protocol* pw_resource_get_protocol([NativeTypeName("struct pw_resource *")] pw_resource* resource);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void* pw_resource_get_user_data([NativeTypeName("struct pw_resource *")] pw_resource* resource);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_resource_add_listener([NativeTypeName("struct pw_resource *")] pw_resource* resource, [NativeTypeName("struct spa_hook *")] spa_hook* listener, [NativeTypeName("const struct pw_resource_events *")] pw_resource_events* events, void* data);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_resource_add_object_listener([NativeTypeName("struct pw_resource *")] pw_resource* resource, [NativeTypeName("struct spa_hook *")] spa_hook* listener, [NativeTypeName("const void *")] void* funcs, void* data);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_resource_ping([NativeTypeName("struct pw_resource *")] pw_resource* resource, int seq);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_resource_ref([NativeTypeName("struct pw_resource *")] pw_resource* resource);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_resource_unref([NativeTypeName("struct pw_resource *")] pw_resource* resource);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_resource_set_bound_id([NativeTypeName("struct pw_resource *")] pw_resource* resource, [NativeTypeName("uint32_t")] uint global_id);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("uint32_t")]
+    internal static extern uint pw_resource_get_bound_id([NativeTypeName("struct pw_resource *")] pw_resource* resource);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_resource_error([NativeTypeName("struct pw_resource *")] pw_resource* resource, int res, [NativeTypeName("const char *")] sbyte* error);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("struct spa_hook_list *")]
+    internal static extern spa_hook_list* pw_resource_get_object_listeners([NativeTypeName("struct pw_resource *")] pw_resource* resource);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("const struct pw_protocol_marshal *")]
+    internal static extern pw_protocol_marshal* pw_resource_get_marshal([NativeTypeName("struct pw_resource *")] pw_resource* resource);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_resource_install_marshal([NativeTypeName("struct pw_resource *")] pw_resource* resource, [NativeTypeName("_Bool")] bool implementor);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("struct pw_impl_factory *")]
+    internal static extern pw_impl_factory* pw_context_create_factory([NativeTypeName("struct pw_context *")] pw_context* context, [NativeTypeName("const char *")] sbyte* name, [NativeTypeName("const char *")] sbyte* type, [NativeTypeName("uint32_t")] uint version, [NativeTypeName("struct pw_properties *")] pw_properties* properties, [NativeTypeName("size_t")] nuint user_data_size);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("const struct pw_properties *")]
+    internal static extern pw_properties* pw_impl_factory_get_properties([NativeTypeName("struct pw_impl_factory *")] pw_impl_factory* factory);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("const struct pw_factory_info *")]
+    internal static extern pw_factory_info* pw_impl_factory_get_info([NativeTypeName("struct pw_impl_factory *")] pw_impl_factory* factory);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_impl_factory_update_properties([NativeTypeName("struct pw_impl_factory *")] pw_impl_factory* factory, [NativeTypeName("const struct spa_dict *")] spa_dict* dict);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_impl_factory_register([NativeTypeName("struct pw_impl_factory *")] pw_impl_factory* factory, [NativeTypeName("struct pw_properties *")] pw_properties* properties);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_impl_factory_destroy([NativeTypeName("struct pw_impl_factory *")] pw_impl_factory* factory);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void* pw_impl_factory_get_user_data([NativeTypeName("struct pw_impl_factory *")] pw_impl_factory* factory);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("struct pw_global *")]
+    internal static extern pw_global* pw_impl_factory_get_global([NativeTypeName("struct pw_impl_factory *")] pw_impl_factory* factory);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_impl_factory_add_listener([NativeTypeName("struct pw_impl_factory *")] pw_impl_factory* factory, [NativeTypeName("struct spa_hook *")] spa_hook* listener, [NativeTypeName("const struct pw_impl_factory_events *")] pw_impl_factory_events* events, void* data);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_impl_factory_set_implementation([NativeTypeName("struct pw_impl_factory *")] pw_impl_factory* factory, [NativeTypeName("const struct pw_impl_factory_implementation *")] pw_impl_factory_implementation* implementation, void* data);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void* pw_impl_factory_create_object([NativeTypeName("struct pw_impl_factory *")] pw_impl_factory* factory, [NativeTypeName("struct pw_resource *")] pw_resource* resource, [NativeTypeName("const char *")] sbyte* type, [NativeTypeName("uint32_t")] uint version, [NativeTypeName("struct pw_properties *")] pw_properties* properties, [NativeTypeName("uint32_t")] uint new_id);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("struct pw_impl_factory *")]
+    internal static extern pw_impl_factory* pw_context_find_factory([NativeTypeName("struct pw_context *")] pw_context* context, [NativeTypeName("const char *")] sbyte* name);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: NativeTypeName("struct pw_impl_module *")]
     internal static extern pw_impl_module* pw_context_load_module([NativeTypeName("struct pw_context *")] pw_context* context, [NativeTypeName("const char *")] sbyte* name, [NativeTypeName("const char *")] sbyte* args, [NativeTypeName("struct pw_properties *")] pw_properties* properties);
 
@@ -856,6 +1007,88 @@ internal static unsafe partial class Native
 
     [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void pw_impl_module_schedule_destroy([NativeTypeName("struct pw_impl_module *")] pw_impl_module* module);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("struct pw_impl_node *")]
+    internal static extern pw_impl_node* pw_context_create_node([NativeTypeName("struct pw_context *")] pw_context* context, [NativeTypeName("struct pw_properties *")] pw_properties* properties, [NativeTypeName("size_t")] nuint user_data_size);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_impl_node_register([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node, [NativeTypeName("struct pw_properties *")] pw_properties* properties);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_impl_node_destroy([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("const struct pw_node_info *")]
+    internal static extern pw_node_info* pw_impl_node_get_info([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void* pw_impl_node_get_user_data([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("struct pw_context *")]
+    internal static extern pw_context* pw_impl_node_get_context([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("struct pw_global *")]
+    internal static extern pw_global* pw_impl_node_get_global([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("const struct pw_properties *")]
+    internal static extern pw_properties* pw_impl_node_get_properties([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_impl_node_update_properties([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node, [NativeTypeName("const struct spa_dict *")] spa_dict* dict);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_impl_node_set_implementation([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node, [NativeTypeName("struct spa_node *")] spa_node* spa_node);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("struct spa_node *")]
+    internal static extern spa_node* pw_impl_node_get_implementation([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_impl_node_add_listener([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node, [NativeTypeName("struct spa_hook *")] spa_hook* listener, [NativeTypeName("const struct pw_impl_node_events *")] pw_impl_node_events* events, void* data);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_impl_node_add_rt_listener([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node, [NativeTypeName("struct spa_hook *")] spa_hook* listener, [NativeTypeName("const struct pw_impl_node_rt_events *")] pw_impl_node_rt_events* events, void* data);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void pw_impl_node_remove_rt_listener([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node, [NativeTypeName("struct spa_hook *")] spa_hook* listener);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_impl_node_for_each_port([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node, [NativeTypeName("enum spa_direction")] SpaDirection direction, [NativeTypeName("int (*)(void *, struct pw_impl_port *)")] delegate* unmanaged[Cdecl]<void*, pw_impl_port*, int> callback, void* data);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_impl_node_for_each_param([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node, int seq, [NativeTypeName("uint32_t")] uint param_id, [NativeTypeName("uint32_t")] uint index, [NativeTypeName("uint32_t")] uint max, [NativeTypeName("const struct spa_pod *")] spa_pod* filter, [NativeTypeName("int (*)(void *, int, uint32_t, uint32_t, uint32_t, struct spa_pod *)")] delegate* unmanaged[Cdecl]<void*, int, uint, uint, uint, spa_pod*, int> callback, void* data);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("struct pw_impl_port *")]
+    internal static extern pw_impl_port* pw_impl_node_find_port([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node, [NativeTypeName("enum spa_direction")] SpaDirection direction, [NativeTypeName("uint32_t")] uint port_id);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("uint32_t")]
+    internal static extern uint pw_impl_node_get_free_port_id([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node, [NativeTypeName("enum spa_direction")] SpaDirection direction);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("struct pw_impl_port *")]
+    internal static extern pw_impl_port* pw_impl_node_get_free_port([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node, [NativeTypeName("enum spa_direction")] SpaDirection direction);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_impl_node_initialized([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_impl_node_set_active([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node, [NativeTypeName("_Bool")] bool active);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: NativeTypeName("_Bool")]
+    internal static extern bool pw_impl_node_is_active([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_impl_node_send_command([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node, [NativeTypeName("const struct spa_command *")] spa_command* command);
+
+    [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int pw_impl_node_set_param([NativeTypeName("struct pw_impl_node *")] pw_impl_node* node, [NativeTypeName("uint32_t")] uint id, [NativeTypeName("uint32_t")] uint flags, [NativeTypeName("const struct spa_pod *")] spa_pod* param3);
 
     [DllImport("libpipewire-0.3", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: NativeTypeName("struct pw_impl_metadata *")]
