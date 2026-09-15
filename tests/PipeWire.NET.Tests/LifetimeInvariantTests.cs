@@ -1,6 +1,8 @@
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
+using PipeWire.NET.Media;
+using PipeWire.NET.Media.Streams;
 
 namespace PipeWire.NET.Tests;
 
@@ -251,7 +253,7 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
             long inside = 0;
 
             PipeWireFilter filter = PipeWireFilter.Create(ctx, $"pwnet_cb_{Environment.ProcessId}_{round}");
-            filter.ProcessCallback = (f, samples) =>
+            filter.ProcessCallback = (f, samples, in _) =>
             {
                 Interlocked.Increment(ref inside);
                 Interlocked.Increment(ref entered);
@@ -280,5 +282,81 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
             await registry.WaitForInitialEnumerationAsync(cts.Token);
             Assert.IsTrue(registry.Current.Version > 0);
         }
+    }
+
+    /// <summary>
+    /// A stream whose node another client destroys reports it, and everything done to it afterwards
+    /// is safe: no throw from the calls, no touch of what the daemon took away.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The ordering the stream core's lifetime argument depends on. <c>pw_stream</c>'s own
+    /// <c>destroy</c> event only fires from <c>pw_stream_destroy</c>, which this library calls; what
+    /// the daemon can do first is destroy the stream's node, which removes the client-node proxy
+    /// under a <c>pw_stream</c> that is still alive here. The core does not listen for
+    /// <c>destroy</c> because the stream pointer is read through the owner that disposal clears,
+    /// and upstream's <c>pw_stream_destroy</c> cleans the hook list itself. This drives exactly that
+    /// case and then every call a caller could still make.
+    /// </para>
+    /// <para>
+    /// The context must survive it too: another stream created on it afterwards has to stream.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task AStreamWhoseNodeTheDaemonDestroys_ReportsItAndStaysSafeToUse()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget * 2);
+
+        await using var ctx = new PipeWireContext("pwnet-destroyed-stream", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+        await using var other = new PipeWireContext("pwnet-destroyer", ConsoleTestLoggerFactory.Instance);
+        await other.StartAsync(cts.Token);
+        await using var registry = new PipeWireRegistry(other);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+
+        var states = new List<PipeWireStreamState>();
+        var output = new PipeWireAudioOutput(ctx, "pwnet-destroyed-stream-src", 48000, 1, AudioSampleFormat.F32Le);
+        output.FillSamples += (_, samples, _, _, _) =>
+        {
+            samples.Clear();
+            return samples.Length;
+        };
+        output.StateChanged += (_, _, now) => { lock (states) states.Add(now); };
+        output.Connect();
+
+        uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
+        await output.WaitForStreamingAsync(cts.Token);
+
+        await registry.DestroyGlobalAsync(nodeId, cts.Token);
+
+        bool reported = false;
+        for (var i = 0; i < 100 && !reported; i++)
+        {
+            lock (states) reported = states.Any(s => s is PipeWireStreamState.Error or PipeWireStreamState.Unconnected);
+            if (!reported) await Task.Delay(50, cts.Token);
+        }
+
+        Assert.IsTrue(reported, "the stream never reported that its node was destroyed");
+
+        // Everything a caller could still do. None of it may throw for the daemon's reason, and
+        // none of it may reach the proxy the daemon removed.
+        _ = output.UpdateProperties(new Dictionary<string, string> { ["media.name"] = "after" });
+        output.SetRate(1.0);
+        _ = output.DriveAt(TimeSpan.FromMilliseconds(10));
+        _ = output.Queue;
+        _ = output.GraphClock;
+        await output.DisposeAsync();
+        await output.DisposeAsync();
+
+        // And the context it lived on is still usable.
+        await using var next = new PipeWireAudioOutput(ctx, "pwnet-destroyed-stream-next", 48000, 1, AudioSampleFormat.F32Le);
+        next.FillSamples += (_, samples, _, _, _) =>
+        {
+            samples.Clear();
+            return samples.Length;
+        };
+        next.Connect();
+        await next.WaitForStreamingAsync(cts.Token);
     }
 }

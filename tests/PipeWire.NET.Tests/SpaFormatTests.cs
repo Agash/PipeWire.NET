@@ -415,7 +415,7 @@ public sealed class SpaFormatTests : PipeWireTestBase
         spa_buffer buf = new() { n_metas = 1, metas = &meta };
 
         Assert.IsTrue(SpaFormatPod.TryFindSyncTimeline(&buf, out SpaFormatPod.SyncTimeline found));
-        Assert.AreEqual(1u, found.Flags);
+        Assert.AreEqual(SpaMetaSyncTimelineFlags.UnscheduledRelease, found.Flags);
         Assert.AreEqual(10ul, found.AcquirePoint);
         Assert.AreEqual(20ul, found.ReleasePoint);
     }

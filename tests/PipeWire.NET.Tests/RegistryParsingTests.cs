@@ -120,7 +120,7 @@ public sealed class RegistryParsingTests : PipeWireTestBase
         Assert.AreEqual(7u, port.NodeId);
         Assert.AreEqual(expected, port.PortDirection);
         Assert.AreEqual("capture_FL", port.PortName);
-        Assert.IsTrue(port.Monitor);
+        Assert.IsTrue(port.IsMonitor);
         Assert.AreEqual(3u, port.PortIndex);
         Assert.IsTrue(port.IsControl);
         Assert.AreEqual("32 bit float mono audio", port.DspFormat);
@@ -170,7 +170,7 @@ public sealed class RegistryParsingTests : PipeWireTestBase
 
         Assert.AreEqual(8814ul, node.ObjectSerial);
         Assert.AreEqual("kept", node.Properties["some.module.key"]);
-        Assert.AreEqual("n", node.Properties[PipeWireNames.NodeName],
+        Assert.AreEqual("n", node.Properties[PipeWireKeys.PW_KEY_NODE_NAME],
             "a modelled property stays readable through the dictionary too");
         Assert.IsNull(node.Properties.GetValueOrDefault("not.sent"));
     }
@@ -186,7 +186,7 @@ public sealed class RegistryParsingTests : PipeWireTestBase
 
         Assert.IsNotNull(port);
         Assert.IsNull(port!.PortName);
-        Assert.IsFalse(port.Monitor, "an absent port.monitor is false, matching spa_atob");
+        Assert.IsFalse(port.IsMonitor, "an absent port.monitor is false, matching spa_atob");
         Assert.IsNull(port.PortIndex);
         Assert.IsFalse(port.IsControl);
     }
@@ -208,7 +208,7 @@ public sealed class RegistryParsingTests : PipeWireTestBase
             Assert.IsTrue(PipeWireGlobalParser.TryParsePort(
                 42, PipeWirePermissions.None, 3, PipeWireProperties.From(d), out port, out _, out _));
 
-        Assert.AreEqual(expected, port!.Monitor, $"port.monitor '{raw}'");
+        Assert.AreEqual(expected, port!.IsMonitor, $"port.monitor '{raw}'");
     }
 
     // ------------------------------------------------------------------ links
@@ -269,10 +269,10 @@ public sealed class RegistryParsingTests : PipeWireTestBase
         Assert.IsNotNull(link);
         Assert.AreEqual(99u, link!.LinkId);
         // Deliberately asymmetric values: equal ones would hide a swapped pair.
-        Assert.AreEqual(1u, link.LinkOutputNode);
-        Assert.AreEqual(2u, link.LinkOutputPort);
-        Assert.AreEqual(3u, link.LinkInputNode);
-        Assert.AreEqual(4u, link.LinkInputPort);
+        Assert.AreEqual(1u, link.OutputNodeId);
+        Assert.AreEqual(2u, link.OutputPortId);
+        Assert.AreEqual(3u, link.InputNodeId);
+        Assert.AreEqual(4u, link.InputPortId);
     }
 
     // ------------------------------------------------------------------ nodes

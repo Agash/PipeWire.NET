@@ -31,6 +31,18 @@ namespace PipeWire.NET.Tests;
 /// interesting assertion, that the daemon refuses, is the same either way.
 /// </para>
 /// </remarks>
+// Serialised against the rest of the suite deliberately. Updating client permissions while other
+// classes tear objects down races an upstream daemon bug: pw_impl_client_update_permissions ->
+// pw_global_update_permissions -> pw_resource_destroy asserts `!resource->destroyed` and aborts the
+// daemon, taking every other test with it. A client should not be able to do that, so this is a
+// workaround for the daemon, not a fix for anything here.
+// Also quarantined, on evidence rather than suspicion: with the other known trigger excluded
+// (ParameterAndMetadataTests, same category) the daemon still aborted mid-suite on the same
+// assertion, and this is the only remaining suite that applies real permissions. One crash here
+// costs every already-connected test its socket, so this runs in its own leg against its own
+// daemon rather than invalidating the run.
+[TestCategory("KillsTheDaemon")]
+[DoNotParallelize]
 [TestClass]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]

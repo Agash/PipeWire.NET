@@ -51,7 +51,7 @@ public sealed class SpaPodValueTests : PipeWireTestBase
     {
         SpaObject original = Props(
             new SpaProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.5f)),
-            new SpaProperty((uint)SpaProp.Mute, SpaPodPropFlag.Mandatory, new SpaBool(true)),
+            new SpaProperty((uint)SpaProp.Mute, SpaPodPropFlags.Mandatory, new SpaBool(true)),
             new SpaProperty((uint)SpaProp.ChannelVolumes, 0,
                 new SpaArray(SpaType.Float, [new SpaFloat(0.25f), new SpaFloat(0.75f)])));
 
@@ -61,7 +61,7 @@ public sealed class SpaPodValueTests : PipeWireTestBase
         Assert.AreEqual(SpaType.ObjectProps, parsed.ObjectType);
         Assert.AreEqual(SpaParamType.Props, parsed.ObjectId);
         Assert.AreEqual(3, parsed.Properties.Length, "properties must not be reordered or lost");
-        Assert.AreEqual(SpaPodPropFlag.Mandatory, parsed.Find((uint)SpaProp.Mute)!.Flags);
+        Assert.AreEqual(SpaPodPropFlags.Mandatory, parsed.Find((uint)SpaProp.Mute)!.Flags);
         Assert.AreEqual(new SpaFloat(0.5f), parsed[(uint)SpaProp.Volume]);
 
         var channels = (SpaArray)parsed[(uint)SpaProp.ChannelVolumes]!;

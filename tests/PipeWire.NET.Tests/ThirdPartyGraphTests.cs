@@ -135,10 +135,10 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
                 reg, g => g.GetOutputLinksForPort(output.PortId).Length == 1, cts.Token);
 
             PipeWireLink link = linked.GetOutputLinksForPort(output.PortId).Single();
-            Assert.AreEqual(output.PortId, link.LinkOutputPort);
-            Assert.AreEqual(input.PortId, link.LinkInputPort);
-            Assert.AreEqual(a.NodeId, link.LinkOutputNode);
-            Assert.AreEqual(b.NodeId, link.LinkInputNode);
+            Assert.AreEqual(output.PortId, link.OutputPortId);
+            Assert.AreEqual(input.PortId, link.InputPortId);
+            Assert.AreEqual(a.NodeId, link.OutputNodeId);
+            Assert.AreEqual(b.NodeId, link.InputNodeId);
             Assert.AreEqual(1, linked.GetInputLinksForPort(input.PortId).Length,
                 "the link must be indexed from the input side too");
         }
@@ -208,18 +208,28 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
     {
         // A node that carries no audio has no channel map: its Props either lack the key or it
         // has no Props at all, and both spell the same empty answer rather than a failure.
+        //
+        // The MIDI node is made here rather than looked for. A session without a MIDI device - a
+        // private one, a CI runner - has none, and a test that skipped there proved nothing on the
+        // machines it runs on most. A filter with one MIDI port is how upstream's midi examples make
+        // a MIDI node, and from the registry's side it is one like any other.
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-tp-midimap", cts.Token);
 
         await using (ctx)
         await using (reg)
         {
-            PipeWireNode? midi = reg.Current.Nodes.FirstOrDefault(
-                n => (n.MediaClass ?? "").StartsWith("Midi/", StringComparison.Ordinal));
-            if (midi is null)
-                Assert.Inconclusive("this session exposes no MIDI node to probe");
+            await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_tp_midi",
+                new Dictionary<string, string> { [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Midi/Sink" });
+            filter.AddMidiPort(PipeWirePortDirection.In, "midi_in");
+            await filter.ConnectAsync(cancellationToken: cts.Token);
+            uint filterNode = await filter.WaitForNodeIdAsync(cts.Token);
 
-            await using PipeWireNodeControl control = reg.BindNode(midi!.NodeId);
+            PipeWireGraphSnapshot seen = await WaitForAsync(reg, g => g.GetNode(filterNode) is not null, cts.Token);
+            PipeWireNode midi = seen.GetNode(filterNode)!;
+            Assert.AreEqual("Midi/Sink", midi.MediaClass, "the filter did not publish as a MIDI node");
+
+            await using PipeWireNodeControl control = reg.BindNode(midi.NodeId);
             Assert.AreEqual(0, (await control.GetChannelMapAsync(cts.Token)).Length,
                 $"MIDI node {midi.NodeName} should not report audio channels");
         }
@@ -280,7 +290,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
             PipeWireLink link = await reg.CreateLink(ourOutput, theirInput).ExecuteAsync(cts.Token);
 
             Assert.IsNotNull(reg.Current.GetLink(link.LinkId));
-            Assert.AreEqual(theirs.NodeId, reg.Current.GetLink(link.LinkId)!.LinkInputNode,
+            Assert.AreEqual(theirs.NodeId, reg.Current.GetLink(link.LinkId)!.InputNodeId,
                 "the link must land on the third-party node we targeted");
         }
     }
@@ -358,9 +368,9 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
                         PipeWireGraphSnapshot g = reg.Current;
                         foreach (PipeWireLink link in g.Links)
                         {
-                            if (!g.GetOutputLinksForPort(link.LinkOutputPort).Contains(link))
+                            if (!g.GetOutputLinksForPort(link.OutputPortId).Contains(link))
                                 throw new InvalidOperationException($"link {link.LinkId} missing from its own index");
-                            if (!g.GetInputLinksForPort(link.LinkInputPort).Contains(link))
+                            if (!g.GetInputLinksForPort(link.InputPortId).Contains(link))
                                 throw new InvalidOperationException($"link {link.LinkId} missing from the input index");
                         }
                         Interlocked.Increment(ref reads);
@@ -422,8 +432,8 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
                 (uint Link, uint Output, uint Input) match = theirs.FirstOrDefault(l => l.Link == mine.LinkId);
 
                 Assert.AreNotEqual(0u, match.Link, $"pw-link does not know link {mine.LinkId}");
-                Assert.AreEqual(mine.LinkOutputPort, match.Output);
-                Assert.AreEqual(mine.LinkInputPort, match.Input);
+                Assert.AreEqual(mine.OutputPortId, match.Output);
+                Assert.AreEqual(mine.InputPortId, match.Input);
             }
 
             Assert.IsNotNull(graph.GetLink(ourLink.LinkId), "our own link must still be there among theirs");

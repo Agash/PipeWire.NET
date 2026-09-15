@@ -92,7 +92,7 @@ public sealed class SpaPodChoiceRoundTripTests : PipeWireTestBase
         // DontFixate is how the first negotiation pass says to narrow the set without picking yet.
         // It rides on the property, not the choice, so a round trip is the only thing that checks
         // it survives.
-        uint flags = (uint)(SpaPodPropFlag.Mandatory | SpaPodPropFlag.DontFixate);
+        SpaPodPropFlags flags = SpaPodPropFlags.Mandatory | SpaPodPropFlags.DontFixate;
 
         SpaProperty p = RoundTrip((ref SpaPodBuilder b) =>
             b.AddChoiceEnumLong(SpaFormat.VideoModifier, [1L, 2L], flags));

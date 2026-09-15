@@ -186,7 +186,7 @@ public sealed class GraphScenarioTests : PipeWireTestBase
 
             Assert.IsNotNull(publisher.NodeId,
                 "a connected stream must expose its node id, that is how a consumer targets it");
-            Assert.AreEqual(published.NodeId, publisher.NodeId!.Value,
+            Assert.AreEqual(published.NodeId, (await publisher.WaitForNodeIdAsync(cts.Token)),
                 "the stream and the registry must agree on which node this is");
 
             // The agent then looks up ports to link or to inspect; they must be filed under that id.
@@ -308,7 +308,7 @@ public sealed class GraphScenarioTests : PipeWireTestBase
             Assert.IsNotNull(after.GetNode(sourceId), "a lingering source node must outlive its creator");
             Assert.IsNotNull(after.GetNode(sinkId), "a lingering sink node must outlive its creator");
             Assert.IsNotNull(after.GetLink(linkId), "a lingering link must outlive its creator");
-            Assert.AreEqual(1, after.GetOutputLinksForPort(after.GetLink(linkId)!.LinkOutputPort).Length,
+            Assert.AreEqual(1, after.GetOutputLinksForPort(after.GetLink(linkId)!.OutputPortId).Length,
                 "the surviving link must still be wired to its ports");
 
             // --- second "run": tear the setup down deliberately.

@@ -5,6 +5,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
 using PipeWire.NET.Media.Streams;
+using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Tests;
 
@@ -36,6 +37,76 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     }
 
     // ------------------------------------------------------------------ lifecycle order
+
+    /// <summary>
+    /// Every accessor on a disposed capture, called anyway. Each has to answer rather than touch
+    /// the native stream it no longer owns.
+    /// </summary>
+    /// <remarks>
+    /// This is the shape a real consumer hits without meaning to: a UI polling the graph clock, or
+    /// a sender pulling frames, that races its own teardown. The guards exist for that, and an
+    /// unguarded one is a use-after-free into a destroyed pw_stream rather than an exception.
+    /// </remarks>
+    [TestMethod]
+    public async Task EveryAccessorOnADisposedCapture_AnswersInsteadOfTouchingTheStream()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        await using var ctx = new PipeWireContext("pwnet-hc-disposed", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+
+        var capture = new PipeWireVideoCapture(ctx, "pwnet-hc-disposed-consumer");
+        capture.Retention = FrameRetention.Owned;
+        capture.Connect();
+        await capture.DisposeAsync();
+
+        // Reading state: all null or empty, none of them a throw and none of them a native call.
+        Assert.IsNull(capture.GraphClock);
+        Assert.IsNull(capture.RateMatch);
+        Assert.IsNull(capture.NodeId);
+        Assert.IsTrue(capture.Controls.IsEmpty);
+        Assert.IsNull(capture.GetControl(0));
+
+        // Pulling: nothing retained, in either form.
+        Assert.IsFalse(capture.TryGetFrame(out PulledVideoFrame? pulled));
+        Assert.IsNull(pulled);
+        Assert.IsFalse(capture.TryGetBorrowedFrame(out BorrowedVideoFrame borrowed));
+        Assert.AreEqual(0, borrowed.PlaneCount);
+
+        // Writing splits two ways, deliberately. A hint the graph is free to ignore is ignored
+        // here too rather than throwing at a caller who has nothing to do about it.
+        capture.SetRate(1.5);
+        capture.AnnounceLatency(new PipeWireLatency(SpaDirection.Input, 0, 0, 0, 0, 0, 0));
+
+        // A command whose failure the caller has to handle says so, which is the .NET convention
+        // and the reason this one is not quietly swallowed like the hints above.
+        Assert.ThrowsExactly<ObjectDisposedException>(() => capture.SetControl(0, [0.5f]));
+
+        // And disposing again, which a using block layered over an explicit dispose does routinely.
+        await capture.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Retention is opt-in, so a puller that never set it gets nothing rather than a frame that
+    /// was quietly being copied on every cycle.
+    /// </summary>
+    [TestMethod]
+    public async Task PullingWithoutOptingIn_ReturnsNothing()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        await using var ctx = new PipeWireContext("pwnet-hc-nopull", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+
+        await using var capture = new PipeWireVideoCapture(ctx, "pwnet-hc-nopull-consumer");
+        Assert.AreEqual(FrameRetention.None, capture.Retention, "retention must be off by default");
+
+        capture.Connect();
+        await Task.Delay(500, cts.Token);
+
+        Assert.IsFalse(capture.TryGetFrame(out _));
+        Assert.IsFalse(capture.TryGetBorrowedFrame(out _));
+    }
 
     [TestMethod]
     public async Task StartingTwice_IsRefusedWithoutLeakingTheFirstLoop()

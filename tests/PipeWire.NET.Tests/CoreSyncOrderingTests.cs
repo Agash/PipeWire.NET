@@ -106,8 +106,8 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
             // able to resolve the whole path - not the link alone.
             PipeWireGraphSnapshot graph = registry.Current;
             Assert.IsNotNull(graph.GetLink(link.LinkId));
-            Assert.IsNotNull(graph.GetNode(link.LinkOutputNode));
-            Assert.IsNotNull(graph.GetNode(link.LinkInputNode));
+            Assert.IsNotNull(graph.GetNode(link.OutputNodeId));
+            Assert.IsNotNull(graph.GetNode(link.InputNodeId));
             Assert.IsTrue(graph.GetLinksForNode(source.NodeId).Any(l => l.LinkId == link.LinkId),
                 "the link is not reachable from the node it starts at");
 

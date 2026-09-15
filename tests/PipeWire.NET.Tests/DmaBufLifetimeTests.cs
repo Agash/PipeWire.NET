@@ -60,7 +60,7 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
 
         await using var output = new PipeWireVideoOutput(ctx, $"{name}-src", Width, Height, PixelFormat.Bgra, 30);
 
-        output.AllocateDmaBuf += (_, index, _, _, _, planes) =>
+        output.AllocateDmaBuf += (_, index, _, _, _, _, planes) =>
         {
             indexes.Enqueue(index);
 
@@ -264,11 +264,10 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
     public async Task BufferIndexesAfterAReconnect_StartAgainRatherThanContinuing()
     {
         // The index is the producer's, handed out per pool buffer and recycled when one is removed.
-        // Two separate producer instances is what this measures - not one renegotiating - and that
-        // is deliberate: making a single instance renegotiate on command needs a peer that can be
-        // told to change format, which nothing here can do. What it does pin is that a fresh
-        // producer starts from zero and stays inside the pool, so an allocator keying a GPU surface
-        // by index cannot carry one session's surface into the next.
+        // Two separate producer instances is what this measures; one instance renegotiating is
+        // ARenegotiatingProducer_KeepsItsPoolBoundedAndBalanced below. What this pins is that a
+        // fresh producer starts from zero and stays inside the pool, so an allocator keying a GPU
+        // surface by index cannot carry one session's surface into the next.
         GbmAllocator gbm = RequireGbm();
         var buffers = new List<GbmAllocator.Buffer>();
 
@@ -289,6 +288,136 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
                 "the second session's indexes did not start again from zero");
             Assert.IsTrue(second.Max() < PoolCap,
                 $"the second session asked for index {second.Max()}, beyond the pool");
+        }
+        finally
+        {
+            foreach (GbmAllocator.Buffer b in buffers) b.Dispose();
+            gbm.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// One producer, renegotiated again and again while it keeps running, keeps its pool bounded
+    /// and every buffer it backed is released exactly once.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The renegotiation is upstream's own. When a port loses its last link,
+    /// <c>pw_impl_port_release_mix</c> clears its format (impl-port.c), and for a stream that is
+    /// <c>clear_buffers</c>: every buffer removed. The next consumer negotiates a format and a pool
+    /// from scratch, <c>impl_port_use_buffers</c> adding them again. So a consumer connecting and
+    /// going away, round after round, is the same producer instance renegotiating each time.
+    /// </para>
+    /// <para>
+    /// That is the path the free-index stack and the plane-layout table exist for. Both are touched
+    /// by add_buffer and remove_buffer, which upstream emits from inside one node method on the main
+    /// loop, and read lock-free by the process callback. A stack that leaked an index would grow the
+    /// pool past the consumer's allocation within a few rounds; one that handed an index out twice
+    /// would back two live buffers with one GPU surface, and the release count would not match.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task ARenegotiatingProducer_KeepsItsPoolBoundedAndBalanced()
+    {
+        const int Rounds = 6;
+        GbmAllocator gbm = RequireGbm();
+        var buffers = new List<GbmAllocator.Buffer>();
+        long modifier = (long)GbmAllocator.LinearModifier;
+
+        var gate = new object();
+        var live = new HashSet<int>();
+        var violations = new List<string>();
+        int allocations = 0, releases = 0, highest = -1;
+
+        try
+        {
+            await using var ctx = new PipeWireContext("pwnet-dmabuf-churn", ConsoleTestLoggerFactory.Instance);
+            await ctx.StartAsync();
+
+            await using var output = new PipeWireVideoOutput(ctx, "pwnet-dmabuf-churn-src", Width, Height, PixelFormat.Bgra, 30);
+
+            output.AllocateDmaBuf += (_, index, _, _, _, _, planes) =>
+            {
+                if (index >= PoolCap) return 0;
+
+                lock (gate)
+                {
+                    if (!live.Add(index)) violations.Add($"index {index} handed out while still live");
+                    allocations++;
+                    highest = Math.Max(highest, index);
+                }
+
+                while (buffers.Count <= index) buffers.Add(gbm.CreateBgra(Width, Height));
+
+                GbmAllocator.Buffer b = buffers[index];
+                planes[0] = new VideoPlane(b.Fd, b.Offset, b.Stride, b.Size);
+                return 1;
+            };
+
+            output.ReleaseDmaBuf += (_, index) =>
+            {
+                lock (gate)
+                {
+                    if (!live.Remove(index)) violations.Add($"index {index} released without being live");
+                    releases++;
+                }
+            };
+
+            output.FillDmaBuf += (_, _) => true;
+            output.ConnectDmaBuf([modifier]);
+
+            uint nodeId = await output.WaitForNodeIdAsync();
+
+            for (int round = 0; round < Rounds; round++)
+            {
+                int dmaBufFrames = 0;
+
+                await using (var capture = new PipeWireVideoCapture(ctx, $"pwnet-dmabuf-churn-sink-{round}"))
+                {
+                    capture.FrameReady += (_, frame) =>
+                    {
+                        if (frame.BufferType == PipeWireBufferType.DmaBuf) Interlocked.Increment(ref dmaBufFrames);
+                    };
+
+                    capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
+
+                    for (int i = 0; i < 100 && Volatile.Read(ref dmaBufFrames) < 10; i++)
+                        await Task.Delay(50);
+                }
+
+                if (round == 0 && Volatile.Read(ref dmaBufFrames) == 0)
+                    Assert.Inconclusive("the first round produced no dmabuf frames, so there is no pool to churn.");
+
+                Assert.IsTrue(Volatile.Read(ref dmaBufFrames) >= 10,
+                    $"round {round}: only {dmaBufFrames} dmabuf frames after the producer was renegotiated");
+
+                // The consumer is gone, so its link is, and upstream clears the producer's format
+                // and every buffer with it. Waiting for that is the proof the round renegotiated.
+                for (int i = 0; i < 100; i++)
+                {
+                    lock (gate) { if (live.Count == 0) break; }
+                    await Task.Delay(50);
+                }
+
+                lock (gate)
+                {
+                    Assert.AreEqual(0, live.Count,
+                        $"round {round}: buffers {string.Join(",", live)} were never released after the consumer left");
+                }
+            }
+
+            lock (gate)
+            {
+                Console.Error.WriteLine(
+                    $"churn: {Rounds} rounds, {allocations} allocations, {releases} releases, highest index {highest}");
+
+                Assert.AreEqual(0, violations.Count, string.Join("; ", violations));
+                Assert.AreEqual(allocations, releases, "allocations and releases do not balance");
+                Assert.IsTrue(allocations >= Rounds,
+                    $"{allocations} allocations over {Rounds} rounds, so the pool was not rebuilt each round");
+                Assert.IsTrue(highest < PoolCap,
+                    $"index {highest} after {Rounds} renegotiations, so freed indexes were not reused");
+            }
         }
         finally
         {

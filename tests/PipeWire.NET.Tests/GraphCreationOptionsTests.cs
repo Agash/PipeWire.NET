@@ -81,7 +81,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
                 .WithName(Unique("pwnet_stay_target")).ExecuteAsync(cts.Token);
 
             PipeWireNode node = await registry.CreateVirtualNode("Staying")
-                .WithName(Unique("pwnet_stay")).WithTarget(target).WithStayWithTheTarget()
+                .WithName(Unique("pwnet_stay")).WithTarget(target).WithDontReconnect()
                 .ExecuteAsync(cts.Token);
 
             try
@@ -387,8 +387,8 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
 
             PipeWireLink link = await registry.CreateLinkAsync(output.PortId, input.PortId, cts.Token);
 
-            Assert.AreEqual(output.PortId, link.LinkOutputPort);
-            Assert.AreEqual(input.PortId, link.LinkInputPort);
+            Assert.AreEqual(output.PortId, link.OutputPortId);
+            Assert.AreEqual(input.PortId, link.InputPortId);
             Assert.IsNotNull(registry.Current.GetLink(link.LinkId));
 
             // The wrong way round is caught here, not by the daemon.

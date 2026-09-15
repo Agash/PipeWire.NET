@@ -272,7 +272,7 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
             // floor is therefore one full block, not the whole image - see the planar-host note on
             // PipeWireVideoCapture.
             int required = SpaFormatProbe.BlockSize(frame.Format, frame.Width, frame.Height);
-            if (frame.Data.Length > 0 && frame.Data.Length < required)
+            if (frame.Pixels.Length > 0 && frame.Pixels.Length < required)
                 Interlocked.Increment(ref shortFrames);
         };
 

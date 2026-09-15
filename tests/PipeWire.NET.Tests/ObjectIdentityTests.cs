@@ -19,7 +19,7 @@ public sealed class ObjectIdentityTests : PipeWireTestBase
                 : PipeWireProperties.FromItems(new Dictionary<string, string>
                 {
                     ["node.name"] = name ?? "n",
-                    [PipeWireNames.ObjectSerial] = serial.Value.ToString(CultureInfo.InvariantCulture),
+                    [PipeWireKeys.PW_KEY_OBJECT_SERIAL] = serial.Value.ToString(CultureInfo.InvariantCulture),
                 }));
 
     private static PipeWireGraphSnapshot Graph(params PipeWireNode[] nodes) =>

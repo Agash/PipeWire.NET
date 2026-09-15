@@ -15,7 +15,7 @@ public sealed class PulledVideoFrameTests
     private static PulledVideoFrame HostFrame(
         ImmutableArray<byte>? pixels = null,
         PixelFormat format = PixelFormat.Bgra,
-        long? presentationTimeNs = 1234) =>
+        long? presentationTimestampNs = 1234) =>
         new(
             pixels: pixels ?? [1, 2, 3, 4],
             planes: ImmutableArray<PulledVideoPlane>.Empty,
@@ -28,9 +28,10 @@ public sealed class PulledVideoFrameTests
             sequenceNumber: 7,
             bufferType: PipeWireBufferType.MemPtr,
             color: default,
-            presentationTimeNs: presentationTimeNs,
-            captureClockNs: 5678,
-            mediaClockNs: 9012,
+            presentationTimestampNs: presentationTimestampNs,
+            queuedTimeNs: 3456,
+            graphTimeNs: 5678,
+            streamPositionNs: 9012,
             delayNs: 42,
             crop: new VideoRegion(1, 2, 3, 4),
             transform: SpaMetaVideotransformValue.Rotate90);
@@ -54,9 +55,10 @@ public sealed class PulledVideoFrameTests
     {
         using PulledVideoFrame frame = HostFrame();
 
-        Assert.AreEqual(1234L, frame.PresentationTimeNs);
-        Assert.AreEqual(5678L, frame.CaptureClockNs);
-        Assert.AreEqual(9012L, frame.MediaClockNs);
+        Assert.AreEqual(1234L, frame.PresentationTimestampNs);
+        Assert.AreEqual(3456L, frame.QueuedTimeNs);
+        Assert.AreEqual(5678L, frame.GraphTimeNs);
+        Assert.AreEqual(9012L, frame.StreamPositionNs);
         Assert.AreEqual(42L, frame.DelayNs);
         Assert.AreEqual(7UL, frame.SequenceNumber);
         Assert.AreEqual(new VideoRegion(1, 2, 3, 4), frame.Crop);
@@ -76,9 +78,9 @@ public sealed class PulledVideoFrameTests
     [TestMethod]
     public void AFrameWithNoProducerTimestampReportsNull()
     {
-        using PulledVideoFrame frame = HostFrame(presentationTimeNs: null);
+        using PulledVideoFrame frame = HostFrame(presentationTimestampNs: null);
 
-        Assert.IsNull(frame.PresentationTimeNs);
+        Assert.IsNull(frame.PresentationTimestampNs);
     }
 
     /// <summary>
@@ -108,9 +110,10 @@ public sealed class PulledVideoFrameTests
             sequenceNumber: 1,
             bufferType: PipeWireBufferType.DmaBuf,
             color: default,
-            presentationTimeNs: 1,
-            captureClockNs: null,
-            mediaClockNs: null,
+            presentationTimestampNs: 1,
+            queuedTimeNs: null,
+            graphTimeNs: null,
+            streamPositionNs: null,
             delayNs: 0,
             crop: null,
             transform: SpaMetaVideotransformValue.None);
@@ -142,9 +145,10 @@ public sealed class PulledVideoFrameTests
             sequenceNumber: 2,
             bufferType: PipeWireBufferType.DmaBuf,
             color: default,
-            presentationTimeNs: null,
-            captureClockNs: null,
-            mediaClockNs: null,
+            presentationTimestampNs: null,
+            queuedTimeNs: null,
+            graphTimeNs: null,
+            streamPositionNs: null,
             delayNs: 0,
             crop: null,
             transform: SpaMetaVideotransformValue.None);

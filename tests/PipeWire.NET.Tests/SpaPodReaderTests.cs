@@ -212,13 +212,13 @@ public sealed class SpaPodReaderTests : PipeWireTestBase
     [TestMethod]
     public void TryReadProperty_SurfacesTheFlagsThatGateFixation()
     {
-        byte[] body = BuildObjectBody((key: 9u, flags: SpaPodPropFlag.DontFixate, value: IntPod(1)));
+        byte[] body = BuildObjectBody((key: 9u, flags: (uint)SpaPodPropFlags.DontFixate, value: IntPod(1)));
 
         var reader = new SpaPodReader(body);
         Assert.IsTrue(reader.EnterObject(out _, out _, out _));
-        Assert.IsTrue(reader.TryReadProperty(out SpaKey key, out uint flags, out _));
+        Assert.IsTrue(reader.TryReadProperty(out SpaKey key, out SpaPodPropFlags flags, out _));
         Assert.AreEqual(9u, key.Value);
-        Assert.AreEqual(SpaPodPropFlag.DontFixate, flags & SpaPodPropFlag.DontFixate,
+        Assert.AreEqual(SpaPodPropFlags.DontFixate, flags & SpaPodPropFlags.DontFixate,
             "DontFixate must survive; it is what says a modifier list is still a choice");
     }
 

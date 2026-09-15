@@ -14,6 +14,12 @@ namespace PipeWire.NET.Tests;
 /// session shares, and reducing a client's permissions can cut off the connection that would undo
 /// it. Both are checked up to the point where the next step would change the machine.
 /// </remarks>
+// Serialised against the rest of the suite deliberately. Updating client permissions while other
+// classes tear objects down races an upstream daemon bug: pw_impl_client_update_permissions ->
+// pw_global_update_permissions -> pw_resource_destroy asserts `!resource->destroyed` and aborts the
+// daemon, taking every other test with it. A client should not be able to do that, so this is a
+// workaround for the daemon, not a fix for anything here.
+[DoNotParallelize]
 [TestClass]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]

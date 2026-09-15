@@ -460,8 +460,8 @@ public sealed class GraphStressTests : PipeWireTestBase
 
             foreach (PipeWireLink link in held.Links)
             {
-                Assert.IsTrue(held.GetOutputLinksForPort(link.LinkOutputPort).Contains(link));
-                Assert.IsTrue(held.GetInputLinksForPort(link.LinkInputPort).Contains(link));
+                Assert.IsTrue(held.GetOutputLinksForPort(link.OutputPortId).Contains(link));
+                Assert.IsTrue(held.GetInputLinksForPort(link.InputPortId).Contains(link));
             }
         }
     }

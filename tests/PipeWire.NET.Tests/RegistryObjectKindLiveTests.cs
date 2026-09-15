@@ -103,7 +103,7 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
 
         Assert.AreEqual(bare.ModuleName, full.ModuleName, "it must still be the same module");
         Assert.IsNotNull(full.Description, "binding must have filled the description in");
-        Assert.IsNotNull(full.Properties.GetValueOrDefault(PipeWireNames.ModuleFilename),
+        Assert.IsNotNull(full.Properties.GetValueOrDefault(PipeWireKeys.MODULE_FILENAME),
             "the module's filename is on the info event and nowhere else");
 
         Assert.AreSame(full, registry.Current.GetModule(bare.Id),
@@ -233,7 +233,7 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
 
         await using var consumer = new PipeWireAudioCapture(context, $"pwnet_profiler_sink_{Environment.ProcessId}");
         consumer.FrameReady += (_, _) => { };
-        consumer.Connect(producer.NodeId!.Value);
+        consumer.Connect((await producer.WaitForNodeIdAsync(cts.Token)));
 
         // Shorter than the class budget, so running out of patience is reported as such rather
         // than arriving as the budget's own cancellation.

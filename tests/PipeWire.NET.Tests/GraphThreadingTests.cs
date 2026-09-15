@@ -177,7 +177,7 @@ public sealed class GraphThreadingTests : PipeWireTestBase
                                 throw new InvalidOperationException($"port {port.PortId} missing from its own index");
 
                         foreach (PipeWireLink link in g.Links)
-                            if (!g.GetOutputLinksForPort(link.LinkOutputPort).Contains(link))
+                            if (!g.GetOutputLinksForPort(link.OutputPortId).Contains(link))
                                 throw new InvalidOperationException($"link {link.LinkId} missing from its own index");
 
                         Interlocked.Increment(ref reads);

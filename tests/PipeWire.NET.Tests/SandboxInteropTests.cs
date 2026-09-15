@@ -21,6 +21,12 @@ namespace PipeWire.NET.Tests;
 /// core reads <c>r-xm-</c> and a sandboxed one <c>r-x--</c>. Not the write bit, which no client
 /// holds on the core object.
 /// </remarks>
+// Serialised against the rest of the suite deliberately. Updating client permissions while other
+// classes tear objects down races an upstream daemon bug: pw_impl_client_update_permissions ->
+// pw_global_update_permissions -> pw_resource_destroy asserts `!resource->destroyed` and aborts the
+// daemon, taking every other test with it. A client should not be able to do that, so this is a
+// workaround for the daemon, not a fix for anything here.
+[DoNotParallelize]
 [TestClass]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]

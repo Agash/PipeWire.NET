@@ -177,8 +177,8 @@ public sealed unsafe class NativeAbiTests : PipeWireTestBase
     {
         // Not a struct, but the same class of assumption: bit 30 marks a queued request and the
         // low bits carry its sequence. Every round-trip correlates on this.
-        Assert.IsTrue(Native.SPA_RESULT_IS_ASYNC(Native.SPA_ASYNC_BIT | 7));
-        Assert.AreEqual(7, Native.SPA_RESULT_ASYNC_SEQ(Native.SPA_ASYNC_BIT | 7));
+        Assert.IsTrue(Native.SPA_RESULT_IS_ASYNC(NativeConstants.SPA_ASYNC_BIT | 7));
+        Assert.AreEqual(7, Native.SPA_RESULT_ASYNC_SEQ(NativeConstants.SPA_ASYNC_BIT | 7));
 
         Assert.IsFalse(Native.SPA_RESULT_IS_ASYNC(0));
         Assert.IsFalse(Native.SPA_RESULT_IS_ASYNC(-13));

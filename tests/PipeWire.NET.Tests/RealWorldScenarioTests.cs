@@ -188,10 +188,10 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
 
             foreach (PipeWireLink link in graph.Links)
             {
-                Assert.IsNotNull(graph.GetNode(link.LinkOutputNode),
-                    $"link {link.LinkId} points at output node {link.LinkOutputNode}, which is not in the graph");
-                Assert.IsNotNull(graph.GetNode(link.LinkInputNode),
-                    $"link {link.LinkId} points at input node {link.LinkInputNode}, which is not in the graph");
+                Assert.IsNotNull(graph.GetNode(link.OutputNodeId),
+                    $"link {link.LinkId} points at output node {link.OutputNodeId}, which is not in the graph");
+                Assert.IsNotNull(graph.GetNode(link.InputNodeId),
+                    $"link {link.LinkId} points at input node {link.InputNodeId}, which is not in the graph");
             }
 
             await registry.DestroyGlobalAsync(b.NodeId, cts.Token);
@@ -222,7 +222,7 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             long copied = 0;
             var ran = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            filter.ProcessCallback = (_, samples) =>
+            filter.ProcessCallback = (_, samples, in _) =>
             {
                 Interlocked.Increment(ref cycles);
 

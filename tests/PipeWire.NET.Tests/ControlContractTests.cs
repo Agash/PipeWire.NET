@@ -124,9 +124,9 @@ public sealed class ControlContractTests : PipeWireTestBase
         // a table so the values are read at runtime rather than folded away by the compiler.
         (string Name, uint Actual, uint Expected)[] flags =
         [
-            ("Serial", SpaParamInfoFlags.Serial, 1u << 0),
-            ("Read", SpaParamInfoFlags.Read, 1u << 1),
-            ("Write", SpaParamInfoFlags.Write, 1u << 2),
+            ("Serial", (uint)SpaParamInfoFlags.Serial, 1u << 0),
+            ("Read", (uint)SpaParamInfoFlags.Read, 1u << 1),
+            ("Write", (uint)SpaParamInfoFlags.Write, 1u << 2),
         ];
 
         foreach ((string name, uint actual, uint expected) in flags)

@@ -82,10 +82,10 @@ public sealed class LinkStateTests : PipeWireTestBase
                 // The endpoints the daemon reports must be the ones we asked it to join. Reading
                 // them from the link rather than from the registry is what proves the info event
                 // arrived rather than the record being echoed back.
-                Assert.AreEqual(source.NodeId, control.OutputNode, "the link reports another output node");
-                Assert.AreEqual(output.PortId, control.OutputPort);
-                Assert.AreEqual(sink.NodeId, control.InputNode, "the link reports another input node");
-                Assert.AreEqual(input.PortId, control.InputPort);
+                Assert.AreEqual(source.NodeId, control.OutputNodeId, "the link reports another output node");
+                Assert.AreEqual(output.PortId, control.OutputPortId);
+                Assert.AreEqual(sink.NodeId, control.InputNodeId, "the link reports another input node");
+                Assert.AreEqual(input.PortId, control.InputPortId);
 
                 // A freshly created link between two idle virtual nodes settles somewhere between
                 // negotiating and paused. Which one is the daemon's business; what matters is that

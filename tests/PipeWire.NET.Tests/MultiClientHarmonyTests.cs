@@ -336,7 +336,7 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
         long cycles = 0;
         string dspName = Unique("pwnet_chain_dsp");
         await using PipeWireFilter filter = PipeWireFilter.Create(dsp.Context, dspName);
-        filter.ProcessCallback = (_, _) => Interlocked.Increment(ref cycles);
+        filter.ProcessCallback = (_, _, in _) => Interlocked.Increment(ref cycles);
 
         filter.AddAudioPort(PipeWirePortDirection.In, "in-l");
         filter.AddAudioPort(PipeWirePortDirection.In, "in-r");
@@ -381,7 +381,7 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
             srcPorts =
             [
                 .. g.GetPortsForNode(producer.NodeId)
-                    .Where(p => p.PortDirection == PipeWirePortDirection.Out && !p.Monitor)
+                    .Where(p => p.PortDirection == PipeWirePortDirection.Out && !p.IsMonitor)
                     .OrderBy(p => p.PortName, StringComparer.Ordinal),
             ];
             dspPorts =

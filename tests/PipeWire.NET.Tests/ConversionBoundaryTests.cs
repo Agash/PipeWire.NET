@@ -362,8 +362,8 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
         byte[] pixels = [1, 2, 3, 4, 5, 6, 7, 8];
         var frame = new VideoFrame(
             pixels, stride: 4, width: 2, height: 2, format: PixelFormat.Bgra,
-            sequenceNumber: 9, presentationTimeNs: 100, captureClockNs: 200,
-            mediaClockNs: 300, delayNs: 5);
+            sequenceNumber: 9, presentationTimestampNs: 100, graphTimeNs: 200,
+            streamPositionNs: 300, delayNs: 5);
 
         OwnedVideoFrame owned = frame.Clone();
 
@@ -373,9 +373,9 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
         Assert.AreEqual(2, owned.Height);
         Assert.AreEqual(PixelFormat.Bgra, owned.Format);
         Assert.AreEqual(9ul, owned.SequenceNumber);
-        Assert.AreEqual(100L, owned.PresentationTimeNs);
-        Assert.AreEqual(200L, owned.CaptureClockNs);
-        Assert.AreEqual(300L, owned.MediaClockNs);
+        Assert.AreEqual(100L, owned.PresentationTimestampNs);
+        Assert.AreEqual(200L, owned.GraphTimeNs);
+        Assert.AreEqual(300L, owned.StreamPositionNs);
         Assert.AreEqual(5L, owned.DelayNs);
 
         // A copy, not a view: mutating the source afterwards must not move the snapshot.
@@ -410,7 +410,7 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
         byte[] samples = [10, 20, 30, 40];
         var chunk = new AudioFrame(
             samples, sampleRate: 48000, channels: 2, format: AudioSampleFormat.F32Le,
-            sequenceNumber: 4, presentationTimeNs: -1, captureClockNs: 700, delayNs: 2);
+            sequenceNumber: 4, presentationTimestampNs: -1, graphTimeNs: 700, delayNs: 2);
 
         OwnedAudioFrame owned = chunk.Clone();
 
@@ -419,8 +419,8 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
         Assert.AreEqual(2, owned.Channels);
         Assert.AreEqual(AudioSampleFormat.F32Le, owned.Format);
         Assert.AreEqual(4ul, owned.SequenceNumber);
-        Assert.IsNull(owned.PresentationTimeNs);
-        Assert.AreEqual(700L, owned.CaptureClockNs);
+        Assert.IsNull(owned.PresentationTimestampNs);
+        Assert.AreEqual(700L, owned.GraphTimeNs);
         Assert.AreEqual(2L, owned.DelayNs);
 
         samples[0] = 99;
@@ -432,13 +432,13 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
     {
         var first = new OwnedVideoFrame(
             ImmutableArray.Create<byte>(1, 2), 2, 1, 1, PixelFormat.Rgba, 0,
-            default, null, null, null, 0);
+            default, null, null, null, null, 0);
         var same = new OwnedVideoFrame(
             ImmutableArray.Create<byte>(1, 2), 2, 1, 1, PixelFormat.Rgba, 0,
-            default, null, null, null, 0);
+            default, null, null, null, null, 0);
         var different = new OwnedVideoFrame(
             ImmutableArray.Create<byte>(1, 3), 2, 1, 1, PixelFormat.Rgba, 0,
-            default, null, null, null, 0);
+            default, null, null, null, null, 0);
 
         Assert.AreEqual(first, same);
         Assert.AreEqual(first.GetHashCode(), same.GetHashCode());
@@ -446,10 +446,10 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
 
         var audio = new OwnedAudioFrame(
             ImmutableArray.Create<byte>(1), 48000, 1, AudioSampleFormat.S16Le, 0,
-            null, null, null, 0);
+            null, null, null, null, 0);
         var audioSame = new OwnedAudioFrame(
             ImmutableArray.Create<byte>(1), 48000, 1, AudioSampleFormat.S16Le, 0,
-            null, null, null, 0);
+            null, null, null, null, 0);
         Assert.AreEqual(audio, audioSame);
         Assert.AreEqual(audio.GetHashCode(), audioSame.GetHashCode());
     }
@@ -499,7 +499,7 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
 
         SpaProperty? metaType = o.Find((uint)SpaParamBuffers.MetaType);
         Assert.IsNotNull(metaType, "the sync buffers param must carry a metaType");
-        Assert.AreNotEqual(0u, metaType.Flags & SpaPodPropFlag.Mandatory,
+        Assert.AreNotEqual(SpaPodPropFlags.None, metaType.Flags & SpaPodPropFlags.Mandatory,
             "the metaType must be mandatory, not advisory");
         Assert.AreEqual(1 << (int)SpaMetaType.SyncTimeline, ((SpaInt)metaType.Value).Value);
     }

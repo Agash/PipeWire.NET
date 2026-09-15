@@ -268,11 +268,11 @@ public sealed class SpaValueModelTests : PipeWireTestBase
         var props = new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
         [
             new SpaProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.5f)),
-            new SpaProperty((uint)SpaProp.Mute, SpaPodPropFlag.Readonly, new SpaBool(false)),
+            new SpaProperty((uint)SpaProp.Mute, SpaPodPropFlags.Readonly, new SpaBool(false)),
         ]);
 
         Assert.AreEqual(new SpaFloat(0.5f), props[SpaProp.Volume]);
-        Assert.AreEqual(SpaPodPropFlag.Readonly, props.Find(SpaProp.Mute)!.Flags);
+        Assert.AreEqual(SpaPodPropFlags.Readonly, props.Find(SpaProp.Mute)!.Flags);
         Assert.IsNull(props[SpaProp.LatencyOffsetNsec]);
     }
 

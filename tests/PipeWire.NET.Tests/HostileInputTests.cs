@@ -91,7 +91,7 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
             buffer.metas[cap].size = (uint)sizeof(spa_meta_header);
             buffer.metas[cap].data = &header;
 
-            Assert.AreEqual(-1, SpaFormatPod.FindPresentationTimeNs(&buffer),
+            Assert.AreEqual(-1, SpaFormatPod.FindPresentationTimestampNs(&buffer),
                 "the walk read past the entry the cap should have stopped it at");
         }
         finally
@@ -116,7 +116,7 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
             buffer.metas[0].size = (uint)sizeof(spa_meta_header);
             buffer.metas[0].data = &header;
 
-            Assert.AreEqual(1234567, SpaFormatPod.FindPresentationTimeNs(&buffer));
+            Assert.AreEqual(1234567, SpaFormatPod.FindPresentationTimestampNs(&buffer));
         }
         finally
         {
@@ -140,7 +140,7 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
             buffer.metas[0].size = 1;
             buffer.metas[0].data = &one;
 
-            Assert.AreEqual(-1, SpaFormatPod.FindPresentationTimeNs(&buffer));
+            Assert.AreEqual(-1, SpaFormatPod.FindPresentationTimestampNs(&buffer));
         }
         finally
         {

@@ -42,7 +42,7 @@ public sealed class GraphModelTests : PipeWireTestBase
         // OutputLinks must filter on the output port, so both sides are checked separately.
         var graph = Build(
             ports: [Port(10, 1, PipeWirePortDirection.Out), Port(20, 2, PipeWirePortDirection.In)],
-            links: [new(100, LinkInputNode: 2, LinkInputPort: 20, LinkOutputNode: 1, LinkOutputPort: 10)]);
+            links: [new(100, InputNodeId: 2, InputPortId: 20, OutputNodeId: 1, OutputPortId: 10)]);
 
         Assert.AreEqual(1, graph.GetOutputLinksForPort(10).Length);
         Assert.AreEqual(0, graph.GetInputLinksForPort(10).Length);
@@ -80,7 +80,7 @@ public sealed class GraphModelTests : PipeWireTestBase
         var graph = Build(
             nodes: [new(1, "loopback", null, null)],
             ports: [Port(10, 1, PipeWirePortDirection.Out), Port(11, 1, PipeWirePortDirection.In)],
-            links: [new(100, LinkInputNode: 1, LinkInputPort: 11, LinkOutputNode: 1, LinkOutputPort: 10)]);
+            links: [new(100, InputNodeId: 1, InputPortId: 11, OutputNodeId: 1, OutputPortId: 10)]);
 
         PipeWireLink[] links = [.. graph.GetLinksForNode(1)];
 
@@ -97,8 +97,8 @@ public sealed class GraphModelTests : PipeWireTestBase
             ports: [Port(10, 1, PipeWirePortDirection.Out), Port(11, 1, PipeWirePortDirection.In)],
             links:
             [
-                new(100, LinkInputNode: 2, LinkInputPort: 20, LinkOutputNode: 1, LinkOutputPort: 10),
-                new(101, LinkInputNode: 1, LinkInputPort: 11, LinkOutputNode: 3, LinkOutputPort: 30),
+                new(100, InputNodeId: 2, InputPortId: 20, OutputNodeId: 1, OutputPortId: 10),
+                new(101, InputNodeId: 1, InputPortId: 11, OutputNodeId: 3, OutputPortId: 30),
             ]);
 
         CollectionAssert.AreEquivalent(new uint[] { 100, 101 },

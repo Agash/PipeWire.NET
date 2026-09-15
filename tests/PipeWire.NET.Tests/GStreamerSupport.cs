@@ -101,11 +101,6 @@ internal sealed class GstTestSource : IAsyncDisposable
         }
     }
 
-    /// <summary>
-    /// Starts ONE gst pipeline with two named pipewiresink branches. Because they live in a
-    /// single pipeline they share one clock, so the two PipeWire nodes carry coherent
-    /// presentation timestamps - the basis for A/V sync.
-    /// </summary>
     /// <summary>Starts a video and an audio producer, each in its own gst process.</summary>
     /// <remarks>
     /// One process per sink, deliberately. Two <c>pipewiresink mode=provide</c> branches in a
@@ -145,6 +140,63 @@ internal sealed class GstTestSource : IAsyncDisposable
         catch { await source.DisposeAsync(); throw; }
     }
 
+    /// <summary>
+    /// Starts a video and an audio producer as two branches of ONE gst pipeline, sharing its clock.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One pipeline is what makes the two legs' header timestamps comparable: pipewiresink stamps
+    /// <c>header-&gt;pts = GST_BUFFER_PTS</c> (gstpipewiresink.c), and two live sources in one
+    /// pipeline timestamp against the same clock and base time.
+    /// </para>
+    /// <para>
+    /// The sinks are <c>async=false</c>. The earlier finding that two <c>mode=provide</c> branches in
+    /// one pipeline never both get driven has the shape of GStreamer's preroll rule: a pipeline
+    /// changes state only when every sink has completed its asynchronous state change, and a
+    /// pipewiresink with no consumer yet does not, so the whole pipeline waited on the leg nobody had
+    /// linked. <c>async=false</c> takes the sinks out of that wait.
+    /// </para>
+    /// </remarks>
+    public static async Task<(GstTestSource Source, uint VideoNode, uint AudioNode)> StartOnePipelineAsync(
+        PipeWireContext ctx,
+        (string Head, string Node) video,
+        (string Head, string Node) audio,
+        TimeSpan? timeout = null)
+    {
+        var psi = new ProcessStartInfo(GstLaunch)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        psi.ArgumentList.Add("-q");
+        AppendBranch(psi, video.Head, video.Node, "Video/Source", asyncStateChange: false);
+        AppendBranch(psi, audio.Head, audio.Node, "Audio/Source", asyncStateChange: false);
+
+        Process proc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start gst-launch-1.0.");
+        var source = new GstTestSource(proc);
+        try
+        {
+            TimeSpan t = timeout ?? TimeSpan.FromSeconds(10);
+            PipeWireNode? v = await WaitForNodeAsync(ctx, video.Node, t);
+            PipeWireNode? a = await WaitForNodeAsync(ctx, audio.Node, t);
+            if (v is null || a is null)
+            {
+                string err = await proc.StandardError.ReadToEndAsync();
+                await source.DisposeAsync();
+                throw new InvalidOperationException(
+                    $"the one-pipeline gst A/V nodes did not appear. stderr:{Environment.NewLine}{err}");
+            }
+
+            return (source, v.NodeId, a.NodeId);
+        }
+        catch
+        {
+            await source.DisposeAsync();
+            throw;
+        }
+    }
+
     private static Process StartBranch(string head, string node, string mediaClass)
     {
         var psi = new ProcessStartInfo(GstLaunch)
@@ -159,7 +211,8 @@ internal sealed class GstTestSource : IAsyncDisposable
             ?? throw new InvalidOperationException("Failed to start gst-launch-1.0.");
     }
 
-    private static void AppendBranch(ProcessStartInfo psi, string head, string node, string mediaClass)
+    private static void AppendBranch(
+        ProcessStartInfo psi, string head, string node, string mediaClass, bool asyncStateChange = true)
     {
         foreach (var tok in head.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             psi.ArgumentList.Add(tok);
@@ -167,6 +220,7 @@ internal sealed class GstTestSource : IAsyncDisposable
         psi.ArgumentList.Add("pipewiresink");
         psi.ArgumentList.Add("mode=provide"); // see StartAsync: a source branch must provide to serve samples.
         psi.ArgumentList.Add($"stream-properties=props,node.name={node},media.class={mediaClass}");
+        if (!asyncStateChange) psi.ArgumentList.Add("async=false");
     }
 
     private static async Task<PipeWireNode?> WaitForNodeAsync(PipeWireContext ctx, string nodeName, TimeSpan timeout)

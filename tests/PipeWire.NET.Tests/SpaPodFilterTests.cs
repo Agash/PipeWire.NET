@@ -16,7 +16,7 @@ public sealed class SpaPodFilterTests : PipeWireTestBase
     private static SpaObject Obj(params SpaProperty[] props) =>
         new(SpaType.ObjectProps, SpaParamType.Props, [.. props]);
 
-    private static SpaProperty Prop(uint key, SpaValue value, uint flags = 0) =>
+    private static SpaProperty Prop(uint key, SpaValue value, SpaPodPropFlags flags = SpaPodPropFlags.None) =>
         new(key, flags, value);
 
     private static SpaChoice Enum(params SpaValue[] alts) =>
@@ -106,12 +106,19 @@ public sealed class SpaPodFilterTests : PipeWireTestBase
     }
 
     [TestMethod]
-    public void NestedObjects_RecursePerProperty()
+    public void AnObjectAsAPropertyValue_MustBeEqual_NotIntersected()
     {
-        SpaObject candidate = Obj(Prop(1, Obj(Prop(2, new SpaInt(5)), Prop(3, new SpaInt(6)))));
+        // Upstream does not intersect an object that is the value of a property. spa_pod_get_values
+        // hands a non-choice pod back as itself (iter.h), and spa_pod_filter_prop then compares the
+        // two with spa_pod_compare_value, whose default arm is memcmp. An earlier version recursed
+        // per property here and accepted a partial nested object that upstream refuses.
+        SpaObject nested = Obj(Prop(2, new SpaInt(5)), Prop(3, new SpaInt(6)));
+        SpaObject candidate = Obj(Prop(1, nested));
 
-        Assert.IsTrue(SpaPodFilter.Matches(candidate, Obj(Prop(1, Obj(Prop(2, new SpaInt(5)))))));
-        Assert.IsFalse(SpaPodFilter.Matches(candidate, Obj(Prop(1, Obj(Prop(2, new SpaInt(9)))))));
+        Assert.IsTrue(SpaPodFilter.Matches(candidate, Obj(Prop(1, Obj(Prop(2, new SpaInt(5)), Prop(3, new SpaInt(6)))))),
+            "an identical nested object is equal and should match");
+        Assert.IsFalse(SpaPodFilter.Matches(candidate, Obj(Prop(1, Obj(Prop(2, new SpaInt(5)))))),
+            "a partial nested object is not equal, and upstream does not narrow into it");
     }
 
     [TestMethod]
@@ -121,12 +128,12 @@ public sealed class SpaPodFilterTests : PipeWireTestBase
 
         // A mandatory filter constraint the candidate lacks fails.
         Assert.IsFalse(SpaPodFilter.Matches(candidate,
-            Obj(Prop(1, new SpaInt(5)), Prop(2, new SpaInt(6), SpaPodPropFlag.Mandatory))));
+            Obj(Prop(1, new SpaInt(5)), Prop(2, new SpaInt(6), SpaPodPropFlags.Mandatory))));
 
         // And a mandatory candidate property the filter does not constrain fails too.
         SpaObject demanding = Obj(
             Prop(1, new SpaInt(5)),
-            Prop(2, new SpaInt(6), SpaPodPropFlag.Mandatory));
+            Prop(2, new SpaInt(6), SpaPodPropFlags.Mandatory));
         Assert.IsFalse(SpaPodFilter.Matches(demanding, Obj(Prop(1, new SpaInt(5)))));
 
         // Non-mandatory extras on either side are fine.

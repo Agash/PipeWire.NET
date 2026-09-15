@@ -181,7 +181,7 @@ public sealed class SequenceAndPortConfigTests : PipeWireTestBase
     [TestMethod]
     public void TheUnscheduledReleaseFlag_IsReadOffTheTimeline()
     {
-        Assert.IsTrue(new VideoSyncTimeline(VideoSyncTimeline.UnscheduledRelease, 1, 2)
+        Assert.IsTrue(new VideoSyncTimeline(SpaMetaSyncTimelineFlags.UnscheduledRelease, 1, 2)
             .ReleaseIsUnscheduled);
         Assert.IsFalse(new VideoSyncTimeline(0, 1, 2).ReleaseIsUnscheduled);
     }

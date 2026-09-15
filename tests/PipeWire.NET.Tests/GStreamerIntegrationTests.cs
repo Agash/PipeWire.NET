@@ -38,13 +38,13 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
         await using var cap = new PipeWireVideoCapture(ctx, "gst-smpte-sink");
         cap.FrameReady += (_, frame) =>
         {
-            if (frame.Data.Length < 1024) return;
+            if (frame.Pixels.Length < 1024) return;
             // A blank/black pre-roll frame is uniform (1 distinct byte). Real SMPTE bars are
             // non-uniform - 100% bars use pure primaries so it's only 0x00/0xFF per channel,
             // i.e. >=2 distinct values. So "not uniform" is the correct "real content" gate.
             Span<bool> seen = stackalloc bool[256];
             int distinct = 0;
-            foreach (byte b in frame.Data[..1024]) { if (!seen[b]) { seen[b] = true; distinct++; } }
+            foreach (byte b in frame.Pixels[..1024]) { if (!seen[b]) { seen[b] = true; distinct++; } }
             if (distinct < 2) return;
             done.TrySetResult((frame.Width, frame.Height, frame.Format, distinct));
         };
@@ -77,7 +77,7 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
 
         var done = new TaskCompletionSource<PixelFormat>(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var cap = new PipeWireVideoCapture(ctx, $"{node}-sink");
-        cap.FrameReady += (_, frame) => { if (frame.Data.Length > 0) done.TrySetResult(frame.Format); };
+        cap.FrameReady += (_, frame) => { if (frame.Pixels.Length > 0) done.TrySetResult(frame.Format); };
         cap.Connect(preferredFormats: stackalloc[] { expected }, targetObjectName: node);
 
         PixelFormat negotiated = await done.Task.WaitAsync(TimeSpan.FromSeconds(8));
@@ -108,7 +108,7 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
         await using var cap = new PipeWireVideoCapture(ctx, $"{node}-sink");
         cap.FrameReady += (_, frame) =>
         {
-            if (frame.Data.Length > 0) done.TrySetResult((frame.Width, frame.Height));
+            if (frame.Pixels.Length > 0) done.TrySetResult((frame.Width, frame.Height));
         };
 
         cap.Connect(
@@ -217,12 +217,12 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
         await using var cap = new PipeWireVideoCapture(ctx, "gst-reneg-sink");
         cap.FrameReady += (_, frame) =>
         {
-            if (frame.Data.Length == 0) return;
+            if (frame.Pixels.Length == 0) return;
 
             // The frame has to be self-consistent with the geometry it reports, whichever
             // negotiation produced it. A stride from the previous format is what this catches.
             int expected = frame.Height * frame.Stride;
-            if (frame.Stride > 0 && frame.Data.Length < expected) Interlocked.Increment(ref ragged);
+            if (frame.Stride > 0 && frame.Pixels.Length < expected) Interlocked.Increment(ref ragged);
 
             seen.Enqueue((frame.Format, frame.Width, frame.Height));
         };
@@ -379,7 +379,7 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
         await using var cap = new PipeWireVideoCapture(ctx, node + "-sink");
         cap.FrameReady += (_, f) =>
         {
-            if (f.PresentationTimeNs is not { } stamp) return;
+            if (f.PresentationTimestampNs is not { } stamp) return;
             lock (pts) { if (pts.Count < want) { pts.Add(stamp); if (pts.Count == want) enough.TrySetResult(); } }
         };
         cap.Connect(preferredFormats: stackalloc[] { PixelFormat.Bgra }, targetObjectName: node);
@@ -427,7 +427,7 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
         cap.FrameReady += (_, f) =>
         {
             lastDelay = f.DelayNs;
-            lock (media) { if (media.Count < want && f.MediaClockNs is { } pos) { media.Add(pos); if (media.Count == want) done.TrySetResult(); } }
+            lock (media) { if (media.Count < want && f.StreamPositionNs is { } pos) { media.Add(pos); if (media.Count == want) done.TrySetResult(); } }
         };
         cap.Connect(sampleRate: 48000, channels: 2, format: AudioSampleFormat.F32Le, targetObjectName: node);
 
@@ -458,7 +458,7 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
         // One gst pipeline, two named sinks -> both PipeWire nodes run in the same graph,
         // driven by the same clock. Per PipeWire's timing model, pw_stream_get_time().now is
         // the monotonic graph-clock time of the processing cycle and is the SAME reference for
-        // every stream. We surface it as Frame.CaptureClockNs. This test proves audio and video
+        // every stream. We surface it as Frame.GraphTimeNs. This test proves audio and video
         // are stamped on that one shared clock - which is exactly what makes lip-sync possible.
         const string vNode = "gst-av-video", aNode = "gst-av-audio";
         await using var src = await GstTestSource.StartTwoAsync(ctx,
@@ -473,7 +473,7 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
         await using var vCap = new PipeWireVideoCapture(ctx, "gst-av-video-sink");
         vCap.FrameReady += (_, f) =>
         {
-            lock (vClk) { if (vClk.Count < cap && f.CaptureClockNs is { } t) vClk.Add(t); }
+            lock (vClk) { if (vClk.Count < cap && f.GraphTimeNs is { } t) vClk.Add(t); }
         };
         vCap.Connect(preferredFormats: stackalloc[] { PixelFormat.Bgra }, targetObjectName: vNode);
 
@@ -481,7 +481,7 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
         aCap.FrameReady += (_, f) =>
         {
             foreach (byte b in f.Samples) { if (b != 0) { audioNonSilent = true; break; } }
-            lock (aClk) { if (aClk.Count < cap && f.CaptureClockNs is { } t) aClk.Add(t); }
+            lock (aClk) { if (aClk.Count < cap && f.GraphTimeNs is { } t) aClk.Add(t); }
         };
         aCap.Connect(sampleRate: 48000, channels: 2, format: AudioSampleFormat.F32Le, targetObjectName: aNode);
 
@@ -517,8 +517,8 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
 
         // 1. Both streams produce a real graph-clock timestamp (proves pw_stream_get_time works
         //    for audio AND video - audio has no header PTS but DOES have this).
-        Assert.IsTrue(v[0] > 0, "video CaptureClockNs must be a real graph-clock time");
-        Assert.IsTrue(a[0] > 0, "audio CaptureClockNs must be a real graph-clock time");
+        Assert.IsTrue(v[0] > 0, "video GraphTimeNs must be a real graph-clock time");
+        Assert.IsTrue(a[0] > 0, "audio GraphTimeNs must be a real graph-clock time");
 
         // 2. Each stream's clock advances monotonically.
         for (int i = 1; i < v.Length; i++) Assert.IsTrue(v[i] >= v[i - 1], "video clock must be monotonic");

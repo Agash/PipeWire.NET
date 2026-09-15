@@ -111,7 +111,7 @@ public sealed class VideoFrameTests : PipeWireTestBase
         Assert.AreEqual(4, frame.Height);
         Assert.AreEqual(PixelFormat.Bgra, frame.Format);
         Assert.AreEqual(42UL, frame.SequenceNumber);
-        Assert.AreEqual(16, frame.Data.Length);
+        Assert.AreEqual(16, frame.Pixels.Length);
     }
 }
 
@@ -259,13 +259,13 @@ public sealed class MetadataMappingTests : PipeWireTestBase
         ReadOnlySpan<byte> px = stackalloc byte[16];
         var frame = new VideoFrame(px, 64, 4, 4, PixelFormat.Bgra, 7,
             bufferType: PipeWireBufferType.DmaBuf, fd: 42, mapOffset: 0,
-            presentationTimeNs: 123_456,
+            presentationTimestampNs: 123_456,
             color: new VideoColorInfo(VideoColorRange.Full_0_255, VideoColorMatrix.Rgb,
                                       VideoTransferFunction.Srgb, VideoColorPrimaries.Bt709));
         Assert.AreEqual(PipeWireBufferType.DmaBuf, frame.BufferType);
         Assert.IsTrue(frame.IsFdBacked);
         Assert.AreEqual(42, frame.Fd);
-        Assert.AreEqual(123_456, frame.PresentationTimeNs);
+        Assert.AreEqual(123_456, frame.PresentationTimestampNs);
         Assert.AreEqual(VideoColorMatrix.Rgb, frame.Color.Matrix);
     }
 }
@@ -290,15 +290,15 @@ public sealed class ModifierNegotiationTests : PipeWireTestBase
         Assert.IsTrue(reader.EnterObject(out _, out _, out _));
 
         bool sawModifier = false;
-        while (reader.TryReadProperty(out SpaKey key, out uint flags, out var value))
+        while (reader.TryReadProperty(out SpaKey key, out SpaPodPropFlags flags, out var value))
         {
             if (key != SpaFormat.VideoModifier) continue;
             sawModifier = true;
 
             // First pass MUST advertise MANDATORY|DONT_FIXATE so the producer narrows the modifier
             // set to what it supports without collapsing it to a single value (the two-step handshake).
-            Assert.AreEqual(SpaPodPropFlag.Mandatory, flags & SpaPodPropFlag.Mandatory, "MANDATORY must be set");
-            Assert.AreEqual(SpaPodPropFlag.DontFixate, flags & SpaPodPropFlag.DontFixate, "DONT_FIXATE must be set");
+            Assert.AreEqual(SpaPodPropFlags.Mandatory, flags & SpaPodPropFlags.Mandatory, "MANDATORY must be set");
+            Assert.AreEqual(SpaPodPropFlags.DontFixate, flags & SpaPodPropFlags.DontFixate, "DONT_FIXATE must be set");
 
             Assert.IsTrue(value.TryReadModifier(out long first, out int count));
             // SPA Choice Enum body is { default, ...allowed }: the first value is the default AND must also
@@ -322,13 +322,13 @@ public sealed class ModifierNegotiationTests : PipeWireTestBase
 
         var reader = new SpaPodReader(buf[..len]);
         Assert.IsTrue(reader.EnterObject(out _, out _, out _));
-        while (reader.TryReadProperty(out SpaKey key, out uint flags, out _))
+        while (reader.TryReadProperty(out SpaKey key, out SpaPodPropFlags flags, out _))
         {
             if (key != SpaFormat.VideoModifier) continue;
             // The fixate pass keeps MANDATORY but drops DONT_FIXATE, telling the producer to settle
             // on the single modifier we now offer.
-            Assert.AreEqual(SpaPodPropFlag.Mandatory, flags & SpaPodPropFlag.Mandatory);
-            Assert.AreEqual(0u, flags & SpaPodPropFlag.DontFixate, "fixate pass must NOT set DONT_FIXATE");
+            Assert.AreEqual(SpaPodPropFlags.Mandatory, flags & SpaPodPropFlags.Mandatory);
+            Assert.AreEqual(SpaPodPropFlags.None, flags & SpaPodPropFlags.DontFixate, "fixate pass must NOT set DONT_FIXATE");
         }
     }
 
@@ -618,8 +618,8 @@ public sealed class NativeLibraryResolutionTests : PipeWireTestBase
         capture.FrameReady += (_, frame) =>
         {
             // Ignore the initial empty/black frames some negotiations emit; wait for real data.
-            if (frame.Data.Length < 256) return;
-            byte[] head = frame.Data[..256].ToArray();
+            if (frame.Pixels.Length < 256) return;
+            byte[] head = frame.Pixels[..256].ToArray();
             captured.TrySetResult((frame.Width, frame.Height, frame.Format, frame.BufferType, head));
         };
         capture.Connect(preferredFormats: stackalloc[] { PixelFormat.Bgra },
@@ -694,8 +694,8 @@ public sealed class NativeLibraryResolutionTests : PipeWireTestBase
         await using var capture = new PipeWireVideoCapture(ctx, "PipeWire.NET.Test.AlphaSink");
         capture.FrameReady += (_, frame) =>
         {
-            if (frame.Data.Length < 4) return;
-            captured.TrySetResult(frame.Data[..4].ToArray());
+            if (frame.Pixels.Length < 4) return;
+            captured.TrySetResult(frame.Pixels[..4].ToArray());
         };
         capture.Connect(preferredFormats: stackalloc[] { PixelFormat.Bgra },
             targetObjectName: "PipeWire.NET.Test.AlphaSource");

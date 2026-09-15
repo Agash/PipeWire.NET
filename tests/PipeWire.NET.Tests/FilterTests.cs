@@ -120,7 +120,7 @@ public sealed class FilterTests : PipeWireTestBase
         long cycles = 0;
         long buffered = 0;
 
-        filter.ProcessCallback = (_, sampleCount) =>
+        filter.ProcessCallback = (_, sampleCount, in _) =>
         {
             // The realtime thread. Nothing here allocates: the buffer is written in place, and the
             // only signals out are counters and a completion source that already exists.
@@ -160,7 +160,7 @@ public sealed class FilterTests : PipeWireTestBase
         filter.AddAudioPort(PipeWirePortDirection.Out, "output_FL");
 
         var threw = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        filter.ProcessCallback = (_, _) =>
+        filter.ProcessCallback = (_, _, in _) =>
         {
             threw.TrySetResult();
 

@@ -55,7 +55,7 @@ public sealed class DmaBufRoundTripTests : PipeWireTestBase
             long firstFd = -1;
 
             await using var output = new PipeWireVideoOutput(ctx, "stx-dmabuf-roundtrip", width, height, PixelFormat.Bgra, 30);
-            output.AllocateDmaBuf += (_, index, w, h, _, planes) =>
+            output.AllocateDmaBuf += (_, index, w, h, _, _, planes) =>
             {
                 if (index >= poolCap) return 0;
                 while (buffers.Count <= index) buffers.Add(gbm.CreateBgra(width, height));

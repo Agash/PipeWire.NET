@@ -22,7 +22,7 @@ public sealed class PublicSurfaceTests : PipeWireTestBase
         typeof(Media.Streams.PipeWireAudioCapture).Assembly,
     ];
 
-    private static string RepoRoot()
+    internal static string RepoRoot()
     {
         DirectoryInfo? dir = new(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "PipeWire.NET.slnx")))

@@ -155,7 +155,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
                 registry, g => g.GetLink(link.LinkId) is null, cts.Token);
 
             Assert.IsNull(after.GetLink(link.LinkId));
-            Assert.AreEqual(0, after.GetOutputLinksForPort(link.LinkOutputPort).Length,
+            Assert.AreEqual(0, after.GetOutputLinksForPort(link.OutputPortId).Length,
                 "the removed link must leave the adjacency index too");
         }
     }
@@ -326,7 +326,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
                 PipeWireGraphSnapshot seen = registry.Current;
                 if (!LeftoversPresent(seen, tag)
                     && !seen.Links.Any(l =>
-                        l.LinkOutputPort == output.PortId && l.LinkInputPort == input.PortId))
+                        l.OutputPortId == output.PortId && l.InputPortId == input.PortId))
                 {
                     break;
                 }
@@ -337,7 +337,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
             PipeWireGraphSnapshot final = registry.Current;
             Assert.IsFalse(LeftoversPresent(final, tag), DescribeLeftovers(final, tag));
             Assert.IsFalse(final.Links.Any(l =>
-                l.LinkOutputPort == output.PortId && l.LinkInputPort == input.PortId),
+                l.OutputPortId == output.PortId && l.InputPortId == input.PortId),
                 "a link through our ports survived their nodes");
             Assert.IsTrue(final.Nodes.Length > 0, "the session stopped answering");
         }

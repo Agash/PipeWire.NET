@@ -42,10 +42,10 @@ public sealed class GraphInvariantTests : PipeWireTestBase
 
         foreach (PipeWireLink link in g.Links)
         {
-            if (g.GetNode(link.LinkInputNode) is null)
-                broken.Add($"link {link.LinkId} refers to absent input node {link.LinkInputNode}");
-            if (g.GetNode(link.LinkOutputNode) is null)
-                broken.Add($"link {link.LinkId} refers to absent output node {link.LinkOutputNode}");
+            if (g.GetNode(link.InputNodeId) is null)
+                broken.Add($"link {link.LinkId} refers to absent input node {link.InputNodeId}");
+            if (g.GetNode(link.OutputNodeId) is null)
+                broken.Add($"link {link.LinkId} refers to absent output node {link.OutputNodeId}");
         }
 
         return broken;

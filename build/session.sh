@@ -66,6 +66,10 @@ wireplumber.profiles = {
     policy.standard = required
     hardware.audio = disabled
     hardware.bluetooth = disabled
+    # Cameras are not contended the way sound cards are - nothing holds a v4l2 device while
+    # idle - and the local-v4l2 tests provision their own loopback camera, so the v4l2 monitor
+    # stays on. With nothing to find it costs nothing.
+    hardware.video-capture = required
   }
 }
 PWNETCONF
@@ -74,7 +78,42 @@ PWNETCONF
     PWNET_WP_ARGS=""
   fi
 
-  pipewire > "$PWNET_SESSION_LOG_DIR/pipewire.log" 2>&1 &
+  # A session without its sound cards has no audio devices at all, so every test that needs a
+  # default sink or source skips. PWNET_SESSION_NULL_AUDIO gives it two null adapters to make
+  # default instead, without touching the hardware.
+  if [ "${PWNET_SESSION_NULL_AUDIO:-0}" = "1" ]; then
+    mkdir -p "$XDG_CONFIG_HOME/pipewire/pipewire.conf.d"
+    cat > "$XDG_CONFIG_HOME/pipewire/pipewire.conf.d/50-pwnet-null.conf" <<'PWNETCONF'
+context.objects = [
+  { factory = adapter
+    args = {
+      factory.name   = support.null-audio-sink
+      node.name      = "pwnet-null-sink"
+      media.class    = Audio/Sink
+      object.linger  = true
+      audio.position = [ FL FR ]
+    }
+  }
+  { factory = adapter
+    args = {
+      factory.name   = support.null-audio-sink
+      node.name      = "pwnet-null-source"
+      media.class    = "Audio/Source/Virtual"
+      object.linger  = true
+      audio.position = [ FL FR ]
+    }
+  }
+]
+PWNETCONF
+  fi
+
+  # PWNET_SESSION_PW_DEBUG sets the daemon's log level (a PIPEWIRE_DEBUG value, topics allowed)
+  # without touching the clients', whose own PIPEWIRE_DEBUG is whatever the caller exported.
+  if [ -n "${PWNET_SESSION_PW_DEBUG:-}" ]; then
+    PIPEWIRE_DEBUG="$PWNET_SESSION_PW_DEBUG" pipewire > "$PWNET_SESSION_LOG_DIR/pipewire.log" 2>&1 &
+  else
+    pipewire > "$PWNET_SESSION_LOG_DIR/pipewire.log" 2>&1 &
+  fi
   PWNET_PW_PID=$!
 
   local i
@@ -113,7 +152,12 @@ PWNETCONF
   # loses: "Failed to connect to PipeWire" and a session that answers pw-cli but manages nothing.
   # Unquoted on purpose: empty must expand to no argument at all, not to one empty argument.
   # shellcheck disable=SC2086
-  wireplumber $PWNET_WP_ARGS > "$PWNET_SESSION_LOG_DIR/wireplumber.log" 2>&1 &
+  # PWNET_SESSION_WP_DEBUG does the same for WirePlumber (a WIREPLUMBER_DEBUG value).
+  if [ -n "${PWNET_SESSION_WP_DEBUG:-}" ]; then
+    WIREPLUMBER_DEBUG="$PWNET_SESSION_WP_DEBUG" wireplumber $PWNET_WP_ARGS > "$PWNET_SESSION_LOG_DIR/wireplumber.log" 2>&1 &
+  else
+    wireplumber $PWNET_WP_ARGS > "$PWNET_SESSION_LOG_DIR/wireplumber.log" 2>&1 &
+  fi
   PWNET_WP_PID=$!
 
   # pipewire answering is only half the session: the tests need WirePlumber managing it

@@ -29,15 +29,15 @@ public sealed unsafe class NativeHelperTests : PipeWireTestBase
         // status. Telling them apart is how a caller knows whether to wait for an answer.
         for (int seq = 0; seq < 8; seq++)
         {
-            int result = Native.SPA_ASYNC_BIT | seq;
+            int result = NativeConstants.SPA_ASYNC_BIT | seq;
 
             Assert.IsTrue(Native.SPA_RESULT_IS_ASYNC(result), $"seq {seq} must read as async");
             Assert.AreEqual(seq, Native.SPA_RESULT_ASYNC_SEQ(result));
         }
 
         Assert.AreEqual(
-            Native.SPA_ASYNC_SEQ_MASK,
-            Native.SPA_RESULT_ASYNC_SEQ(Native.SPA_ASYNC_BIT | Native.SPA_ASYNC_SEQ_MASK));
+            NativeConstants.SPA_ASYNC_SEQ_MASK,
+            Native.SPA_RESULT_ASYNC_SEQ(NativeConstants.SPA_ASYNC_BIT | NativeConstants.SPA_ASYNC_SEQ_MASK));
     }
 
     [TestMethod]

@@ -102,7 +102,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
                 Interlocked.Increment(ref ragged);
         };
 
-        capture.Connect(output.NodeId!.Value, Rate, Channels, Format);
+        capture.Connect((await output.WaitForNodeIdAsync(cts.Token)), Rate, Channels, Format);
 
         await WaitForCountAsync(() => Volatile.Read(ref received), 5, cts.Token);
 
@@ -171,7 +171,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
                 if (!nonZero && frame.Samples.Length > 0) Interlocked.Increment(ref allZero);
             };
 
-            capture.Connect(output.NodeId!.Value, rate, channels, format);
+            capture.Connect((await output.WaitForNodeIdAsync(cts.Token)), rate, channels, format);
 
             await WaitForCountAsync(() => Volatile.Read(ref received), 5, cts.Token);
 
@@ -205,7 +205,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
                      && g.GetPortsForNode(output.NodeId ?? 0).Length > 0,
                 cts.Token);
 
-            uint id = output.NodeId!.Value;
+            uint id = (await output.WaitForNodeIdAsync(cts.Token));
             PipeWireNode node = graph.GetNode(id)!;
 
             // A stream is a node: it must answer the same questions as any other, or a patchbay
@@ -252,7 +252,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
             var received = 0;
             await using var capture = new PipeWireAudioCapture(ctx, "pwnet-art-silent-sink");
             capture.FrameReady += (_, _) => Interlocked.Increment(ref received);
-            capture.Connect(output.NodeId!.Value);
+            capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
 
             await WaitForCountAsync(() => Volatile.Read(ref asked), 5, cts.Token);
 
@@ -288,7 +288,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
             // would pass without exercising anything. A consumer pulling from it is what makes the
             // throwing callback actually run.
             await using var capture = new PipeWireAudioCapture(ctx, "pwnet-art-throw-sink");
-            capture.Connect(output.NodeId!.Value);
+            capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
 
             await WaitForCountAsync(() => Volatile.Read(ref asked), 5, cts.Token);
 
@@ -382,7 +382,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
 
             await using var capture = new PipeWireAudioCapture(ctx, "pwnet-clock-in");
             capture.FrameReady += (_, _) => { };
-            capture.Connect(output.NodeId!.Value);
+            capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
 
             // The area arrives with the first cycle, not with the connect.
             PipeWireGraphClock? producer = null, consumer = null;
