@@ -96,7 +96,7 @@ public static class PipeWireGraphExtensions
 
         /// <summary>Both endpoints of a link, if both are still present.</summary>
         public (PipeWirePort? Output, PipeWirePort? Input) GetEndpoints(PipeWireLink link) =>
-            (graph.GetPort(link.LinkOutputPort), graph.GetPort(link.LinkInputPort));
+            (graph.GetPort(link.OutputPortId), graph.GetPort(link.InputPortId));
 
         /// <summary>
         /// True when this node has a data output port, so media can be read from it.

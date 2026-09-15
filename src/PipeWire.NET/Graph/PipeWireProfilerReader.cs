@@ -53,12 +53,12 @@ public sealed partial class PipeWireProfilerReader : IDisposable, IAsyncDisposab
 
         var reader = new PipeWireProfilerReader(ctx, id, logger);
         reader._bound = BoundProxy.Bind(
-            ctx, registry, id, Native.PW_TYPE_INTERFACE_PROFILER, version, Native.PW_VERSION_PROFILER,
+            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Profiler, version, NativeConstants.PW_VERSION_PROFILER,
             sizeof(pw_profiler_events),
             events =>
             {
                 var table = (pw_profiler_events*)events;
-                table->version = Native.PW_VERSION_PROFILER_EVENTS;
+                table->version = NativeConstants.PW_VERSION_PROFILER_EVENTS;
                 table->profile = &OnProfileCallback;
             },
             (proxy, hook, events, data) => Native.pw_profiler_add_listener(

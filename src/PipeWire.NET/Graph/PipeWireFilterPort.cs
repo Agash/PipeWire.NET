@@ -86,4 +86,155 @@ public sealed unsafe class PipeWireFilterPort
         void* buffer = Interop.Native.pw_filter_get_dsp_buffer(_portData, sampleCount);
         return buffer is null ? default : new Span<float>(buffer, checked((int)sampleCount));
     }
+
+    /// <summary>
+    /// The cycle's pixels for a video port, as 32 bit float RGBA.
+    /// </summary>
+    /// <param name="width">The frame width, from the graph's position area.</param>
+    /// <param name="height">The frame height, from the graph's position area.</param>
+    /// <returns>
+    /// Four floats per pixel, row-major and tightly packed, or an empty span when the graph gave
+    /// this port no buffer for the cycle.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// The video counterpart of <see cref="GetSamples"/>, and subject to the same rules: call it
+    /// only from inside the process callback, and do not keep the span past it.
+    /// </para>
+    /// <para>
+    /// The geometry is a parameter rather than a property because a filter port does not negotiate
+    /// one. Upstream's <c>video-dsp-play</c> reads the size from the graph's position area each
+    /// cycle for exactly this reason - the frame size belongs to the graph, not to the port.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The filter that owns this port has been disposed.</exception>
+    /// <exception cref="InvalidOperationException">The port does not carry video.</exception>
+    public Span<float> GetPixels(uint width, uint height)
+    {
+        ObjectDisposedException.ThrowIf(_owner.IsDisposed, _owner);
+
+        if (_format is not PipeWireDspFormat.Rgba32FloatVideo)
+            throw new InvalidOperationException(
+                $"port '{Name}' carries {_format}, not video; GetPixels is video-only.");
+
+        uint floats = checked(width * height * 4);
+        void* buffer = Interop.Native.pw_filter_get_dsp_buffer(_portData, floats);
+        return buffer is null ? default : new Span<float>(buffer, checked((int)floats));
+    }
+
+    /// <summary>
+    /// Reads the timed events that arrived on a MIDI or control port this cycle.
+    /// </summary>
+    /// <returns>The sequence, or <see langword="null"/> when the port had no buffer this cycle.</returns>
+    /// <remarks>
+    /// <para>
+    /// A sequence port's buffer holds a <c>spa_pod_sequence</c> of timed controls, not samples,
+    /// which is why <see cref="GetSamples"/> refuses it. Each control carries an offset in frames
+    /// from the start of the cycle, so a consumer knows not just what happened but when within the
+    /// quantum - the difference between MIDI that is merely delivered and MIDI that is in time.
+    /// </para>
+    /// <para>
+    /// Call only from inside the process callback.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The filter that owns this port has been disposed.</exception>
+    /// <exception cref="InvalidOperationException">The port does not carry a sequence.</exception>
+    public Spa.SpaSequence? ReadEvents()
+    {
+        ObjectDisposedException.ThrowIf(_owner.IsDisposed, _owner);
+        RequireSequencePort(nameof(ReadEvents));
+
+        pw_buffer* buf = Interop.Native.pw_filter_dequeue_buffer(_portData);
+        if (buf is null) return null;
+
+        try
+        {
+            spa_buffer* sb = buf->buffer;
+            if (sb is null || sb->n_datas == 0 || sb->datas is null) return null;
+
+            spa_data* d = &sb->datas[0];
+            if (d->data is null || d->chunk is null) return null;
+
+            uint size = d->chunk->size;
+            if (size == 0 || size > d->maxsize) return null;
+
+            var pod = new ReadOnlySpan<byte>((byte*)d->data + d->chunk->offset, checked((int)size));
+
+            return Spa.SpaPod.TryParse(pod, out Spa.SpaValue? parsed) && parsed is Spa.SpaSequence seq
+                ? seq
+                : null;
+        }
+        finally
+        {
+            // Returned either way: a buffer dequeued and not queued back is one the pool never
+            // sees again, and the port stalls a few cycles later with no error anywhere.
+            _ = Interop.Native.pw_filter_queue_buffer(_portData, buf);
+        }
+    }
+
+    /// <summary>
+    /// Publishes timed events on a MIDI or control port for this cycle.
+    /// </summary>
+    /// <param name="events">The controls to emit, in ascending offset order.</param>
+    /// <returns><see langword="false"/> when the port had no buffer to write into this cycle.</returns>
+    /// <remarks>
+    /// <para>
+    /// The chunk size is set to the pod's own length rather than to a sample count, which is why
+    /// this cannot go through the DSP-buffer helper: that helper assumes floats and would declare a
+    /// size in samples, leaving the consumer to parse a sequence that claims the wrong length.
+    /// </para>
+    /// <para>
+    /// Call only from inside the process callback.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The filter that owns this port has been disposed.</exception>
+    /// <exception cref="InvalidOperationException">The port does not carry a sequence.</exception>
+    /// <exception cref="ArgumentException">The events do not fit the port's buffer.</exception>
+    public bool WriteEvents(scoped ReadOnlySpan<Spa.SpaControl> events)
+    {
+        ObjectDisposedException.ThrowIf(_owner.IsDisposed, _owner);
+        RequireSequencePort(nameof(WriteEvents));
+
+        pw_buffer* buf = Interop.Native.pw_filter_dequeue_buffer(_portData);
+        if (buf is null) return false;
+
+        try
+        {
+            spa_buffer* sb = buf->buffer;
+            if (sb is null || sb->n_datas == 0 || sb->datas is null) return false;
+
+            spa_data* d = &sb->datas[0];
+            if (d->data is null || d->chunk is null || d->maxsize == 0) return false;
+
+            var target = new Span<byte>(d->data, checked((int)d->maxsize));
+            var sequence = new Spa.SpaSequence(0, [.. events]);
+
+            if (!Spa.SpaPod.TryWrite(sequence, target, out int written))
+            {
+                throw new ArgumentException(
+                    $"the events need {Spa.SpaPod.GetByteCount(sequence)} bytes, and the port's "
+                    + $"buffer holds {d->maxsize}.",
+                    nameof(events));
+            }
+
+            d->chunk->offset = 0;
+            d->chunk->size = (uint)written;
+            d->chunk->stride = 1;
+            d->chunk->flags = 0;
+            return true;
+        }
+        finally
+        {
+            _ = Interop.Native.pw_filter_queue_buffer(_portData, buf);
+        }
+    }
+
+    private void RequireSequencePort(string member)
+    {
+        if (_format is PipeWireDspFormat.Midi or PipeWireDspFormat.Control or PipeWireDspFormat.Ump)
+            return;
+
+        throw new InvalidOperationException(
+            $"port '{Name}' carries {_format}, not a sequence; {member} is for MIDI and control ports.");
+    }
 }

@@ -29,8 +29,6 @@ public sealed partial class SafeDescriptorHandle : SafeHandle
         : (int)handle;
 
     /// <inheritdoc/>
-    protected override bool ReleaseHandle() => close((int)handle) == 0;
+    protected override bool ReleaseHandle() => NativeConstants.close((int)handle) == 0;
 
-    [LibraryImport("libc", EntryPoint = "close", SetLastError = true)]
-    private static partial int close(int fd);
 }

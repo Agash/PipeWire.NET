@@ -77,7 +77,7 @@ public sealed class PipeWireProperties : IReadOnlyDictionary<string, string>
 
     /// <summary>Reads <c>object.serial</c>, which every object carries.</summary>
     internal ulong? Serial =>
-        _items.TryGetValue("object.serial", out string? raw) && ulong.TryParse(raw, out ulong serial)
+        _items.TryGetValue(PipeWireKeys.PW_KEY_OBJECT_SERIAL, out string? raw) && ulong.TryParse(raw, out ulong serial)
             ? serial
             : null;
 

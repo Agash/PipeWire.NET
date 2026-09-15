@@ -77,6 +77,13 @@ public readonly struct PipeWireLinkCreation
     /// Marks the link passive (<c>link.passive</c>), so it does not by itself keep its endpoints
     /// running when nothing else is driving them.
     /// </summary>
+    /// <remarks>
+    /// A request, which the daemon honours only when its link factory allows it:
+    /// <c>module-link-factory</c> removes <c>link.passive</c> unless it was loaded with
+    /// <c>allow.link.passive = true</c>, and upstream's default is false. On a default daemon the link
+    /// is created active, with no error. Read the created link's <c>link.passive</c> to know which
+    /// happened.
+    /// </remarks>
     public PipeWireLinkCreation Passive() =>
         new(_registry, _output, _input, _options with { Passive = true });
 

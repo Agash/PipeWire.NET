@@ -103,15 +103,15 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
             context, name, context.LoggerFactory.CreateLogger($"PipeWire.NET.Device.{name}"));
 
         var props = ImmutableArray.CreateBuilder<KeyValuePair<string, string>>();
-        props.Add(new("device.name", name));
-        props.Add(new("device.description", description));
-        props.Add(new("device.api", "pwnet"));
-        props.Add(new("media.class", "Audio/Device"));
+        props.Add(new(PipeWireKeys.PW_KEY_DEVICE_NAME, name));
+        props.Add(new(PipeWireKeys.PW_KEY_DEVICE_DESCRIPTION, description));
+        props.Add(new(PipeWireKeys.PW_KEY_DEVICE_API, "pwnet"));
+        props.Add(new(PipeWireKeys.PW_KEY_MEDIA_CLASS, "Audio/Device"));
         if (properties is not null)
         {
             foreach (KeyValuePair<string, string> pair in properties)
             {
-                if (pair.Key is "device.name" or "device.description") continue;
+                if (pair.Key is PipeWireKeys.PW_KEY_DEVICE_NAME or PipeWireKeys.PW_KEY_DEVICE_DESCRIPTION) continue;
                 props.Add(pair);
             }
         }
@@ -136,7 +136,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         // Everything the daemon will hold a pointer to, allocated once and freed only in Dispose
         // after the proxy that refers to it has gone.
         _methods = (spa_device_methods*)NativeMemory.AllocZeroed((nuint)sizeof(spa_device_methods));
-        _methods->version = SpaDevice.VersionMethods;
+        _methods->version = NativeConstants.SPA_VERSION_DEVICE_METHODS;
         _methods->add_listener = &OnAddListener;
         _methods->sync = &OnSync;
         _methods->enum_params = &OnEnumParams;
@@ -159,9 +159,9 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
             {
                 _paramInfo[i].id = (uint)id;
                 // Readable, and writable for the two a caller is expected to change.
-                _paramInfo[i].flags = id is SpaParamType.Profile or SpaParamType.Route
-                    ? SpaParamInfoFlags.Serial | SpaParamInfoFlags.Read | SpaParamInfoFlags.Write
-                    : SpaParamInfoFlags.Serial | SpaParamInfoFlags.Read;
+                _paramInfo[i].flags = (uint)(id is SpaParamType.Profile or SpaParamType.Route
+                    ? SpaParamInfoFlags.Serial | SpaParamInfoFlags.ReadWrite
+                    : SpaParamInfoFlags.Serial | SpaParamInfoFlags.Read);
                 i++;
             }
         }
@@ -169,13 +169,15 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         _self = GCHandle.Alloc(this, GCHandleType.Weak);
 
         _iface = (spa_interface*)NativeMemory.AllocZeroed((nuint)sizeof(spa_interface));
-        _iface->version = SpaDevice.Version;
+        _iface->version = NativeConstants.SPA_VERSION_DEVICE;
         _iface->cb.funcs = _methods;
         _iface->cb.data = (void*)GCHandle.ToIntPtr(_self);
 
-        ReadOnlySpan<byte> typeUtf8 = Encoding.UTF8.GetBytes(SpaDevice.InterfaceType + '\0');
-        _iface->type = (sbyte*)NativeMemory.Alloc((nuint)typeUtf8.Length);
-        typeUtf8.CopyTo(new Span<byte>(_iface->type, typeUtf8.Length));
+        // The interface keeps its own copy of the type string for as long as it lives, so the
+        // generated span is copied out, terminator included, rather than pointed at.
+        ReadOnlySpan<byte> type = NativeConstants.SPA_TYPE_INTERFACE_Device;
+        _iface->type = (sbyte*)NativeMemory.AllocZeroed((nuint)type.Length + 1);
+        type.CopyTo(new Span<byte>(_iface->type, type.Length));
 
         pw_proxy* exported;
         using (_ctx.Lock())
@@ -191,11 +193,8 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
 
             spa_dict native = dict.Build();
 
-            fixed (byte* t = typeUtf8)
-            {
-                exported = Native.pw_core_export(
-                    _ctx.CoreHandle, (sbyte*)t, &native, _iface, 0);
-            }
+            exported = Native.pw_core_export(
+                _ctx.CoreHandle, _iface->type, &native, _iface, 0);
         }
 
         if (exported is null)
@@ -320,8 +319,8 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         spa_dict native = dict.Build();
 
         spa_device_info info = default;
-        info.version = SpaDevice.VersionInfo;
-        info.change_mask = SpaDevice.ChangeMaskProps | SpaDevice.ChangeMaskParams;
+        info.version = NativeConstants.SPA_VERSION_DEVICE_INFO;
+        info.change_mask = (ulong)(SpaDeviceChangeMask.Props | SpaDeviceChangeMask.Params);
         info.props = &native;
         info.@params = _paramInfo;
         info.n_params = _paramInfoCount;
@@ -343,7 +342,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         void* obj, spa_hook* listener, spa_device_events* events, void* data)
     {
         PipeWireDeviceProvider? self = FromData(obj);
-        if (self is null || listener is null) return -22;
+        if (self is null || listener is null) return -NativeConstants.EINVAL;
 
         try
         {
@@ -368,7 +367,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         catch (Exception ex)
         {
             self.LogCallbackThrew(nameof(OnAddListener), ex);
-            return -5;
+            return -NativeConstants.EIO;
         }
     }
 
@@ -376,7 +375,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
     private static int OnSync(void* obj, int seq)
     {
         PipeWireDeviceProvider? self = FromData(obj);
-        if (self is null) return -22;
+        if (self is null) return -NativeConstants.EINVAL;
 
         try
         {
@@ -390,7 +389,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         catch (Exception ex)
         {
             self.LogCallbackThrew(nameof(OnSync), ex);
-            return -5;
+            return -NativeConstants.EIO;
         }
     }
 
@@ -399,7 +398,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         void* obj, int seq, uint id, uint start, uint num, spa_pod* filter)
     {
         PipeWireDeviceProvider? self = FromData(obj);
-        if (self is null) return -22;
+        if (self is null) return -NativeConstants.EINVAL;
 
         try
         {
@@ -429,7 +428,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
                     result.next = index + 1;
                     result.param = (spa_pod*)p;
 
-                    self.EmitResult(seq, 0, SpaDevice.ResultTypeParams, &result);
+                    self.EmitResult(seq, 0, (uint)NativeConstants.SPA_RESULT_TYPE_DEVICE_PARAMS, &result);
                 }
 
                 sent++;
@@ -441,7 +440,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         catch (Exception ex)
         {
             self.LogCallbackThrew(nameof(OnEnumParams), ex);
-            return -5;
+            return -NativeConstants.EIO;
         }
     }
 
@@ -474,7 +473,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
     private static int OnSetParam(void* obj, uint id, uint flags, spa_pod* param)
     {
         PipeWireDeviceProvider? self = FromData(obj);
-        if (self is null) return -22;
+        if (self is null) return -NativeConstants.EINVAL;
 
         try
         {
@@ -521,7 +520,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         catch (Exception ex)
         {
             self.LogCallbackThrew(nameof(OnSetParam), ex);
-            return -5;
+            return -NativeConstants.EIO;
         }
     }
 

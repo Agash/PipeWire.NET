@@ -60,9 +60,9 @@ internal ref struct SpaPodBuilder
 
     public void AddId(SpaKey key, SpaIdValue value)            { WritePropHeader(key); AddId(value); }
     public void AddInt(SpaKey key, int value)            { WritePropHeader(key); AddInt(value); }
-    public void AddInt(SpaKey key, int value, uint propFlags) { WritePropHeader(key, propFlags); AddInt(value); }
+    public void AddInt(SpaKey key, int value, SpaPodPropFlags propFlags) { WritePropHeader(key, propFlags); AddInt(value); }
     public void AddLong(SpaKey key, long value)          { WritePropHeader(key); AddLong(value); }
-    public void AddLong(SpaKey key, long value, uint propFlags) { WritePropHeader(key, propFlags); AddLong(value); }
+    public void AddLong(SpaKey key, long value, SpaPodPropFlags propFlags) { WritePropHeader(key, propFlags); AddLong(value); }
     public void AddFraction(SpaKey key, uint n, uint d)  { WritePropHeader(key); WriteFraction(n, d); }
     public void AddRectangle(SpaKey key, uint w, uint h) { WritePropHeader(key); WriteRectangle(w, h); }
 
@@ -71,12 +71,12 @@ internal ref struct SpaPodBuilder
     /// <summary>
     /// Choice(Enum) over <c>Long</c> values - used to offer DRM format modifiers. The first
     /// modifier is the preferred/default; the rest are alternatives. Pass
-    /// <see cref="SpaPodPropFlag.Mandatory"/> | <see cref="SpaPodPropFlag.DontFixate"/> as
+    /// <see cref="SpaPodPropFlags.Mandatory"/> | <see cref="SpaPodPropFlags.DontFixate"/> as
     /// <paramref name="propFlags"/> on the first negotiation pass so the producer narrows the set
     /// to what it supports without fixating, then re-offer a single modifier to fixate.
     /// </summary>
     /// <exception cref="ArgumentException"><paramref name="values"/> is empty.</exception>
-    public void AddChoiceEnumLong(SpaKey key, ReadOnlySpan<long> values, uint propFlags = 0)
+    public void AddChoiceEnumLong(SpaKey key, ReadOnlySpan<long> values, SpaPodPropFlags propFlags = SpaPodPropFlags.None)
     {
         // A choice with no children is a header claiming alternatives it does not carry. Our own
         // reader rejects it, and a producer reading it has nothing to select, so refuse to write
@@ -287,6 +287,18 @@ internal ref struct SpaPodBuilder
         AddBytes(data);
     }
 
+    /// <summary>Writes a property whose value is raw bytes, such as a format's <c>deviceId</c>.</summary>
+    /// <remarks>
+    /// <c>SPA_FORMAT_VIDEO_deviceId</c> is a <c>dev_t</c> carried this way, in host byte order,
+    /// which is how upstream's video-src-fixate writes it (<c>spa_pod_builder_bytes(b, &amp;device_id,
+    /// sizeof device_id)</c>).
+    /// </remarks>
+    public void AddBytes(SpaKey key, scoped ReadOnlySpan<byte> data, SpaPodPropFlags propFlags = SpaPodPropFlags.None)
+    {
+        WritePropHeader(key, propFlags);
+        AddBytes(data);
+    }
+
     /// <summary>Writes a bare bytes pod.</summary>
     public void AddBytes(scoped ReadOnlySpan<byte> data)
     {
@@ -355,11 +367,11 @@ internal ref struct SpaPodBuilder
         WriteU32(height);           // already aligned
     }
 
-    private void WritePropHeader(SpaKey key, uint flags = 0)
+    private void WritePropHeader(SpaKey key, SpaPodPropFlags flags = SpaPodPropFlags.None)
     {
         // spa_pod_prop header: key (uint32) + flags (uint32), then the value pod.
         WriteU32(key);
-        WriteU32(flags);
+        WriteU32((uint)flags);
     }
 
     /// <summary>Back-patches the 4-byte size field of a pod whose header starts at <paramref name="start"/>.</summary>

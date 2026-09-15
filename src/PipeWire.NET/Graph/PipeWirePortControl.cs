@@ -38,12 +38,12 @@ public sealed partial class PipeWirePortControl : PipeWireParameterObject
     {
         var control = new PipeWirePortControl(ctx, id, logger);
         control.Attach(BoundProxy.Bind(
-            ctx, registry, id, Native.PW_TYPE_INTERFACE_PORT, version, Native.PW_VERSION_PORT,
+            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Port, version, NativeConstants.PW_VERSION_PORT,
             sizeof(pw_port_events),
             events =>
             {
                 var table = (pw_port_events*)events;
-                table->version = Native.PW_VERSION_PORT_EVENTS;
+                table->version = NativeConstants.PW_VERSION_PORT_EVENTS;
                 table->info = &OnInfoCallback;
                 table->param = &OnParamCallback;
             },

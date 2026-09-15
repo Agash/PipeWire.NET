@@ -29,9 +29,18 @@ internal static class AssemblyInitializer
             typeof(AssemblyInitializer).Assembly,
             static (name, asm, path) =>
             {
-                if (name is not "libpipewire-0.3") return 0;
-                if (NativeLibrary.TryLoad("libpipewire-0.3.so.0", asm, path, out nint h)) return h;
-                if (NativeLibrary.TryLoad("libpipewire-0.3.so",   asm, path, out h))      return h;
+                // libdrm backs explicit sync (the DRM syncobj timeline calls). Same rule: the
+                // versioned soname a runtime install ships, then the -dev symlink.
+                (string versioned, string unversioned) = name switch
+                {
+                    "libpipewire-0.3" => ("libpipewire-0.3.so.0", "libpipewire-0.3.so"),
+                    "libdrm" => ("libdrm.so.2", "libdrm.so"),
+                    _ => (string.Empty, string.Empty),
+                };
+
+                if (versioned.Length == 0) return 0;
+                if (NativeLibrary.TryLoad(versioned, asm, path, out nint h)) return h;
+                if (NativeLibrary.TryLoad(unversioned, asm, path, out h)) return h;
                 return 0;
             });
     }

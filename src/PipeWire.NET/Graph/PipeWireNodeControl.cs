@@ -36,12 +36,12 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
     {
         var control = new PipeWireNodeControl(ctx, id, logger);
         control.Attach(BoundProxy.Bind(
-            ctx, registry, id, Native.PW_TYPE_INTERFACE_NODE, version, Native.PW_VERSION_NODE,
+            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Node, version, NativeConstants.PW_VERSION_NODE,
             sizeof(pw_node_events),
             events =>
             {
                 var table = (pw_node_events*)events;
-                table->version = Native.PW_VERSION_NODE_EVENTS;
+                table->version = NativeConstants.PW_VERSION_NODE_EVENTS;
                 table->info = &OnInfoCallback;
                 table->param = &OnParamCallback;
             },

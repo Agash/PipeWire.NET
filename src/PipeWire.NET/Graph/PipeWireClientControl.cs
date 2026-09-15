@@ -62,9 +62,9 @@ public sealed partial class PipeWireClientControl : IDisposable, IAsyncDisposabl
     {
         var control = new PipeWireClientControl(ctx, id, logger);
         control._bound = BoundProxy.Bind(
-            ctx, registry, id, Native.PW_TYPE_INTERFACE_CLIENT, version, Native.PW_VERSION_CLIENT,
+            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Client, version, NativeConstants.PW_VERSION_CLIENT,
             sizeof(pw_client_events),
-            events => ((pw_client_events*)events)->version = Native.PW_VERSION_CLIENT_EVENTS,
+            events => ((pw_client_events*)events)->version = NativeConstants.PW_VERSION_CLIENT_EVENTS,
             static (proxy, hook, events, data) => Native.pw_client_add_listener(
                 (pw_client*)proxy, (spa_hook*)hook, (pw_client_events*)events, (void*)data),
             control);

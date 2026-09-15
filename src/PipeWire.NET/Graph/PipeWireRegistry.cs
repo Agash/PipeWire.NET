@@ -42,6 +42,13 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     private readonly ILogger _logger;
     internal readonly ConcurrentDictionary<uint, PipeWireNode> _sources = new();
     internal readonly ConcurrentDictionary<uint, PipeWirePort> _ports = new();
+
+    // Nodes whose global has been removed, until a new node takes the id. pw-cli destroy removes a
+    // node's global before pw_impl_node_destroy tears its ports down (impl-node.c, global_free), and
+    // the teardown suspends and deactivates the node first, which can announce port globals after the
+    // node is already gone. Filed, those ports would sit in the snapshot under a node it does not
+    // hold. Loop-thread only, like every other write here.
+    private readonly HashSet<uint> _removedNodes = [];
     internal readonly ConcurrentDictionary<uint, PipeWireLink> _links = new();
 
     // Everything that is not a node, port or link. One dictionary rather than eight, because none
@@ -190,7 +197,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             using (_ctx.Lock())
             {
                 pw_registry* registry =
-                    Native.pw_core_get_registry(_ctx.CoreHandle, Native.PW_VERSION_REGISTRY, 0);
+                    Native.pw_core_get_registry(_ctx.CoreHandle, NativeConstants.PW_VERSION_REGISTRY, 0);
 
                 // The registry is a proxy like any other, so it gets the same owner: that keeps the
                 // core and context alive long enough to destroy it properly rather than having it
@@ -200,10 +207,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                     _registryOwner = new PipeWireProxyHandle(
                         (pw_proxy*)registry, _ctx.LoopOwner, _ctx.CoreOwner);
                 if (registry is null)
-                    throw new PipeWireInteropException("pw_core_get_registry", -12);   // ENOMEM
+                    throw new PipeWireInteropException("pw_core_get_registry", -NativeConstants.ENOMEM);
 
                 _events = (pw_registry_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_registry_events));
-                _events->version       = Native.PW_VERSION_REGISTRY_EVENTS;
+                _events->version       = NativeConstants.PW_VERSION_REGISTRY_EVENTS;
                 _events->global        = &OnGlobal;
                 _events->global_remove = &OnGlobalRemove;
 
@@ -380,7 +387,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
             foreach ((uint linkId, PipeWireLink link) in _links)
             {
-                if (link.LinkOutputPort != portId && link.LinkInputPort != portId) continue;
+                if (link.OutputPortId != portId && link.InputPortId != portId) continue;
                 if (!_links.TryRemove(linkId, out _)) continue;
 
                 LogRemoved("link", linkId);
@@ -431,7 +438,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         if (_awaitingPublish.TryRemove(id, out PublishWaiters? waiters))
         {
             waiters.FailAll(new PipeWireInteropException(
-                "bind", -22, id, reason));
+                "bind", -NativeConstants.EINVAL, id, reason));
         }
     }
 
@@ -487,7 +494,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                 // publish that satisfies this waiter is not always what was created. That is a
                 // lost race rather than a broken invariant, and it is reported as one.
                 throw new PipeWireException(
-                    "create", -2, id,
+                    "create", -NativeConstants.ENOENT, id,
                     $"global {id} arrived as {published.Kind} rather than {typeof(T).Name}; "
                     + "the id was reused before the new object was observed");
             }
@@ -647,6 +654,23 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// </remarks>
     private void Publish() => Interlocked.Increment(ref _revision);
 
+    /// <summary>Applies one change to the collections and publishes it, atomically for readers.</summary>
+    /// <remarks>
+    /// Every write goes through here. Rebuild reads the collections under <see cref="_publishGate"/>,
+    /// and without the writer holding it too a caller reading <see cref="Current"/> from another
+    /// thread built a snapshot mid-change: a destroyed node gone and three of its four ports still
+    /// listed (the lab box, 2026-09-15). Only the change itself runs under the gate; events are
+    /// raised after it is released, so no handler runs holding it.
+    /// </remarks>
+    private void Change(Action apply)
+    {
+        lock (_publishGate)
+        {
+            apply();
+            Publish();
+        }
+    }
+
     // A counter rather than a flag. A flag has to be cleared before the collections are read, or a
     // change arriving mid-build is lost - and clearing it first opens a window where a reader sees
     // "clean" while the new snapshot has not been published yet, and takes the stale one. The
@@ -658,9 +682,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
     private PipeWireGraphSnapshot Rebuild()
     {
-        // Under one lock, so the four collections are read at one instant rather than four. A
-        // reader arriving mid-burst still sees a coherent set rather than ports from one moment
-        // and links from another.
+        // Under one lock, so the four collections are read at one instant rather than four. The
+        // loop thread holds the same lock across every change it makes (Change below), so a reader
+        // cannot land between a node's removal and its ports', or between a node's arrival and a
+        // port naming it - the collections are concurrent, but a snapshot is several of them.
         lock (_publishGate)
         {
             long revision = Interlocked.Read(ref _revision);
@@ -952,7 +977,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // a removal - so without this the call looks like it worked. Every other unknown id is left
         // to the daemon, which does report those: an id that has just been removed by somebody else
         // is a race, not a caller mistake, and the daemon's answer is the honest one.
-        if (id == Native.PW_ID_CORE)
+        if (id == NativeConstants.PW_ID_CORE)
         {
             throw new ArgumentOutOfRangeException(nameof(id),
                 "the core is the connection itself and cannot be destroyed; dispose the context instead.");
@@ -1026,7 +1051,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
                 // The core is never a destroy target, and ids recycle: without dedupe one id
                 // could go out twice, the second answer landing on an object that is not ours.
-                if (id == Native.PW_ID_CORE || !seen.Add(id)) continue;
+                if (id == NativeConstants.PW_ID_CORE || !seen.Add(id)) continue;
 
                 // Owned proxies go through their own destruction, exactly as the single path
                 // does (its lock is recursive on this thread); everything else is issued
@@ -1104,41 +1129,41 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
             foreach ((string key, string value) in extra) dict.Add(key, value);
 
-            if (options.Linger && !Supplied("object.linger"))
-                dict.Add(PipeWireKeys.ObjectLinger, PipeWireKeys.True);
+            if (options.Linger && !Supplied(PipeWireKeys.PW_KEY_OBJECT_LINGER))
+                dict.Add(NativeConstants.PW_KEY_OBJECT_LINGER, PipeWireValues.True);
 
             if (isLink)
             {
                 // The endpoints are what the link is, not a property of it, so they are not
                 // overridable and are written unconditionally.
-                dict.Add(PipeWireKeys.LinkOutputNode, output!.NodeId);
-                dict.Add(PipeWireKeys.LinkOutputPort, output.PortId);
-                dict.Add(PipeWireKeys.LinkInputNode, input!.NodeId);
-                dict.Add(PipeWireKeys.LinkInputPort, input.PortId);
+                dict.Add(NativeConstants.PW_KEY_LINK_OUTPUT_NODE, output!.NodeId);
+                dict.Add(NativeConstants.PW_KEY_LINK_OUTPUT_PORT, output.PortId);
+                dict.Add(NativeConstants.PW_KEY_LINK_INPUT_NODE, input!.NodeId);
+                dict.Add(NativeConstants.PW_KEY_LINK_INPUT_PORT, input.PortId);
 
-                if (options.Passive && !Supplied("link.passive"))
-                    dict.Add(PipeWireKeys.LinkPassive, PipeWireKeys.True);
+                if (options.Passive && !Supplied(PipeWireKeys.PW_KEY_LINK_PASSIVE))
+                    dict.Add(NativeConstants.PW_KEY_LINK_PASSIVE, PipeWireValues.True);
 
                 return NativeObjectCreation.CreateAsync(
-                    _ctx, PipeWireKeys.LinkFactory, PipeWireKeys.InterfaceLink,
-                    Native.PW_VERSION_LINK, dict.Build(), cancellationToken, onBound);
+                    _ctx, PipeWireValues.LinkFactory, NativeConstants.PW_TYPE_INTERFACE_Link,
+                    NativeConstants.PW_VERSION_LINK, dict.Build(), cancellationToken, onBound);
             }
 
             // The factory is what kind of object this is rather than a property of it, so it is
             // not overridable.
-            dict.Add(PipeWireKeys.FactoryName, PipeWireKeys.NullAudioSink);
+            dict.Add(NativeConstants.PW_KEY_FACTORY_NAME, PipeWireValues.NullAudioSink);
 
-            if (!Supplied("node.name")) dict.Add(PipeWireKeys.NodeName, name!);
-            if (!Supplied("node.description")) dict.Add(PipeWireKeys.NodeDescription, description!);
+            if (!Supplied(PipeWireKeys.PW_KEY_NODE_NAME)) dict.Add(NativeConstants.PW_KEY_NODE_NAME, name!);
+            if (!Supplied(PipeWireKeys.PW_KEY_NODE_DESCRIPTION)) dict.Add(NativeConstants.PW_KEY_NODE_DESCRIPTION, description!);
 
             // Defaults, and only defaults: a stereo sink is the useful shape for a virtual device,
             // and a caller naming either key gets theirs instead.
-            if (!Supplied("media.class")) dict.Add(PipeWireKeys.MediaClass, PipeWireKeys.AudioSink);
-            if (!Supplied("audio.position")) dict.Add(PipeWireKeys.AudioPosition, PipeWireKeys.StereoPosition);
+            if (!Supplied(PipeWireKeys.PW_KEY_MEDIA_CLASS)) dict.Add(NativeConstants.PW_KEY_MEDIA_CLASS, PipeWireValues.AudioSink);
+            if (!Supplied(PipeWireKeys.SPA_KEY_AUDIO_POSITION)) dict.Add(NativeConstants.SPA_KEY_AUDIO_POSITION, PipeWireValues.StereoPosition);
 
             return NativeObjectCreation.CreateAsync(
-                _ctx, PipeWireKeys.Adapter, PipeWireKeys.InterfaceNode,
-                Native.PW_VERSION_NODE, dict.Build(), cancellationToken, onBound);
+                _ctx, PipeWireValues.Adapter, NativeConstants.PW_TYPE_INTERFACE_Node,
+                NativeConstants.PW_VERSION_NODE, dict.Build(), cancellationToken, onBound);
         }
         finally
         {
@@ -1163,15 +1188,15 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// otherwise have worked and the scratch is transient either way.
     /// </remarks>
     private static readonly int FixedPropertyBytes = 2 * (
-        PipeWireKeys.LinkOutputNode.Length + PipeWireKeys.LinkOutputPort.Length
-        + PipeWireKeys.LinkInputNode.Length + PipeWireKeys.LinkInputPort.Length
+        NativeConstants.PW_KEY_LINK_OUTPUT_NODE.Length + NativeConstants.PW_KEY_LINK_OUTPUT_PORT.Length
+        + NativeConstants.PW_KEY_LINK_INPUT_NODE.Length + NativeConstants.PW_KEY_LINK_INPUT_PORT.Length
         + (4 * 11)                                              // one uint32 per endpoint key
-        + PipeWireKeys.ObjectLinger.Length + PipeWireKeys.LinkPassive.Length
-        + PipeWireKeys.FactoryName.Length + PipeWireKeys.NullAudioSink.Length
-        + PipeWireKeys.NodeName.Length + PipeWireKeys.NodeDescription.Length
-        + PipeWireKeys.MediaClass.Length + PipeWireKeys.AudioSink.Length
-        + PipeWireKeys.AudioPosition.Length + PipeWireKeys.StereoPosition.Length
-        + PipeWireKeys.True.Length
+        + NativeConstants.PW_KEY_OBJECT_LINGER.Length + NativeConstants.PW_KEY_LINK_PASSIVE.Length
+        + NativeConstants.PW_KEY_FACTORY_NAME.Length + PipeWireValues.NullAudioSink.Length
+        + NativeConstants.PW_KEY_NODE_NAME.Length + NativeConstants.PW_KEY_NODE_DESCRIPTION.Length
+        + NativeConstants.PW_KEY_MEDIA_CLASS.Length + PipeWireValues.AudioSink.Length
+        + NativeConstants.SPA_KEY_AUDIO_POSITION.Length + PipeWireValues.StereoPosition.Length
+        + PipeWireValues.True.Length
         + 32);                                                  // one NUL per key and value
 
     /// <inheritdoc/>
@@ -1427,21 +1452,21 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     {
         IPipeWireObject? parsed = null;
 
-        if      (kind.SequenceEqual(PipeWireKeys.InterfaceDevice))
+        if      (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Device))
             parsed = PipeWireGlobalParser.ParseDevice(id, permissions, version, PipeWireProperties.From(props));
-        else if (kind.SequenceEqual(PipeWireKeys.InterfaceClient))
+        else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Client))
             parsed = PipeWireGlobalParser.ParseClient(id, permissions, version, PipeWireProperties.From(props));
-        else if (kind.SequenceEqual(PipeWireKeys.InterfaceFactory))
+        else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Factory))
             parsed = PipeWireGlobalParser.ParseFactory(id, permissions, version, PipeWireProperties.From(props));
-        else if (kind.SequenceEqual(PipeWireKeys.InterfaceModule))
+        else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Module))
             parsed = PipeWireGlobalParser.ParseModule(id, permissions, version, PipeWireProperties.From(props));
-        else if (kind.SequenceEqual(PipeWireKeys.InterfaceMetadata))
+        else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Metadata))
             parsed = PipeWireGlobalParser.ParseMetadata(id, permissions, version, PipeWireProperties.From(props));
-        else if (kind.SequenceEqual(PipeWireKeys.InterfaceCore))
+        else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Core))
             parsed = PipeWireGlobalParser.ParseCore(id, permissions, version, PipeWireProperties.From(props));
-        else if (kind.SequenceEqual(PipeWireKeys.InterfaceProfiler))
+        else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Profiler))
             parsed = new PipeWireProfiler(id, permissions, version, PipeWireProperties.From(props));
-        else if (kind.SequenceEqual(PipeWireKeys.InterfaceSecurityContext))
+        else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_SecurityContext))
             parsed = new PipeWireSecurityContext(id, permissions, version, PipeWireProperties.From(props));
 
         if (parsed is null)
@@ -1450,9 +1475,8 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             return;
         }
 
-        _objects[id] = parsed;
+        Change(() => _objects[id] = parsed);
         LogObjectAdded(parsed.Kind.ToString(), id);
-        Publish();
         CompletePublishWaiter(id, parsed);
         RaiseGraphChanged();
     }
@@ -1565,7 +1589,6 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
         if (!replaced) return;
 
-        Publish();
         RaiseGraphChanged();
 
         bool TryReplace(PipeWireProperties existing, Action<PipeWireProperties> store)
@@ -1580,7 +1603,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             PipeWireProperties merged = existing.MergedWith(observed);
             if (ReferenceEquals(merged, existing)) return false;
 
-            store(merged);
+            Change(() => store(merged));
             return true;
         }
     }
@@ -1632,9 +1655,9 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
             ReadOnlySpan<byte> kind = DaemonText.Bytes(type);
 
-            if      (kind.SequenceEqual(PipeWireKeys.InterfaceNode)) self.AddNode(id, perms, version, props);
-            else if (kind.SequenceEqual(PipeWireKeys.InterfacePort)) self.AddPort(id, perms, version, props);
-            else if (kind.SequenceEqual(PipeWireKeys.InterfaceLink)) self.AddLink(id, perms, version, props);
+            if      (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Node)) self.AddNode(id, perms, version, props);
+            else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Port)) self.AddPort(id, perms, version, props);
+            else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Link)) self.AddLink(id, perms, version, props);
             else self.AddOtherObject(id, perms, version, kind, props);
         }
         catch (Exception ex)
@@ -1656,9 +1679,12 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // No lock. The collection is concurrent, every write to it comes from the loop thread,
         // and nothing else takes this monitor - so it excludes nobody while making the field look
         // like it has a lock discipline that readers would have to respect.
-        _sources[id] = source;
+        Change(() =>
+        {
+            _sources[id] = source;
+            _removedNodes.Remove(id);   // the id is a node again; ports naming it belong to this one
+        });
         LogNodeAdded(id, name, mediaClass);
-        Publish();
         CompletePublishWaiter(id, source);
 
         RaiseIsolated(NodeAdded, source, nameof(NodeAdded));
@@ -1677,9 +1703,18 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         }
 
         PipeWirePort port = parsed!;
-        _ports[id] = port;
+
+        // A port announced for a node that has already left: its own removal follows, and filing it
+        // in between breaks the snapshot's promise that every port's node is in it.
+        if (_removedNodes.Contains(port.NodeId))
+        {
+            LogPortOfRemovedNode(id, port.NodeId);
+            FailPublishWaiter(id, "its node was already removed");
+            return;
+        }
+
+        Change(() => _ports[id] = port);
         LogPortAdded(id, port.PortName, port.PortDirection, port.NodeId);
-        Publish();
         CompletePublishWaiter(id, port);
 
         RaiseIsolated(PortAdded, port, nameof(PortAdded));
@@ -1698,12 +1733,11 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         }
 
         PipeWireLink link = parsed!;
-        uint outputNode = link.LinkOutputNode, outputPort = link.LinkOutputPort;
-        uint inputNode = link.LinkInputNode, inputPort = link.LinkInputPort;
+        uint outputNode = link.OutputNodeId, outputPort = link.OutputPortId;
+        uint inputNode = link.InputNodeId, inputPort = link.InputPortId;
 
-        _links[id] = link;
+        Change(() => _links[id] = link);
         LogLinkAdded(id, outputNode, outputPort, inputNode, inputPort);
-        Publish();
         CompletePublishWaiter(id, link);
 
         RaiseIsolated(LinkAdded, link, nameof(LinkAdded));
@@ -1725,46 +1759,53 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             // fires, which is a hang where the honest answer is that it was destroyed first.
             self.FailPublishWaiter(id, "it was destroyed before it reached the registry");
 
-            if (self._sources.TryRemove(id, out _))
+            // The kind is decided and the change applied in one hold of the gate: the loop thread is
+            // the only writer, but a reader building a snapshot must see the node and everything that
+            // goes with it leave together.
+            List<uint> removedLinks = [], removedPorts = [];
+            string? kind = null;
+            self.Change(() =>
             {
-                self.LogRemoved("node", id);
+                if (self._sources.TryRemove(id, out _))
+                {
+                    kind = "node";
+                    self._removedNodes.Add(id);
 
-                // The daemon removes a node's ports and links in their own events, which arrive
-                // after this one. Publishing in between leaves a snapshot holding ports whose node
-                // is not in it and links whose endpoints are not either, so GetNodeForPort returns
-                // null for a port the snapshot still lists - and the snapshot documents itself as
-                // internally consistent. They go with the node, and their own removals then find
-                // nothing left to do.
-                self.CascadeRemove(id, out List<uint> removedLinks, out List<uint> removedPorts);
+                    // The daemon removes a node's ports and links in their own events, which arrive
+                    // after this one (pw-cli destroy removes the node's global first; impl-node.c,
+                    // global_free). Publishing in between leaves a snapshot holding ports whose node
+                    // is not in it and links whose endpoints are not either, so GetNodeForPort returns
+                    // null for a port the snapshot still lists - and the snapshot documents itself as
+                    // internally consistent. They go with the node, and their own removals then find
+                    // nothing left to do.
+                    self.CascadeRemove(id, out removedLinks, out removedPorts);
+                }
+                else if (self._ports.TryRemove(id, out _)) kind = "port";
+                else if (self._links.TryRemove(id, out _)) kind = "link";
+                else if (self._objects.TryRemove(id, out IPipeWireObject? gone)) kind = gone.Kind.ToString();
+            });
 
-                self.Publish();
+            if (kind is null) return;
+            self.LogRemoved(kind, id);
+
+            if (kind == "node")
+            {
                 foreach (uint linkId in removedLinks)
                     self.RaiseIsolated(self.LinkRemoved, linkId, nameof(LinkRemoved));
                 foreach (uint portId in removedPorts)
                     self.RaiseIsolated(self.PortRemoved, portId, nameof(PortRemoved));
                 self.RaiseIsolated(self.NodeRemoved, id, nameof(NodeRemoved));
-                self.RaiseGraphChanged();
             }
-            else if (self._ports.TryRemove(id, out _))
+            else if (kind == "port")
             {
-                self.LogRemoved("port", id);
-                self.Publish();
                 self.RaiseIsolated(self.PortRemoved, id, nameof(PortRemoved));
-                self.RaiseGraphChanged();
             }
-            else if (self._links.TryRemove(id, out _))
+            else if (kind == "link")
             {
-                self.LogRemoved("link", id);
-                self.Publish();
                 self.RaiseIsolated(self.LinkRemoved, id, nameof(LinkRemoved));
-                self.RaiseGraphChanged();
             }
-            else if (self._objects.TryRemove(id, out IPipeWireObject? gone))
-            {
-                self.LogRemoved(gone.Kind.ToString(), id);
-                self.Publish();
-                self.RaiseGraphChanged();
-            }
+
+            self.RaiseGraphChanged();
         }
         catch (Exception ex)
         {
@@ -1792,6 +1833,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
     [LoggerMessage(EventId = 5, Level = LogLevel.Warning, Message = "skipped port {Id}: {Reason} ({Value})")]
     private partial void LogPortSkipped(uint id, string reason, string? value);
+
+    [LoggerMessage(EventId = 12, Level = LogLevel.Debug,
+        Message = "port {Id} announced for node {NodeId}, which was already removed; not filed")]
+    private partial void LogPortOfRemovedNode(uint id, uint nodeId);
 
     [LoggerMessage(EventId = 6, Level = LogLevel.Warning, Message = "skipped link {Id}: {Reason} ({Value})")]
     private partial void LogLinkSkipped(uint id, string reason, string? value);

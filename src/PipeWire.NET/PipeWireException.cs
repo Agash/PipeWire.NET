@@ -1,4 +1,5 @@
 using System.Globalization;
+using PipeWire.NET.Interop;
 
 namespace PipeWire.NET;
 
@@ -77,7 +78,7 @@ public class PipeWireException : Exception
     public bool IsPermissionDenied => Result is -13 or -1;
 
     /// <summary>True when the connection is gone (<c>-EPIPE</c>).</summary>
-    public bool IsDisconnected => Result == -32;
+    public bool IsDisconnected => Result == -NativeConstants.EPIPE;
 
     /// <summary>
     /// True when the object the request was against no longer exists (<c>-ENOENT</c>).
@@ -95,7 +96,7 @@ public class PipeWireException : Exception
     /// and the daemon processing the request.
     /// </para>
     /// </remarks>
-    public bool IsObjectGone => Result == -2;
+    public bool IsObjectGone => Result == -NativeConstants.ENOENT;
 
     /// <summary>Throws if <paramref name="result"/> reports a failure.</summary>
     internal static void ThrowIfFailed(int result, string operation, uint? objectId = null)

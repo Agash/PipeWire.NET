@@ -162,7 +162,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
             Span<byte> scratch = stackalloc byte[256];
             Span<spa_dict_item> items = stackalloc spa_dict_item[2];
             var props = new SpaDictBuilder(scratch, items);
-            props.Add(PipeWireKeys.MetadataName, Name);
+            props.Add(NativeConstants.PW_KEY_METADATA_NAME, Name);
             spa_dict dict = props.Build();
 
             pw_impl_metadata* impl;
@@ -171,13 +171,13 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
                     _ctx.ContextHandle, (sbyte*)n, Native.pw_properties_new_dict(&dict), 0);
 
             if (impl is null)
-                throw new PipeWireInteropException("pw_context_create_metadata", -12);
+                throw new PipeWireInteropException("pw_context_create_metadata", -NativeConstants.ENOMEM);
 
             _handle = new PipeWireImplMetadataHandle(impl, _ctx.LoopOwner);
 
             _events = NativeMemory.AllocZeroed((nuint)sizeof(pw_impl_metadata_events));
             var table = (pw_impl_metadata_events*)_events;
-            table->version = Native.PW_VERSION_IMPL_METADATA_EVENTS;
+            table->version = NativeConstants.PW_VERSION_IMPL_METADATA_EVENTS;
             table->property = &OnPropertyCallback;
 
             _hook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
@@ -205,10 +205,10 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
             Span<byte> exportScratch = stackalloc byte[256];
             Span<spa_dict_item> exportItems = stackalloc spa_dict_item[2];
             var exportProps = new SpaDictBuilder(exportScratch, exportItems);
-            exportProps.Add(PipeWireKeys.MetadataName, Name);
+            exportProps.Add(NativeConstants.PW_KEY_METADATA_NAME, Name);
             spa_dict exportDict = exportProps.Build();
 
-            ReadOnlySpan<byte> typeUtf8 = Encoding.UTF8.GetBytes(Native.PW_TYPE_INTERFACE_METADATA + '\0');
+            ReadOnlySpan<byte> typeUtf8 = Encoding.UTF8.GetBytes(PipeWireKeys.PW_TYPE_INTERFACE_Metadata + '\0');
 
             pw_proxy* exported = null;
             if (_export)
@@ -220,7 +220,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
                 pw_metadata* implementation = Native.pw_impl_metadata_get_implementation(impl);
 
                 if (implementation is null)
-                    throw new PipeWireInteropException("pw_impl_metadata_get_implementation", -22);
+                    throw new PipeWireInteropException("pw_impl_metadata_get_implementation", -NativeConstants.EINVAL);
 
                 fixed (byte* t = typeUtf8)
                 {
@@ -399,7 +399,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
             // SPA_ID_INVALID means every subject, not a subject numbered 0xFFFFFFFF. Comparing it
             // to a stored subject matches nothing, so a store-wide clear would drop no entries at
             // all and the cache would keep reporting values the server no longer has.
-            bool everySubject = subject == Native.SPA_ID_INVALID;
+            bool everySubject = subject == NativeConstants.SPA_ID_INVALID;
 
             foreach ((uint Subject, string Key) existing in _entries.Keys)
             {

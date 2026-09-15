@@ -30,18 +30,18 @@ internal static unsafe class PipeWireGlobalParser
     internal static PipeWireNode ParseNode(
         uint id, PipeWirePermissions permissions, uint version, PipeWireProperties props) =>
         new(id,
-            props.Text(PipeWireNames.NodeName),
-            props.Text(PipeWireNames.NodeDescription),
-            props.Text(PipeWireNames.MediaClass),
-            props.Text(PipeWireNames.NodeNick),
+            props.Text(PipeWireKeys.PW_KEY_NODE_NAME),
+            props.Text(PipeWireKeys.PW_KEY_NODE_DESCRIPTION),
+            props.Text(PipeWireKeys.SPA_KEY_MEDIA_CLASS),
+            props.Text(PipeWireKeys.PW_KEY_NODE_NICK),
             permissions,
             version,
-            props.Id(PipeWireNames.DeviceId),
-            props.Id(PipeWireNames.ClientId),
-            props.Id(PipeWireNames.FactoryId),
-            props.Text(PipeWireNames.ObjectPath),
-            props.Int(PipeWireNames.PriorityDriver),
-            props.Int(PipeWireNames.PrioritySession),
+            props.Id(PipeWireKeys.PW_KEY_DEVICE_ID),
+            props.Id(PipeWireKeys.PW_KEY_CLIENT_ID),
+            props.Id(PipeWireKeys.PW_KEY_FACTORY_ID),
+            props.Text(PipeWireKeys.SPA_KEY_OBJECT_PATH),
+            props.Int(PipeWireKeys.PW_KEY_PRIORITY_DRIVER),
+            props.Int(PipeWireKeys.PW_KEY_PRIORITY_SESSION),
             props);
 
     /// <summary>
@@ -54,7 +54,7 @@ internal static unsafe class PipeWireGlobalParser
     {
         port = null;
 
-        string? nodeId = props.GetValueOrDefault(PipeWireNames.NodeId);
+        string? nodeId = props.GetValueOrDefault(PipeWireKeys.PW_KEY_NODE_ID);
         if (!uint.TryParse(nodeId, out uint parsedNodeId))
         {
             reason = "unusable node id";
@@ -62,7 +62,7 @@ internal static unsafe class PipeWireGlobalParser
             return false;
         }
 
-        string? direction = props.GetValueOrDefault(PipeWireNames.PortDirection);
+        string? direction = props.GetValueOrDefault(PipeWireKeys.PW_KEY_PORT_DIRECTION);
         if (!TryParseDirection(direction, out PipeWirePortDirection parsedDirection))
         {
             reason = "unusable direction";
@@ -72,18 +72,18 @@ internal static unsafe class PipeWireGlobalParser
 
         port = new PipeWirePort(
             id, parsedNodeId,
-            props.Text(PipeWireNames.PortName),
+            props.Text(PipeWireKeys.PW_KEY_PORT_NAME),
             parsedDirection,
-            props.Flag(PipeWireNames.PortMonitor),
-            props.Id(PipeWireNames.PortIndex),
-            props.Flag(PipeWireNames.PortControl) || parsedDirection is PipeWirePortDirection.Control,
-            props.Flag(PipeWireNames.PortPhysical),
-            props.Flag(PipeWireNames.PortTerminal),
-            props.Text(PipeWireNames.FormatDsp),
-            props.Text(PipeWireNames.AudioChannel),
-            props.Text(PipeWireNames.PortAlias),
-            props.Text(PipeWireNames.PortGroup),
-            props.Text(PipeWireNames.ObjectPath),
+            props.Flag(PipeWireKeys.PW_KEY_PORT_MONITOR),
+            props.Id(PipeWireKeys.PW_KEY_PORT_ID),
+            props.Flag(PipeWireKeys.PW_KEY_PORT_CONTROL) || parsedDirection is PipeWirePortDirection.Control,
+            props.Flag(PipeWireKeys.PW_KEY_PORT_PHYSICAL),
+            props.Flag(PipeWireKeys.PW_KEY_PORT_TERMINAL),
+            props.Text(PipeWireKeys.PW_KEY_FORMAT_DSP),
+            props.Text(PipeWireKeys.PW_KEY_AUDIO_CHANNEL),
+            props.Text(PipeWireKeys.PW_KEY_PORT_ALIAS),
+            props.Text(PipeWireKeys.PW_KEY_PORT_GROUP),
+            props.Text(PipeWireKeys.SPA_KEY_OBJECT_PATH),
             permissions,
             version,
             props);
@@ -103,17 +103,17 @@ internal static unsafe class PipeWireGlobalParser
     {
         link = null;
 
-        if (!TryReadId(props, PipeWireNames.LinkOutputNode, out uint outputNode, out reason, out offendingValue) ||
-            !TryReadId(props, PipeWireNames.LinkOutputPort, out uint outputPort, out reason, out offendingValue) ||
-            !TryReadId(props, PipeWireNames.LinkInputNode, out uint inputNode, out reason, out offendingValue) ||
-            !TryReadId(props, PipeWireNames.LinkInputPort, out uint inputPort, out reason, out offendingValue))
+        if (!TryReadId(props, PipeWireKeys.PW_KEY_LINK_OUTPUT_NODE, out uint outputNode, out reason, out offendingValue) ||
+            !TryReadId(props, PipeWireKeys.PW_KEY_LINK_OUTPUT_PORT, out uint outputPort, out reason, out offendingValue) ||
+            !TryReadId(props, PipeWireKeys.PW_KEY_LINK_INPUT_NODE, out uint inputNode, out reason, out offendingValue) ||
+            !TryReadId(props, PipeWireKeys.PW_KEY_LINK_INPUT_PORT, out uint inputPort, out reason, out offendingValue))
             return false;
 
         link = new PipeWireLink(
             id, inputNode, inputPort, outputNode, outputPort, permissions, version,
-            props.Flag(PipeWireNames.LinkPassive),
-            props.Id(PipeWireNames.FactoryId),
-            props.Id(PipeWireNames.ClientId),
+            props.Flag(PipeWireKeys.PW_KEY_LINK_PASSIVE),
+            props.Id(PipeWireKeys.PW_KEY_FACTORY_ID),
+            props.Id(PipeWireKeys.PW_KEY_CLIENT_ID),
             props);
         reason = string.Empty;
         offendingValue = null;
@@ -127,71 +127,71 @@ internal static unsafe class PipeWireGlobalParser
     internal static PipeWireDevice ParseDevice(
         uint id, PipeWirePermissions permissions, uint version, PipeWireProperties props) =>
         new(id, permissions, version,
-            props.Text(PipeWireNames.DeviceName),
-            props.Text(PipeWireNames.DeviceDescription),
-            props.Text(PipeWireNames.DeviceNick),
-            props.Text(PipeWireNames.DeviceApi),
-            props.Text(PipeWireNames.MediaClass),
-            props.Text(PipeWireNames.ObjectPath),
-            props.Id(PipeWireNames.FactoryId),
-            props.Id(PipeWireNames.ClientId),
-            props.Id(PipeWireNames.ModuleId),
+            props.Text(PipeWireKeys.SPA_KEY_DEVICE_NAME),
+            props.Text(PipeWireKeys.SPA_KEY_DEVICE_DESCRIPTION),
+            props.Text(PipeWireKeys.SPA_KEY_DEVICE_NICK),
+            props.Text(PipeWireKeys.SPA_KEY_DEVICE_API),
+            props.Text(PipeWireKeys.SPA_KEY_MEDIA_CLASS),
+            props.Text(PipeWireKeys.SPA_KEY_OBJECT_PATH),
+            props.Id(PipeWireKeys.PW_KEY_FACTORY_ID),
+            props.Id(PipeWireKeys.PW_KEY_CLIENT_ID),
+            props.Id(PipeWireKeys.PW_KEY_MODULE_ID),
             props);
 
     /// <summary>Builds a client. Always succeeds; every field is optional.</summary>
     internal static PipeWireClient ParseClient(
         uint id, PipeWirePermissions permissions, uint version, PipeWireProperties props) =>
         new(id, permissions, version,
-            props.Text(PipeWireNames.ApplicationName),
-            props.Int(PipeWireNames.SecurityPid),
-            props.Id(PipeWireNames.SecurityUid),
-            props.Id(PipeWireNames.SecurityGid),
-            props.Text(PipeWireNames.Access),
-            props.Text(PipeWireNames.Protocol),
-            props.Id(PipeWireNames.ModuleId),
-            props.Text(PipeWireNames.SecuritySocket),
-            props.Text(PipeWireNames.SecurityLabel),
-            props.Text(PipeWireNames.SecurityAppId),
-            props.Text(PipeWireNames.SecurityInstanceId),
+            props.Text(PipeWireKeys.PW_KEY_APP_NAME),
+            props.Int(PipeWireKeys.PW_KEY_SEC_PID),
+            props.Id(PipeWireKeys.PW_KEY_SEC_UID),
+            props.Id(PipeWireKeys.PW_KEY_SEC_GID),
+            props.Text(PipeWireKeys.PW_KEY_ACCESS),
+            props.Text(PipeWireKeys.PW_KEY_PROTOCOL),
+            props.Id(PipeWireKeys.PW_KEY_MODULE_ID),
+            props.Text(PipeWireKeys.PW_KEY_SEC_SOCKET),
+            props.Text(PipeWireKeys.PW_KEY_SEC_LABEL),
+            props.Text(PipeWireKeys.PW_KEY_SEC_APP_ID),
+            props.Text(PipeWireKeys.PW_KEY_SEC_INSTANCE_ID),
             props);
 
     /// <summary>Builds a factory. Always succeeds; every field is optional.</summary>
     internal static PipeWireFactory ParseFactory(
         uint id, PipeWirePermissions permissions, uint version, PipeWireProperties props) =>
         new(id, permissions, version,
-            props.Text(PipeWireNames.FactoryName),
-            props.Text(PipeWireNames.FactoryTypeName),
-            props.Id(PipeWireNames.FactoryTypeVersion),
-            props.Id(PipeWireNames.ModuleId),
+            props.Text(PipeWireKeys.PW_KEY_FACTORY_NAME),
+            props.Text(PipeWireKeys.PW_KEY_FACTORY_TYPE_NAME),
+            props.Id(PipeWireKeys.PW_KEY_FACTORY_TYPE_VERSION),
+            props.Id(PipeWireKeys.PW_KEY_MODULE_ID),
             props);
 
     /// <summary>Builds a module. Always succeeds; every field is optional.</summary>
     internal static PipeWireModule ParseModule(
         uint id, PipeWirePermissions permissions, uint version, PipeWireProperties props) =>
         new(id, permissions, version,
-            props.Text(PipeWireNames.ModuleName),
-            props.Text(PipeWireNames.ModuleDescription),
-            props.Text(PipeWireNames.ModuleAuthor),
-            props.Text(PipeWireNames.ModuleVersion),
+            props.Text(PipeWireKeys.PW_KEY_MODULE_NAME),
+            props.Text(PipeWireKeys.PW_KEY_MODULE_DESCRIPTION),
+            props.Text(PipeWireKeys.PW_KEY_MODULE_AUTHOR),
+            props.Text(PipeWireKeys.PW_KEY_MODULE_VERSION),
             props);
 
     /// <summary>Builds a metadata store. Always succeeds; the name is optional.</summary>
     internal static PipeWireMetadataObject ParseMetadata(
         uint id, PipeWirePermissions permissions, uint version, PipeWireProperties props) =>
-        new(id, permissions, version, props.Text(PipeWireNames.MetadataName),
-            props.Id(PipeWireNames.ClientId),
-            props.Id(PipeWireNames.FactoryId),
-            props.Id(PipeWireNames.ModuleId),
+        new(id, permissions, version, props.Text(PipeWireKeys.PW_KEY_METADATA_NAME),
+            props.Id(PipeWireKeys.PW_KEY_CLIENT_ID),
+            props.Id(PipeWireKeys.PW_KEY_FACTORY_ID),
+            props.Id(PipeWireKeys.PW_KEY_MODULE_ID),
             props);
 
     /// <summary>Builds the core object. Always succeeds; every field is optional.</summary>
     internal static PipeWireCoreObject ParseCore(
         uint id, PipeWirePermissions permissions, uint version, PipeWireProperties props) =>
         new(id, permissions, version,
-            props.Text(PipeWireNames.CoreName),
-            props.Text(PipeWireNames.CoreVersion),
-            props.Text(PipeWireNames.HostName),
-            props.Text(PipeWireNames.UserName),
+            props.Text(PipeWireKeys.PW_KEY_CORE_NAME),
+            props.Text(PipeWireKeys.PW_KEY_CORE_VERSION),
+            props.Text(PipeWireKeys.PW_KEY_APP_PROCESS_HOST),
+            props.Text(PipeWireKeys.PW_KEY_APP_PROCESS_USER),
             props);
 
     /// <summary>
@@ -235,7 +235,7 @@ internal static unsafe class PipeWireGlobalParser
 
     /// <remarks>Mirrors spa_atob: only "true" and "1" are true, and absence is false.</remarks>
     internal static bool ParseBool(ReadOnlySpan<byte> value) =>
-        value.SequenceEqual(PipeWireKeys.True) || value.SequenceEqual("1"u8);
+        value.SequenceEqual(PipeWireValues.True) || value.SequenceEqual("1"u8);
 
     /// <summary>
     /// Finds a property and hands back its value as UTF-8 over the daemon's own buffer.

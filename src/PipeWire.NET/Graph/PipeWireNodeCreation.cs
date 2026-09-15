@@ -100,7 +100,7 @@ public readonly struct PipeWireNodeCreation
     /// carries audio whatever the class says.
     /// </remarks>
     public PipeWireNodeCreation WithMediaClass(string mediaClass) =>
-        WithProperty("media.class", mediaClass);
+        WithProperty(PipeWireKeys.PW_KEY_MEDIA_CLASS, mediaClass);
 
     /// <summary>Sets <c>audio.position</c>: the channel map, and so the port count.</summary>
     /// <param name="positions">
@@ -112,7 +112,7 @@ public readonly struct PipeWireNodeCreation
     /// changes the node's whole shape rather than a detail of it.
     /// </remarks>
     public PipeWireNodeCreation WithChannelPositions(string positions) =>
-        WithProperty("audio.position", positions);
+        WithProperty(PipeWireKeys.SPA_KEY_AUDIO_POSITION, positions);
 
     /// <summary>Sets <c>target.object</c>: what the session manager should link this node to.</summary>
     /// <param name="node">The node to link to. Its <c>node.name</c> is what travels.</param>
@@ -150,7 +150,7 @@ public readonly struct PipeWireNodeCreation
     public PipeWireNodeCreation WithTarget(string nameOrSerial)
     {
         ArgumentException.ThrowIfNullOrEmpty(nameOrSerial);
-        return WithProperty("target.object", nameOrSerial);
+        return WithProperty(PipeWireKeys.PW_KEY_TARGET_OBJECT, nameOrSerial);
     }
 
     /// <summary>Sets <c>node.autoconnect</c>: whether the session manager may link this node.</summary>
@@ -164,7 +164,7 @@ public readonly struct PipeWireNodeCreation
     /// and removed before the intended ones can be made.
     /// </remarks>
     public PipeWireNodeCreation WithAutoConnect(bool autoConnect) =>
-        WithProperty("node.autoconnect", autoConnect ? "true" : "false");
+        WithProperty(PipeWireKeys.PW_KEY_NODE_AUTOCONNECT, autoConnect ? "true" : "false");
 
     /// <summary>Sets <c>node.dont-reconnect</c>: end the node rather than move it.</summary>
     /// <remarks>
@@ -177,8 +177,8 @@ public readonly struct PipeWireNodeCreation
     /// to survive its target has to watch the graph and relink instead.
     /// </para>
     /// </remarks>
-    public PipeWireNodeCreation WithStayWithTheTarget() =>
-        WithProperty("node.dont-reconnect", "true");
+    public PipeWireNodeCreation WithDontReconnect() =>
+        WithProperty(PipeWireKeys.PW_KEY_NODE_DONT_RECONNECT, "true");
 
     /// <summary>Creates the node and returns it once the graph reports it.</summary>
     /// <exception cref="InvalidOperationException">The daemon refused the request.</exception>

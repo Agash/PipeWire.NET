@@ -252,9 +252,9 @@ public sealed record SpaStruct(ImmutableArray<SpaValue> Fields) : SpaValue
 /// for <see cref="SpaParamType.Props"/>, <see cref="SpaFormat"/> for a format - or as a plain
 /// number for a key this library has no name for.
 /// </param>
-/// <param name="Flags">Property flags, such as <see cref="SpaPodPropFlag.DontFixate"/>.</param>
+/// <param name="Flags">Property flags, such as <see cref="SpaPodPropFlags.DontFixate"/>.</param>
 /// <param name="Value">The property's value.</param>
-public sealed record SpaProperty(SpaKey Key, uint Flags, SpaValue Value);
+public sealed record SpaProperty(SpaKey Key, SpaPodPropFlags Flags, SpaValue Value);
 
 /// <summary>A keyed property bag. Every parameter is one of these.</summary>
 /// <param name="ObjectType">What the object describes, such as <see cref="SpaType.ObjectProps"/>.</param>

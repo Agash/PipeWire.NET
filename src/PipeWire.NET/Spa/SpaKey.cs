@@ -102,6 +102,10 @@ public readonly record struct SpaKey
     /// <param name="key">The key.</param>
     public static implicit operator SpaKey(SpaProfiler key) => new((uint)key);
 
+    /// <summary>A key naming part of a parameter dictionary, such as a stream Capability.</summary>
+    /// <param name="key">The key.</param>
+    public static implicit operator SpaKey(SpaParamDict key) => new((uint)key);
+
     /// <inheritdoc/>
     public override string ToString() => Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }

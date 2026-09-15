@@ -47,7 +47,7 @@ public sealed partial class PipeWireSecurityContextControl : IDisposable, IAsync
         // No events are subscribed: the interface's only event is a lifecycle signal this type has
         // no use for, and the zeroed table keeps the binding shape the same as every other.
         control._bound = BoundProxy.Bind(
-            ctx, registry, id, Native.PW_TYPE_INTERFACE_SECURITY_CONTEXT, version, Native.PW_VERSION_SECURITY_CONTEXT,
+            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_SecurityContext, version, NativeConstants.PW_VERSION_SECURITY_CONTEXT,
             sizeof(pw_security_context_events),
             events => ((pw_security_context_events*)events)->version = 0,
             static (_, _, _, _) => 0,

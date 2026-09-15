@@ -80,9 +80,9 @@ internal ref struct SpaPodReader
 
     /// <summary>
     /// Reads the next property and also reports its <c>spa_pod_prop</c> flags (e.g.
-    /// <see cref="SpaPodPropFlag.DontFixate"/> on an unfixated modifier choice).
+    /// <see cref="SpaPodPropFlags.DontFixate"/> on an unfixated modifier choice).
     /// </summary>
-    public bool TryReadProperty(out SpaKey key, out uint flags, out SpaPodReader value)
+    public bool TryReadProperty(out SpaKey key, out SpaPodPropFlags flags, out SpaPodReader value)
     {
         key = default;
         flags = 0;
@@ -93,7 +93,8 @@ internal ref struct SpaPodReader
         if (_pos + 8 > end) return false;
         if (!TryReadU32(out uint rawKey)) return false;
         key = SpaKey.FromRaw(rawKey);
-        if (!TryReadU32(out flags))  return false; // flags
+        if (!TryReadU32(out uint rawFlags)) return false;
+        flags = (SpaPodPropFlags)rawFlags;
 
         // The value pod sits at the current offset. Peek its size.
         if (_pos + 8 > end) return false;
@@ -176,6 +177,36 @@ internal ref struct SpaPodReader
         uint n = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4)); _pos += 4;
         uint d = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4)); _pos += 4;
         return (n, d);
+    }
+
+    /// <summary>Reads a bytes value pod, such as a format's <c>deviceId</c>, in place.</summary>
+    /// <returns><see langword="false"/> when the value is not a bytes pod.</returns>
+    public bool TryReadBytes(out ReadOnlySpan<byte> bytes)
+    {
+        bytes = default;
+
+        // A choice's child: the body is the value, its type carried out of band. This is the shape a
+        // negotiated Bytes property arrives in, because spa_pod_filter_prop writes every result as a
+        // Choice (None for a single match).
+        if (_synthesizedType is { } synthesized)
+        {
+            if (synthesized != SpaType.Bytes) return false;
+            bytes = _buf[_pos..];
+            _pos = _buf.Length;
+            return true;
+        }
+
+        int savedPos = _pos;
+        if (!TryReadHeader(out uint size, out SpaType type) || type != SpaType.Bytes)
+        {
+            _pos = savedPos;
+            return false;
+        }
+
+        bytes = _buf.Slice(_pos, (int)size);
+        _pos += (int)size;
+        AlignTo8();
+        return true;
     }
 
     /// <summary>

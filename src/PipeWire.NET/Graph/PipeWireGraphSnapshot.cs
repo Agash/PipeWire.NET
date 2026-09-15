@@ -80,7 +80,7 @@ public sealed class PipeWireGraphSnapshot
 
     private FrozenDictionary<uint, ImmutableArray<PipeWireLink>> LinksByNode =>
         LazyInitializer.EnsureInitialized(ref _linksByNode, ref _linksByNodeLock,
-            () => Links.SelectMany(l => new[] { (Node: l.LinkInputNode, Link: l), (Node: l.LinkOutputNode, Link: l) })
+            () => Links.SelectMany(l => new[] { (Node: l.InputNodeId, Link: l), (Node: l.OutputNodeId, Link: l) })
                        .GroupBy(static x => x.Node)
                        .ToFrozenDictionary(static g => g.Key,
                                            static g => g.Select(static x => x.Link).Distinct().ToImmutableArray()));
@@ -92,12 +92,12 @@ public sealed class PipeWireGraphSnapshot
 
     private FrozenDictionary<uint, ImmutableArray<PipeWireLink>> InputLinksByPort =>
         LazyInitializer.EnsureInitialized(ref _inputLinksByPort, ref _inputLinksByPortLock,
-            () => Links.GroupBy(static l => l.LinkInputPort)
+            () => Links.GroupBy(static l => l.InputPortId)
                        .ToFrozenDictionary(static g => g.Key, static g => g.ToImmutableArray()));
 
     private FrozenDictionary<uint, ImmutableArray<PipeWireLink>> OutputLinksByPort =>
         LazyInitializer.EnsureInitialized(ref _outputLinksByPort, ref _outputLinksByPortLock,
-            () => Links.GroupBy(static l => l.LinkOutputPort)
+            () => Links.GroupBy(static l => l.OutputPortId)
                        .ToFrozenDictionary(static g => g.Key, static g => g.ToImmutableArray()));
 
     private FrozenDictionary<uint, IPipeWireObject> ObjectsById =>

@@ -37,7 +37,7 @@ public sealed record PipeWirePort : IPipeWireObject
         this.NodeId = NodeId;
         this.PortName = PortName;
         this.PortDirection = PortDirection;
-        this.Monitor = Monitor;
+        this.IsMonitor = Monitor;
         this.PortIndex = PortIndex;
         this.IsControl = IsControl;
         this.IsPhysical = IsPhysical;
@@ -80,7 +80,7 @@ public sealed record PipeWirePort : IPipeWireObject
     public PipeWirePortDirection PortDirection { get; }
 
     /// <summary>True when this is a monitor port (<c>port.monitor</c>).</summary>
-    public bool Monitor { get; }
+    public bool IsMonitor { get; }
 
     /// <summary>
     /// The port's index within its node (<c>port.id</c>), which is what <c>pw-link</c> prints after

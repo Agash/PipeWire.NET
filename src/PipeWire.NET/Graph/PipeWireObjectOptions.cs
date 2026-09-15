@@ -37,11 +37,12 @@ internal readonly record struct PipeWireObjectOptions(
     /// caller-supplied value placed ahead of the library's silently wins and routes the link
     /// elsewhere or hands the request to another factory.
     /// </remarks>
-    private static readonly string[] ReservedForEverything = ["factory.name"];
+    private static readonly string[] ReservedForEverything = [PipeWireKeys.PW_KEY_FACTORY_NAME];
 
     private static readonly string[] ReservedForLinks =
     [
-        "link.output.node", "link.output.port", "link.input.node", "link.input.port",
+        PipeWireKeys.PW_KEY_LINK_OUTPUT_NODE, PipeWireKeys.PW_KEY_LINK_OUTPUT_PORT,
+        PipeWireKeys.PW_KEY_LINK_INPUT_NODE, PipeWireKeys.PW_KEY_LINK_INPUT_PORT,
     ];
 
     /// <summary>Refuses a key the caller does not get to set.</summary>

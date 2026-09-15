@@ -34,7 +34,7 @@ namespace PipeWire.NET.Graph;
 public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposable
 {
     /// <summary>The subject that means "the daemon", used for settings that are not about one object.</summary>
-    public const uint SubjectCore = 0;
+    public const uint SubjectCore = NativeConstants.PW_ID_CORE;
 
     private readonly PipeWireContext _ctx;
     private readonly ILogger _logger;
@@ -71,12 +71,12 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
     {
         var store = new PipeWireMetadataStore(ctx, id, logger);
         store._bound = BoundProxy.Bind(
-            ctx, registry, id, Native.PW_TYPE_INTERFACE_METADATA, version, Native.PW_VERSION_METADATA,
+            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Metadata, version, NativeConstants.PW_VERSION_METADATA,
             sizeof(pw_metadata_events),
             events =>
             {
                 var table = (pw_metadata_events*)events;
-                table->version = Native.PW_VERSION_METADATA_EVENTS;
+                table->version = NativeConstants.PW_VERSION_METADATA_EVENTS;
                 table->property = &OnPropertyCallback;
             },
             static (proxy, hook, events, data) => Native.pw_metadata_add_listener(
@@ -527,7 +527,7 @@ public sealed partial class PipeWireMetadataStore : IDisposable, IAsyncDisposabl
             // SPA_ID_INVALID means every subject, not a subject numbered 0xFFFFFFFF. Comparing it
             // to a stored subject matches nothing, so a store-wide clear would drop no entries at
             // all and the cache would keep reporting values the server no longer has.
-            bool everySubject = subject == Native.SPA_ID_INVALID;
+            bool everySubject = subject == NativeConstants.SPA_ID_INVALID;
 
             // Reported one entry at a time. A subject-wide clear changes the store exactly as an
             // individual removal does, and a consumer that only listens would otherwise never learn

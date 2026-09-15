@@ -52,10 +52,10 @@ public sealed partial class PipeWireLinkControl : IDisposable, IAsyncDisposable
     private sealed record LinkSnapshot(
         PipeWireLinkState State,
         string? Error,
-        uint OutputNode,
-        uint OutputPort,
-        uint InputNode,
-        uint InputPort);
+        uint OutputNodeId,
+        uint OutputPortId,
+        uint InputNodeId,
+        uint InputPortId);
 
     /// <summary>The global id of the link this is bound to.</summary>
     public uint LinkId { get; }
@@ -83,16 +83,16 @@ public sealed partial class PipeWireLinkControl : IDisposable, IAsyncDisposable
     public string? Error => _snapshot.Error;
 
     /// <summary>The node the data leaves.</summary>
-    public uint OutputNode => _snapshot.OutputNode;
+    public uint OutputNodeId => _snapshot.OutputNodeId;
 
     /// <summary>The port the data leaves.</summary>
-    public uint OutputPort => _snapshot.OutputPort;
+    public uint OutputPortId => _snapshot.OutputPortId;
 
     /// <summary>The node the data arrives at.</summary>
-    public uint InputNode => _snapshot.InputNode;
+    public uint InputNodeId => _snapshot.InputNodeId;
 
     /// <summary>The port the data arrives at.</summary>
-    public uint InputPort => _snapshot.InputPort;
+    public uint InputPortId => _snapshot.InputPortId;
 
     /// <summary>True once the link is carrying data.</summary>
     public bool IsActive => State == PipeWireLinkState.Active;
@@ -118,12 +118,12 @@ public sealed partial class PipeWireLinkControl : IDisposable, IAsyncDisposable
     {
         var control = new PipeWireLinkControl(ctx, id, logger);
         control._bound = BoundProxy.Bind(
-            ctx, registry, id, Native.PW_TYPE_INTERFACE_LINK, version, Native.PW_VERSION_LINK,
+            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Link, version, NativeConstants.PW_VERSION_LINK,
             sizeof(pw_link_events),
             events =>
             {
                 var table = (pw_link_events*)events;
-                table->version = Native.PW_VERSION_LINK_EVENTS;
+                table->version = NativeConstants.PW_VERSION_LINK_EVENTS;
                 table->info = &OnInfo;
             },
             static (proxy, hook, events, data) => Native.pw_link_add_listener(
@@ -206,11 +206,11 @@ public sealed partial class PipeWireLinkControl : IDisposable, IAsyncDisposable
         return ValueTask.CompletedTask;
     }
 
-    [LoggerMessage(EventId = 34300, Level = LogLevel.Debug,
+    [LoggerMessage(EventId = 34500, Level = LogLevel.Debug,
         Message = "link {LinkId} is {State}{Error}")]
     private partial void LogState(uint linkId, PipeWireLinkState state, string? error);
 
-    [LoggerMessage(EventId = 34301, Level = LogLevel.Warning,
+    [LoggerMessage(EventId = 34501, Level = LogLevel.Warning,
         Message = "a link state handler threw")]
     private partial void LogHandlerFaulted(Exception exception);
 }

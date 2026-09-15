@@ -12,10 +12,10 @@ public sealed record PipeWireLink : IPipeWireObject
 {
     internal PipeWireLink(
         uint LinkId,
-        uint LinkInputNode,
-        uint LinkInputPort,
-        uint LinkOutputNode,
-        uint LinkOutputPort,
+        uint InputNodeId,
+        uint InputPortId,
+        uint OutputNodeId,
+        uint OutputPortId,
         PipeWirePermissions Permissions = PipeWirePermissions.None,
         uint InterfaceVersion = 0,
         bool IsPassive = false,
@@ -31,10 +31,10 @@ public sealed record PipeWireLink : IPipeWireObject
         this.Permissions = Permissions;
         this.InterfaceVersion = InterfaceVersion;
         this.LinkId = LinkId;
-        this.LinkInputNode = LinkInputNode;
-        this.LinkInputPort = LinkInputPort;
-        this.LinkOutputNode = LinkOutputNode;
-        this.LinkOutputPort = LinkOutputPort;
+        this.InputNodeId = InputNodeId;
+        this.InputPortId = InputPortId;
+        this.OutputNodeId = OutputNodeId;
+        this.OutputPortId = OutputPortId;
     }
 
     /// <inheritdoc/>
@@ -74,14 +74,14 @@ public sealed record PipeWireLink : IPipeWireObject
     public uint LinkId { get; }
 
     /// <summary>The global id of the node this link feeds into.</summary>
-    public uint LinkInputNode { get; }
+    public uint InputNodeId { get; }
 
     /// <summary>The global id of the port this link feeds into.</summary>
-    public uint LinkInputPort { get; }
+    public uint InputPortId { get; }
 
     /// <summary>The global id of the node this link starts from.</summary>
-    public uint LinkOutputNode { get; }
+    public uint OutputNodeId { get; }
 
     /// <summary>The global id of the port this link starts from.</summary>
-    public uint LinkOutputPort { get; }
+    public uint OutputPortId { get; }
 }

@@ -86,7 +86,36 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
     /// would abort the process, but by then the cycle has already been missed.
     /// </para>
     /// </remarks>
-    public Action<PipeWireFilter, uint>? ProcessCallback { get; set; }
+    public ProcessHandler? ProcessCallback { get; set; }
+
+    /// <summary>Runs once per graph cycle on the realtime thread.</summary>
+    /// <param name="filter">The filter being processed.</param>
+    /// <param name="sampleCount">Samples to produce or consume this cycle.</param>
+    /// <param name="clock">
+    /// Where the graph clock stands for this cycle. This is the supported way to get timing in a
+    /// filter: <c>pw_filter_get_time</c> is marked deprecated in the header, which says to use the
+    /// <c>spa_io_position</c> handed to the process callback instead - which is what this is.
+    /// </param>
+    /// <remarks>
+    /// A struct rather than an object, and a single delegate rather than an event, for the same
+    /// reason: neither may allocate on this thread.
+    /// </remarks>
+    public delegate void ProcessHandler(PipeWireFilter filter, uint sampleCount, in PipeWireGraphClock clock);
+
+    private PipeWireVideoCycle _videoCycle;
+
+    /// <summary>
+    /// The frame geometry the graph is running, valid only inside the process callback.
+    /// </summary>
+    /// <remarks>
+    /// What <see cref="PipeWireFilterPort.GetPixels"/> needs, and the reason it takes the size as
+    /// arguments rather than reading it itself: a filter with several video ports reads this once
+    /// and sizes every port from it. Outside the callback this reports
+    /// <see cref="PipeWireVideoCycle.IsValid"/> false, because the graph is between cycles and the
+    /// last geometry is not a statement about the next one.
+    /// </remarks>
+    public PipeWireVideoCycle VideoCycle => _videoCycle;
+
 
     /// <summary>Raised when the filter changes state, on the loop thread.</summary>
     public event Action<PipeWireFilter, PipeWireFilterState, PipeWireFilterState, string?>? StateChanged;
@@ -122,7 +151,7 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
 
             // Zero is the core's id and can never be a filter's, so the daemon reporting it means
             // "not yet", exactly as SPA_ID_INVALID does.
-            return id is 0 or Native.SPA_ID_INVALID ? null : id;
+            return id is 0 or NativeConstants.SPA_ID_INVALID ? null : id;
         }
     }
 
@@ -271,7 +300,7 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
                 }
 
                 filter._events = (pw_filter_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_filter_events));
-                filter._events->version = Native.PW_VERSION_FILTER_EVENTS;
+                filter._events->version = NativeConstants.PW_VERSION_FILTER_EVENTS;
                 filter._events->process = &OnProcessCallback;
                 filter._events->state_changed = &OnStateChangedCallback;
 
@@ -312,6 +341,30 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
 
             using (_ctx.Lock())
                 return Native.pw_filter_is_driving(_handle.Filter);
+        }
+    }
+
+    /// <summary>
+    /// Puts the filter into the error state and tells the daemon why.
+    /// </summary>
+    /// <param name="result">A negative errno describing the failure.</param>
+    /// <param name="message">What went wrong, for logs and for the peer.</param>
+    /// <remarks>
+    /// The counterpart to what a stream does when it cannot satisfy a negotiation. A filter that
+    /// fails and stays quiet leaves the nodes linked to it waiting on a cycle that will not come,
+    /// and nothing in the graph says why. Reporting turns that into a visible error.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The filter is not connected.</exception>
+    public unsafe void SetError(int result, string message)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(message);
+        if (_handle is null || !_connected)
+            throw new InvalidOperationException("connect the filter before reporting an error on it.");
+
+        using (_ctx.Lock())
+        {
+            _ = Native.pw_filter_set_error(_handle.Filter, result, message);
         }
     }
 
@@ -404,6 +457,33 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
     public PipeWireFilterPort AddControlPort(PipeWirePortDirection direction, string name) =>
         AddPort(direction, name, PipeWireDspFormat.Control);
 
+    /// <summary>Adds a video port carrying 32 bit float RGBA frames.</summary>
+    /// <param name="direction">Whether the filter reads from it or writes to it.</param>
+    /// <param name="name">The port's name, as the graph shows it.</param>
+    /// <remarks>
+    /// The shape upstream's <c>video-dsp-play</c> and <c>video-dsp-src</c> use: a filter port is how
+    /// video reaches a processing node without the node being a stream. The frame's geometry is not
+    /// on the port - it comes from the graph's position area, so a filter reads the size from its
+    /// process callback rather than negotiating it.
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="name"/> is null or empty.</exception>
+    /// <exception cref="InvalidOperationException">The filter is already connected, or PipeWire refused.</exception>
+    public PipeWireFilterPort AddVideoPort(PipeWirePortDirection direction, string name) =>
+        AddPort(direction, name, PipeWireDspFormat.Rgba32FloatVideo);
+
+    /// <summary>Adds a port carrying MIDI 2.0 Universal MIDI Packets.</summary>
+    /// <param name="direction">Whether the filter reads from it or writes to it.</param>
+    /// <param name="name">The port's name, as the graph shows it.</param>
+    /// <remarks>
+    /// PipeWire rewrites this port's <c>format.dsp</c> to <c>8 bit raw midi</c> and sets
+    /// <c>control.ump</c>, so the port reports itself as MIDI once it is in the graph. What differs
+    /// is the control type it carries.
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="name"/> is null or empty.</exception>
+    /// <exception cref="InvalidOperationException">The filter is already connected, or PipeWire refused.</exception>
+    public PipeWireFilterPort AddUmpPort(PipeWirePortDirection direction, string name) =>
+        AddPort(direction, name, PipeWireDspFormat.Ump);
+
     /// <summary>Adds a port carrying a named DSP format.</summary>
     /// <param name="direction">Whether the filter reads from it or writes to it.</param>
     /// <param name="name">The port's name, as the graph shows it.</param>
@@ -415,7 +495,7 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
     /// <returns>The port, for reading or writing during processing.</returns>
     /// <remarks>
     /// The general form. <c>format.dsp</c> is what decides a port's shape, and the graph's DSP links
-    /// only carry the three formats <see cref="PipeWireDspFormat"/> names: a port declaring anything
+    /// only carry the formats <see cref="PipeWireDspFormat"/> names: a port declaring anything
     /// else is not linkable to the rest of the graph, which is why this takes an enum rather than a
     /// string. Add every port before connecting.
     /// </remarks>
@@ -446,6 +526,8 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
             PipeWireDspFormat.MonoAudio => "32 bit float mono audio",
             PipeWireDspFormat.Midi => "8 bit raw midi",
             PipeWireDspFormat.Control => "8 bit raw control",
+            PipeWireDspFormat.Rgba32FloatVideo => "32 bit float RGBA video",
+            PipeWireDspFormat.Ump => "32 bit raw UMP",
             _ => throw new ArgumentException($"unknown DSP format {format}.", nameof(format)),
         };
 
@@ -456,8 +538,8 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
                 portProperties[pair.Key] = pair.Value;
         }
 
-        portProperties["format.dsp"] = dsp;
-        portProperties["port.name"] = name;
+        portProperties[PipeWireKeys.PW_KEY_FORMAT_DSP] = dsp;
+        portProperties[PipeWireKeys.PW_KEY_PORT_NAME] = name;
 
         Dictionary<string, string> properties2 = portProperties;
 
@@ -544,12 +626,39 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
             var self = (PipeWireFilter?)GCHandle.FromIntPtr((nint)data).Target;
             if (self is null || self._disposed) return;
 
-            Action<PipeWireFilter, uint>? callback = self.ProcessCallback;
+            ProcessHandler? callback = self.ProcessCallback;
             if (callback is null || position is null) return;
+
+            // The whole clock, not just the duration. The position area is the only timing a filter
+            // is supposed to read - pw_filter_get_time is deprecated in favour of exactly this - so
+            // dropping everything but the sample count left a filter unable to timestamp its own
+            // work or line it up against anything else on the graph.
+            spa_io_clock* c = &position->clock;
+            PipeWireGraphClock clock = new(
+                c->nsec, c->position, c->duration,
+                c->rate.num, c->rate.denom, c->delay, c->rate_diff, c->next_nsec);
+
+            // The graph's frame geometry for this cycle. A video port has no size of its own, so
+            // this is the only place a filter can learn how many pixels its buffer holds - and it
+            // is per-cycle, because the graph may change it.
+            spa_io_video_size* v = &position->video;
+            self._videoCycle = new PipeWireVideoCycle(
+                (v->flags & (uint)SpaIoVideoSizeFlags.Valid) != 0,
+                v->size.width, v->size.height, v->stride,
+                v->framerate.num, v->framerate.denom);
 
             // Invoked directly rather than through GetInvocationList: walking one allocates, which
             // is why this is a single delegate and not an event.
-            callback(self, (uint)position->clock.duration);
+            try
+            {
+                callback(self, (uint)position->clock.duration, in clock);
+            }
+            finally
+            {
+                // Outside the cycle the geometry is not a fact about anything, and a filter that
+                // read it later would size its next access from a frame the graph has moved on from.
+                self._videoCycle = default;
+            }
         }
         catch
         {

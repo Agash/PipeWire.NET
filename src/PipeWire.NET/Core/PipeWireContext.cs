@@ -125,6 +125,155 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         return true;
     }
 
+    /// <summary>
+    /// Whether this context is its own daemon, rather than connecting to one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Set before starting. The graph then lives entirely in this process: nothing is shared with
+    /// the session, nothing needs a socket, and there is no daemon to be running. Upstream's
+    /// <c>internal</c> example is exactly this.
+    /// </para>
+    /// <para>
+    /// An in-process graph starts empty - not even a factory to create nodes with - so load the
+    /// modules the work needs with <see cref="LoadModule"/> before starting. Upstream loads
+    /// <c>libpipewire-module-spa-node-factory</c> and <c>libpipewire-module-link-factory</c>, which
+    /// between them are enough to create nodes and link them.
+    /// </para>
+    /// </remarks>
+    public bool RunInProcess { get; set; }
+
+    private readonly List<(string Name, string? Args)> _modules = [];
+
+    /// <summary>
+    /// Loads a PipeWire module into this context before it starts.
+    /// </summary>
+    /// <param name="name">The module, e.g. <c>libpipewire-module-link-factory</c>.</param>
+    /// <param name="args">Module arguments, or null.</param>
+    /// <remarks>
+    /// Only meaningful with <see cref="RunInProcess"/>: a context connected to a daemon uses the
+    /// modules the daemon loaded, and loading more here would only affect this process's own
+    /// context. Queued rather than applied immediately, because the modules have to be in place
+    /// before the self-connection creates the core.
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="name"/> is null or empty.</exception>
+    /// <exception cref="InvalidOperationException">The context has already started.</exception>
+    public void LoadModule(string name, string? args = null)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        if (_started)
+            throw new InvalidOperationException("modules must be loaded before the context starts.");
+
+        _modules.Add((name, args));
+    }
+
+    private unsafe void LoadQueuedModules()
+    {
+        if (_modules.Count == 0) return;
+
+        pw_context* context = _contextHandle!.Context;
+
+        foreach ((string name, string? args) in _modules)
+        {
+            ReadOnlySpan<byte> nameUtf8 = Encoding.UTF8.GetBytes(name + '\0');
+            ReadOnlySpan<byte> argsUtf8 = args is null ? default : Encoding.UTF8.GetBytes(args + '\0');
+
+            fixed (byte* n = nameUtf8)
+            fixed (byte* a = argsUtf8)
+            {
+                if (Native.pw_context_load_module(context, (sbyte*)n, (sbyte*)a, null) is null)
+                {
+                    throw new PipeWireInteropException(
+                        $"pw_context_load_module({name})", -NativeConstants.ENOENT);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the application drives the loop instead of this context running a thread for it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Set before starting. The default is <see langword="false"/>: the context owns a thread and
+    /// callbacks arrive on it, which is what most applications want. Set it when the host already
+    /// has an event loop and wants PipeWire's callbacks on that thread instead - a UI toolkit's
+    /// message pump, a game loop, a scheduler that owns its threads.
+    /// </para>
+    /// <para>
+    /// The host then polls <see cref="LoopDescriptor"/> alongside everything else it waits on, and
+    /// calls <see cref="IterateLoop"/> when it signals, between one
+    /// <see cref="EnterLoop"/> and <see cref="LeaveLoop"/> on that thread. This is what upstream's
+    /// <c>gmain</c> example does by wrapping the descriptor in a GSource.
+    /// </para>
+    /// </remarks>
+    public bool DriveExternally { get; set; }
+
+    /// <summary>
+    /// The descriptor that becomes readable when the loop has work pending, or -1.
+    /// </summary>
+    /// <remarks>
+    /// Only meaningful with <see cref="DriveExternally"/>. Poll it for read; do not read from it.
+    /// </remarks>
+    public unsafe int LoopDescriptor
+    {
+        get
+        {
+            PipeWireLoopHandle? loop = _loopHandle;
+            if (loop is null || loop.IsInvalid || loop.IsClosed) return -1;
+
+            return Native.pw_loop_get_fd(Native.pw_thread_loop_get_loop(LoopHandle));
+        }
+    }
+
+    /// <summary>Claims the loop for the calling thread. Call once, before iterating.</summary>
+    /// <remarks>
+    /// PipeWire records which thread owns the loop so its own "am I on the loop thread" checks
+    /// answer correctly. Iterating without entering makes those checks wrong rather than loud.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The context does not have an external driver.</exception>
+    public unsafe void EnterLoop()
+    {
+        RequireExternalDriver();
+        Native.pw_loop_enter(Native.pw_thread_loop_get_loop(LoopHandle));
+    }
+
+    /// <summary>Releases the loop from the calling thread.</summary>
+    /// <exception cref="InvalidOperationException">The context does not have an external driver.</exception>
+    public unsafe void LeaveLoop()
+    {
+        RequireExternalDriver();
+        Native.pw_loop_leave(Native.pw_thread_loop_get_loop(LoopHandle));
+    }
+
+    /// <summary>
+    /// Dispatches whatever the loop has ready.
+    /// </summary>
+    /// <param name="timeoutMs">
+    /// How long to wait for work. Zero is the non-blocking form a host loop uses once
+    /// <see cref="LoopDescriptor"/> has signalled; -1 blocks until there is something.
+    /// </param>
+    /// <returns>A negative errno on failure, otherwise the number of sources dispatched.</returns>
+    /// <exception cref="InvalidOperationException">The context does not have an external driver.</exception>
+    public unsafe int IterateLoop(int timeoutMs = 0)
+    {
+        RequireExternalDriver();
+        return Native.pw_loop_iterate(Native.pw_thread_loop_get_loop(LoopHandle), timeoutMs);
+    }
+
+    private void RequireExternalDriver()
+    {
+        ObjectDisposedException.ThrowIf(_loopHandle is null, this);
+
+        if (!DriveExternally)
+        {
+            throw new InvalidOperationException(
+                "this context runs its own loop thread; set DriveExternally before starting it to "
+                + "drive the loop from your own.");
+        }
+    }
+
     private unsafe void InitializeNative(string name)
     {
         _ = ProcessInit.Value;
@@ -135,7 +284,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
             loop = Native.pw_thread_loop_new((sbyte*)n, null);
 
         if (loop is null)
-            throw new PipeWireInteropException("pw_thread_loop_new", -12);     // ENOMEM
+            throw new PipeWireInteropException("pw_thread_loop_new", -NativeConstants.ENOMEM);
 
         _loopHandle = new PipeWireLoopHandle(loop);
 
@@ -148,7 +297,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         {
             _loopHandle.Dispose();
             _loopHandle = null;
-            throw new PipeWireInteropException("pw_context_new", -12);         // ENOMEM
+            throw new PipeWireInteropException("pw_context_new", -NativeConstants.ENOMEM);
         }
 
         _contextHandle = new PipeWireContextHandle(context, _loopHandle);
@@ -363,8 +512,15 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     private unsafe void StartNative(SafeHandle? handle, int rawFd)
     {
         pw_thread_loop* loop = LoopHandle;
-        if (Native.pw_thread_loop_start(loop) < 0)
-            throw new PipeWireInteropException("pw_thread_loop_start", -11);   // EAGAIN
+
+        // Before the core exists, because an in-process graph has no factories until its modules
+        // are in and the self-connection creates the core from what the context holds.
+        LoadQueuedModules();
+
+        // A host that drives the loop itself must not also have a thread doing it: two iterators on
+        // one loop is a race over the poll set, not a speedup.
+        if (!DriveExternally && Native.pw_thread_loop_start(loop) < 0)
+            throw new PipeWireInteropException("pw_thread_loop_start", -NativeConstants.EAGAIN);
 
         // The loop thread is live from here, but _started is only set once this returns and disposal
         // gates pw_thread_loop_stop on it - so a throw below would strand the thread.
@@ -398,15 +554,17 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
                 Span<byte> scratch = stackalloc byte[512];
                 Span<spa_dict_item> items = stackalloc spa_dict_item[2];
                 var builder = new SpaDictBuilder(scratch, items);
-                builder.Add("application.name", _name);
+                builder.Add(PipeWireKeys.PW_KEY_APP_NAME, _name);
                 spa_dict native = builder.Build();
 
                 pw_properties* props = Native.pw_properties_new_dict(&native);
                 if (props is null)
-                    throw new PipeWireInteropException("pw_properties_new_dict", -12);   // ENOMEM
+                    throw new PipeWireInteropException("pw_properties_new_dict", -NativeConstants.ENOMEM);
 
                 core = connectFd < 0
-                    ? Native.pw_context_connect(_contextHandle!.Context, props, user_data_size: 0)
+                    ? (RunInProcess
+                        ? Native.pw_context_connect_self(_contextHandle!.Context, props, user_data_size: 0)
+                        : Native.pw_context_connect(_contextHandle!.Context, props, user_data_size: 0))
                     : Native.pw_context_connect_fd(_contextHandle!.Context, connectFd, props, user_data_size: 0);
             }
             finally
@@ -421,11 +579,11 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
                 // disposal closes it. A raw descriptor stays the caller's; nothing here closes it.
                 throw connectFd < 0
                     ? new PipeWireConnectFailedException(
-                        "pw_context_connect", -2,   // ENOENT
+                        "pw_context_connect", -NativeConstants.ENOENT,
                         objectId: null,
                         "ensure the PipeWire daemon is running (pipewire.service / wireplumber.service)")
                     : new PipeWireConnectFailedException(
-                        "pw_context_connect_fd", -2,   // ENOENT
+                        "pw_context_connect_fd", -NativeConstants.ENOENT,
                         objectId: null,
                         "the fd must be a connected PipeWire socket (as returned by a portal "
                         + "OpenPipeWireRemote request), not a plain file, and the daemon must be "
@@ -637,7 +795,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     {
         _watchSelf = GCHandle.Alloc(this, GCHandleType.Weak);
         _watchEvents = (pw_core_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_core_events));
-        _watchEvents->version = Native.PW_VERSION_CORE_EVENTS;
+        _watchEvents->version = NativeConstants.PW_VERSION_CORE_EVENTS;
         _watchEvents->error = &OnConnectionError;
         _watchHook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
 
@@ -711,10 +869,10 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
 
     /// <inheritdoc cref="CoreSync.IsConnectionFatal"/>
     private static bool IsConnectionFatal(int result) => result is
-        -32 or    // EPIPE
-        -103 or   // ECONNABORTED
-        -104 or   // ECONNRESET
-        -107;     // ENOTCONN
+        -NativeConstants.EPIPE or
+        -NativeConstants.ECONNABORTED or
+        -NativeConstants.ECONNRESET or
+        -NativeConstants.ENOTCONN;
 
     private void DisposeCore()
     {

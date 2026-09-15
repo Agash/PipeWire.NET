@@ -337,7 +337,7 @@ public static class SpaPod
         while (offset + 16 <= body.Length)
         {
             uint key = MemoryMarshal.Read<uint>(body[offset..]);
-            uint flags = MemoryMarshal.Read<uint>(body[(offset + 4)..]);
+            var flags = (SpaPodPropFlags)MemoryMarshal.Read<uint>(body[(offset + 4)..]);
 
             if (!TryParseValue(body[(offset + 8)..], depth + 1, out SpaValue? propertyValue, out int consumed)
                 || propertyValue is null || consumed <= 0)
@@ -383,11 +383,21 @@ public static class SpaPod
         if (!ChildrenTileExactly(childSize, childType, items.Length)) return false;
 
         int count = items.Length / (int)childSize;
-        // The kind says how to read the positions - a Range is default, min, max - so a count that
-        // does not match it is a pod that cannot be interpreted, not one that is merely unusual.
-        // Refused here: the record's own check throws, which is right for a caller building one by
-        // hand and wrong on a parse path whose whole contract is to return false.
-        if (!SpaChoice.CountFitsKind(kind, count)) return false;
+
+        // The kind says how to read the positions - a Range is default, min, max - so fewer values
+        // than it needs is a pod that cannot be interpreted. More is legal, and only the first ones
+        // count: upstream's spa_pod_choice_body_get_values clamps n_values to the kind's maximum, and
+        // spa_pod_object_fixate turns a choice into None by changing its type alone, leaving every
+        // value it had. So a settled format arrives as None choices carrying all of the
+        // alternatives, and refusing them refused every format the audio adapter sets on a follower.
+        // Refused only when short: the record's own check throws, which is right for a caller
+        // building one by hand and wrong on a parse path whose whole contract is to return false.
+        int required = SpaChoice.RequiredCount(kind);
+        if (required > 0)
+        {
+            if (count < required) return false;
+            count = required;
+        }
 
         var builder = ImmutableArray.CreateBuilder<SpaValue>(count);
         for (int i = 0; i < count; i++)
@@ -621,7 +631,7 @@ public static class SpaPod
                 foreach (SpaProperty property in o.Properties)
                 {
                     MemoryMarshal.Write<uint>(body[offset..], property.Key.Value);
-                    MemoryMarshal.Write<uint>(body[(offset + 4)..], property.Flags);
+                    MemoryMarshal.Write<uint>(body[(offset + 4)..], (uint)property.Flags);
                     WriteValue(property.Value, body[(offset + 8)..]);
                     offset += 8 + Pad(8 + BodySize(property.Value));
                 }

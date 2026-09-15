@@ -30,12 +30,12 @@ internal sealed class PipeWireModuleReader : IDisposable
     {
         var reader = new PipeWireModuleReader();
         reader._bound = BoundProxy.Bind(
-            ctx, registry, id, Native.PW_TYPE_INTERFACE_MODULE, version, Native.PW_VERSION_MODULE,
+            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Module, version, NativeConstants.PW_VERSION_MODULE,
             sizeof(pw_module_events),
             events =>
             {
                 var table = (pw_module_events*)events;
-                table->version = Native.PW_VERSION_MODULE_EVENTS;
+                table->version = NativeConstants.PW_VERSION_MODULE_EVENTS;
                 table->info = &OnInfoCallback;
             },
             static (proxy, hook, events, data) => Native.pw_module_add_listener(
@@ -57,8 +57,8 @@ internal sealed class PipeWireModuleReader : IDisposable
             // filename and args are not properties, but they are the two facts a reader of a module
             // most often wants and they arrive nowhere else, so they travel as properties here.
             var extra = new Dictionary<string, string>(StringComparer.Ordinal);
-            if (info->filename is not null) extra[PipeWireNames.ModuleFilename] = DaemonText.String(info->filename)!;
-            if (info->args is not null) extra[PipeWireNames.ModuleArguments] = DaemonText.String(info->args)!;
+            if (info->filename is not null) extra[PipeWireKeys.MODULE_FILENAME] = DaemonText.String(info->filename)!;
+            if (info->args is not null) extra[PipeWireKeys.MODULE_ARGS] = DaemonText.String(info->args)!;
 
             self._info.TrySetResult(
                 PipeWireProperties.From(info->props).MergedWith(PipeWireProperties.FromItems(extra)));

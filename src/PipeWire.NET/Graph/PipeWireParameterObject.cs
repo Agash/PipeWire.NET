@@ -131,7 +131,7 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     /// <summary>
     /// A number to hand to <c>enum_params</c>. Only for tracing: the protocol does not echo it.
     /// </summary>
-    private int NextRequestTag() => Interlocked.Increment(ref _nextTag) & Native.SPA_ASYNC_SEQ_MASK;
+    private int NextRequestTag() => Interlocked.Increment(ref _nextTag) & NativeConstants.SPA_ASYNC_SEQ_MASK;
 
     // Each takes the proxy pointer rather than reading it from the binding. Destroying a proxy
     // clears that pointer before it takes the loop lock, so a pointer re-read inside the call could
@@ -224,7 +224,17 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
 
         try
         {
-            await roundTrip.ConfigureAwait(false);
+            try
+            {
+                await roundTrip.ConfigureAwait(false);
+            }
+            catch (PipeWireRequestRefusedException ex) when (IsNoSuchParameter(ex))
+            {
+                // Deliberately not logged or rethrown: an object without the parameter is the empty
+                // answer this method documents, not a failure. A filter node has no Props, and its
+                // node answers enum_params with -ENOENT.
+                return [];
+            }
 
             if (!_answers.TryGetValue(key, out List<SpaObject>? got))
                 return [];
@@ -239,6 +249,18 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
             _answers.TryRemove(key, out _);
         }
     }
+
+    /// <summary>Whether a refused enumeration means the object has no such parameter.</summary>
+    /// <remarks>
+    /// Both "no such parameter" and "no such object" are <c>-ENOENT</c>; upstream tells them apart
+    /// by where it raises them. A missing parameter is raised on the object's own resource
+    /// (impl-node.c, impl-port.c, impl-device.c: "enum params id:%d (%s) failed"); an object that is
+    /// gone is raised on the core by the protocol ("unknown resource %d op:%u"). Only the first is
+    /// an empty answer; the second stays an error the caller can read as
+    /// <see cref="PipeWireException.IsObjectGone"/>.
+    /// </remarks>
+    private static bool IsNoSuchParameter(PipeWireRequestRefusedException ex) =>
+        ex.Result == -NativeConstants.ENOENT && ex.ObjectId is { } id && id != NativeConstants.PW_ID_CORE;
 
     /// <summary>
     /// Reads the single value of a parameter that has one, or <see langword="null"/> if it has none.
@@ -451,8 +473,8 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
         {
             described[i] = new PipeWireParameterInfo(
                 (SpaParamType)parameters![i].id,
-                (parameters[i].flags & SpaParamInfoFlags.Read) != 0,
-                (parameters[i].flags & SpaParamInfoFlags.Write) != 0);
+                ((SpaParamInfoFlags)parameters[i].flags & SpaParamInfoFlags.Read) != 0,
+                ((SpaParamInfoFlags)parameters[i].flags & SpaParamInfoFlags.Write) != 0);
         }
 
         Volatile.Write(ref _parameters, described);
