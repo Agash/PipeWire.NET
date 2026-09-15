@@ -39,63 +39,112 @@ internal static partial class Descriptors
         }
     }
 
-    // - eventfd timelines for explicit sync (sys/eventfd.h). A timeline descriptor behaves like a
-    // semaphore counter: write adds, read waits for nonzero and takes. The acquire timeline is
-    // signalled when the frame is ready, the release timeline when the consumer is done with it,
-    // which is exactly the wait/signal pairing explicit sync needs without any GPU involved. -
-
-    private const int EFD_CLOEXEC = 0x80000; // == O_CLOEXEC: close-on-exec, never inherited
+    // - The eventfd stand-in for explicit-sync timelines (sys/eventfd.h). Real timelines are DRM
+    // syncobjs (DrmSyncobj); these exist because upstream's video-src-sync example passes eventfds
+    // labelled as syncobjs ("just an example, not really syncobj here"). The convention is the
+    // example's: write adds one, read waits for nonzero and takes it. A descriptor is only treated
+    // this way once the kernel has confirmed it is an eventfd (IsEventfd), and every call reports
+    // failure - see SyncTimeline for what went wrong when neither held. CreateEventfd has no
+    // production caller of its own; it builds such descriptors for the tests. -
 
     /// <summary>Creates an eventfd timeline starting at zero, blocking mode like upstream.</summary>
     /// <exception cref="IOException">The kernel refused.</exception>
     internal static int CreateEventfd()
     {
-        int fd = Eventfd(0, EFD_CLOEXEC);
+        int fd = NativeConstants.eventfd(0, NativeConstants.O_CLOEXEC);
         if (fd < 0)
             throw new IOException($"eventfd failed with errno {Marshal.GetLastPInvokeError()}.");
 
         return fd;
     }
 
-    /// <summary>Signals a timeline (adds one).</summary>
+    /// <summary>Whether the kernel says <paramref name="fd"/> is an eventfd.</summary>
     /// <remarks>
-    /// Retried on EINTR: nothing waiting on a timeline times out, so a dropped signal is a peer
-    /// that waits forever.
+    /// An eventfd is an anonymous inode, and <c>/proc/self/fd/N</c> names its kind:
+    /// <c>anon_inode:[eventfd]</c>. Nothing about a syncobj, a pipe or a DMA-BUF reads that way, so
+    /// this is what separates upstream's stand-in from a descriptor that merely failed to import.
     /// </remarks>
-    internal static unsafe void SignalEventfd(int fd)
+    internal static bool IsEventfd(int fd)
+    {
+        if (fd < 0) return false;
+
+        try
+        {
+            string? target = new FileInfo($"/proc/self/fd/{fd}").LinkTarget;
+            return string.Equals(target, "anon_inode:[eventfd]", StringComparison.Ordinal);
+        }
+        catch (IOException)
+        {
+            // Deliberately not logged: a descriptor /proc cannot describe is not an eventfd, and the
+            // caller reports the descriptor as unusable.
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Deliberately not logged, for the same reason.
+            return false;
+        }
+    }
+
+    /// <summary>Signals a timeline (adds one).</summary>
+    /// <returns>0, or the errno of the failed write.</returns>
+    /// <remarks>
+    /// Retried on EINTR: a dropped signal is a peer left waiting until its timeout.
+    /// </remarks>
+    internal static unsafe int SignalEventfd(int fd)
     {
         ulong one = 1;
-        while (Write(fd, &one, 8) < 0 && Marshal.GetLastPInvokeError() == EIntr) { }
+        while (NativeConstants.write(fd, &one, 8) < 0)
+        {
+            int errno = Marshal.GetLastPInvokeError();
+            if (errno != NativeConstants.EINTR) return errno;
+        }
+
+        return 0;
     }
 
-    /// <summary>Waits for a timeline to become nonzero and takes one count.</summary>
+    /// <summary>Waits for a timeline to become nonzero and takes one count, up to <paramref name="timeout"/>.</summary>
     /// <remarks>
-    /// Blocks the calling thread, like upstream's consumer and producer: only call it where a
-    /// missing signal is a peer bug rather than a slow peer, because nothing here will time out.
+    /// Through <c>poll</c> rather than a bare blocking read, so an eventfd wait has the same
+    /// deadline and the same three outcomes as a syncobj wait. Upstream's example blocks without
+    /// one; a peer that never signals would then hang the loop thread for good.
     /// </remarks>
-    internal static unsafe void WaitEventfd(int fd)
+    internal static unsafe SyncWait WaitEventfd(int fd, TimeSpan timeout)
     {
-        ulong taken;
-        while (Read(fd, &taken, 8) < 0 && Marshal.GetLastPInvokeError() == EIntr) { }
+        long deadline = Environment.TickCount64 + (long)timeout.TotalMilliseconds;
+
+        while (true)
+        {
+            var pfd = new PosixPollFd { fd = fd, events = (short)NativeConstants.POLLIN };
+            int remaining = (int)Math.Max(0, deadline - Environment.TickCount64);
+
+            int ready = NativeConstants.poll(&pfd, 1, remaining);
+            if (ready < 0)
+            {
+                int errno = Marshal.GetLastPInvokeError();
+                if (errno == NativeConstants.EINTR) continue;
+                return new SyncWait(SyncWaitOutcome.Failed, errno);
+            }
+
+            if (ready == 0) return new SyncWait(SyncWaitOutcome.TimedOut, NativeConstants.ETIME);
+
+            if ((pfd.revents & NativeConstants.POLLNVAL) != 0)
+                return new SyncWait(SyncWaitOutcome.Failed, NativeConstants.EBADF);
+
+            if ((pfd.revents & (NativeConstants.POLLERR | NativeConstants.POLLHUP)) != 0)
+                return new SyncWait(SyncWaitOutcome.Failed, NativeConstants.EIO);
+
+            ulong taken;
+            if (NativeConstants.read(fd, &taken, 8) >= 0) return new SyncWait(SyncWaitOutcome.Reached, 0);
+
+            int readErrno = Marshal.GetLastPInvokeError();
+            if (readErrno != NativeConstants.EINTR) return new SyncWait(SyncWaitOutcome.Failed, readErrno);
+        }
     }
 
-    internal static void CloseEventfd(int fd)
+    internal static void CloseDescriptor(int fd)
     {
-        if (fd >= 0) _ = Close(fd);
+        if (fd >= 0) _ = NativeConstants.close(fd);
     }
 
-    [LibraryImport("libc", EntryPoint = "eventfd", SetLastError = true)]
-    private static partial int Eventfd(uint initval, int flags);
-
-    /// <summary><c>EINTR</c>: interrupted by a signal, so the call is retried rather than lost.</summary>
-    private const int EIntr = 4;
-
-    [LibraryImport("libc", EntryPoint = "read", SetLastError = true)]
-    private static unsafe partial nint Read(int fd, void* buf, nuint count);
-
-    [LibraryImport("libc", EntryPoint = "write", SetLastError = true)]
-    private static unsafe partial nint Write(int fd, void* buf, nuint count);
-
-    [LibraryImport("libc", EntryPoint = "close")]
-    private static partial int Close(int fd);
 }

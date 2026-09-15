@@ -40,7 +40,12 @@ public sealed record PulledVideoPlane(
 /// </remarks>
 public sealed class PulledVideoFrame : IDisposable
 {
-    private bool _disposed;
+    // Interlocked rather than a plain bool: disposing now signals a release point, and a release
+    // signalled twice tells the producer a later frame is free before the consumer let go of it.
+    private int _disposed;
+
+    // The release point this frame's reader has promised, signalled when the frame is disposed.
+    private SyncRelease _release;
 
     internal PulledVideoFrame(
         ImmutableArray<byte> pixels,
@@ -54,9 +59,10 @@ public sealed class PulledVideoFrame : IDisposable
         ulong sequenceNumber,
         PipeWireBufferType bufferType,
         VideoColorInfo color,
-        long? presentationTimeNs,
-        long? captureClockNs,
-        long? mediaClockNs,
+        long? presentationTimestampNs,
+        long? queuedTimeNs,
+        long? graphTimeNs,
+        long? streamPositionNs,
         long delayNs,
         VideoRegion? crop,
         SpaMetaVideotransformValue transform)
@@ -72,9 +78,10 @@ public sealed class PulledVideoFrame : IDisposable
         SequenceNumber = sequenceNumber;
         BufferType = bufferType;
         Color = color;
-        PresentationTimeNs = presentationTimeNs;
-        CaptureClockNs = captureClockNs;
-        MediaClockNs = mediaClockNs;
+        PresentationTimestampNs = presentationTimestampNs;
+        QueuedTimeNs = queuedTimeNs;
+        GraphTimeNs = graphTimeNs;
+        StreamPositionNs = streamPositionNs;
         DelayNs = delayNs;
         Crop = crop;
         Transform = transform;
@@ -122,13 +129,17 @@ public sealed class PulledVideoFrame : IDisposable
     /// Presentation timestamp, or null when the producer sent none. On the same monotonic clock as
     /// an audio stream on the same graph, which is what makes the two alignable.
     /// </summary>
-    public long? PresentationTimeNs { get; }
+    public long? PresentationTimestampNs { get; }
+
+    /// <summary>The cycle time the buffer was queued in (<c>pw_buffer.time</c>), or null.</summary>
+    /// <remarks>See <see cref="VideoFrame.QueuedTimeNs"/>.</remarks>
+    public long? QueuedTimeNs { get; }
 
     /// <summary>Graph clock time of the cycle this frame arrived on, or null.</summary>
-    public long? CaptureClockNs { get; }
+    public long? GraphTimeNs { get; }
 
     /// <summary>Media position at the cycle, or null.</summary>
-    public long? MediaClockNs { get; }
+    public long? StreamPositionNs { get; }
 
     /// <summary>Signal delay between the source and this stream.</summary>
     public long DelayNs { get; }
@@ -142,13 +153,28 @@ public sealed class PulledVideoFrame : IDisposable
     /// <summary>True when the frame carries dmabuf descriptors rather than host bytes.</summary>
     public bool IsFdBacked => !Planes.IsDefaultOrEmpty;
 
-    /// <summary>Closes every descriptor the frame owns. Safe to call more than once.</summary>
+    /// <summary>Ties the frame's explicit-sync release to its lifetime.</summary>
+    internal void HoldRelease(SyncRelease release) => _release = release;
+
+    /// <summary>
+    /// Closes every descriptor the frame owns and, under explicit sync, tells the producer it may
+    /// reuse the buffer. Safe to call more than once.
+    /// </summary>
+    /// <remarks>
+    /// The release is what an owned DMA-BUF frame was missing: the descriptors were duplicated, so the
+    /// memory stayed mapped, but the producer was told at the end of the cycle that it could write into
+    /// it again. Now it is told when this frame is disposed, which is when the reader has actually
+    /// finished with it.
+    /// </remarks>
     public void Dispose()
     {
-        if (_disposed)
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
-        _disposed = true;
+        // Deliberately not checked: a frame has no logger, and a refused signal leaves the producer
+        // waiting until its own release timeout, which is where it is reported.
+        _ = _release.Signal();
+        _release = default;
 
         if (!Planes.IsDefaultOrEmpty)
         {

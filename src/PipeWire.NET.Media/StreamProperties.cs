@@ -22,15 +22,15 @@ public sealed class StreamProperties
     /// <param name="category">Capture or playback.</param>
     public StreamProperties(StreamMediaType mediaType, StreamCategory category)
     {
-        _props["media.type"]     = mediaType == StreamMediaType.Video ? "Video" : "Audio";
-        _props["media.category"] = category == StreamCategory.Capture ? "Capture" : "Playback";
+        _props[PipeWireKeys.PW_KEY_MEDIA_TYPE]     = mediaType == StreamMediaType.Video ? "Video" : "Audio";
+        _props[PipeWireKeys.PW_KEY_MEDIA_CATEGORY] = category == StreamCategory.Capture ? "Capture" : "Playback";
     }
 
     /// <summary>Sets <c>media.role</c> (e.g. "Camera", "Music", "Screen").</summary>
     public StreamProperties WithRole(string role)
     {
         ArgumentException.ThrowIfNullOrEmpty(role);
-        _props["media.role"] = role;
+        _props[PipeWireKeys.PW_KEY_MEDIA_ROLE] = role;
         return this;
     }
 
@@ -38,7 +38,7 @@ public sealed class StreamProperties
     public StreamProperties WithTargetObject(string targetObject)
     {
         ArgumentException.ThrowIfNullOrEmpty(targetObject);
-        _props["target.object"] = targetObject;
+        _props[PipeWireKeys.PW_KEY_TARGET_OBJECT] = targetObject;
         return this;
     }
 
@@ -46,7 +46,7 @@ public sealed class StreamProperties
     public StreamProperties WithNodeName(string nodeName)
     {
         ArgumentException.ThrowIfNullOrEmpty(nodeName);
-        _props["node.name"] = nodeName;
+        _props[PipeWireKeys.PW_KEY_NODE_NAME] = nodeName;
         return this;
     }
 
@@ -54,7 +54,7 @@ public sealed class StreamProperties
     public StreamProperties WithNodeDescription(string description)
     {
         ArgumentException.ThrowIfNullOrEmpty(description);
-        _props["node.description"] = description;
+        _props[PipeWireKeys.PW_KEY_NODE_DESCRIPTION] = description;
         return this;
     }
 

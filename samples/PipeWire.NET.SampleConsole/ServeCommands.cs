@@ -84,7 +84,7 @@ internal static class ServeCommands
 
         long cycles = 0;
         long processed = 0;
-        filter.ProcessCallback = (_, sampleCount) =>
+        filter.ProcessCallback = (_, sampleCount, in _) =>
         {
             // The realtime thread: no allocation, no blocking, counters only.
             Interlocked.Increment(ref cycles);

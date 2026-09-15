@@ -36,7 +36,7 @@ namespace PipeWire.NET.Media.Streams;
 public sealed partial class PipeWireAudioCapture : IAsyncDisposable
 {
     /// <summary>Wildcard node id - let PipeWire auto-select a source.</summary>
-    public const uint AnyNode = Native.PW_ID_ANY;
+    public const uint AnyNode = NativeConstants.PW_ID_ANY;
 
     /// <summary>Handles an audio frame on the loop thread. Do not cache the frame.</summary>
     public delegate void FrameReadyHandler(PipeWireAudioCapture sender, AudioFrame frame);
@@ -73,6 +73,12 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
     /// <see langword="true"/> to end the stream when its source goes away, rather than letting the
     /// daemon attach it to another one.
     /// </param>
+    /// <param name="pullMode">
+    /// Take the driver role, so cycles happen when this stream asks for them rather than when the
+    /// graph schedules them. Pair with <see cref="TriggerProcess"/>, and with
+    /// <see cref="CommandReceived"/> to answer <see cref="SpaNodeCommand.RequestProcess"/>. This is
+    /// how upstream's pull example consumes: a driver on an input stream pulls.
+    /// </param>
     /// <exception cref="ArgumentNullException"><paramref name="source"/> is <see langword="null"/>.</exception>
     /// <param name="cancellationToken">
     /// Abandons the wait for the loop lock. The connect request itself is issued
@@ -84,6 +90,7 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
         int channels = 2,
         AudioSampleFormat format = AudioSampleFormat.F32Le,
         bool stayWithTheSource = false,
+        bool pullMode = false,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -104,6 +111,11 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
     /// <see langword="true"/> to end the stream when its source goes away, rather than letting the
     /// daemon attach it to another one.
     /// </param>
+    /// <param name="pullMode">
+    /// Take the driver role, so cycles happen when this stream asks for them rather than when the
+    /// graph schedules them. Pair with <see cref="TriggerProcess"/>, and with
+    /// <see cref="CommandReceived"/> to answer <see cref="SpaNodeCommand.RequestProcess"/>.
+    /// </param>
     /// <param name="cancellationToken">
     /// Abandons the wait for the loop lock. The connect request itself is issued
     /// synchronously once that is held, so there is nothing to recall after it.
@@ -112,6 +124,7 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
         int sampleRate = 48000, int channels = 2, AudioSampleFormat format = AudioSampleFormat.F32Le,
         string? targetObjectName = null,
         bool stayWithTheSource = false,
+        bool pullMode = false,
         CancellationToken cancellationToken = default)
     {
         if (_core is not null) throw new InvalidOperationException("Already connected.");
@@ -121,6 +134,16 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
         var props = new StreamProperties(StreamMediaType.Audio, StreamCategory.Capture)
             .WithRole("Music")
             .WithNodeName(_name);
+
+        // After the stream's own defaults, so an explicit media.role or node.description from the
+        // caller wins rather than being silently ignored. An explicit method argument still beats
+        // both, which is why target.object is applied below this.
+        if (ExtraProperties is { Count: > 0 })
+        {
+            foreach (KeyValuePair<string, string> kv in ExtraProperties)
+                props.With(kv.Key, kv.Value);
+        }
+
         if (targetObjectName is not null) props.WithTargetObject(targetObjectName);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleRate);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(channels);
@@ -137,10 +160,15 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
         {
             core.Connect(SpaDirection.Input, targetNodeId,
             PipeWireStreamFlags.Autoconnect | PipeWireStreamFlags.MapBuffers
-                | (stayWithTheSource ? PipeWireStreamFlags.DontReconnect : 0),
+                | (stayWithTheSource ? PipeWireStreamFlags.DontReconnect : 0)
+                | (pullMode ? PipeWireStreamFlags.Driver : 0),
             pod[..len],
             cancellationToken: cancellationToken);
             _core = core;
+
+            // Set here, not when a handler subscribes: a caller that subscribed before connecting
+            // would otherwise never be hooked up, and the events it was waiting for would pass silently.
+            core.OnCommand = RaiseCommand;
         }
         catch
         {
@@ -155,16 +183,92 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
     /// </summary>
     /// <remarks>
     /// A stream is a node like any other, so this is the handle for routing it:
-    /// <c>graph.GetPortsForNode(stream.NodeId!.Value)</c> finds its ports, which can then be linked.
+    /// <c>graph.GetPortsForNode(await stream.WaitForNodeIdAsync())</c> finds its ports, which can then
+    /// be linked. Awaited rather than read, because the id only exists once the daemon has bound the
+    /// stream, which is after <c>Connect</c> returns.
     /// </remarks>
     public uint? NodeId
     {
         get
         {
-            uint id = _core?.NodeId ?? Native.PW_ID_ANY;
-            return id == Native.PW_ID_ANY ? null : id;
+            uint id = _core?.NodeId ?? NativeConstants.PW_ID_ANY;
+            return id == NativeConstants.PW_ID_ANY ? null : id;
         }
     }
+
+
+    /// <summary>
+    /// From inside a <c>FrameReady</c> handler: drop this frame instead of consuming it.
+    /// </summary>
+    /// <remarks>
+    /// The buffer goes straight back to the pool without being counted as consumed. A consumer
+    /// that is behind and would rather skip than fall further behind should say so here, so the
+    /// queue depth other code reads stays honest about what was actually taken.
+    /// </remarks>
+    public void SkipCurrentFrame() => _core?.SkipCurrentBuffer();
+
+    /// <summary>Whether the daemon has made this stream the graph's driver.</summary>
+    public bool IsDriving => _core?.IsDriving ?? false;
+
+    /// <summary>
+    /// Asks for one cycle now. Only meaningful on a stream connected with <c>pullMode</c>.
+    /// </summary>
+    /// <remarks>
+    /// The pull primitive: a consumer that drives calls this on its own schedule, or in answer to
+    /// <see cref="SpaNodeCommand.RequestProcess"/> from <see cref="CommandReceived"/>. Safe to call
+    /// from any thread - the trigger does its own hop onto the data loop.
+    /// </remarks>
+    public void TriggerProcess() => _core?.TriggerProcess();
+
+    /// <summary>
+    /// Extra node properties to set when connecting, on top of the ones this stream sets itself.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Session managers, routing rules and anything showing the user a list of streams read these,
+    /// so the tags are how a stream explains itself to the rest of the system. <c>pw-cat</c> sets
+    /// <c>media.title</c>, <c>media.artist</c> and the rest for exactly that reason.
+    /// </para>
+    /// <para>
+    /// Applied at connect, and a key set here wins over this stream's own default for that key -
+    /// which is the point, since overriding <c>media.role</c> or <c>node.description</c> is the
+    /// usual reason to reach for this. To change a tag on a stream that is already running, use
+    /// <c>UpdateProperties</c> instead; some keys, <c>target.object</c> among them, are only read
+    /// when the connection is made.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyDictionary<string, string>? ExtraProperties { get; set; }
+
+    /// <summary>How much this stream currently holds, or null when it cannot be read.</summary>
+    /// <remarks>
+    /// The error term for a rate controller. Pair it with <see cref="PipeWireRateController"/> to
+    /// close the loop the way upstream's tunnels do.
+    /// </remarks>
+    public PipeWireStreamQueue? Queue => _core?.Queue;
+
+    /// <summary>Whether the daemon has put this stream in lazy scheduling.</summary>
+    public bool IsLazy => _core?.IsLazy ?? false;
+
+    /// <summary>Adds or replaces properties on the live stream.</summary>
+    /// <param name="properties">The keys to set. An empty value removes a key.</param>
+    /// <returns>The number of properties actually changed.</returns>
+    public int UpdateProperties(IReadOnlyDictionary<string, string> properties) =>
+        _core?.UpdateProperties(properties) ?? 0;
+
+    /// <summary>Raised on the loop thread when the daemon sends this stream's node a command.</summary>
+    /// <remarks>
+    /// Suspend, Flush, Drain and RequestProcess all arrive here. A state change tells you the
+    /// stream stopped streaming; this tells you why.
+    /// </remarks>
+    public event Action<SpaNodeCommand>? CommandReceived
+    {
+        add => _commandReceived += value;
+        remove => _commandReceived -= value;
+    }
+
+    private Action<SpaNodeCommand>? _commandReceived;
+
+    private void RaiseCommand(SpaNodeCommand command) => _commandReceived?.Invoke(command);
 
     /// <inheritdoc/>
     public ValueTask DisposeAsync() => _core?.DisposeAsync() ?? ValueTask.CompletedTask;
@@ -187,9 +291,10 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
 
         var samples = new ReadOnlySpan<byte>((byte*)d->data + offset, (int)size);
         var frame = new AudioFrame(samples, fmt.SampleRate, fmt.Channels, fmt.Format, ++_sequence,
-            presentationTimeNs: SpaFormatPod.FindPresentationTimeNs(buf->buffer),
-            captureClockNs: clock.CaptureClockNs,
-            mediaClockNs: clock.MediaClockNs,
+            presentationTimestampNs: SpaFormatPod.FindPresentationTimestampNs(buf),
+            queuedTimeNs: SpaFormatPod.QueuedTimeNs(buf),
+            graphTimeNs: clock.GraphTimeNs,
+            streamPositionNs: clock.StreamPositionNs,
             delayNs: clock.DelayNs);
         FrameReady?.Invoke(this, frame);
     }
@@ -246,6 +351,27 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
             ?? throw new InvalidOperationException("Connect before waiting for the stream to start.");
 
         return core.WaitForStreamingAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Waits until the daemon has given this stream a node id, and returns it.
+    /// </summary>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <returns>The node id, the same value <see cref="NodeId"/> reports from then on.</returns>
+    /// <remarks>
+    /// <see cref="NodeId"/> is null straight after <c>Connect</c>: the stream is a proxy until the
+    /// daemon binds it, and the id is only assigned then. Linking or targeting this stream needs the
+    /// id, so await this rather than reading the property and hoping. It completes when the stream
+    /// first reaches Paused, which is where upstream's own examples read the id.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">Not connected yet.</exception>
+    /// <exception cref="PipeWireException">The stream reached its error state instead.</exception>
+    public Task<uint> WaitForNodeIdAsync(CancellationToken cancellationToken = default)
+    {
+        PipeWireStreamCore core = _core
+            ?? throw new InvalidOperationException("Connect before waiting for the node id.");
+
+        return core.WaitForNodeIdAsync(cancellationToken);
     }
 
     /// <summary>Every control this stream exposes, as the daemon last reported them.</summary>

@@ -22,9 +22,10 @@ namespace PipeWire.NET.Media;
 /// <param name="Format">Negotiated pixel format.</param>
 /// <param name="SequenceNumber">The frame index within this session.</param>
 /// <param name="Color">Negotiated colour metadata.</param>
-/// <param name="PresentationTimeNs">Presentation timestamp, or null if the producer sent none.</param>
-/// <param name="CaptureClockNs">Graph clock time of the cycle, or null.</param>
-/// <param name="MediaClockNs">Media position at the cycle, or null.</param>
+/// <param name="PresentationTimestampNs">The header <c>pts</c>, or null when the buffer carried none.</param>
+/// <param name="QueuedTimeNs">The cycle time the buffer was queued in (<c>pw_buffer.time</c>), or null.</param>
+/// <param name="GraphTimeNs">Graph clock time of the cycle, or null.</param>
+/// <param name="StreamPositionNs">Media position at the cycle, or null.</param>
 /// <param name="DelayNs">Signal delay between the source and this stream.</param>
 public sealed record OwnedVideoFrame(
     ImmutableArray<byte> Pixels,
@@ -34,9 +35,10 @@ public sealed record OwnedVideoFrame(
     PixelFormat Format,
     ulong SequenceNumber,
     VideoColorInfo Color,
-    long? PresentationTimeNs,
-    long? CaptureClockNs,
-    long? MediaClockNs,
+    long? PresentationTimestampNs,
+    long? QueuedTimeNs,
+    long? GraphTimeNs,
+    long? StreamPositionNs,
     long DelayNs)
 {
     // By content, not by array identity. A record compares its members with
@@ -53,9 +55,10 @@ public sealed record OwnedVideoFrame(
         && Format == other.Format
         && SequenceNumber == other.SequenceNumber
         && Color.Equals(other.Color)
-        && PresentationTimeNs == other.PresentationTimeNs
-        && CaptureClockNs == other.CaptureClockNs
-        && MediaClockNs == other.MediaClockNs
+        && PresentationTimestampNs == other.PresentationTimestampNs
+        && QueuedTimeNs == other.QueuedTimeNs
+        && GraphTimeNs == other.GraphTimeNs
+        && StreamPositionNs == other.StreamPositionNs
         && DelayNs == other.DelayNs;
 
     /// <inheritdoc/>
@@ -69,9 +72,10 @@ public sealed record OwnedVideoFrame(
         hash.Add(Format);
         hash.Add(SequenceNumber);
         hash.Add(Color);
-        hash.Add(PresentationTimeNs);
-        hash.Add(CaptureClockNs);
-        hash.Add(MediaClockNs);
+        hash.Add(PresentationTimestampNs);
+        hash.Add(QueuedTimeNs);
+        hash.Add(GraphTimeNs);
+        hash.Add(StreamPositionNs);
         hash.Add(DelayNs);
         return hash.ToHashCode();
     }
@@ -84,9 +88,10 @@ public sealed record OwnedVideoFrame(
 /// <param name="Channels">Channel count.</param>
 /// <param name="Format">Negotiated sample format.</param>
 /// <param name="SequenceNumber">The chunk index within this session.</param>
-/// <param name="PresentationTimeNs">Presentation timestamp, or null.</param>
-/// <param name="CaptureClockNs">Graph clock time of the cycle, or null.</param>
-/// <param name="MediaClockNs">Media position at the cycle, or null.</param>
+/// <param name="PresentationTimestampNs">The header <c>pts</c>, or null when the buffer carried none.</param>
+/// <param name="QueuedTimeNs">The cycle time the buffer was queued in (<c>pw_buffer.time</c>), or null.</param>
+/// <param name="GraphTimeNs">Graph clock time of the cycle, or null.</param>
+/// <param name="StreamPositionNs">Media position at the cycle, or null.</param>
 /// <param name="DelayNs">Signal delay between the source and this stream.</param>
 public sealed record OwnedAudioFrame(
     ImmutableArray<byte> Samples,
@@ -94,9 +99,10 @@ public sealed record OwnedAudioFrame(
     int Channels,
     AudioSampleFormat Format,
     ulong SequenceNumber,
-    long? PresentationTimeNs,
-    long? CaptureClockNs,
-    long? MediaClockNs,
+    long? PresentationTimestampNs,
+    long? QueuedTimeNs,
+    long? GraphTimeNs,
+    long? StreamPositionNs,
     long DelayNs)
 {
     // By content, for the same reason as OwnedVideoFrame above.
@@ -108,9 +114,10 @@ public sealed record OwnedAudioFrame(
         && Channels == other.Channels
         && Format == other.Format
         && SequenceNumber == other.SequenceNumber
-        && PresentationTimeNs == other.PresentationTimeNs
-        && CaptureClockNs == other.CaptureClockNs
-        && MediaClockNs == other.MediaClockNs
+        && PresentationTimestampNs == other.PresentationTimestampNs
+        && QueuedTimeNs == other.QueuedTimeNs
+        && GraphTimeNs == other.GraphTimeNs
+        && StreamPositionNs == other.StreamPositionNs
         && DelayNs == other.DelayNs;
 
     /// <inheritdoc/>
@@ -122,9 +129,10 @@ public sealed record OwnedAudioFrame(
         hash.Add(Channels);
         hash.Add(Format);
         hash.Add(SequenceNumber);
-        hash.Add(PresentationTimeNs);
-        hash.Add(CaptureClockNs);
-        hash.Add(MediaClockNs);
+        hash.Add(PresentationTimestampNs);
+        hash.Add(QueuedTimeNs);
+        hash.Add(GraphTimeNs);
+        hash.Add(StreamPositionNs);
         hash.Add(DelayNs);
         return hash.ToHashCode();
     }

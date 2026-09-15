@@ -27,10 +27,24 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// Timing snapshot for a processing cycle, from <c>pw_stream_get_time</c>. All on the one
     /// graph clock shared by every stream - the basis for A/V sync and sample-accurate position.
     /// </summary>
-    /// <param name="CaptureClockNs">Monotonic graph time (ns) of the cycle. The sync reference.</param>
-    /// <param name="MediaClockNs">Media position (ns) at the cycle, from <c>ticks * rate</c>; -1 if unknown.</param>
+    /// <param name="GraphTimeNs">Monotonic graph time (ns) of the cycle. The sync reference.</param>
+    /// <param name="StreamPositionNs">Media position (ns) at the cycle, from <c>ticks * rate</c>; -1 if unknown.</param>
     /// <param name="DelayNs">Signal delay/latency (ns) between this stream and the hardware.</param>
-    internal readonly record struct StreamClock(long CaptureClockNs, long MediaClockNs, long DelayNs);
+    /// <param name="Queued">
+    /// Bytes (or frames, for audio) the stream has queued but not yet played or read, summed from
+    /// the <c>size</c> each buffer was queued with.
+    /// </param>
+    /// <param name="Buffered">Extra frames an audio stream's resampler is holding (<c>pw_time.buffered</c>).</param>
+    /// <param name="QueuedBuffers">Buffers currently queued.</param>
+    /// <param name="AvailableBuffers">Buffers available to dequeue.</param>
+    internal readonly record struct StreamClock(
+        long GraphTimeNs,
+        long StreamPositionNs,
+        long DelayNs,
+        ulong Queued,
+        ulong Buffered,
+        uint QueuedBuffers,
+        uint AvailableBuffers);
 
     /// <summary>Invoked from <c>process</c> with the first data plane of a dequeued buffer.</summary>
     /// <param name="data">First data plane of the buffer.</param>
@@ -64,16 +78,18 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     internal delegate void PostFormatHandler(PipeWireStreamCore core);
 
     /// <summary>
-    /// Invoked when a peer (consumer) links and the daemon reports <c>SPA_PARAM_PeerCapability</c>. A dmabuf
-    /// DRIVER producer connected INACTIVE uses this to (re-)announce its EnumFormat and activate the stream,
-    /// which is what kicks off format negotiation (pipewire's video-src-fixate.c does this).
+    /// Invoked when the stream learns its peer's capabilities (<c>SPA_PARAM_PeerCapability</c>). A stream
+    /// connected INACTIVE uses this to announce its real EnumFormats and activate, which is what starts
+    /// format negotiation - upstream's video-src-fixate.c and video-play-fixate.c.
     /// </summary>
-    internal delegate void PeerConnectedHandler(PipeWireStreamCore core);
+    /// <remarks>
+    /// Always delivered, whatever the peer: when the daemon sends none, pw_stream synthesises one on
+    /// the first Latency param (<c>stream.c, emit_dummy_peer_capability</c>), with no capabilities in it.
+    /// </remarks>
+    /// <param name="core">The stream.</param>
+    /// <param name="param">The PeerCapability pod, valid for the duration of the call.</param>
+    internal unsafe delegate void PeerConnectedHandler(PipeWireStreamCore core, spa_pod* param);
 
-    // SPA_PARAM_PeerCapability (spa/param/param.h). The generated bindings predate it (they stop at Tag=17:
-    // ... Tag(17), PeerEnumFormat(18), Capability(19), PeerCapability(20)); the enum is append-only so the
-    // value is stable on the 1.6 runtime.
-    private const uint SpaParamPeerCapability = 20;
 
     private readonly PipeWireContext _ctx;
     private readonly ILogger _logger;
@@ -107,6 +123,12 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         _controls = new();
 
     private readonly TaskCompletionSource _streaming =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    // Completed with the node id once the daemon has bound this stream's proxy. Upstream's
+    // proxy_bound_props (stream.c) assigns node_id and only then moves the stream to PAUSED, so the
+    // first Paused - or Streaming, should Paused be skipped - is the point the id is known to be real.
+    private readonly TaskCompletionSource<uint> _bound =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private string? _lastError;
@@ -165,13 +187,14 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
         _hook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
         _events = (pw_stream_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_stream_events));
-        _events->version       = Native.PW_VERSION_STREAM_EVENTS;
+        _events->version       = NativeConstants.PW_VERSION_STREAM_EVENTS;
         _events->process       = &OnProcess;
         _events->state_changed = &OnStateChanged;
         _events->param_changed = &OnParamChanged;
         _events->control_info  = &OnControlInfo;
         _events->io_changed    = &OnIoChanged;
         _events->drained       = &OnDrained;
+        _events->command       = &OnCommandArrived;
         _events->trigger_done  = &OnTriggerDone;
         if (onAddBuffer is not null)    _events->add_buffer    = &OnAddBuffer;
         if (onRemoveBuffer is not null) _events->remove_buffer = &OnRemoveBuffer;
@@ -223,6 +246,31 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         }
     }
 
+    /// <summary>Refuses <c>PW_STREAM_FLAG_RT_PROCESS</c> for every stream this core drives.</summary>
+    /// <remarks>
+    /// <para>
+    /// The stream types built on this core keep their buffer bookkeeping - the video output's free
+    /// index stack and plane-layout table, the capture's retained-frame slots - on the premise that
+    /// <c>process</c> runs on the same loop thread as <c>add_buffer</c>, <c>remove_buffer</c> and
+    /// <c>param_changed</c>. Upstream emits those from the main loop (<c>impl_port_use_buffers</c>
+    /// in stream.c), and only <c>RT_PROCESS</c> moves <c>process</c> to the data loop. With it the
+    /// premise is gone and the plain collections race the realtime thread.
+    /// </para>
+    /// <para>
+    /// A thrown argument error rather than a comment, so the day someone adds the flag for
+    /// latency, the premise is revisited instead of silently broken. <see cref="PipeWire.NET.Graph.PipeWireFilter"/>
+    /// is the realtime surface, and is not built on this core.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="flags"/> includes <c>RtProcess</c>.</exception>
+    internal static void RequireLoopThreadProcess(PipeWireStreamFlags flags)
+    {
+        if ((flags & PipeWireStreamFlags.RtProcess) != 0)
+            throw new ArgumentException(
+                "streams built on PipeWireStreamCore process on the loop thread; RT_PROCESS would race their buffer bookkeeping",
+                nameof(flags));
+    }
+
     /// <summary>Connects the stream. <paramref name="formatPod"/> is copied by PipeWire before returning.</summary>
     /// <remarks>
     /// The SPA_META_Header (which carries the presentation timestamp) is NOT requested here -
@@ -235,9 +283,11 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         PipeWireStreamFlags flags,
         ReadOnlySpan<byte> formatPod,
         ReadOnlySpan<byte> fallbackPod = default,
+        ReadOnlySpan<byte> capabilityPod = default,
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        RequireLoopThreadProcess(flags);
 
         // Checked before the loop lock rather than after: taking it can wait on the loop thread,
         // and a caller that has already given up should not join that queue.
@@ -255,17 +305,20 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             int rc;
             fixed (byte* fp = formatPod)
             fixed (byte* fb = fallbackPod)
+            fixed (byte* cp = capabilityPod)
             {
                 // Offered in preference order. A modifier choice is written mandatory, so with one
                 // pod a producer that cannot do DMA-BUF has nothing left to agree to and
                 // negotiation fails outright; a second pod without modifiers is the host-memory
-                // path it can fall back to.
-                spa_pod** offers = stackalloc spa_pod*[2];
-                offers[0] = (spa_pod*)fp;
-                offers[1] = (spa_pod*)fb;
+                // path it can fall back to. A Capability param rides in the same list, as upstream's
+                // fixate examples pass it to pw_stream_connect.
+                spa_pod** offers = stackalloc spa_pod*[3];
+                uint count = 0;
+                offers[count++] = (spa_pod*)fp;
+                if (!fallbackPod.IsEmpty) offers[count++] = (spa_pod*)fb;
+                if (!capabilityPod.IsEmpty) offers[count++] = (spa_pod*)cp;
 
-                rc = Native.pw_stream_connect(
-                    _stream, direction, targetNodeId, flags, offers, fallbackPod.IsEmpty ? 1u : 2u);
+                rc = Native.pw_stream_connect(_stream, direction, targetNodeId, flags, offers, count);
             }
             if (rc < 0)
                 throw new PipeWireInteropException("pw_stream_connect", rc);
@@ -324,6 +377,26 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         }
 
         if (Interlocked.Exchange(ref _disposedFlag, 1) != 0) return;
+
+        // The drive timer first, and while the stream is still alive. The source belongs to the
+        // stream's data loop and holds a pointer to this instance's handle; destroying it after the
+        // loop has gone would be a write into freed memory, which is the whole shape of bug this
+        // teardown order exists to avoid.
+        if (_driveTimer is not null)
+        {
+            pw_stream* stream = _stream;
+            if (stream is not null)
+            {
+                using (_ctx.Lock())
+                {
+                    pw_loop* loop = Native.pw_stream_get_data_loop(stream);
+                    if (loop is not null && loop->utils is not null)
+                        Native.spa_loop_utils_destroy_source(loop->utils, _driveTimer);
+                }
+            }
+
+            _driveTimer = null;
+        }
 
         // The handle disconnects and destroys under the loop lock, holding the core and loop open
         // for exactly as long as that takes - so this works whichever order the caller disposed in.
@@ -392,7 +465,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
             // Graph clock for this cycle - the common monotonic reference across all streams,
             // plus media position (ticks*rate) and latency (delay*rate) per PipeWire's timing model.
-            StreamClock clock = new(-1, -1, 0);
+            StreamClock clock = new(-1, -1, 0, 0, 0, 0, 0);
             pw_time t;
             if (Native.pw_stream_get_time_n(stream, &t, (nuint)sizeof(pw_time)) == 0)
             {
@@ -410,7 +483,12 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
                 long delayNs = denom != 0
                     ? (long)((Int128)(long)t.delay * num * 1_000_000_000 / denom)
                     : 0;
-                clock = new StreamClock((long)t.now, mediaNs, delayNs);
+                // Occupancy as well as time. These are what a rate controller measures its error
+                // against: module-rtp reads its own ring buffer because it owns one, but a stream
+                // consumer's queue is the stream's, and this is where its depth is reported.
+                clock = new StreamClock(
+                    (long)t.now, mediaNs, delayNs,
+                    t.queued, t.buffered, t.queued_buffers, t.avail_buffers);
             }
 
             spa_data* d = &spaBuf->datas[0];
@@ -429,9 +507,35 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         }
         finally
         {
-            Native.pw_stream_queue_buffer(stream, buf);
+            // Returned rather than queued when the handler said it did not use the buffer.
+            // Returning makes it immediately available to dequeue again without counting as
+            // consumed, which is what a consumer skipping a frame means; queueing it would report
+            // data the consumer never took and skew the queue depth a rate controller reads.
+            if (Volatile.Read(ref self._skipCurrent))
+            {
+                Volatile.Write(ref self._skipCurrent, false);
+                Native.pw_stream_return_buffer(stream, buf);
+            }
+            else
+            {
+                Native.pw_stream_queue_buffer(stream, buf);
+            }
         }
     }
+
+    // Set by a handler, read once by the finally above. Only ever touched on the loop thread, but
+    // volatile so the write inside the handler cannot be sunk past the read.
+    private bool _skipCurrent;
+
+    /// <summary>
+    /// From inside a buffer handler: return this cycle's buffer unused instead of queueing it.
+    /// </summary>
+    /// <remarks>
+    /// For a consumer that has decided to drop the frame. It applies to the buffer the handler is
+    /// currently holding, and resets each cycle, so calling it outside a handler does nothing
+    /// beyond skipping whatever arrives next.
+    /// </remarks>
+    internal void SkipCurrentBuffer() => Volatile.Write(ref _skipCurrent, true);
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnAddBuffer(void* data, pw_buffer* buffer)
@@ -494,7 +598,13 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
             self.LogStateChanged((PipeWireStreamState)(int)old, (PipeWireStreamState)(int)state);
 
+            self._lastState = (int)state;
             self.SettleStreaming((PipeWireStreamState)(int)state);
+
+            // Arm on streaming, disarm on anything else. Upstream's driver example does the same
+            // from its state handler: a timer left running across a pause keeps triggering cycles
+            // on a stream that is not scheduled to process them.
+            self.ApplyDriveTimer((PipeWireStreamState)(int)state);
 
             self._onState?.Invoke((PipeWireStreamState)(int)old, (PipeWireStreamState)(int)state);
         }
@@ -511,6 +621,12 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// </remarks>
     private void SettleStreaming(PipeWireStreamState state)
     {
+        if (state is PipeWireStreamState.Paused or PipeWireStreamState.Streaming
+            && NodeId is var id && id != NativeConstants.PW_ID_ANY)
+        {
+            _bound.TrySetResult(id);
+        }
+
         switch (state)
         {
             case PipeWireStreamState.Streaming:
@@ -518,9 +634,11 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
                 break;
 
             case PipeWireStreamState.Error:
-                _streaming.TrySetException(new PipeWireRequestRefusedException(
+                var refused = new PipeWireRequestRefusedException(
                     "pw_stream_connect", 0, _targetNodeId,
-                    _lastError ?? $"stream '{_streamName}' reported no reason"));
+                    _lastError ?? $"stream '{_streamName}' reported no reason");
+                _streaming.TrySetException(refused);
+                _bound.TrySetException(refused);
                 break;
 
             default:
@@ -538,6 +656,19 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _streaming.Task.WaitAsync(cancellationToken);
+    }
+
+    /// <summary>Waits until the daemon has assigned this stream a node id, and returns it.</summary>
+    /// <remarks>
+    /// The id is not known when connect returns: the stream is a proxy until the daemon binds it,
+    /// and pw_stream_get_node_id answers SPA_ID_INVALID until then. Reading it straight after
+    /// connecting is a race that usually loses. Upstream's examples read it in their PAUSED handler,
+    /// which is what this awaits.
+    /// </remarks>
+    internal Task<uint> WaitForNodeIdAsync(CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _bound.Task.WaitAsync(cancellationToken);
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -670,15 +801,23 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             return;
         }
 
-        // SPA_PARAM_PeerCapability (a newer PipeWire signal) would be the place to (re-)announce and activate a
-        // dmabuf producer (video-src-fixate.c), but it is unavailable on the 1.6.6 runtime.
-        // On 1.6.6 the producer instead offers a fixated modifier up front (it owns the surfaces, so it knows
-        // the single modifier) and negotiates through the normal Format param flow below.
         self.LogParamChanged(id);
 
-        if (self._onPeerConnected is not null && id == SpaParamPeerCapability)
+        // SPA_PARAM_PeerCapability: where an INACTIVE stream announces its formats and activates
+        // (video-src-fixate.c, video-play-fixate.c). A null one is ignored, as both examples ignore it.
+        if (self._onPeerConnected is not null && id == (uint)SpaParamType.PeerCapability)
         {
-            try { self._onPeerConnected.Invoke(self); } catch { /* keep the loop thread alive */ }
+            try
+            {
+                self._onPeerConnected.Invoke(self, param);
+            }
+            catch (Exception ex)
+            {
+                // Logged and contained: this is a native frame, and an escaping exception aborts
+                // the process. The stream stays inactive, which the log explains.
+                self.LogPeerHandlerThrew(ex);
+            }
+
             return;
         }
 
@@ -705,7 +844,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             self.LogFormatHandlerThrew(ex);
 
             if (!self._disposed && self._stream is not null)
-                Native.pw_stream_set_error(self._stream, -22, $"format handler failed: {ex.Message}");
+                Native.pw_stream_set_error(self._stream, -NativeConstants.EINVAL, $"format handler failed: {ex.Message}");
         }
     }
 
@@ -716,7 +855,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         {
             if (_disposed || _stream is null)
             {
-                return Native.PW_ID_ANY;
+                return NativeConstants.PW_ID_ANY;
             }
 
             using (_ctx.Lock())
@@ -757,6 +896,18 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     private TaskCompletionSource? _drained;
     private TaskCompletionSource? _triggerDone;
 
+    /// <summary>Invoked on the loop thread when the daemon sends the node a command.</summary>
+    internal delegate void CommandHandler(SpaNodeCommand command);
+
+    private CommandHandler? _onCommand;
+
+    /// <summary>Sets the command hook. Not an event: one owner, set during construction.</summary>
+    internal CommandHandler? OnCommand
+    {
+        get => _onCommand;
+        set => _onCommand = value;
+    }
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnDrained(void* data)
     {
@@ -764,6 +915,36 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         try { self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target; }
         catch (Exception) { return; }
         self?._drained?.TrySetResult();
+    }
+
+    /// <summary>
+    /// A node command from the daemon, after <c>pw_stream</c> has acted on it.
+    /// </summary>
+    /// <remarks>
+    /// The stream handles Pause and Start itself and then passes every command on, so what reaches
+    /// here includes Suspend (the node's format and device are being dropped), Flush, Drain, and
+    /// RequestProcess, which is how lazy scheduling asks for a cycle. A sender that wants to know
+    /// the graph has parked it has no other way to find out: the state change that accompanies a
+    /// suspend says the stream is no longer streaming, not why.
+    /// </remarks>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void OnCommandArrived(void* data, spa_command* command)
+    {
+        PipeWireStreamCore? self;
+        try { self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target; }
+        catch (Exception) { return; }
+        if (self is null || command is null) return;
+
+        // SPA_COMMAND_ID: the id only means a node command when the body says it is one, and a
+        // command of another type reuses the same numbers for different things.
+        if (command->body.body.type != (uint)SpaType.CommandNode) return;
+
+        CommandHandler? handler = self._onCommand;
+        if (handler is null) return;
+
+        // A native callback frame: an escaping exception aborts the process.
+        try { handler((SpaNodeCommand)command->body.body.id); }
+        catch (Exception ex) { self.LogCommandHandlerThrew(ex); }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -810,8 +991,6 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
 
     // SPA_IO_Position (7) and SPA_IO_RateMatch (8) from spa/node/io.h.
-    private const uint SpaIoPosition = 7;
-    private const uint SpaIoRateMatch = 8;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnIoChanged(void* data, uint id, void* area, uint size)
@@ -825,10 +1004,10 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         // pointer would read freed memory on the next look.
         switch (id)
         {
-            case SpaIoPosition:
+            case (uint)SpaIoType.Position:
                 self._ioPosition = size >= (uint)sizeof(spa_io_position) ? (spa_io_position*)area : null;
                 break;
-            case SpaIoRateMatch:
+            case (uint)SpaIoType.RateMatch:
                 self._ioRateMatch = size >= (uint)sizeof(spa_io_rate_match) ? (spa_io_rate_match*)area : null;
                 break;
         }
@@ -919,6 +1098,329 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     }
 
     /// <summary>Whether the daemon has made this stream the graph's driver.</summary>
+    // The driver's timer: a source on the stream's own data loop, so the callback lands on the
+    // thread that processes, not on the main loop.
+    private unsafe spa_source* _driveTimer;
+
+    // What DriveAt was last asked for. The timer only runs while the stream is streaming, so this
+    // is what gets re-armed when it starts again rather than making the caller ask twice.
+    private TimeSpan _driveInterval;
+
+    // The last state the daemon reported, as an int because volatile cannot be applied to an enum.
+    // Read by DriveAt when it is called before the stream starts, which is the normal case.
+    private volatile int _lastState;
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void OnDriveTimer(void* data, ulong expirations)
+    {
+        PipeWireStreamCore? self;
+        try { self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target; }
+        catch (Exception) { return; }
+        if (self is null || self._disposed) return;
+
+        pw_stream* stream = self._stream;
+        if (stream is null) return;
+
+        // Already on the data loop, and trigger_process does its own hop, so no lock is taken:
+        // taking the main loop lock from the data thread is the deadlock this path exists to avoid.
+        // The clock is published first, on this same thread, as upstream's pipewiresink does.
+        if (Native.pw_stream_is_driving(stream)) self.PublishDriverClock(stream);
+        Native.pw_stream_trigger_process(stream);
+    }
+
+    /// <summary>
+    /// Writes the graph clock for a cycle this stream is about to drive.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A driver publishes the clock every node in its group is stamped from. A driver <em>node</em>
+    /// does it itself - <c>support/node-driver.c</c> and <c>null-audio-sink.c</c> write their
+    /// <c>SPA_IO_Clock</c> area each cycle. A <em>stream</em> that drives gets no such help:
+    /// <c>pw_stream_trigger_process</c> runs the cycle and writes nothing, and the daemon only
+    /// initialises the clock while the driver is not yet running (<c>context.c</c>). Left alone,
+    /// every consumer of a graph this library drives sees <c>pw_time.now</c> frozen at that value -
+    /// which is what a capture of a stream-driven group reports.
+    /// </para>
+    /// <para>
+    /// Upstream's own answer is in GStreamer's pipewiresink, whose <c>update_time()</c> writes
+    /// <c>nsec</c>, <c>position</c>, <c>duration</c>, <c>rate</c> and <c>next_nsec</c> into the
+    /// stream's position area on the data loop immediately before each trigger. This does the same,
+    /// without its rate-correction loop: the quantum and rate are the ones the daemon asked this
+    /// driver for (<c>target_duration</c>, <c>target_rate</c>), so there is no second clock to
+    /// correct against.
+    /// </para>
+    /// <para>
+    /// Only ever called for a stream the daemon reports as driving. Writing a position area this
+    /// stream does not drive would overwrite the real driver's clock for every node in the group.
+    /// Must run on the data loop, or under its lock, because the processing thread reads the area.
+    /// </para>
+    /// </remarks>
+    private unsafe void PublishDriverClock(pw_stream* stream)
+    {
+        spa_io_position* p = _ioPosition;
+        if (p is null) return;
+
+        ulong duration = p->clock.target_duration;
+        spa_fraction rate = p->clock.target_rate;
+        if (duration == 0 || rate.denom == 0) return;
+
+        ulong now = Native.pw_stream_get_nsec(stream);
+
+        // Position counts in the clock's own units, so it advances by the duration of the cycle that
+        // just ended - the same running sample position pipewiresink keeps.
+        p->clock.position += p->clock.duration;
+        p->clock.nsec = now;
+        p->clock.duration = duration;
+        p->clock.rate = rate;
+        p->clock.next_nsec = now + (ulong)((UInt128)duration * rate.num * 1_000_000_000UL / rate.denom);
+        p->clock.rate_diff = 1.0;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe int DoPublishDriverClock(spa_loop* loop, bool async, uint seq, void* data, nuint size, void* userData)
+    {
+        // Runs under the data loop's lock, called from C: nothing may escape.
+        try
+        {
+            if (GCHandle.FromIntPtr((IntPtr)userData).Target is PipeWireStreamCore self
+                && !self._disposed && self._stream is not null)
+            {
+                self.PublishDriverClock(self._stream);
+            }
+        }
+        catch (Exception)
+        {
+            // Deliberately not logged: this is a realtime-adjacent native frame, and a missed clock
+            // write costs one cycle's timestamp while a throw here would abort the process.
+        }
+
+        return 0;
+    }
+
+    /// <summary>The current time on the clock the graph is stamped from (<c>pw_stream_get_nsec</c>).</summary>
+    /// <remarks>
+    /// CLOCK_MONOTONIC, the same clock driver nodes publish the graph clock in. Upstream's
+    /// video-src stamps each frame's presentation time with it. Safe from the data loop.
+    /// </remarks>
+    internal unsafe long NowNs()
+    {
+        pw_stream* stream = _stream;
+        return stream is null ? -1 : (long)Native.pw_stream_get_nsec(stream);
+    }
+
+    /// <summary>Writes a presentation time into a buffer's <c>SPA_META_Header</c>, if it has one.</summary>
+    /// <remarks>
+    /// Shared by every producer so audio and video stamp the same way. The header only exists when
+    /// the buffers were allocated with it, which the core arranges by requesting the meta once the
+    /// format is set; a buffer without one is left alone. The meta count belongs to the pool, so it is
+    /// bounded rather than trusted.
+    /// </remarks>
+    internal static unsafe void StampPresentationTime(pw_buffer* buf, long pts)
+    {
+        if (pts < 0 || buf is null) return;
+
+        spa_buffer* sb = buf->buffer;
+        if (sb is null || sb->metas is null) return;
+
+        uint metas = Math.Min(sb->n_metas, 64u);
+        for (uint i = 0; i < metas; i++)
+        {
+            spa_meta* m = &sb->metas[i];
+            if (m->type != (uint)SpaMetaType.Header
+                || m->data is null
+                || m->size < (uint)sizeof(spa_meta_header))
+            {
+                continue;
+            }
+
+            ((spa_meta_header*)m->data)->pts = pts;
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Drives a cycle every <paramref name="interval"/> from the stream's own data loop.
+    /// </summary>
+    /// <param name="interval">The period. <see cref="TimeSpan.Zero"/> disarms the timer.</param>
+    /// <returns>True when the timer was armed or disarmed as asked.</returns>
+    /// <remarks>
+    /// <para>
+    /// For a DRIVER producer that has to pace the graph itself. The alternative a caller has today
+    /// is to call the trigger from a thread of its own, which works but paces against that thread's
+    /// scheduling rather than the loop's, and pays a hop on every cycle.
+    /// </para>
+    /// <para>
+    /// This dispatches through a hand-written copy of the loop's method table, so it refuses to run
+    /// against a table whose version it does not recognise - see
+    /// <c>spa_loop_utils_methods</c>. A false return means the loop declined, not that the
+    /// interval was wrong.
+    /// </para>
+    /// </remarks>
+    internal unsafe bool DriveAt(TimeSpan interval)
+    {
+        if (_disposed || _stream is null) return false;
+
+        _driveInterval = interval > TimeSpan.Zero ? interval : TimeSpan.Zero;
+
+        // Only actually armed while streaming. Asking before the stream starts is normal - a caller
+        // sets the pace up front - so this records the request and the state handler applies it.
+        return ApplyDriveTimer((PipeWireStreamState)_lastState);
+    }
+
+    /// <summary>Arms or disarms the drive timer to match the stream's state.</summary>
+    private unsafe bool ApplyDriveTimer(PipeWireStreamState state)
+    {
+        if (_disposed) return false;
+
+        bool shouldRun = state == PipeWireStreamState.Streaming && _driveInterval > TimeSpan.Zero;
+        if (!shouldRun && _driveTimer is null) return true;
+
+        using (_ctx.Lock())
+        {
+            pw_stream* stream = _stream;
+            if (_disposed || stream is null) return false;
+
+            pw_loop* loop = Native.pw_stream_get_data_loop(stream);
+            if (loop is null || loop->utils is null) return false;
+
+            if (_driveTimer is null)
+            {
+                if (!shouldRun) return true;
+
+                _driveTimer = Native.spa_loop_utils_add_timer(
+                    loop->utils, &OnDriveTimer, (void*)GCHandle.ToIntPtr(_selfHandle));
+
+                if (_driveTimer is null) return false;
+            }
+
+            PosixTimespec value = default;
+            PosixTimespec period = default;
+
+            if (shouldRun)
+            {
+                long ns = (long)(_driveInterval.TotalMilliseconds * 1_000_000.0);
+                if (ns <= 0) ns = 1;
+                value.tv_sec = (nint)(ns / 1_000_000_000);
+                value.tv_nsec = (nint)(ns % 1_000_000_000);
+                period = value;
+            }
+
+            // Both zero disarms, which is what a null pair means to the loop as well.
+            return Native.spa_loop_utils_update_timer(
+                loop->utils, _driveTimer, &value, &period, absolute: false) == 0;
+        }
+    }
+
+    /// <summary>
+    /// Offers a new set of formats on a running stream, asking the peer to renegotiate.
+    /// </summary>
+    /// <param name="enumFormatPod">A <c>SPA_PARAM_EnumFormat</c> pod.</param>
+    /// <returns>0 or better on success, a negative errno otherwise.</returns>
+    /// <remarks>
+    /// Unlike the param helpers used during negotiation, this is meant to be called from outside
+    /// the format callback - which is how upstream's renegotiation examples drive it, from a timer
+    /// rather than from `param_changed`. The peer answers by running the format exchange again, so
+    /// the caller sees a fresh format arrive through the usual path rather than a return value.
+    /// </remarks>
+    internal unsafe int RequestFormats(ReadOnlySpan<byte> enumFormatPod)
+    {
+        if (_disposed || _stream is null || enumFormatPod.IsEmpty) return -NativeConstants.EINVAL;
+
+        using (_ctx.Lock())
+        {
+            pw_stream* stream = _stream;
+            if (_disposed || stream is null) return -NativeConstants.EINVAL;
+
+            fixed (byte* p = enumFormatPod)
+            {
+                spa_pod** arr = stackalloc spa_pod*[1];
+                arr[0] = (spa_pod*)p;
+                return Native.pw_stream_update_params(stream, arr, 1);
+            }
+        }
+    }
+
+    /// <summary>The stream's queue depth, or null if it cannot be read.</summary>
+    internal unsafe PipeWireStreamQueue? Queue
+    {
+        get
+        {
+            if (_disposed || _stream is null) return null;
+
+            using (_ctx.Lock())
+            {
+                pw_stream* stream = _stream;
+                if (_disposed || stream is null) return null;
+
+                pw_time t;
+                if (Native.pw_stream_get_time_n(stream, &t, (nuint)sizeof(pw_time)) != 0)
+                    return null;
+
+                return new PipeWireStreamQueue(t.queued, t.buffered, t.queued_buffers, t.avail_buffers);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the daemon has put this stream in lazy scheduling, where cycles happen on request
+    /// rather than on a timer.
+    /// </summary>
+    /// <remarks>
+    /// Worth knowing before driving: in lazy mode a producer is expected to answer RequestProcess
+    /// rather than pace itself, so a driver that also runs its own timer produces twice.
+    /// </remarks>
+    internal unsafe bool IsLazy
+    {
+        get
+        {
+            if (_disposed || _stream is null) return false;
+
+            using (_ctx.Lock())
+            {
+                pw_stream* stream = _stream;
+                if (_disposed || stream is null) return false;
+                return Native.pw_stream_is_lazy(stream);
+            }
+        }
+    }
+
+    /// <summary>Adds or replaces properties on a live stream.</summary>
+    /// <param name="properties">The keys to set. An empty value removes a key.</param>
+    /// <returns>The number of properties actually changed.</returns>
+    /// <remarks>
+    /// Retagging without reconnecting. The alternative is tearing the stream down and building it
+    /// again, which drops the link and everything buffered behind it - a heavy price for renaming
+    /// what a sender is currently sending.
+    /// </remarks>
+    internal unsafe int UpdateProperties(IReadOnlyDictionary<string, string> properties)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        if (_disposed || _stream is null || properties.Count == 0) return 0;
+
+        // Sized from the input rather than a fixed scratch: a caller retagging with a long
+        // media.name would otherwise silently lose the tail. UTF-8 is at most 4 bytes per char,
+        // plus a terminator for each key and value.
+        int bytes = 0;
+        foreach (KeyValuePair<string, string> kv in properties)
+            bytes += ((kv.Key.Length + kv.Value.Length) * 4) + 2;
+
+        byte[] scratch = new byte[bytes];
+        spa_dict_item[] items = new spa_dict_item[properties.Count];
+
+        var builder = new SpaDictBuilder(scratch, items);
+        foreach (KeyValuePair<string, string> kv in properties)
+            builder.Add(kv.Key, kv.Value);
+
+        spa_dict native = builder.Build();
+
+        using (_ctx.Lock())
+        {
+            pw_stream* stream = _stream;
+            if (_disposed || stream is null) return 0;
+            return Native.pw_stream_update_properties(stream, &native);
+        }
+    }
+
     internal unsafe bool IsDriving
     {
         get
@@ -957,6 +1459,14 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             // this stream drives is the daemon's answer, not ours: it depends on the graph.
             if (!Native.pw_stream_is_driving(stream)) return;
 
+            // The clock is written under the data loop's lock rather than from here directly: the
+            // processing thread reads that area, and this is the main thread. Synchronous, so the
+            // handle it is given cannot outlive the call.
+            _ = Native.pw_loop_locked(
+                Native.pw_stream_get_data_loop(stream),
+                &DoPublishDriverClock,
+                (void*)GCHandle.ToIntPtr(_selfHandle));
+
             Native.pw_stream_trigger_process(stream);
         }
     }
@@ -973,10 +1483,10 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// <param name="count">How many pods are in the buffer.</param>
     internal int RequestParamsFromCallback(ReadOnlySpan<byte> pods, int count)
     {
-        if (pods.IsEmpty || count <= 0) return -22;
+        if (pods.IsEmpty || count <= 0) return -NativeConstants.EINVAL;
 
         pw_stream* stream = _stream;
-        if (_disposed || stream is null) return -22;
+        if (_disposed || stream is null) return -NativeConstants.EINVAL;
 
         fixed (byte* start = pods)
         {
@@ -986,7 +1496,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
             for (int i = 0; i < count; i++)
             {
-                if (p + sizeof(spa_pod) > end) return -22;
+                if (p + sizeof(spa_pod) > end) return -NativeConstants.EINVAL;
 
                 arr[i] = (spa_pod*)p;
 
@@ -995,7 +1505,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
                 advance = (advance + 7) & ~(nuint)7;
                 p += advance;
 
-                if (p > end && i + 1 < count) return -22;
+                if (p > end && i + 1 < count) return -NativeConstants.EINVAL;
             }
 
             return Native.pw_stream_update_params(stream, arr, (uint)count);
@@ -1022,18 +1532,18 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         // An empty span fixes to a null pointer, and handing the daemon an array of one null pod
         // with a count of one is a dereference on its side, not ours. Snapshotted once for the same
         // reason OnProcess does: the field can be cleared by a disposal between the two reads.
-        if (pod0.IsEmpty) return -22;
+        if (pod0.IsEmpty) return -NativeConstants.EINVAL;
 
         // A gap would put a null in the middle of the array, which is the same dereference one
         // position along. Refused rather than compacted: a caller passing the third and not the
         // second has miscounted, and silently sending two pods hides that.
-        if (pod1.IsEmpty && !pod2.IsEmpty) return -22;
-        if (pod2.IsEmpty && !pod3.IsEmpty) return -22;
-        if (pod3.IsEmpty && !pod4.IsEmpty) return -22;
-        if (pod4.IsEmpty && !pod5.IsEmpty) return -22;
+        if (pod1.IsEmpty && !pod2.IsEmpty) return -NativeConstants.EINVAL;
+        if (pod2.IsEmpty && !pod3.IsEmpty) return -NativeConstants.EINVAL;
+        if (pod3.IsEmpty && !pod4.IsEmpty) return -NativeConstants.EINVAL;
+        if (pod4.IsEmpty && !pod5.IsEmpty) return -NativeConstants.EINVAL;
 
         pw_stream* stream = _stream;
-        if (_disposed || stream is null) return -22;
+        if (_disposed || stream is null) return -NativeConstants.EINVAL;
 
         fixed (byte* p0 = pod0)
         fixed (byte* p1 = pod1)
@@ -1074,6 +1584,9 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     [LoggerMessage(Level = LogLevel.Trace, Message = "process: no buffer dequeued (producer underrun or not yet started)")]
     private partial void LogDequeueEmpty();
 
+    [LoggerMessage(Level = LogLevel.Error, Message = "a node command handler threw")]
+    private partial void LogCommandHandlerThrew(Exception exception);
+
     [LoggerMessage(Level = LogLevel.Error, Message = "a stream state handler threw")]
     private partial void LogStateHandlerThrew(Exception ex);
 
@@ -1083,6 +1596,10 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
     [LoggerMessage(Level = LogLevel.Error, Message = "a format handler threw; negotiation continued with defaults")]
     private partial void LogFormatHandlerThrew(Exception ex);
+
+    [LoggerMessage(EventId = 34991, Level = LogLevel.Error,
+        Message = "the peer-capability handler threw; an INACTIVE stream stays inactive")]
+    private partial void LogPeerHandlerThrew(Exception ex);
 }
 
 /// <summary>

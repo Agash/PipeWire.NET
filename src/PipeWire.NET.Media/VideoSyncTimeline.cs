@@ -9,16 +9,14 @@ namespace PipeWire.NET.Media;
 /// which is why asking for this meta changes the buffer layout.
 /// </remarks>
 /// <param name="Flags">
-/// Producer flags. <see cref="UnscheduledRelease"/> set means the producer has not scheduled the
+/// Producer flags. <see cref="SpaMetaSyncTimelineFlags.UnscheduledRelease"/> set means the producer has not scheduled the
 /// release point and the consumer is expected to clear it by promising to signal.
 /// </param>
 /// <param name="AcquirePoint">The point to wait for before reading the frame.</param>
 /// <param name="ReleasePoint">The point to signal once the frame is no longer being read.</param>
-public readonly record struct VideoSyncTimeline(uint Flags, ulong AcquirePoint, ulong ReleasePoint)
+public readonly record struct VideoSyncTimeline(SpaMetaSyncTimelineFlags Flags, ulong AcquirePoint, ulong ReleasePoint)
 {
-    /// <summary>The producer has not scheduled the release point.</summary>
-    public const uint UnscheduledRelease = 1 << 0;
 
     /// <summary>True when the producer has not scheduled the release point.</summary>
-    public bool ReleaseIsUnscheduled => (Flags & UnscheduledRelease) != 0;
+    public bool ReleaseIsUnscheduled => (Flags & SpaMetaSyncTimelineFlags.UnscheduledRelease) != 0;
 }

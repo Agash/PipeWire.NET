@@ -1,4 +1,4 @@
-using PipeWire.NET.Drm;
+using PipeWire.NET.Interop;
 using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Media;
@@ -10,7 +10,7 @@ namespace PipeWire.NET.Media;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The fourcc values themselves come from <see cref="DrmFourcc"/>, generated from
+/// The fourcc values themselves come from <see cref="NativeConstants"/>, generated from
 /// <c>drm_fourcc.h</c>. Only the mapping is written by hand, because it exists in neither project's
 /// headers: PipeWire's GStreamer element defers to GStreamer, whose table lives in the C source of
 /// <c>video-info-dma.c</c>. This table is transcribed from there.
@@ -32,7 +32,7 @@ namespace PipeWire.NET.Media;
 public static class DrmFormat
 {
     /// <summary><c>DRM_FORMAT_INVALID</c> - no known fourcc for this format.</summary>
-    public const uint Invalid = DrmFourcc.DRM_FORMAT_INVALID;
+    public const uint Invalid = NativeConstants.DRM_FORMAT_INVALID;
 
     /// <summary>
     /// Returns the DRM fourcc for <paramref name="format"/>, or <see cref="Invalid"/> when the format
@@ -40,39 +40,39 @@ public static class DrmFormat
     /// </summary>
     public static uint FromVideoFormat(SpaVideoFormat format) => format switch
     {
-        SpaVideoFormat.Yuy2 => DrmFourcc.DRM_FORMAT_YUYV,
-        SpaVideoFormat.Yvyu => DrmFourcc.DRM_FORMAT_YVYU,
-        SpaVideoFormat.Uyvy => DrmFourcc.DRM_FORMAT_UYVY,
-        SpaVideoFormat.Vyuy => DrmFourcc.DRM_FORMAT_VYUY,
-        SpaVideoFormat.Nv12 => DrmFourcc.DRM_FORMAT_NV12,
-        SpaVideoFormat.Nv21 => DrmFourcc.DRM_FORMAT_NV21,
-        SpaVideoFormat.Nv16 => DrmFourcc.DRM_FORMAT_NV16,
-        SpaVideoFormat.Nv61 => DrmFourcc.DRM_FORMAT_NV61,
-        SpaVideoFormat.Nv24 => DrmFourcc.DRM_FORMAT_NV24,
-        SpaVideoFormat.Yuv9 => DrmFourcc.DRM_FORMAT_YUV410,
-        SpaVideoFormat.Yvu9 => DrmFourcc.DRM_FORMAT_YVU410,
-        SpaVideoFormat.Y41B => DrmFourcc.DRM_FORMAT_YUV411,
-        SpaVideoFormat.I420 => DrmFourcc.DRM_FORMAT_YUV420,
-        SpaVideoFormat.Yv12 => DrmFourcc.DRM_FORMAT_YVU420,
-        SpaVideoFormat.Y42B => DrmFourcc.DRM_FORMAT_YUV422,
-        SpaVideoFormat.Y444 => DrmFourcc.DRM_FORMAT_YUV444,
-        SpaVideoFormat.Rgb15 => DrmFourcc.DRM_FORMAT_XRGB1555,
-        SpaVideoFormat.Rgb16 => DrmFourcc.DRM_FORMAT_RGB565,
-        SpaVideoFormat.Bgr16 => DrmFourcc.DRM_FORMAT_BGR565,
-        SpaVideoFormat.Rgb => DrmFourcc.DRM_FORMAT_BGR888,
-        SpaVideoFormat.Bgr => DrmFourcc.DRM_FORMAT_RGB888,
-        SpaVideoFormat.Rgba => DrmFourcc.DRM_FORMAT_ABGR8888,
-        SpaVideoFormat.Rgbx => DrmFourcc.DRM_FORMAT_XBGR8888,
-        SpaVideoFormat.Bgra => DrmFourcc.DRM_FORMAT_ARGB8888,
-        SpaVideoFormat.Bgrx => DrmFourcc.DRM_FORMAT_XRGB8888,
-        SpaVideoFormat.Argb => DrmFourcc.DRM_FORMAT_BGRA8888,
-        SpaVideoFormat.XRgb => DrmFourcc.DRM_FORMAT_BGRX8888,
-        SpaVideoFormat.Abgr => DrmFourcc.DRM_FORMAT_RGBA8888,
-        SpaVideoFormat.XBgr => DrmFourcc.DRM_FORMAT_RGBX8888,
-        SpaVideoFormat.P010_10Le => DrmFourcc.DRM_FORMAT_P010,
-        SpaVideoFormat.Gray8 => DrmFourcc.DRM_FORMAT_R8,
-        SpaVideoFormat.Gray16Le => DrmFourcc.DRM_FORMAT_R16,
-        SpaVideoFormat.Gray16Be => DrmFourcc.DRM_FORMAT_R16 | DrmFourcc.DRM_FORMAT_BIG_ENDIAN,
+        SpaVideoFormat.Yuy2 => NativeConstants.DRM_FORMAT_YUYV,
+        SpaVideoFormat.Yvyu => NativeConstants.DRM_FORMAT_YVYU,
+        SpaVideoFormat.Uyvy => NativeConstants.DRM_FORMAT_UYVY,
+        SpaVideoFormat.Vyuy => NativeConstants.DRM_FORMAT_VYUY,
+        SpaVideoFormat.Nv12 => NativeConstants.DRM_FORMAT_NV12,
+        SpaVideoFormat.Nv21 => NativeConstants.DRM_FORMAT_NV21,
+        SpaVideoFormat.Nv16 => NativeConstants.DRM_FORMAT_NV16,
+        SpaVideoFormat.Nv61 => NativeConstants.DRM_FORMAT_NV61,
+        SpaVideoFormat.Nv24 => NativeConstants.DRM_FORMAT_NV24,
+        SpaVideoFormat.Yuv9 => NativeConstants.DRM_FORMAT_YUV410,
+        SpaVideoFormat.Yvu9 => NativeConstants.DRM_FORMAT_YVU410,
+        SpaVideoFormat.Y41B => NativeConstants.DRM_FORMAT_YUV411,
+        SpaVideoFormat.I420 => NativeConstants.DRM_FORMAT_YUV420,
+        SpaVideoFormat.Yv12 => NativeConstants.DRM_FORMAT_YVU420,
+        SpaVideoFormat.Y42B => NativeConstants.DRM_FORMAT_YUV422,
+        SpaVideoFormat.Y444 => NativeConstants.DRM_FORMAT_YUV444,
+        SpaVideoFormat.Rgb15 => NativeConstants.DRM_FORMAT_XRGB1555,
+        SpaVideoFormat.Rgb16 => NativeConstants.DRM_FORMAT_RGB565,
+        SpaVideoFormat.Bgr16 => NativeConstants.DRM_FORMAT_BGR565,
+        SpaVideoFormat.Rgb => NativeConstants.DRM_FORMAT_BGR888,
+        SpaVideoFormat.Bgr => NativeConstants.DRM_FORMAT_RGB888,
+        SpaVideoFormat.Rgba => NativeConstants.DRM_FORMAT_ABGR8888,
+        SpaVideoFormat.Rgbx => NativeConstants.DRM_FORMAT_XBGR8888,
+        SpaVideoFormat.Bgra => NativeConstants.DRM_FORMAT_ARGB8888,
+        SpaVideoFormat.Bgrx => NativeConstants.DRM_FORMAT_XRGB8888,
+        SpaVideoFormat.Argb => NativeConstants.DRM_FORMAT_BGRA8888,
+        SpaVideoFormat.XRgb => NativeConstants.DRM_FORMAT_BGRX8888,
+        SpaVideoFormat.Abgr => NativeConstants.DRM_FORMAT_RGBA8888,
+        SpaVideoFormat.XBgr => NativeConstants.DRM_FORMAT_RGBX8888,
+        SpaVideoFormat.P010_10Le => NativeConstants.DRM_FORMAT_P010,
+        SpaVideoFormat.Gray8 => NativeConstants.DRM_FORMAT_R8,
+        SpaVideoFormat.Gray16Le => NativeConstants.DRM_FORMAT_R16,
+        SpaVideoFormat.Gray16Be => NativeConstants.DRM_FORMAT_R16 | NativeConstants.DRM_FORMAT_BIG_ENDIAN,
         _ => Invalid,
     };
 

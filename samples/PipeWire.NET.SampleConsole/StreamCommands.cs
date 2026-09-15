@@ -92,7 +92,7 @@ internal static class StreamCommands
         capture.FrameReady += (_, frame) =>
         {
             Interlocked.Increment(ref frames);
-            Interlocked.Add(ref bytes, frame.Data.Length);
+            Interlocked.Add(ref bytes, frame.Pixels.Length);
             Volatile.Write(ref width, frame.Width);
             Volatile.Write(ref height, frame.Height);
             Volatile.Write(ref format, (int)frame.Format);

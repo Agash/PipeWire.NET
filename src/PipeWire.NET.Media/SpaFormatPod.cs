@@ -162,7 +162,7 @@ internal static class SpaFormatPod
             if (m->size < (uint)sizeof(spa_meta_sync_timeline)) continue;
 
             spa_meta_sync_timeline* t = (spa_meta_sync_timeline*)m->data;
-            timeline = new SyncTimeline(t->flags, t->acquire_point, t->release_point);
+            timeline = new SyncTimeline((SpaMetaSyncTimelineFlags)t->flags, t->acquire_point, t->release_point);
             return true;
         }
 
@@ -175,7 +175,7 @@ internal static class SpaFormatPod
     /// <param name="ReleasePoint">
     /// The timeline point the consumer signals when it is finished with the data.
     /// </param>
-    internal readonly record struct SyncTimeline(uint Flags, ulong AcquirePoint, ulong ReleasePoint);
+    internal readonly record struct SyncTimeline(SpaMetaSyncTimelineFlags Flags, ulong AcquirePoint, ulong ReleasePoint);
 
     /// <summary>Finds the acquire and release timeline descriptors of a buffer, in order.</summary>
     /// <remarks>
@@ -263,7 +263,7 @@ internal static class SpaFormatPod
         // as GPU corruption rather than a failed negotiation.
         if (syncDataBlocks > 0)
             b.AddInt(SpaParamBuffers.MetaType, 1 << (int)SpaMetaType.SyncTimeline,
-                SpaPodPropFlag.Mandatory);
+                SpaPodPropFlags.Mandatory);
 
         return b.GetPod().Length;
     }
@@ -381,14 +381,31 @@ internal static class SpaFormatPod
     private const uint MaxMetasWalked = 64;
 
     /// <summary>
-    /// Finds the presentation timestamp (ns) from a buffer's SPA_META_Header, or -1 if absent.
+    /// The <c>pts</c> of a buffer's <c>SPA_META_Header</c> in nanoseconds, or -1 when it has none.
     /// </summary>
     /// <remarks>
-    /// Video producers populate this; PipeWire audio typically does NOT carry a per-buffer
-    /// header PTS (audio timing is derived from the graph clock + sample position), so audio
-    /// frames usually report -1 here.
+    /// Header only, deliberately. Video producers write it and nothing between them and a consumer
+    /// rewrites it; PipeWire audio normally arrives without one, because audioconvert and the mixer
+    /// do not copy the header. The graph's time for a buffer is a different value with a different
+    /// clock owner and lives in <see cref="QueuedTimeNs"/>: folding it in here would hand a consumer
+    /// two meanings under one name and no way to tell which one it got.
     /// </remarks>
-    internal static unsafe long FindPresentationTimeNs(spa_buffer* buf)
+    internal static unsafe long FindPresentationTimestampNs(pw_buffer* buf) =>
+        buf is null ? -1 : FindPresentationTimestampNs(buf->buffer);
+
+    /// <summary>
+    /// <c>pw_buffer.time</c>: the cycle time the buffer was queued in, or -1 when it is not set.
+    /// </summary>
+    /// <remarks>
+    /// Nanoseconds on CLOCK_MONOTONIC, comparable with <c>pw_time.now</c> and
+    /// <c>pw_stream_get_nsec()</c>. 0 reads as "not set" rather than the epoch: the field was added
+    /// in 1.0.5 and an older daemon leaves it zeroed.
+    /// </remarks>
+    internal static unsafe long QueuedTimeNs(pw_buffer* buf) =>
+        buf is null || buf->time == 0 ? -1 : (long)buf->time;
+
+    /// <inheritdoc cref="FindPresentationTimestampNs(pw_buffer*)"/>
+    internal static unsafe long FindPresentationTimestampNs(spa_buffer* buf)
     {
         if (buf is null || buf->metas is null) return -1;
         uint headerType = (uint)SpaMetaType.Header;
@@ -487,6 +504,10 @@ internal static class SpaFormatPod
     /// True when the producer returned more than one modifier (it honoured <c>DONT_FIXATE</c>) and the
     /// negotiation must be fixated by re-offering a single modifier.
     /// </param>
+    /// <param name="DeviceId">
+    /// The DRM device (<c>dev_t</c>) the format was negotiated for, when both ends negotiated device
+    /// IDs; null otherwise, which is upstream's "device undefined".
+    /// </param>
     // We deliberately keep ONLY the preferred modifier + a "needs fixation" flag, never the full
     // returned set. The set is never needed: the consumer offers exactly the modifiers its GPU can
     // import, so whatever subset the producer returns is entirely importable and the first one is
@@ -496,7 +517,8 @@ internal static class SpaFormatPod
     internal readonly record struct VideoFormatInfo(
         PixelFormat Format, int Width, int Height, VideoColorInfo Color,
         ulong Modifier = DrmFormatModifier.Invalid,
-        bool ModifierNeedsFixation = false);
+        bool ModifierNeedsFixation = false,
+        ulong? DeviceId = null);
 
     /// <summary>The largest parameter pod this library will parse, in bytes.</summary>
     /// <remarks>
@@ -528,6 +550,10 @@ internal static class SpaFormatPod
         ulong modifier = DrmFormatModifier.Invalid;
         bool modifierNeedsFixation = false;
 
+        // Not carried over either: a format without a deviceId is one negotiated without device
+        // IDs, and keeping the last one would name a device this negotiation never chose.
+        ulong? deviceId = null;
+
         // Null means the parameter was withdrawn, not that it is empty; there is nothing to read
         // and dereferencing it is a fault in a callback the loop thread cannot survive.
         if (param is null) return current;
@@ -543,7 +569,7 @@ internal static class SpaFormatPod
         var reader = new SpaPodReader(pod);
         if (reader.EnterObject(out uint objType, out _, out _) && (SpaType)objType == SpaType.ObjectFormat)
         {
-            while (reader.TryReadProperty(out SpaKey key, out uint propFlags, out var value))
+            while (reader.TryReadProperty(out SpaKey key, out SpaPodPropFlags propFlags, out var value))
             {
                 try
                 {
@@ -564,8 +590,21 @@ internal static class SpaFormatPod
                         if (value.TryReadModifier(out long first, out int n) && n > 0)
                         {
                             modifier = (ulong)first;
-                            modifierNeedsFixation = (propFlags & SpaPodPropFlag.DontFixate) != 0;
+                            modifierNeedsFixation = (propFlags & SpaPodPropFlags.DontFixate) != 0;
                         }
+                    }
+                    else if (key == SpaFormat.VideoDeviceId)
+                    {
+                        // A dev_t in host byte order (video-src-fixate.c, find_device_id_from_param
+                        // reads it back as *(dev_t *)bytes and refuses any other size). Unwrapped
+                        // first like every other property: a negotiated format carries it inside a
+                        // Choice(None), which is how spa_pod_filter_prop writes a single match.
+                        ReadOnlySpan<byte> bytes;
+                        bool read = value.TryUnwrapChoice(out SpaPodReader inner)
+                            ? inner.TryReadBytes(out bytes)
+                            : value.TryReadBytes(out bytes);
+                        if (read && bytes.Length == sizeof(ulong))
+                            deviceId = System.Runtime.InteropServices.MemoryMarshal.Read<ulong>(bytes);
                     }
                     else if (key == SpaFormat.VideoSize)
                     {
@@ -594,7 +633,7 @@ internal static class SpaFormatPod
             }
         }
         return new VideoFormatInfo(fmt, w, h, new VideoColorInfo(range, matrix, transfer, primaries),
-            modifier, modifierNeedsFixation);
+            modifier, modifierNeedsFixation, deviceId);
 
         static uint ReadId(ref SpaPodReader v) => v.TryUnwrapChoice(out var inner) ? inner.ReadId() : v.ReadId();
     }
@@ -659,18 +698,33 @@ internal static class SpaFormatPod
     /// chosen a single modifier its GPU supports, re-submit with <see langword="true"/> (no
     /// <c>DONT_FIXATE</c>) to fixate the negotiation.
     /// </param>
+    /// <param name="deviceId">
+    /// The DRM device (<c>dev_t</c>) this offer is for, when device IDs are being negotiated; one
+    /// offer per device, each with that device's modifiers, is upstream's shape
+    /// (video-src-fixate.c, build_format).
+    /// </param>
     internal static int WriteVideoFormat(
         Span<byte> buf,
         ReadOnlySpan<PixelFormat> formats,
         uint defaultWidth, uint defaultHeight, uint defaultFrameRate,
         bool fixedSize,
         ReadOnlySpan<long> modifiers = default,
-        bool fixateModifier = false)
+        bool fixateModifier = false,
+        ulong? deviceId = null)
     {
         var b = new SpaPodBuilder(buf);
         b.PushObject(SpaType.ObjectFormat, SpaParamType.EnumFormat);
         b.AddId(SpaFormat.MediaType,    SpaMediaType.Video);
         b.AddId(SpaFormat.MediaSubtype, SpaMediaSubtype.Raw);
+
+        // Before the format, MANDATORY, as a dev_t in host byte order - upstream's order and flags.
+        // Mandatory because an offer for one device must not be matched by a peer on another.
+        if (deviceId is { } device)
+        {
+            Span<byte> devBytes = stackalloc byte[sizeof(ulong)];
+            System.Runtime.InteropServices.MemoryMarshal.Write(devBytes, device);
+            b.AddBytes(SpaFormat.VideoDeviceId, devBytes, SpaPodPropFlags.Mandatory);
+        }
 
         if (formats.IsEmpty)
         {
@@ -703,12 +757,12 @@ internal static class SpaFormatPod
         {
             if (fixateModifier)
             {
-                b.AddLong(SpaFormat.VideoModifier, modifiers[0], SpaPodPropFlag.Mandatory);
+                b.AddLong(SpaFormat.VideoModifier, modifiers[0], SpaPodPropFlags.Mandatory);
             }
             else
             {
                 b.AddChoiceEnumLong(SpaFormat.VideoModifier, modifiers,
-                    SpaPodPropFlag.Mandatory | SpaPodPropFlag.DontFixate);
+                    SpaPodPropFlags.Mandatory | SpaPodPropFlags.DontFixate);
             }
         }
 
