@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -26,10 +27,12 @@ namespace PipeWire.NET;
 [SupportedOSPlatform("linux")]
 public sealed class PipeWireRegistry : IAsyncDisposable
 {
-    private readonly PipeWireContext _ctx;
-    private readonly ConcurrentDictionary<uint, PipeWireSource> _sources = new();
+    internal readonly PipeWireContext _ctx;
+    internal readonly ConcurrentDictionary<uint, PipeWireSource> _sources = new();
+    internal readonly ConcurrentDictionary<uint, PipeWirePort> _ports = new();
+    internal readonly ConcurrentDictionary<uint, PipeWireLink> _links = new();
 
-    private unsafe pw_registry*        _registry;
+    internal unsafe pw_registry*        _registry;
     private unsafe pw_registry_events* _events;
     private spa_hook            _hook;
     private GCHandle            _selfHandle;
@@ -41,6 +44,18 @@ public sealed class PipeWireRegistry : IAsyncDisposable
 
     /// <summary>Raised when a node is removed (carries the global id of the removed node).</summary>
     public event Action<uint>? SourceRemoved;
+
+    /// <summary>Raised when a new port appears in the graph</summary>
+    public event Action<PipeWirePort>? PortAdded;
+
+    /// <summary>Raised when a new port appears in the graph</summary>
+    public event Action<uint>? PortRemoved;
+
+    /// <summary>Raised when a new link appears in the graph</summary>
+    public event Action<PipeWireLink>? LinkAdded;
+
+    /// <summary>Raised when a new link appears in the graph</summary>
+    public event Action<uint>? LinkRemoved;
 
     /// <param name="context">A <see cref="PipeWireContext"/> with <see cref="PipeWireContext.StartAsync"/> already called.</param>
     public PipeWireRegistry(PipeWireContext context)
@@ -94,6 +109,112 @@ public sealed class PipeWireRegistry : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Creates and registers a new virtual audio node, using stereo sound.
+    /// The node will have default ports "playback_FL", "playback_FR" as well as "monitor_FL", "monitor_FR".
+    /// </summary>
+    /// <param name="description">The description of the node to create.</param>
+    /// <param name="name">The name of the node to create; mainly used internally. Falls back to a random Guid string</param>
+    /// <returns>A task that obtains the newly created Node.</returns>
+    /// <exception cref="InvalidOperationException">If the node could not be created due to internal errors inside pipewire.</exception>
+    public unsafe Task<PipeWireSource> CreateVirtualStereoNode(string description, string? name = null)
+    {
+        name ??= Guid.NewGuid().ToString();
+
+        spa_interface* result;
+
+        fixed (byte* ptrFactoryNameKey = Encoding.UTF8.GetBytes(Native.PW_KEY_FACTORY_NAME))
+        fixed (byte* ptrFactoryName = "support.null-audio-sink"u8.ToArray())
+        fixed (byte* ptrNodeNameKey = Encoding.UTF8.GetBytes(Native.PW_KEY_NODE_NAME))
+        fixed (byte* ptrNodeName = Encoding.UTF8.GetBytes(name))
+        fixed (byte* ptrNodeDescriptionKey = Encoding.UTF8.GetBytes(Native.PW_KEY_NODE_DESCRIPTION))
+        fixed (byte* ptrNodeDescription = Encoding.UTF8.GetBytes(description))
+        fixed (byte* ptrMediaClassKey = Encoding.UTF8.GetBytes(Native.PW_KEY_MEDIA_CLASS))
+        fixed (byte* ptrMediaClass = "Audio/Sink"u8.ToArray())
+        fixed (byte* ptrAudioPositionKey = Encoding.UTF8.GetBytes(Native.PW_KEY_AUDIO_POSITION))
+        fixed (byte* ptrAudioPosition = "[ FL FR ]"u8.ToArray())
+        {
+            var factoryName = new spa_dict_item { key = (sbyte*)ptrFactoryNameKey, value = (sbyte*)ptrFactoryName };
+            var nodeName = new spa_dict_item { key = (sbyte*)ptrNodeNameKey, value = (sbyte*)ptrNodeName };
+            var nodeDescription = new spa_dict_item { key = (sbyte*)ptrNodeDescriptionKey, value = (sbyte*)ptrNodeDescription };
+            var mediaClass = new spa_dict_item { key = (sbyte*)ptrMediaClassKey, value = (sbyte*)ptrMediaClass };
+            var audioPosition = new spa_dict_item { key = (sbyte*)ptrAudioPositionKey, value = (sbyte*)ptrAudioPosition };
+
+            fixed (spa_dict_item* ptrItems = new[] { factoryName, nodeName, nodeDescription, mediaClass, audioPosition })
+            {
+                var dict = new spa_dict { flags = 0, items = ptrItems, n_items = 5 };
+
+                Native.GetInterface(_ctx._core, out pw_core_methods* methods, out void* data);
+                fixed (byte* ptrFactory = "adapter"u8.ToArray())
+                fixed (byte* iface = Encoding.UTF8.GetBytes(Native.PW_TYPE_INTERFACE_Node))
+                fixed (spa_dict* props = new[] { dict })
+                    using (_ctx.Lock())
+                        result = (spa_interface*)methods->create_object(data, (sbyte*)ptrFactory, (sbyte*)iface, Native.PW_VERSION_NODE, props, 0);
+            }
+        }
+
+        if ((byte)result == 0)
+        {
+            throw new InvalidOperationException($"Creating new node '{name}' ({description}) failed!");
+        }
+
+        return WaitForNode((pw_proxy*)result);
+    }
+
+    /// <summary>
+    /// Creates and registers a new Link between two ports.
+    /// </summary>
+    /// <param name="feed">The port to start the link from; must be of <see langword="input direction" cref="PipeWirePortDirection.In" />.</param>
+    /// <param name="sink">The port to feed the link into; must be of <see langword="output direction" cref="PipeWirePortDirection.Out" />.</param>
+    /// <exception cref="ArgumentException">If ports marked from a different <see cref="PipeWireRegistry"/> were provided.</exception>
+    /// <exception cref="ArgumentException">If ports with invalid <see cref="PipeWirePortDirection"/> were provided.</exception>
+    /// <exception cref="InvalidOperationException">If the link could not be created due to internal errors inside pipewire.</exception>
+    public unsafe Task<PipeWireLink> CreateLink(PipeWirePort feed, PipeWirePort sink)
+    {
+        if (feed._registry != this || sink._registry != this)
+            throw new ArgumentException($"Linking ports {feed.PortId} and {sink.PortId} not possible; registry mismatch");
+        if (feed.PortDirection != PipeWirePortDirection.Out)
+            throw new ArgumentException($"Linking ports {feed.PortId} and {sink.PortId} not possible; {nameof(feed)} is not an output port");
+        if (sink.PortDirection != PipeWirePortDirection.In)
+            throw new ArgumentException($"Linking ports {feed.PortId} and {sink.PortId} not possible; {nameof(sink)} is not an input port");
+
+        spa_interface* result;
+
+        fixed (byte* pkin = Encoding.UTF8.GetBytes(Native.PW_KEY_LINK_OUTPUT_NODE))
+        fixed (byte* pvin = Encoding.UTF8.GetBytes(feed.NodeId.ToString()))
+        fixed (byte* pkip = Encoding.UTF8.GetBytes(Native.PW_KEY_LINK_OUTPUT_PORT))
+        fixed (byte* pvip = Encoding.UTF8.GetBytes(feed.PortId.ToString()))
+        fixed (byte* pkon = Encoding.UTF8.GetBytes(Native.PW_KEY_LINK_INPUT_NODE))
+        fixed (byte* pvon = Encoding.UTF8.GetBytes(sink.NodeId.ToString()))
+        fixed (byte* pkop = Encoding.UTF8.GetBytes(Native.PW_KEY_LINK_INPUT_PORT))
+        fixed (byte* pvop = Encoding.UTF8.GetBytes(sink.PortId.ToString()))
+        {
+            var inputNode = new spa_dict_item { key = (sbyte*)pkin, value = (sbyte*)pvin };
+            var inputPort = new spa_dict_item { key = (sbyte*)pkip, value = (sbyte*)pvip };
+            var outputNode = new spa_dict_item { key = (sbyte*)pkon, value = (sbyte*)pvon };
+            var outputPort = new spa_dict_item { key = (sbyte*)pkop, value = (sbyte*)pvop };
+
+            fixed (spa_dict_item* ptr = new[] { inputNode, inputPort, outputNode, outputPort })
+            {
+                var dict = new spa_dict { flags = 0, items = ptr, n_items = 4 };
+
+                Native.GetInterface(_ctx._core, out pw_core_methods* methods, out void* data);
+                fixed (byte* key = "link-factory"u8.ToArray())
+                fixed (byte* iface = Encoding.UTF8.GetBytes(Native.PW_TYPE_INTERFACE_Link))
+                fixed (spa_dict* props = new[] { dict })
+                    using (_ctx.Lock())
+                        result = (spa_interface*)methods->create_object(data, (sbyte*)key, (sbyte*)iface, Native.PW_VERSION_LINK, props, 0);
+            }
+        }
+
+        if ((byte)result == 0)
+        {
+            throw new InvalidOperationException($"Creating new link from port {feed.PortId} to port {sink.PortId} failed!");
+        }
+
+        return WaitForLink((pw_proxy*)result);
+    }
+
     /// <inheritdoc/>
     public ValueTask DisposeAsync()
     {
@@ -128,18 +249,104 @@ public sealed class PipeWireRegistry : IAsyncDisposable
         if (self is null || self._disposed) return;
 
         string? typeStr = PtrToUtf8(type);
-        if (typeStr != "PipeWire:Interface:Node") return;       // we only surface nodes
+        switch (typeStr)
+        {
+            case "PipeWire:Interface:Node":
+                string? nodeName    = TryReadKey(props, Native.PW_KEY_NODE_NAME);
+                string? nodeDescription = TryReadKey(props, Native.PW_KEY_NODE_DESCRIPTION);
+                string? nodeNick    = TryReadKey(props, Native.PW_KEY_NODE_NICK);
+                string? mediaClass  = TryReadKey(props, Native.PW_KEY_MEDIA_CLASS);
 
-        string? nodeName    = TryReadKey(props, Native.PW_KEY_NODE_NAME);
-        string? description = TryReadKey(props, Native.PW_KEY_NODE_DESCRIPTION);
-        string? nodeNick    = TryReadKey(props, Native.PW_KEY_NODE_NICK);
-        string? mediaClass  = TryReadKey(props, Native.PW_KEY_MEDIA_CLASS);
+                var source = new PipeWireSource(self, id, nodeName, nodeDescription, mediaClass, nodeNick);
+                lock (self._sources)
+                    self._sources[id] = source;
+                Debug.WriteLine($"Loaded Node {id} '{source.NodeName}' ({mediaClass}): {nodeDescription}");
 
-        var source = new PipeWireSource(id, nodeName, description, mediaClass, nodeNick);
-        self._sources[id] = source;
+                try { self.SourceAdded?.Invoke(source); }
+                catch { /* event handler should not break the main loop */ }
 
-        try { self.SourceAdded?.Invoke(source); }
-        catch { /* event handler should not break the main loop */ }
+                break;
+            case "PipeWire:Interface:Port":
+                string? portNodeId = TryReadKey(props, Native.PW_KEY_NODE_ID);
+                string? portName = TryReadKey(props, Native.PW_KEY_PORT_NAME);
+                string? portDirection = TryReadKey(props, Native.PW_KEY_PORT_DIRECTION);
+                string? portMonitor = TryReadKey(props, Native.PW_KEY_PORT_MONITOR);
+                string? portExclusive = TryReadKey(props, Native.PW_KEY_PORT_EXCLUSIVE);
+
+                if (portNodeId == null)
+                {
+                    Debug.WriteLine($"Port {id} was loaded without a node id!");
+                    return;
+                }
+
+                if (!uint.TryParse(portNodeId, out uint parsedPortNodeId))
+                {
+                    Debug.WriteLine($"Port {id} was loaded with an invalid node id '{portNodeId}'");
+                    return;
+                }
+
+                if (!Enum.TryParse(typeof(PipeWirePortDirection), portDirection, true, out object? parsedPortDirection))
+                {
+                    Debug.WriteLine($"Port {id} was loaded with an invalid direction attribute '{portDirection}'");
+                    return;
+                }
+
+                var port = new PipeWirePort(self, id, parsedPortNodeId, portName,
+                    (PipeWirePortDirection) parsedPortDirection,
+                    portMonitor != null, portExclusive != null);
+                lock (self._ports)
+                    self._ports[id] = port;
+                Debug.WriteLine($"Loaded Port {id} '{port.PortName}' ({port.PortDirection}) of Node {port.NodeId}");
+
+                try { self.PortAdded?.Invoke(port); }
+                catch { /* event handler should not break the main loop */ }
+
+                break;
+            case "PipeWire:Interface:Link":
+                string? linkInputNodeId = TryReadKey(props, Native.PW_KEY_LINK_INPUT_NODE);
+                string? linkInputPortId = TryReadKey(props, Native.PW_KEY_LINK_INPUT_PORT);
+                string? linkOutputNodeId = TryReadKey(props, Native.PW_KEY_LINK_OUTPUT_NODE);
+                string? linkOutputPortId = TryReadKey(props, Native.PW_KEY_LINK_OUTPUT_PORT);
+
+                if (!uint.TryParse(linkInputNodeId, out uint parsedLinkInputNodeId))
+                {
+                    Debug.WriteLine($"Link {id} was loaded with an invalid input node id '{linkInputNodeId}'");
+                    return;
+                }
+
+                if (!uint.TryParse(linkInputPortId, out uint parsedLinkInputPortId))
+                {
+                    Debug.WriteLine($"Link {id} was loaded with an invalid input port id '{linkInputPortId}'");
+                    return;
+                }
+
+                if (!uint.TryParse(linkOutputNodeId, out uint parsedLinkOutputNodeId))
+                {
+                    Debug.WriteLine($"Link {id} was loaded with an invalid output node id '{linkOutputNodeId}'");
+                    return;
+                }
+
+                if (!uint.TryParse(linkOutputPortId, out uint parsedLinkOutputPortId))
+                {
+                    Debug.WriteLine($"Link {id} was loaded with an invalid output port id '{linkOutputPortId}'");
+                    return;
+                }
+
+                var link = new PipeWireLink(self, id,
+                    parsedLinkInputNodeId, parsedLinkInputPortId,
+                    parsedLinkOutputNodeId, parsedLinkOutputPortId);
+                lock (self._links)
+                    self._links[id] = link;
+                Debug.WriteLine($"Loaded Link {id} ({link.LinkOutputNode}.{link.LinkOutputPort} -> {link.LinkInputNode}.{link.LinkInputPort})");
+
+                try { self.LinkAdded?.Invoke(link); }
+                catch { /* event handler should not break the main loop */ }
+
+                break;
+            default:
+                Debug.WriteLine($"Not enumerating result of type {typeStr}");
+                break;
+        }
 
         self._initialEnumeration.TrySetResult();
     }
@@ -152,7 +359,21 @@ public sealed class PipeWireRegistry : IAsyncDisposable
 
         if (self._sources.TryRemove(id, out _))
         {
+            Debug.WriteLine($"Unloaded Node {id}");
+
             try { self.SourceRemoved?.Invoke(id); }
+            catch { /* swallow */ }
+        } else if (self._ports.TryRemove(id, out _))
+        {
+            Debug.WriteLine($"Unloaded Port {id}");
+
+            try { self.PortRemoved?.Invoke(id); }
+            catch { /* swallow */ }
+        } else if (self._links.TryRemove(id, out _))
+        {
+            Debug.WriteLine($"Unloaded Link {id}");
+
+            try { self.LinkRemoved?.Invoke(id); }
             catch { /* swallow */ }
         }
     }
@@ -188,5 +409,103 @@ public sealed class PipeWireRegistry : IAsyncDisposable
         for (; i < needle.Length - 1; i++)              // skip the trailing \0 in needle
             if ((byte)nullTerminated[i] != needle[i]) return false;
         return nullTerminated[i] == 0;
+    }
+
+    private unsafe Task<PipeWireSource> WaitForNode(pw_proxy* proxy)
+    {
+        var waiter = new NodeWaiter(this, proxy);
+        return waiter.GetOrAwaitRegistration();
+    }
+
+    private unsafe Task<PipeWireLink> WaitForLink(pw_proxy* proxy)
+    {
+        var waiter = new LinkWaiter(this, proxy);
+        return waiter.GetOrAwaitRegistration();
+    }
+
+    private unsafe uint GetIdFromProxy(pw_proxy* proxy)
+    {
+        using (_ctx.Lock())
+            return Native.pw_proxy_get_bound_id(proxy);
+    }
+
+    private abstract unsafe class ObjectWaiter<T>
+    {
+        internal readonly TaskCompletionSource<T> _completion = new();
+        protected readonly pw_proxy* _proxy;
+
+        protected ObjectWaiter(pw_proxy* proxy)
+        {
+            _proxy = proxy;
+            _completion.Task.ContinueWith(_ => Unregister());
+        }
+
+        protected abstract void Unregister();
+    }
+
+    private sealed unsafe class NodeWaiter(PipeWireRegistry registry, pw_proxy* proxy) : ObjectWaiter<PipeWireSource>(proxy)
+    {
+        internal Task<PipeWireSource> GetOrAwaitRegistration()
+        {
+            lock (registry._sources)
+            {
+                uint id = registry.GetIdFromProxy(_proxy);
+                if (id != Native.SPA_ID_INVALID && registry._sources.TryGetValue(id, out PipeWireSource? node))
+                    _completion.TrySetResult(node);
+
+                registry.SourceAdded += OnSourceAdd;
+                return _completion.Task;
+            }
+        }
+
+        protected override void Unregister()
+        {
+            registry.SourceAdded -= OnSourceAdd;
+        }
+
+        private void OnSourceAdd(PipeWireSource obj)
+        {
+            lock (registry._sources)
+            {
+                uint id = registry.GetIdFromProxy(_proxy);
+                if (obj.NodeId != id || _completion.Task.IsCompleted)
+                    return;
+
+                _completion.TrySetResult(obj);
+            }
+        }
+    }
+
+    private sealed unsafe class LinkWaiter(PipeWireRegistry registry, pw_proxy* proxy) : ObjectWaiter<PipeWireLink>(proxy)
+    {
+        internal Task<PipeWireLink> GetOrAwaitRegistration()
+        {
+            lock (registry._links)
+            {
+                uint id = registry.GetIdFromProxy(_proxy);
+                if (id != Native.SPA_ID_INVALID && registry._links.TryGetValue(id, out PipeWireLink? node))
+                    _completion.TrySetResult(node);
+
+                registry.LinkAdded += OnSourceAdd;
+                return _completion.Task;
+            }
+        }
+
+        protected override void Unregister()
+        {
+            registry.LinkAdded -= OnSourceAdd;
+        }
+
+        private void OnSourceAdd(PipeWireLink obj)
+        {
+            lock (registry._links)
+            {
+                uint id = registry.GetIdFromProxy(_proxy);
+                if (obj.LinkId != id || _completion.Task.IsCompleted)
+                    return;
+
+                _completion.TrySetResult(obj);
+            }
+        }
     }
 }
