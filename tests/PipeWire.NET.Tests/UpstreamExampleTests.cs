@@ -2,7 +2,6 @@ using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
-using PipeWire.NET.Media.Streams;
 using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Tests;
@@ -487,7 +486,30 @@ public sealed class UpstreamExampleTests
             + $"(it had written up to {Volatile.Read(ref written)})");
 
         // Outside a cycle the geometry is deliberately not reported, so a filter cannot size its
-        // next access from a frame the graph has moved on from.
+        // next access from a frame the graph has moved on from. Every cycle above proves the other
+        // half: the callback returns early unless the geometry is valid, so 4 reads is 4 cycles
+        // that had it.
+        //
+        // The filter is taken out of the graph before the read. VideoCycle is written on the
+        // realtime thread at the top of each cycle and cleared at the bottom, so a read taken while
+        // cycles are still running races that write and sees a cycle in flight - which is the
+        // contract working, not failing.
+        play.SetActive(false);
+        source.SetActive(false);
+
+        int quiet = Volatile.Read(ref read);
+        for (var i = 0; i < 40; i++)
+        {
+            await Task.Delay(50, cts.Token);
+            int now = Volatile.Read(ref read);
+            if (now == quiet) break;
+            quiet = now;
+        }
+
+        Assert.AreEqual(
+            quiet, Volatile.Read(ref read),
+            "the consuming filter is still being scheduled after SetActive(false)");
+
         Assert.IsFalse(
             play.VideoCycle.IsValid,
             "the frame geometry is still being reported outside the process callback");
@@ -690,7 +712,7 @@ public sealed class UpstreamExampleTests
         // port is bound, and binding files it into the registry's record of the port.
         PipeWirePort ump = ports.Single(
             p => p.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_PORT_NAME) == "ump_in");
-        await using PipeWirePortControl bound = reg.BindPort(ump.PortId);
+        await using PipeWirePortProxy bound = reg.BindPort(ump.PortId);
         for (var i = 0; i < 50 && ump.Properties.GetValueOrDefault("control.ump") is null; i++)
         {
             await Task.Delay(100, cts.Token);
