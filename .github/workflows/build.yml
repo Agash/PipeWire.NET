@@ -21,7 +21,11 @@ env:
 jobs:
   build_and_test:
     name: Build, Test, and Pack
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: that is still 24.04, whose PipeWire is 1.0.5, and the upstream PPA only
+    # reaches 1.0.7 there. 26.04 ships 1.6.2, which is the series these bindings are generated
+    # against. Anything older is refused at pw_init rather than hanging, so a runner that drifts
+    # back says so immediately.
+    runs-on: ubuntu-26.04
 
     permissions:
       contents: read
@@ -53,7 +57,12 @@ jobs:
             pkg-config \
             dbus \
             pipewire wireplumber pipewire-bin \
-            gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pipewire
+            gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pipewire             elfutils
+
+      - name: Report the PipeWire that was installed
+        run: |
+          echo "libpipewire: $(pkg-config --modversion libpipewire-0.3 2>/dev/null || echo unknown)"
+          echo "pinned:      $(tr -d '[:space:]' < generate/HEADER-VERSION)"
 
       - uses: actions/setup-dotnet@v5
         with:
@@ -71,7 +80,7 @@ jobs:
         run: dotnet build PipeWire.NET.slnx --no-restore -c Release
 
       - name: Test (non-integration on host runner)
-        run: dotnet test PipeWire.NET.slnx --no-build -c Release --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+        run: dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
              --filter "TestCategory!=Integration"
 
       - name: Summarize coverage
@@ -171,8 +180,30 @@ jobs:
           fi
 
       - name: Run Linux integration tests (against installed runtime, no daemon required)
-        run: dotnet test PipeWire.NET.slnx --no-build -c Release
+        # Bounded, and traced. A test that hangs here produces no output at all - the runner shows
+        # a step that has been running for hours and the log ends at the command echo - so the
+        # timeout turns that into a failure, and PWNET_TEST_TRACE names the test it died in. A
+        # connect over a descriptor that is not a daemon socket is the way this happened: whether
+        # it completes, is refused, or waits for a handshake that never comes depends on the
+        # runner's PipeWire version, which is older than the one this repository is developed on.
+        env:
+          PWNET_TEST_TRACE: ${{ runner.temp }}/no-daemon.trace
+          PIPEWIRE_DEBUG: "3"
+          PIPEWIRE_LOG: ${{ runner.temp }}/pw-native-nodaemon.log
+        timeout-minutes: 10
+        run: dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release
              --filter "TestCategory=Integration&TestCategory!=RequiresDaemon&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon" --max-parallel-test-modules 1
+
+      - name: Name the test that hung
+        if: failure()
+        # The last START with no outcome after it is the one that was running.
+        run: |
+          echo "::group::no-daemon trace (tail)"
+          tail -40 "$RUNNER_TEMP/no-daemon.trace" 2>/dev/null || echo "(no trace was written)"
+          echo "::endgroup::"
+          echo "::group::libpipewire native log (tail)"
+          tail -120 "$RUNNER_TEMP/pw-native-nodaemon.log" 2>/dev/null || echo "(no native log)"
+          echo "::endgroup::"
 
       - name: Graph tests against a real daemon
         # Gating. Registry enumeration, object creation and linking need only the daemon and the
@@ -184,7 +215,7 @@ jobs:
         run: |
           source build/session.sh
           pwnet_session_start
-          pwnet_session_run dotnet test PipeWire.NET.slnx --no-build -c Release \
+          pwnet_session_run dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon" --max-parallel-test-modules 1
           exit $PWNET_LAST_RC
 
@@ -201,6 +232,12 @@ jobs:
           echo "::group::metadata"; pw-metadata -n default 2>&1 || true; echo "::endgroup::"
 
       - name: Native AOT publish and run
+        timeout-minutes: 20
+        env:
+          # The library's own log, at debug. The sample builds no logger, so without this there is
+          # nothing between "connected to daemon" and the point it stops.
+          PIPEWIRE_DEBUG: "3"
+          PIPEWIRE_LOG: ${{ runner.temp }}/pw-native.log
         # IsAotCompatible is an analyzer switch. This is the only thing that proves the graph
         # actually links and that the published binary can talk to a daemon.
         run: |
@@ -216,9 +253,34 @@ jobs:
           # Exit 1 is the sample's "no video source", which a headless runner has. Connecting and
           # enumerating is what is being checked. Output goes through a file: a command
           # substitution would run the helper in a subshell and lose PWNET_LAST_RC.
-          pwnet_session_run "$BIN" >"$RUNNER_TEMP/aot-output.txt" 2>&1
+          # Bounded, and the output is shown whichever way it goes. If the binary is still alive
+          # when the budget runs out, its stack is dumped before it is killed: the sample connects
+          # and then stops, and where it stops is the only thing that says why.
+          run_with_stack() {
+            "$BIN" >"$RUNNER_TEMP/aot-output.txt" 2>&1 &
+            local pid=$!
+            local waited=0
+            while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 60 ]; do
+              sleep 2; waited=$((waited + 2))
+            done
+
+            if kill -0 "$pid" 2>/dev/null; then
+              echo "::group::stack of the hung sample (pid $pid)"
+              eu-stack -p "$pid" 2>&1 | head -80 || cat /proc/$pid/task/*/stack 2>/dev/null || true
+              echo "::endgroup::"
+              kill -9 "$pid" 2>/dev/null || true
+              wait "$pid" 2>/dev/null || true
+              return 124
+            fi
+
+            wait "$pid"
+          }
+
+          pwnet_session_run run_with_stack || true
           OUT=$(cat "$RUNNER_TEMP/aot-output.txt")
+          echo "::group::sample output"
           echo "$OUT"
+          echo "::endgroup::"
 
           echo "$OUT" | grep -q "connected to daemon" || { echo "AOT binary did not reach the daemon"; exit 1; }
           test $PWNET_LAST_RC -le 1
@@ -232,7 +294,7 @@ jobs:
         run: |
           source build/session.sh
           pwnet_session_start
-          pwnet_session_run dotnet test PipeWire.NET.slnx --no-build -c Release \
+          pwnet_session_run dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
             --filter "TestCategory=RequiresGpu&TestCategory!=RequiresGStreamer" --max-parallel-test-modules 1
           echo "::notice::DMA-BUF leg exit $PWNET_LAST_RC (non-gating: a hosted runner has no GPU to import with)"
 
@@ -245,7 +307,7 @@ jobs:
         run: |
           source build/session.sh
           pwnet_session_start
-          pwnet_session_run dotnet test PipeWire.NET.slnx --no-build -c Release \
+          pwnet_session_run dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
             --filter "TestCategory=RequiresGStreamer&TestCategory!=RequiresGpu&TestCategory!=PenTest" --max-parallel-test-modules 1
           exit $PWNET_LAST_RC
 
@@ -298,7 +360,7 @@ jobs:
         run: dotnet build PipeWire.NET.slnx -c Release
 
       - name: Unit tests
-        run: dotnet test PipeWire.NET.slnx --no-build -c Release --filter "TestCategory!=Integration"
+        run: dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release --filter "TestCategory!=Integration"
 
   aot_arm64:
     name: Native AOT and ABI on arm64
@@ -310,7 +372,7 @@ jobs:
     # The ABI tests are the cheap half and need no daemon, so they run on pull requests too: struct
     # offsets and calling convention are exactly what a pull request can break and nothing else
     # checks. The AOT publish, which needs a session, stays off pull requests.
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
 
@@ -322,7 +384,7 @@ jobs:
       - name: Install PipeWire runtime and headers
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends             libpipewire-0.3-0 libpipewire-0.3-dev pipewire wireplumber pipewire-bin
+          sudo apt-get install -y --no-install-recommends             libpipewire-0.3-0 libpipewire-0.3-dev pipewire wireplumber pipewire-bin elfutils
 
       - uses: actions/setup-dotnet@v5
         with:
@@ -337,9 +399,15 @@ jobs:
         # The struct layouts and enum widths are what arm64 is here to disagree about, and these
         # need no daemon.
         run: |
-          dotnet test PipeWire.NET.slnx --no-build -c Release             --filter "TestCategory!=Integration"
+          dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release             --filter "TestCategory!=Integration"
 
       - name: Native AOT publish and run
+        timeout-minutes: 20
+        env:
+          # The library's own log, at debug. The sample builds no logger, so without this there is
+          # nothing between "connected to daemon" and the point it stops.
+          PIPEWIRE_DEBUG: "3"
+          PIPEWIRE_LOG: ${{ runner.temp }}/pw-native.log
         # Not on pull requests: it needs a session, and an arm64 runner for every push buys little
         # against how rarely the interop layout moves.
         if: github.event_name != 'pull_request'
@@ -356,9 +424,34 @@ jobs:
 
           # Through a file, not a command substitution: the helper's exit code would not
           # survive the subshell.
-          pwnet_session_run "$BIN" >"$RUNNER_TEMP/aot-output.txt" 2>&1
+          # Bounded, and the output is shown whichever way it goes. If the binary is still alive
+          # when the budget runs out, its stack is dumped before it is killed: the sample connects
+          # and then stops, and where it stops is the only thing that says why.
+          run_with_stack() {
+            "$BIN" >"$RUNNER_TEMP/aot-output.txt" 2>&1 &
+            local pid=$!
+            local waited=0
+            while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 60 ]; do
+              sleep 2; waited=$((waited + 2))
+            done
+
+            if kill -0 "$pid" 2>/dev/null; then
+              echo "::group::stack of the hung sample (pid $pid)"
+              eu-stack -p "$pid" 2>&1 | head -80 || cat /proc/$pid/task/*/stack 2>/dev/null || true
+              echo "::endgroup::"
+              kill -9 "$pid" 2>/dev/null || true
+              wait "$pid" 2>/dev/null || true
+              return 124
+            fi
+
+            wait "$pid"
+          }
+
+          pwnet_session_run run_with_stack || true
           OUT=$(cat "$RUNNER_TEMP/aot-output.txt")
+          echo "::group::sample output"
           echo "$OUT"
+          echo "::endgroup::"
 
           echo "$OUT" | grep -q "connected to daemon" || { echo "AOT binary did not reach the daemon"; exit 1; }
           test $PWNET_LAST_RC -le 1
@@ -421,7 +514,7 @@ jobs:
         run: |
           source build/session.sh
           pwnet_session_start
-          pwnet_session_run dotnet test PipeWire.NET.slnx -c Release             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon"             --max-parallel-test-modules 1
+          pwnet_session_run dotnet test PipeWire.NET.slnx --settings tests.runsettings -c Release             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon"             --max-parallel-test-modules 1
 
           if [ $PWNET_LAST_RC -eq 0 ]; then
             echo "- result: passed" >> "$GITHUB_STEP_SUMMARY"

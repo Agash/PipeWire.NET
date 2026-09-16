@@ -229,7 +229,7 @@ run_watched() {
   : > "$trace"
 
   env "$@" PWNET_TEST_TRACE="$trace" \
-    dotnet test PipeWire.NET.slnx -c Debug --nologo --no-build -f "$tfm" --output Detailed \
+    dotnet test PipeWire.NET.slnx -c Debug --nologo --no-build -f "$tfm" --output Detailed --settings tests.runsettings \
     --filter "$filter" > "$log" 2>&1 &
   local runner=$! last="" still=0 started=$SECONDS host unanswered=0 probed=$SECONDS
 
