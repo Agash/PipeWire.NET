@@ -424,4 +424,116 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
             gbm.Dispose();
         }
     }
+
+    /// <summary>An allocator that misbehaves leaves the pool unbacked rather than half-backed.</summary>
+    /// <remarks>
+    /// <para>
+    /// The allocator is the application's, so every wrong answer it can give is an input this
+    /// library has to survive: declining, backing fewer planes than the format needs, handing back
+    /// a descriptor that is not one, and throwing. None of these is a library bug, and all of them
+    /// reach a consumer as a deep EINVAL inside its importer if the buffer is published anyway.
+    /// </para>
+    /// <para>
+    /// Every-block-or-none is the rule being pinned: a partially backed buffer leaves a tail
+    /// <c>spa_data</c> with no fd, which is exactly the shape that fails far from its cause. The
+    /// index going back on the free list is the other half, so a refused buffer is retried rather
+    /// than burned.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    [DataRow("declines", 0)]
+    [DataRow("backs too few planes", -1)]
+    [DataRow("hands back a bad descriptor", -2)]
+    [DataRow("throws", -3)]
+    public async Task AnAllocatorThatMisbehaves_LeavesTheBufferUnbacked(string how, int mode)
+    {
+        using GbmAllocator gbm = RequireGbm();
+        var buffers = new List<GbmAllocator.Buffer>();
+
+        try
+        {
+            long modifier = (long)GbmAllocator.LinearModifier;
+            int calls = 0, framesSeen = 0;
+
+            await using var ctx = new PipeWireContext(
+                $"pwnet-badalloc-{mode}", ConsoleTestLoggerFactory.Instance);
+            await ctx.StartAsync();
+
+            await using var output = new PipeWireVideoOutput(
+                ctx, $"pwnet-badalloc-src-{mode}", Width, Height, PixelFormat.Bgra, 30);
+
+            output.AllocateDmaBuf += (_, index, _, _, _, _, planes) =>
+            {
+                Interlocked.Increment(ref calls);
+
+                switch (mode)
+                {
+                    case 0:
+                        return 0;
+
+                    case -3:
+                        throw new InvalidOperationException($"an allocator that {how}");
+
+                    case -2:
+                        planes[0] = new VideoPlane(-1, 0, Width * 4, (uint)(Width * 4 * Height));
+                        return 1;
+
+                    default:
+                        // One real plane, but claiming none were backed: the partial answer.
+                        while (buffers.Count <= index) buffers.Add(gbm.CreateBgra(Width, Height));
+                        GbmAllocator.Buffer b = buffers[index];
+                        planes[0] = new VideoPlane(b.Fd, b.Offset, b.Stride, b.Size);
+                        return 0;
+                }
+            };
+
+            output.FillDmaBuf += (_, _) => true;
+            output.ConnectDmaBuf([modifier]);
+
+            uint? nodeId = null;
+            for (var i = 0; i < 50 && nodeId is null; i++)
+            {
+                nodeId = output.NodeId;
+                if (nodeId is null) await Task.Delay(50);
+            }
+
+            if (nodeId is null) Assert.Inconclusive("the producer was never given a node id.");
+
+            await using var capture = new PipeWireVideoCapture(ctx, $"pwnet-badalloc-sink-{mode}");
+            capture.FrameReady += (_, _) => Interlocked.Increment(ref framesSeen);
+            capture.Connect(nodeId!.Value, [PixelFormat.Bgra], modifiers: [modifier]);
+
+            await Task.Delay(TimeSpan.FromSeconds(3));
+
+            Assert.AreNotEqual(
+                0, Volatile.Read(ref calls),
+                "the daemon never asked for a buffer, so nothing was actually exercised");
+
+            Assert.AreEqual(
+                0, Volatile.Read(ref framesSeen),
+                $"a producer whose allocator {how} published a frame anyway");
+
+            // The stream is still the library's to talk to: a refused pool is not a torn-down one.
+            Assert.IsNotNull(output.NodeId, "the producer fell out of the graph");
+
+            // Declining is an answer and throwing is a fault, and the two are told apart rather
+            // than both going quiet: an allocator with a bug in it should be visible to its host.
+            if (mode == -3)
+            {
+                Assert.IsNotNull(
+                    output.LastProcessError,
+                    "an allocator that threw was contained but never reported");
+            }
+            else
+            {
+                Assert.IsNull(
+                    output.LastProcessError,
+                    "an allocator that refused cleanly was recorded as a fault");
+            }
+        }
+        finally
+        {
+            foreach (GbmAllocator.Buffer b in buffers) b.Dispose();
+        }
+    }
 }

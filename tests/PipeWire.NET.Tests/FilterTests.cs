@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
+using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Tests;
 
@@ -172,6 +173,16 @@ public sealed class FilterTests : PipeWireTestBase
         (PipeWireNode sink, _) = await LinkToSinkAsync(registry, filter, "pwnet_filter_throw_sink", cts.Token);
 
         await threw.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
+
+        // And the throw is visible afterwards. Without this the filter is silent about a handler
+        // that fails every cycle, which is indistinguishable from one that processed nothing.
+        Assert.IsInstanceOfType<InvalidOperationException>(
+            filter.LastProcessError,
+            "the filter did not record the exception its process callback threw");
+
+        Assert.IsTrue(
+            filter.ProcessErrorCount > 0,
+            "the filter recorded an error but counted no failures");
 
         await registry.WaitForInitialEnumerationAsync(cts.Token);
         await registry.DestroyGlobalAsync(sink.NodeId, cts.Token);
@@ -362,5 +373,127 @@ public sealed class FilterTests : PipeWireTestBase
 
         Assert.ThrowsExactly<InvalidOperationException>(
             () => PipeWireFilter.Create(ctx, "pwnet_filter_cold"));
+    }
+
+    /// <summary>A port can be taken out of a running filter without rebuilding it.</summary>
+    /// <remarks>
+    /// The counterpart to <c>AddPort</c>. Before this existed the only way to drop one port was to
+    /// destroy the filter, which takes every other port's links with it - so the assertion is that
+    /// the filter keeps working and its other port survives.
+    /// </remarks>
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    public async Task APortRemovedFromALiveFilter_LeavesTheRestOfItWorking()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext("pwnet-filter-removeport", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+
+        await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_filter_removeport");
+        PipeWireFilterPort keep = filter.AddAudioPort(PipeWirePortDirection.Out, "output_FL");
+        PipeWireFilterPort drop = filter.AddAudioPort(PipeWirePortDirection.Out, "output_FR");
+
+        await filter.ConnectAsync(PipeWireFilterFlags.RtProcess, cts.Token);
+        Assert.AreEqual(2, filter.Ports.Count);
+
+        filter.RemovePort(drop);
+
+        Assert.AreEqual(1, filter.Ports.Count, "the removed port is still listed");
+        Assert.AreSame(keep, filter.Ports[0], "the wrong port was removed");
+
+        // Removing one port must not have taken the filter with it.
+        Assert.AreNotEqual(PipeWireFilterState.Error, filter.State);
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => filter.RemovePort(drop),
+            "removing a port twice should be refused, not repeated");
+    }
+
+    /// <summary>A connected filter can be retagged, as every stream type already could.</summary>
+    /// <remarks>
+    /// `pw_filter_update_properties` returns how many keys changed and re-emits the node or port
+    /// info, so the deterministic assertion is that the first call changes the key and an identical
+    /// second call changes nothing. Whether a snapshot shows it is the registry's enrichment, not
+    /// this call's contract.
+    /// </remarks>
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    public async Task AConnectedFilter_CanBeRetagged()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext("pwnet-filter-retag", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+
+        await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_filter_retag");
+        PipeWireFilterPort port = filter.AddAudioPort(PipeWirePortDirection.Out, "output_FL");
+        await filter.ConnectAsync(PipeWireFilterFlags.RtProcess, cts.Token);
+
+        var properties = new Dictionary<string, string>
+        {
+            [PipeWireKeys.PW_KEY_NODE_DESCRIPTION] = "retagged by a test",
+        };
+
+        Assert.IsTrue(
+            filter.UpdateProperties(properties) > 0,
+            "the new description changed nothing, so it was never stored");
+
+        Assert.AreEqual(
+            0, filter.UpdateProperties(properties),
+            "setting the same value twice reported a change, so the first one did not stick");
+
+        // And per port, which is the granularity the native call offers and the streams do not.
+        Assert.IsTrue(
+            filter.UpdateProperties(
+                new Dictionary<string, string> { [PipeWireKeys.PW_KEY_PORT_NAME] = "renamed" }, port) > 0,
+            "a per-port retag changed nothing");
+
+        Assert.AreNotEqual(
+            PipeWireFilterState.Error, filter.State,
+            "retagging put the filter into the error state");
+    }
+
+    /// <summary>A filter can be subscribed to the commands its node is sent.</summary>
+    /// <remarks>
+    /// All four stream types have exposed `CommandReceived` since they were written; the filter
+    /// never wired the event at all, so a driving filter could not be asked to run a cycle
+    /// (`RequestProcess`). Which commands arrive is the daemon's business and depends on the rest
+    /// of the graph, so what is pinned here is that subscribing works and nothing about it disturbs
+    /// a running filter.
+    /// </remarks>
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    public async Task AFilter_CanSubscribeToItsNodesCommands()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext("pwnet-filter-command", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+
+        await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_filter_command");
+        filter.AddAudioPort(PipeWirePortDirection.Out, "output_FL");
+
+        var commands = 0;
+        void OnCommand(PipeWireFilter _, SpaNodeCommand __) => Interlocked.Increment(ref commands);
+
+        filter.CommandReceived += OnCommand;
+
+        await filter.ConnectAsync(PipeWireFilterFlags.RtProcess, cts.Token);
+        _ = await filter.WaitForNodeIdAsync(cts.Token);
+
+        Assert.AreNotEqual(
+            PipeWireFilterState.Error, filter.State,
+            "subscribing to commands put the filter into the error state");
+
+        Assert.IsNull(filter.LastProcessError, "the command handler faulted");
+
+        filter.CommandReceived -= OnCommand;
     }
 }

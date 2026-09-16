@@ -337,4 +337,188 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
             }
         }
     }
+
+    /// <summary>
+    /// Retagging the connection reaches the daemon and comes back on the client's own info event.
+    /// </summary>
+    /// <remarks>
+    /// End to end on purpose. `pw_core_update_properties` forwards to
+    /// `pw_impl_client_update_properties`, which updates the client global and sends a fresh
+    /// `info` to every bound client resource (`impl-client.c`), and `application.name` is one of
+    /// the keys the daemon promotes to the global. So binding this process's own client and
+    /// watching its properties proves the whole path rather than just that the value was stored
+    /// locally - which is all an idempotence check would prove.
+    /// </remarks>
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    public async Task RetaggingAConnection_ReachesTheDaemonAndComesBack()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        const string Before = "pwnet-retag";
+        const string After = "pwnet retagged client";
+
+        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(Before, cts.Token);
+
+        await using (ctx)
+        await using (reg)
+        {
+            // This process's own client, found by the name the context connected under.
+            PipeWireClient? own = null;
+            for (var i = 0; i < 100 && own is null; i++)
+            {
+                own = reg.Current.Clients.FirstOrDefault(
+                    c => c.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? v) && v == Before);
+
+                if (own is null) await Task.Delay(50, cts.Token);
+            }
+
+            Assert.IsNotNull(own, $"no client in the graph is this process (application.name '{Before}')");
+
+            await using PipeWireClientProxy client = reg.BindClient(own!.Id);
+            await client.ReadyAsync(cts.Token);
+
+            Assert.AreEqual(
+                Before,
+                client.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? initial) ? initial : null,
+                "the bound client did not report the name it connected under");
+
+            Assert.IsTrue(
+                ctx.UpdateProperties(new Dictionary<string, string>
+                {
+                    [PipeWireKeys.PW_KEY_APP_NAME] = After,
+                }) > 0,
+                "the new application.name changed nothing, so it was never stored");
+
+            for (var i = 0; i < 100; i++)
+            {
+                if (client.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? now) && now == After)
+                    return;
+
+                await Task.Delay(50, cts.Token);
+            }
+
+            Assert.Fail("the daemon never sent the retagged application.name back on the client's info event");
+        }
+    }
+
+    /// <summary>A client's permissions can be read back, not only written.</summary>
+    /// <remarks>
+    /// The daemon answers `get_permissions` on the client's `permissions` event, which this proxy
+    /// did not subscribe to at all until this session - so permissions could be set and never
+    /// verified. Every client holds at least the default entry (`AnyObject`), so a healthy read
+    /// returns something.
+    /// </remarks>
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    public async Task AClientsPermissions_CanBeReadBack()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-perm-read", cts.Token);
+
+        await using (ctx)
+        await using (reg)
+        {
+            PipeWireClient? own = null;
+            for (var i = 0; i < 100 && own is null; i++)
+            {
+                own = reg.Current.Clients.FirstOrDefault(
+                    c => c.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? v)
+                         && v == "pwnet-perm-read");
+
+                if (own is null) await Task.Delay(50, cts.Token);
+            }
+
+            Assert.IsNotNull(own, "no client in the graph is this process");
+
+            await using PipeWireClientProxy client = reg.BindClient(own!.Id);
+            await client.ReadyAsync(cts.Token);
+
+            ImmutableArray<PipeWireObjectPermission> permissions =
+                await client.GetPermissionsAsync(cancellationToken: cts.Token);
+
+            Assert.IsFalse(
+                permissions.IsDefaultOrEmpty,
+                "the daemon answered with no permission entries at all");
+
+            // Reading twice in a row has to work: the waiter is per-call and must be cleared.
+            ImmutableArray<PipeWireObjectPermission> again =
+                await client.GetPermissionsAsync(cancellationToken: cts.Token);
+
+            Assert.AreEqual(permissions.Length, again.Length, "a second read answered differently");
+        }
+    }
+
+    /// <summary>A proxy is told when the daemon destroys the object behind it.</summary>
+    /// <remarks>
+    /// `pw_proxy_events.removed` was wired nowhere until this session, so a caller holding a proxy
+    /// had no way to learn its object had gone: the proxy stayed alive as a zombie and every call
+    /// through it failed. Watching the graph is the other route to the same news, and it is the one
+    /// this test does not use, precisely because the point is the proxy's own signal.
+    /// </remarks>
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    public async Task AProxyWhoseObjectIsDestroyed_IsToldAboutIt()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-removed", cts.Token);
+
+        await using (ctx)
+        await using (reg)
+        {
+            PipeWireNode node = await reg.CreateVirtualSinkAsync(
+                "pwnet removed probe", cancellationToken: cts.Token);
+
+            await using PipeWireNodeProxy proxy = reg.BindNode(node.NodeId);
+            await proxy.ReadyAsync(cts.Token);
+
+            var removed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            proxy.Removed += () => removed.TrySetResult();
+
+            Assert.IsFalse(proxy.IsRemoved, "a live proxy reported its object as removed");
+
+            await reg.DestroyGlobalAsync(node.NodeId, cts.Token);
+
+            await removed.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
+
+            Assert.IsTrue(proxy.IsRemoved, "the proxy raised Removed but does not report it");
+        }
+    }
+
+    /// <summary>The disconnect signal is readable and starts clear.</summary>
+    /// <remarks>
+    /// Losing the daemon on purpose would take the rest of the suite's session with it, so what is
+    /// pinned here is the part a consumer depends on being true on a healthy connection: the fault
+    /// is null, the event is subscribable, and neither is internal-only - which is what it was
+    /// until this session.
+    /// </remarks>
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    public async Task AHealthyConnection_ReportsNoFaultAndAcceptsALostHandler()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-fault", cts.Token);
+
+        await using (ctx)
+        await using (reg)
+        {
+            var seen = 0;
+            void OnLost(PipeWireConnectionClosedException _) => Interlocked.Increment(ref seen);
+
+            ctx.ConnectionLost += OnLost;
+
+            Assert.IsNull(ctx.ConnectionFault, "a healthy connection reported a fault");
+            Assert.AreEqual(0, Volatile.Read(ref seen), "ConnectionLost fired on a healthy connection");
+
+            ctx.ConnectionLost -= OnLost;
+        }
+    }
 }

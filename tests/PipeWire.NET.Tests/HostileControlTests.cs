@@ -651,7 +651,10 @@ public sealed class HostileControlTests : PipeWireTestBase
                 string? reported = null;
                 try
                 {
-                    reported = await sawTheirs.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
+                    // The same budget the shared relay helper gives the session manager, rather than
+                    // a shorter one of this test's own: a relay that is merely slow was being read
+                    // here as a relay that never happened.
+                    reported = await sawTheirs.Task.WaitAsync(MetadataRelay.Budget, cts.Token);
                 }
                 catch (TimeoutException)
                 {
@@ -666,7 +669,7 @@ public sealed class HostileControlTests : PipeWireTestBase
                     }
 
                     Assert.Inconclusive(
-                        $"the session manager did not relay the other client's write within 10s. "
+                        $"the session manager did not relay the other client's write within {MetadataRelay.Budget}. "
                         + $"cache holds '{mine.Get(key) ?? "(null)"}', "
                         + $"peer holds '{theirs.Get(key) ?? "(null)"}'");
                 }

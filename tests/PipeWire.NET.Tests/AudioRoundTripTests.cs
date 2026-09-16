@@ -293,6 +293,21 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
 
             Assert.IsTrue(asked >= 5,
                 $"the stream stopped after {asked} throwing fills; it must survive a bad producer");
+
+            // Surviving is half of it. A swallowed exception nothing can read leaves a handler that
+            // throws every cycle looking exactly like one that published silence, which is the
+            // hardest kind of bug to find in somebody else's application.
+            Assert.IsNotNull(
+                output.LastProcessError,
+                "the fill handler threw every cycle and the stream reported no error at all");
+
+            Assert.IsInstanceOfType<InvalidOperationException>(
+                output.LastProcessError,
+                "the recorded error is not the one the handler threw");
+
+            Assert.IsTrue(
+                output.ProcessErrorCount >= 5,
+                $"{asked} fills threw but only {output.ProcessErrorCount} were counted");
         }
     }
 
@@ -399,6 +414,42 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
             Assert.AreEqual(producer!.Value.RateDen, consumer!.Value.RateDen,
                 "two streams on one graph must be on one clock rate");
             Assert.IsTrue(producer!.Value.Duration > 0, "the quantum must be a real number of frames");
+        }
+    }
+
+    /// <summary>A stream can tell the graph it cannot go on, and both idioms dispose it.</summary>
+    /// <remarks>
+    /// <c>SetError</c> is what a callback calls when it cannot do what the graph asked; a stream
+    /// that fails silently leaves its peer waiting on a cycle that never comes. The disposal half
+    /// is here because the two forms do the same work and a caller should be able to pick either.
+    /// </remarks>
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [ExpectsLibraryError("stream error: a test said so")]
+    public async Task AStreamThatCannotGoOn_CanSaySoAndDisposeEitherWay()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-art-seterror", cts.Token);
+
+        await using (ctx)
+        await using (reg)
+        {
+            var output = new PipeWireAudioOutput(ctx, "pwnet_art_seterror");
+            output.FillSamples += (_, samples, _, _, _) => { samples.Clear(); return samples.Length; };
+            output.Connect(autoConnect: false);
+
+            await WaitForAsync(reg, g => g.Nodes.Any(n => n.NodeName == "pwnet_art_seterror"), cts.Token);
+
+            // Accepted on a live stream, and it does not throw its way back out.
+            output.SetError(-5, "a test said so");
+
+            Assert.IsNull(output.LastProcessError, "SetError is not a callback fault");
+
+            // The synchronous form, on a type that only offered the async one until this session.
+            output.Dispose();
+            output.Dispose();
         }
     }
 }

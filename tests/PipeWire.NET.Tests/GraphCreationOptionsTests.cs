@@ -199,7 +199,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
             PipeWirePort input = ready.GetPortsForNode(b.NodeId, PipeWirePortDirection.In).First();
 
             PipeWireLink link = await registry.CreateLink(output, input)
-                                              .Passive()
+                                              .WithPassive()
                                               .ExecuteAsync(cts.Token);
 
             Assert.IsNotNull(registry.Current.GetLink(link.LinkId));

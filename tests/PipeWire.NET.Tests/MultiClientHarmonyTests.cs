@@ -254,17 +254,17 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
                 if (string.Equals(e.Key, key, StringComparison.Ordinal)) seenByB.Enqueue(e.Value);
             };
 
-            // Our client writes; the other one must see it.
-            await sa.SetAsync(key, "from-a", "Spa:String", PipeWireMetadataProxy.SubjectCore, cts.Token);
-            if (!await EventuallyAsync(() => Task.FromResult(sb.Get(key) == "from-a"),
-                    TimeSpan.FromSeconds(10), cts.Token))
-            {
-                // The hop between the two clients is the session manager's, not this library's. A
-                // write that never arrives says the relay stalled, and every assertion below it
-                // depends on that relay working.
-                Assert.Inconclusive(
-                    "the session manager did not relay a write between two clients within 10s.");
-            }
+            // Our client writes; the other one must see it. Waited on the change event rather than
+            // polled: polling cannot tell a relay that stalled from one that arrived without
+            // raising anything, and the second of those is this library's defect rather than the
+            // session manager's. The shared helper draws that line and fails on the near side of it.
+            string? relayed = await MetadataRelay.AwaitRelayAsync(
+                sb,
+                key,
+                () => sa.SetAsync(key, "from-a", "Spa:String", PipeWireMetadataProxy.SubjectCore, cts.Token),
+                cts.Token);
+
+            Assert.AreEqual("from-a", relayed, "the relayed write carried the wrong value");
 
             // And the direction it breaks in the quiet way: a write from a client that is not this
             // library at all, to a key this library has just written. Suppressing our own echoes

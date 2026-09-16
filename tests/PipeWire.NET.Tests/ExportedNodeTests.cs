@@ -979,4 +979,189 @@ public sealed class ExportedNodeTests
 
         Assert.IsTrue(breaks <= 2, $"{what}: the ramp broke {breaks} times, so a buffer was reordered or recycled in use");
     }
+
+    /// <summary>
+    /// A node that misses a cycle can say so, and the graph takes the report.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `xrun` is the only way a node reports an over or underrun; nothing can report one on its
+    /// behalf, so a node without access to it leaves the daemon's accounting silently wrong. The
+    /// graph installs the callback through `set_callbacks` once the node is scheduled, which is why
+    /// this reports from inside a cycle rather than from the test thread.
+    /// </para>
+    /// <para>
+    /// A `false` return is legal - it means the graph installed no xrun callback - so the assertion
+    /// is that a report from inside a cycle is accepted, which is what proves the pointer the node
+    /// stored is the graph's and is live.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    public async Task ANodeThatMissesACycle_CanReportTheXrunToTheGraph()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        string name = $"pwnet-xrun-{Environment.ProcessId}";
+
+        await using var ctx = new PipeWireContext("pwnet-xrun", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+
+        await using var reg = new PipeWireRegistry(ctx);
+        await reg.WaitForInitialEnumerationAsync(cts.Token);
+
+        await using PipeWireNodeProvider node = PipeWireNodeProvider.Create(
+            ctx,
+            name,
+            PipeWireExportedFormat.AudioF32(Rate, Channels),
+            SpaDirection.Output,
+            new Dictionary<string, string>
+            {
+                [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source",
+            });
+
+        var reported = 0;
+        var accepted = 0;
+
+        node.ProcessCallback = (self, data) =>
+        {
+            // Reported from the realtime thread, which is where the graph expects its callbacks.
+            if (Interlocked.Increment(ref reported) <= 3 && self.ReportXrun(1000, 250))
+                Interlocked.Increment(ref accepted);
+
+            return 0;
+        };
+
+        // Something has to pull, or the node is never scheduled and no callbacks are installed.
+        await using var capture = new PipeWireAudioCapture(ctx, name + "-sink");
+        capture.Connect(await WaitForNodeIdAsync(reg, name, cts.Token));
+
+        for (var i = 0; i < 100 && Volatile.Read(ref reported) == 0; i++)
+            await Task.Delay(50, cts.Token);
+
+        Assert.IsTrue(Volatile.Read(ref reported) > 0, "the exported node was never driven");
+
+        Assert.IsTrue(
+            Volatile.Read(ref accepted) > 0,
+            "the graph installed no xrun callback, so a node here cannot report a missed cycle at all");
+    }
+
+    private static async Task<uint> WaitForNodeIdAsync(
+        PipeWireRegistry reg, string nodeName, CancellationToken cancellationToken)
+    {
+        for (var i = 0; i < 100; i++)
+        {
+            PipeWireNode? found = reg.Current.Nodes.FirstOrDefault(
+                n => string.Equals(n.NodeName, nodeName, StringComparison.Ordinal));
+
+            if (found is not null) return found.NodeId;
+            await Task.Delay(50, cancellationToken);
+        }
+
+        Assert.Fail($"the node '{nodeName}' never reached the graph");
+        return 0;
+    }
+
+    /// <summary>A node with no process handler is driven anyway, and produces silence.</summary>
+    /// <remarks>
+    /// <para>
+    /// Setting <c>ProcessCallback</c> is optional, and a node without one is a real shape: a node
+    /// exported to hold a place in the graph, or one whose handler is attached later. The graph
+    /// still schedules it, so every cycle reaches the produce path with nothing to call.
+    /// </para>
+    /// <para>
+    /// The answer has to be an empty cycle rather than a refusal. Returning an error would make the
+    /// graph treat the node as broken and tear the link down, where the honest outcome is a node
+    /// that is simply not producing yet.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task AnExportedNodeWithNoHandler_IsStillDrivenAndProducesSilence()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        string name = $"pwnet-nohandler-{Environment.ProcessId}";
+
+        await using var ctx = new PipeWireContext("pwnet-nohandler", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+
+        await using var reg = new PipeWireRegistry(ctx);
+        await reg.WaitForInitialEnumerationAsync(cts.Token);
+
+        await using PipeWireNodeProvider node = PipeWireNodeProvider.Create(
+            ctx,
+            name,
+            PipeWireExportedFormat.AudioF32(Rate, Channels),
+            SpaDirection.Output,
+            new Dictionary<string, string>
+            {
+                [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source",
+            });
+
+        // Deliberately no ProcessCallback.
+
+        PipeWireNode? exported = null;
+        for (var i = 0; i < 100 && exported is null; i++)
+        {
+            exported = reg.Current.Nodes.FirstOrDefault(
+                n => string.Equals(n.NodeName, name, StringComparison.Ordinal));
+
+            if (exported is null) await Task.Delay(50, cts.Token);
+        }
+
+        Assert.IsNotNull(exported, "the exported node never appeared in the graph");
+
+        PipeWirePort? source = null;
+        for (var i = 0; i < 100 && source is null; i++)
+        {
+            source = reg.Current.Ports.FirstOrDefault(
+                p => p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.Out);
+
+            if (source is null) await Task.Delay(50, cts.Token);
+        }
+
+        Assert.IsNotNull(source, "the exported node never registered an output port to route to");
+
+        var frames = 0;
+        var nonZero = 0;
+
+        await using var capture = new PipeWireAudioCapture(ctx, $"{name}-sink");
+        capture.FrameReady += (_, f) =>
+        {
+            Interlocked.Increment(ref frames);
+            ReadOnlySpan<float> floats = MemoryMarshal.Cast<byte, float>(f.Samples);
+            foreach (float v in floats)
+            {
+                if (v != 0f) { Interlocked.Increment(ref nonZero); break; }
+            }
+        };
+
+        capture.Connect(exported!.NodeId, sampleRate: Rate, channels: Channels, format: AudioSampleFormat.F32Le);
+        await capture.WaitForStreamingAsync(cts.Token);
+
+        for (var i = 0; i < 100 && Volatile.Read(ref frames) < 10; i++) await Task.Delay(50, cts.Token);
+
+        Assert.IsTrue(
+            node.HasBeenScheduled,
+            "a node with no handler was never driven at all");
+
+        Assert.IsFalse(
+            node.HasProcessed,
+            "a node with no handler reported that a handler had produced something");
+
+        Assert.IsTrue(node.BufferCount > 0, "the graph never gave the node any buffers");
+        Assert.IsNull(node.LastProcessError, "an absent handler was recorded as a process fault");
+
+        Assert.AreEqual(
+            0, Volatile.Read(ref nonZero),
+            "a node with no handler produced something other than silence");
+
+        // Still there: an empty cycle is not a reason for the graph to drop the node.
+        Assert.IsTrue(
+            reg.Current.Nodes.Any(n => n.NodeId == exported.NodeId),
+            "the graph removed a node that was merely producing nothing");
+    }
 }

@@ -36,18 +36,24 @@ namespace PipeWire.NET.Tests;
 [TestClass]
 public sealed class DocumentationExampleTests : PipeWireTestBase
 {
+    /// <summary>What every generated file opens with, before the examples' own usings.</summary>
+    private const string Preamble = "#pragma warning disable CS0649, CS8618, IDE0059, CS0219";
+
+    /// <summary>
+    /// The usings an example may rely on without writing them: this library's namespaces, and the
+    /// one System namespace `dotnet new console` does not bring in implicitly.
+    /// </summary>
+    private static readonly string[] Usings =
+    [
+        "System.Runtime.InteropServices",
+        "PipeWire.NET",
+        "PipeWire.NET.Graph",
+        "PipeWire.NET.Media",
+        "PipeWire.NET.Spa",
+    ];
+
     /// <summary>Declarations the examples use without introducing them.</summary>
     private const string Harness = """
-        #pragma warning disable CS0649, CS8618, IDE0059, CS0219
-        using System;
-        using System.Runtime.InteropServices;
-        using System.Threading;
-        using System.Threading.Tasks;
-        using PipeWire.NET;
-        using PipeWire.NET.Graph;
-        using PipeWire.NET.Media;
-        using PipeWire.NET.Spa;
-
         internal static class DocExamples
         {
             // An example reads the surrounding application; these stand in for it.
@@ -55,14 +61,19 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
             private static PipeWireRegistry registry;
             private static CancellationToken cancellationToken;
             private static SafeHandle fd;
+            private static int rawFd;
             private static uint nodeId;
             private static uint deviceId;
+            private static uint clientId;
             private static uint outputPortId;
             private static uint inputPortId;
 
-            // The application's own code, which an example calls but does not show.
+            // The application's own code, which an example calls but does not show. Written the
+            // shape a reader would write it, not the shape that makes examples compile: Render
+            // returns void, so an example that leans on it returning the callback's bool - which is
+            // how both fill snippets used to read - fails here rather than in the reader's editor.
             private static int WriteTone(Span<byte> samples, int sampleRate, int channels) => 0;
-            private static bool Render(Span<byte> pixels, int stride, int width, int height) => true;
+            private static void Render(Span<byte> pixels, int stride, int width, int height) { }
         """;
 
     private sealed record Example(string File, int Line, string Code);
@@ -91,6 +102,59 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
         return found;
     }
 
+    /// <summary>Every link between the README and the guides points at something that exists.</summary>
+    /// <remarks>
+    /// File links and in-page anchors only; nothing here reaches the network. A moved guide or a
+    /// renamed heading is otherwise silent until a reader hits it.
+    /// </remarks>
+    [TestMethod]
+    public void EveryDocumentationLink_Resolves()
+    {
+        string root = PublicSurfaceTests.RepoRoot();
+
+        var files = new List<string> { Path.Combine(root, "README.md") };
+        files.AddRange(Directory.EnumerateFiles(Path.Combine(root, "docs"), "*.md"));
+
+        var broken = new List<string>();
+
+        foreach (string path in files)
+        {
+            string text = File.ReadAllText(path);
+            string name = Path.GetFileName(path);
+            string dir = Path.GetDirectoryName(path)!;
+
+            HashSet<string> anchors = [.. text
+                .Split('\n')
+                .Where(line => line.StartsWith('#'))
+                .Select(line => Slug(line.TrimStart('#')))];
+
+            foreach (Match m in Regex.Matches(text, @"\[[^\]]*\]\((?<target>[^)]+)\)"))
+            {
+                string target = m.Groups["target"].Value;
+
+                if (target.StartsWith("http", StringComparison.Ordinal)) continue;
+
+                if (target.StartsWith('#'))
+                {
+                    if (!anchors.Contains(target[1..])) broken.Add($"{name}: {target}");
+                    continue;
+                }
+
+                if (!File.Exists(Path.Combine(dir, target.Split('#')[0]))) broken.Add($"{name}: {target}");
+            }
+        }
+
+        Assert.IsTrue(broken.Count == 0,
+            $"the documentation links to things that do not exist: {string.Join(", ", broken)}");
+    }
+
+    /// <summary>A heading as the anchor a link to it has to use.</summary>
+    /// <remarks>Lowercased, punctuation dropped, spaces to hyphens, which is what GitHub does.</remarks>
+    private static string Slug(string heading) => string.Join(
+        '-',
+        new string([.. heading.Trim().ToLowerInvariant().Where(c => char.IsLetterOrDigit(c) || c is ' ' or '-')])
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
     [TestMethod]
     public void EveryExampleInTheDocumentation_Compiles()
     {
@@ -108,7 +172,31 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
         string dir = Path.Combine(root, "obj", "doc-examples");
         Directory.CreateDirectory(dir);
 
-        var code = new StringBuilder(Harness);
+        // An example that opens with its own usings is a complete program as a reader would write
+        // it, which is what a quick-start example should look like. They are hoisted rather than
+        // rejected: a using is not legal inside the method body each example becomes.
+        var usings = new SortedSet<string>(Usings, StringComparer.Ordinal);
+        var bodies = new List<string[]>();
+
+        foreach (Example example in examples)
+        {
+            var lines = new List<string>();
+            foreach (string line in example.Code.TrimEnd().Split('\n'))
+            {
+                Match u = Regex.Match(line, @"^\s*using ([\w.]+);\s*$");
+                if (u.Success) usings.Add(u.Groups[1].Value);
+                else lines.Add(line);
+            }
+
+            bodies.Add([.. lines]);
+        }
+
+        var code = new StringBuilder(Preamble);
+        code.AppendLine();
+        foreach (string ns in usings) code.AppendLine($"using {ns};");
+        code.AppendLine();
+        code.Append(Harness);
+
         for (var i = 0; i < examples.Count; i++)
         {
             Example example = examples[i];
@@ -116,7 +204,7 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
             code.AppendLine($"    // {example.File}:{example.Line}");
             code.AppendLine($"    private static async Task Example{i}()");
             code.AppendLine("    {");
-            foreach (string line in example.Code.TrimEnd().Split('\n'))
+            foreach (string line in bodies[i])
                 code.AppendLine(line.Length == 0 ? string.Empty : "        " + line);
 
             // Every example is awaited into, and some have nothing to await; saying so here keeps
@@ -155,7 +243,7 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
               <PropertyGroup>
                 <TargetFramework>{tfm}</TargetFramework>
                 <Nullable>enable</Nullable>
-                <ImplicitUsings>disable</ImplicitUsings>
+                <ImplicitUsings>enable</ImplicitUsings>
                 <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
                 <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
                 <EnableNETAnalyzers>false</EnableNETAnalyzers>

@@ -205,7 +205,7 @@ public sealed class GraphSurfaceTests
 
         PipeWireLink link = await reg
             .CreateLink(outPort!, inPort!)
-            .Passive()
+            .WithPassive()
             .WithProperty("pwnet.test.marker", name)
             .ExecuteAsync(cts.Token);
 

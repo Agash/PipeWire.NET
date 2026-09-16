@@ -192,10 +192,20 @@ summarise() {
 #                                              ~410k context closes (PenHarness.Contexts soak, daemon
 #                                              at debug), the client having closed with the registry
 #                                              dump unread exactly like the clean ones around it.
+#   AStreamThatCannotGoOn_...=a.test.said.so   the subject of the test is pw_stream_set_error, so
+#   EveryStreamMember_...=a.deliberate.error   the daemon logging that error is what proves the call
+#                                              reached it. Keyed to the message each test sends, so
+#                                              any other error during the same test still fails.
+#   AnAllocatorThatMisbehaves_...=invalid.     an application allocator that declines, backs too few
+#   memory.type                                planes, or hands back a bad descriptor leaves the
+#                                              buffer unbacked, and the library publishes the pool
+#                                              anyway so the whole pool fails rather than one buffer
+#                                              reaching a consumer half-backed. The daemon refusing
+#                                              do_port_use_buffers is that design, seen from its end.
 # Entries are "Test" (anything logged during it), or "Test=regex" / "*=regex" for matching lines
 # only. An entry needs the error explained, not merely seen: an allowance for something not
 # understood is how a real defect gets waved through.
-export PWNET_EXPECTED_DAEMON_ERRORS='EndsWithNoDeviceInCommon_DoNotSettleOnOne *=^mod\.protocol-native:.*connection_data:.client.*error.-N.\(Input/output.error\)$'
+export PWNET_EXPECTED_DAEMON_ERRORS='EndsWithNoDeviceInCommon_DoNotSettleOnOne *=^mod\.protocol-native:.*connection_data:.client.*error.-N.\(Input/output.error\)$ AStreamThatCannotGoOn_CanSaySoAndDisposeEitherWay=a.test.said.so EveryStreamMember_WorksConnectedAndIsQuietAfterDisposal=a.deliberate.error,.to.prove.the.call.reaches.the.daemon AnAllocatorThatMisbehaves_LeavesTheBufferUnbacked=invalid.memory.type'
 
 report_daemon_errors() {
   local label="$1" log="$2" trace="$3" out unexpected
