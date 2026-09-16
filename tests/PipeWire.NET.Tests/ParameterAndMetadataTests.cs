@@ -473,50 +473,86 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
         }
     }
 
+    /// <summary>
+    /// Confining a client leaves it seeing only what it was granted, and connected.
+    /// </summary>
     /// <remarks>
     /// <para>
-    /// Quarantined, and not because it is flaky. On PipeWire 1.6.8 this request does not come back
-    /// refused: the daemon segfaults inside <c>pw_impl_client_update_permissions</c> while applying
-    /// an update it should have rejected, so the round-trip times out after the session is already
-    /// gone and every test that runs afterwards fails to connect.
+    /// What <see cref="PipeWireClientControl.ConfineToAsync"/> is for: a session manager sandboxing an
+    /// application. The client confined is a second connection of this test's own, never someone
+    /// else's: it binds a few objects first, so the daemon has resources of its to take away.
     /// </para>
     /// <para>
-    /// It carries its own category so a suite run never reaches it by accident. Run it deliberately,
-    /// alone, against a session nothing else is using:
-    /// <c>--filter "TestCategory=KillsTheDaemon"</c>.
+    /// Carries <c>KillsTheDaemon</c> because on a stock 1.6.8 daemon that path can abort it:
+    /// <c>pw_global_update_permissions</c> destroys the client's resources while walking lists that a
+    /// destroy can change under it, the object itself included when the client exported it
+    /// (<c>assert(!resource->destroyed)</c> or a segfault; reproduced on the lab box with a core by
+    /// <c>repro/permissions-crash.sh</c>, which confines a session manager's client, whose exports make
+    /// it certain where this test's own client makes it merely possible). <c>repro/libpipewire-permissions.patch</c> fixes it; the verify script runs this
+    /// category against a daemon of its own that loads the patched library.
     /// </para>
     /// </remarks>
     [TestMethod]
     [TestCategory("KillsTheDaemon")]
-    public async Task ConfiningAClientWithoutTheManagerPermission_IsRefusedRatherThanSilentlyIgnored()
+    public async Task ConfiningAClient_LeavesItOnlyWhatItWasGrantedAndConnected()
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-confine", cts.Token);
-        await using (ctx)
-        await using (registry)
+        string appName = Unique("pwnet-confined");
+        (PipeWireContext managerCtx, PipeWireRegistry manager) = await ConnectAsync("pwnet-confine-manager", cts.Token);
+        (PipeWireContext appCtx, PipeWireRegistry app) = await ConnectAsync(appName, cts.Token);
+        await using (managerCtx)
+        await using (manager)
+        await using (appCtx)
+        await using (app)
         {
-            PipeWireClient? other = registry.Current.Clients
-                .FirstOrDefault(c => c.ProcessId != Environment.ProcessId);
+            // Objects the application holds bound, so confining it has resources to destroy.
+            var held = new List<PipeWireNodeControl>();
+            foreach (PipeWireNode node in app.Current.Nodes.Take(4))
+                held.Add(app.BindNode(node.NodeId));
 
-            if (other is null)
-                Assert.Inconclusive("this session has no other client to attempt to confine.");
+            Assert.IsTrue(held.Count > 0, "the session has no nodes for the application to hold");
+            Assert.IsTrue(app.Current.Nodes.Length > 0, "the application saw no nodes to begin with");
 
-            await using PipeWireClientControl control = registry.BindClient(other!.Id);
-
-            // An ordinary application is not a session manager. The refusal comes back on the core's
-            // error stream, not from the call - which is exactly why the write round-trips instead
-            // of returning as soon as it is sent. A daemon that did permit it is also a valid
-            // outcome here; silently appearing to succeed while doing nothing is not.
-            try
+            PipeWireClient? confined = null;
+            for (var i = 0; i < 100 && confined is null; i++)
             {
-                await control.ConfineToAsync(
-                    [new PipeWireObjectPermission(0, PipeWirePermissions.Read)], cts.Token);
+                confined = manager.Current.Clients.FirstOrDefault(c => c.ApplicationName == appName);
+                if (confined is null) await Task.Delay(50, cts.Token);
             }
-            catch (PipeWireException)
-            {
-                // The expected path for a client without manager rights.
-            }
+
+            Assert.IsNotNull(confined, "the application's client never reached the manager's graph");
+
+            await using PipeWireClientControl control = manager.BindClient(confined.Id);
+            await control.ConfineToAsync(
+                [new PipeWireObjectPermission(0, PipeWirePermissions.Read)], cts.Token);
+
+            // Everything but the core is withdrawn from the application's view.
+            for (var i = 0; i < 100 && app.Current.Nodes.Length > 0; i++)
+                await Task.Delay(50, cts.Token);
+
+            Assert.AreEqual(0, app.Current.Nodes.Length,
+                "the confined application still sees nodes it was never granted");
+
+            // Read on the core is not enough to talk to it: every method needs X on its object
+            // (protocol-native process_messages), so the application's sync is refused - and the
+            // refusal has to reach it as one, not leave it waiting for a done that never comes.
+            PipeWireException refused = await Assert.ThrowsAsync<PipeWireException>(
+                () => Interop.CoreSync.RoundTripAsync(appCtx, cts.Token));
+            Assert.IsTrue(refused.IsPermissionDenied, $"the refused sync reported {refused.Result}, not a denial");
+
+            // Granted execute on the core as well, as WirePlumber's access policy grants a sandboxed
+            // client, it can talk to the daemon again and is still connected.
+            await control.UpdatePermissionsAsync(
+                new[] { new PipeWireObjectPermission(0, PipeWirePermissions.Read | PipeWirePermissions.Execute) },
+                cts.Token);
+            await Interop.CoreSync.RoundTripAsync(appCtx, cts.Token);
+
+            // And the manager's own view, and the daemon, are untouched.
+            await manager.WaitForInitialEnumerationAsync(cts.Token);
+            Assert.IsTrue(manager.Current.Nodes.Length > 0, "confining another client emptied the manager's view");
+
+            foreach (PipeWireNodeControl c in held) await c.DisposeAsync();
         }
     }
 }

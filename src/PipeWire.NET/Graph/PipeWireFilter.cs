@@ -43,6 +43,10 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
     private readonly PipeWireContext _ctx;
     private readonly ILogger _logger;
     private readonly List<PipeWireFilterPort> _ports = [];
+
+    // The graph's position area, as io_changed hands it over. Read on the loop thread when a video
+    // port's format arrives, to size its buffers for the frames the graph publishes.
+    private unsafe spa_io_position* _position;
     private PipeWireFilterHandle? _handle;
     private unsafe pw_filter_events* _events;
     private unsafe spa_hook* _hook;
@@ -303,6 +307,8 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
                 filter._events->version = NativeConstants.PW_VERSION_FILTER_EVENTS;
                 filter._events->process = &OnProcessCallback;
                 filter._events->state_changed = &OnStateChangedCallback;
+                filter._events->io_changed = &OnIoChangedCallback;
+                filter._events->param_changed = &OnParamChangedCallback;
 
                 filter._hook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
                 // Weak: a strong self-handle roots the filter for the life of the process, so one dropped
@@ -668,6 +674,105 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void OnIoChangedCallback(void* data, void* portData, uint id, void* area, uint size)
+    {
+        try
+        {
+            var self = (PipeWireFilter?)GCHandle.FromIntPtr((nint)data).Target;
+            if (self is null || self._disposed) return;
+
+            // The node's position area; port io areas are pw_filter's own business.
+            if (portData is null && id == (uint)SpaIoType.Position)
+                self._position = area is not null && size >= (uint)sizeof(spa_io_position) ? (spa_io_position*)area : null;
+        }
+        catch
+        {
+            // Deliberately not logged: the instance the logger belongs to is what failed to resolve.
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void OnParamChangedCallback(void* data, void* portData, uint id, spa_pod* param)
+    {
+        try
+        {
+            var self = (PipeWireFilter?)GCHandle.FromIntPtr((nint)data).Target;
+            if (self is null || self._disposed || portData is null || param is null) return;
+            if (id != (uint)SpaParamType.Format) return;
+
+            PipeWireFilterPort? port = self._ports.Find(p => p.PortData == portData);
+            if (port is { Format: PipeWireDspFormat.Rgba32FloatVideo })
+                self.DeclareVideoBuffers(port);
+        }
+        catch (Exception ex)
+        {
+            // A native frame on the loop thread: contained, and the port keeps whatever pool the
+            // graph gives it, which the pixel accessor refuses rather than overruns.
+            if (GCHandle.FromIntPtr((nint)data).Target is PipeWireFilter self) self.LogVideoBuffersFailed(ex);
+        }
+    }
+
+    /// <summary>
+    /// Tells the graph how large a video port's buffers must be, once its format is set.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Upstream's filter declares no Buffers parameter for a video DSP port
+    /// (<c>filter.c, add_video_dsp_port_params</c>), so the pool falls back to buffers.c's default of
+    /// <c>clock.quantum_limit</c> bytes - 8 KiB on a default install - while the graph publishes frames
+    /// of <c>default.video.width</c> x <c>height</c> (640x480) at 16 bytes a pixel. A frame does not
+    /// fit, and writing one overran the buffer every cycle. Upstream's own video-dsp-src answers its
+    /// format exactly this way: stride from the position area's width, size stride times height.
+    /// </para>
+    /// <para>
+    /// Before the position area arrives, upstream's defaults stand in; a graph that later publishes a
+    /// larger frame gets buffers too small for it, which the pixel accessor refuses rather than
+    /// overruns.
+    /// </para>
+    /// </remarks>
+    private unsafe void DeclareVideoBuffers(PipeWireFilterPort port)
+    {
+        uint width = DefaultVideoWidth, height = DefaultVideoHeight;
+        spa_io_position* position = _position;
+        if (position is not null
+            && (position->video.flags & (uint)SpaIoVideoSizeFlags.Valid) != 0
+            && position->video.size.width > 0 && position->video.size.height > 0)
+        {
+            width = position->video.size.width;
+            height = position->video.size.height;
+        }
+
+        // RGBA, four floats: the stride upstream's impl-node.c publishes (width * 16), rounded as
+        // video-dsp-src rounds it.
+        int stride = checked((int)((width * 16 + 3) & ~3u));
+        int size = checked(stride * (int)height);
+
+        Span<byte> pod = stackalloc byte[256];
+        var b = new SpaPodBuilder(pod);
+        b.PushObject(SpaType.ObjectParamBuffers, SpaParamType.Buffers);
+        b.AddChoiceRangeInt(SpaParamBuffers.Buffers, 8, 2, 64);
+        b.AddInt(SpaParamBuffers.Blocks, 1);
+        b.AddInt(SpaParamBuffers.Size, size);
+        b.AddInt(SpaParamBuffers.Stride, stride);
+        b.Pop();
+
+        int rc;
+        fixed (byte* p = b.GetPod())
+        {
+            var param = (spa_pod*)p;
+            rc = Native.pw_filter_update_params(_handle!.Filter, port.PortData, &param, 1);
+        }
+
+        if (rc < 0) LogVideoBuffersRefused(port.Name, rc);
+        else LogVideoBuffersDeclared(port.Name, width, height, size);
+    }
+
+    // Upstream's default.video.width and height (settings.c), what the graph publishes when nothing
+    // configures them.
+    private const uint DefaultVideoWidth = 640;
+    private const uint DefaultVideoHeight = 480;
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnStateChangedCallback(
         void* data, PipeWireFilterState old, PipeWireFilterState state, sbyte* error)
     {
@@ -730,6 +835,18 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
 
         _ports.Clear();
     }
+
+    [LoggerMessage(EventId = 33310, Level = LogLevel.Debug,
+        Message = "video port '{Port}' asks for {Width}x{Height} frames: buffers of {Size} bytes")]
+    private partial void LogVideoBuffersDeclared(string port, uint width, uint height, int size);
+
+    [LoggerMessage(EventId = 33311, Level = LogLevel.Warning,
+        Message = "the graph refused video port '{Port}''s buffer size ({Result}); frames larger than its default pool will not be handed out")]
+    private partial void LogVideoBuffersRefused(string port, int result);
+
+    [LoggerMessage(EventId = 33312, Level = LogLevel.Error,
+        Message = "declaring a video port's buffers threw")]
+    private partial void LogVideoBuffersFailed(Exception exception);
 
     [LoggerMessage(EventId = 33300, Level = LogLevel.Debug,
                    Message = "filter '{Name}' connected with {PortCount} port(s)")]

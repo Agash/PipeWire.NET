@@ -446,7 +446,7 @@ internal sealed class NativeObjectCreation : IDisposable
                 }
                 finally
                 {
-                    Native.pw_thread_loop_unlock(loop);
+                    _ctx.UnlockLoop(loop);
                 }
             }
         }

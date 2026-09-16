@@ -1248,8 +1248,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             ?? throw new ArgumentException($"{nodeId} is not a node in the current graph.", nameof(nodeId));
 
         PipeWireNodeControl control =
-            PipeWireNodeControl.Bind(_ctx, RegistryHandle, nodeId, node.InterfaceVersion, _logger);
-        control.PropertiesObserved = EnrichGlobal;
+            PipeWireNodeControl.Bind(_ctx, RegistryHandle, nodeId, node.InterfaceVersion, _logger, EnrichGlobal);
         return control;
     }
 
@@ -1267,8 +1266,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             ?? throw new ArgumentException($"{deviceId} is not a device in the current graph.", nameof(deviceId));
 
         PipeWireDeviceControl control =
-            PipeWireDeviceControl.Bind(_ctx, RegistryHandle, deviceId, device.InterfaceVersion, _logger);
-        control.PropertiesObserved = EnrichGlobal;
+            PipeWireDeviceControl.Bind(_ctx, RegistryHandle, deviceId, device.InterfaceVersion, _logger, EnrichGlobal);
         return control;
     }
 
@@ -1313,8 +1311,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             ?? throw new ArgumentException($"{portId} is not a port in the current graph.", nameof(portId));
 
         PipeWirePortControl control =
-            PipeWirePortControl.Bind(_ctx, RegistryHandle, portId, port.InterfaceVersion, _logger);
-        control.PropertiesObserved = EnrichGlobal;
+            PipeWirePortControl.Bind(_ctx, RegistryHandle, portId, port.InterfaceVersion, _logger, EnrichGlobal);
         return control;
     }
 
@@ -1389,8 +1386,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             ?? throw new ArgumentException($"{linkId} is not a link in the current graph.", nameof(linkId));
 
         PipeWireLinkControl control =
-            PipeWireLinkControl.Bind(_ctx, RegistryHandle, linkId, link.InterfaceVersion, _logger);
-        control.PropertiesObserved = EnrichGlobal;
+            PipeWireLinkControl.Bind(_ctx, RegistryHandle, linkId, link.InterfaceVersion, _logger, EnrichGlobal);
         return control;
     }
 
@@ -1405,6 +1401,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// </remarks>
     /// <exception cref="ArgumentException">The id is not a metadata store in the current graph.</exception>
     /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// The store is one this connection serves, which cannot be bound through it without hanging
+    /// the connection.
+    /// </exception>
     public unsafe PipeWireMetadataStore BindMetadataStore(uint storeId)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -1414,6 +1414,21 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         {
             throw new ArgumentException(
                 $"{storeId} is not a metadata store in the current graph.", nameof(storeId));
+        }
+
+        // A store this connection serves cannot be bound through it. module-metadata answers a
+        // bind by marking the binding client busy - the daemon stops reading its socket - until
+        // the store's exporter answers a ping; when that exporter is the same connection, its
+        // answer sits in the socket the daemon has stopped reading, and the connection hangs for
+        // good, every request on it included.
+        foreach (PipeWireMetadataProvider served in _ctx.ServedStores.Keys)
+        {
+            if (served.ServedGlobalId != storeId) continue;
+            throw new InvalidOperationException(
+                $"metadata store {storeId} ('{metadata.MetadataName}') is served by this connection, and "
+                + "binding a store through the connection that serves it hangs the connection (the daemon "
+                + "waits on an answer from it while no longer reading from it). Use the "
+                + "PipeWireMetadataProvider itself, or bind the store from another context.");
         }
 
         return PipeWireMetadataStore.Bind(_ctx, RegistryHandle, storeId, metadata.InterfaceVersion, _logger);
@@ -1430,6 +1445,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// answers with null rather than throwing.
     /// </remarks>
     /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// The store is one this connection serves (a <see cref="PipeWireMetadataProvider"/> on the same
+    /// context), which cannot be bound through it without hanging the connection.
+    /// </exception>
     public PipeWireMetadataStore? BindMetadataStore(string name)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

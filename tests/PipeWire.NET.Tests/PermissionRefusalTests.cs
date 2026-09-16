@@ -40,7 +40,10 @@ namespace PipeWire.NET.Tests;
 // (ParameterAndMetadataTests, same category) the daemon still aborted mid-suite on the same
 // assertion, and this is the only remaining suite that applies real permissions. One crash here
 // costs every already-connected test its socket, so this runs in its own leg against its own
-// daemon rather than invalidating the run.
+// daemon rather than invalidating the run. The cause is the walks in pw_impl_client_update_permissions
+// and pw_global_update_permissions continuing past a destroy that took other resources, or the
+// object itself, with it; the verify script's KillsTheDaemon leg loads
+// repro/libpipewire-permissions.patch, which fixes it.
 [TestCategory("KillsTheDaemon")]
 [DoNotParallelize]
 [TestClass]

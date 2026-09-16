@@ -953,7 +953,9 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         PipeWireStreamCore? self;
         try { self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target; }
         catch (Exception) { return; }
-        self?._triggerDone?.TrySetResult();
+        if (self is null) return;
+        self.LogTriggerDone(self._triggerDone is { Task.IsCompleted: false });
+        self._triggerDone?.TrySetResult();
     }
 
     /// <summary>Drains what is queued and waits for the daemon to say it has played out.</summary>
@@ -971,6 +973,13 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     internal Task TriggerAndWaitAsync(CancellationToken cancellationToken)
     {
         if (_disposed || _stream is null) return Task.CompletedTask;
+
+        // stream.c emits trigger_done only for a driving stream (driver_end && using_trigger), so a
+        // follower's wait would never end. Refused up front rather than left to the caller's timeout.
+        if (!IsDriving)
+            return Task.FromException(new InvalidOperationException(
+                "the stream is not the graph's driver, so no triggered cycle will report completion; "
+                + "connect with driver: true and wait for IsDriving"));
 
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _triggerDone = done;
@@ -1467,7 +1476,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
                 &DoPublishDriverClock,
                 (void*)GCHandle.ToIntPtr(_selfHandle));
 
-            Native.pw_stream_trigger_process(stream);
+            int rc = Native.pw_stream_trigger_process(stream);
+            LogTriggered(rc);
         }
     }
 
@@ -1596,6 +1606,12 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
     [LoggerMessage(Level = LogLevel.Error, Message = "a format handler threw; negotiation continued with defaults")]
     private partial void LogFormatHandlerThrew(Exception ex);
+
+    [LoggerMessage(EventId = 34992, Level = LogLevel.Trace, Message = "trigger_process -> {Result}")]
+    private partial void LogTriggered(int result);
+
+    [LoggerMessage(EventId = 34993, Level = LogLevel.Trace, Message = "trigger_done (a wait was pending: {Pending})")]
+    private partial void LogTriggerDone(bool pending);
 
     [LoggerMessage(EventId = 34991, Level = LogLevel.Error,
         Message = "the peer-capability handler threw; an INACTIVE stream stays inactive")]

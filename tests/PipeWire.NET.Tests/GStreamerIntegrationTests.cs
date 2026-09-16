@@ -197,19 +197,26 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task AStreamNegotiatingASecondTime_ReportsTheNewFormatNotTheOld()
     {
-        // Negotiation after the first one, on a live stream instance. A true A-then-B-then-A from
-        // one producer would need it to renegotiate on command, which neither gst-launch nor this
-        // library offers; what does happen in the field, and is the same code path, is the daemon
-        // moving a stream to another producer when its source goes. The consumer's param_changed
-        // runs a second time and everything derived from the format has to be rebuilt: format,
-        // dimensions, stride, buffer sizes. State kept from the first negotiation shows up as
-        // frames decoded with the old geometry, which look like corruption rather than a bug here.
+        // Negotiation after the first one, on a live stream instance: its only link goes, upstream
+        // clears the port's format (pw_impl_port_release_mix), and a link to a producer of another
+        // format and geometry negotiates again. The consumer's param_changed runs a second time and
+        // everything derived from the format has to be rebuilt: format, dimensions, stride, buffer
+        // sizes. State kept from the first negotiation shows up as frames decoded with the old
+        // geometry, which look like corruption rather than a bug here.
+        //
+        // The links are made here, with the stream out of the session manager's policy
+        // (autoConnect: false), so the subject is this library's renegotiation and nothing else.
+        // Left to WirePlumber, the handover depended on its routing: with the first producer gone
+        // it moved the stream to the default video source in between (on the lab box an unfed
+        // loopback camera, a start error in the daemon log), and with node.dont-fallback it errored
+        // the stream instead of waiting.
         GstTestSource.RequireGStreamer();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
         await using var ctx = new PipeWireContext("test", ConsoleTestLoggerFactory.Instance);
-        await ctx.StartAsync();
+        await ctx.StartAsync(cts.Token);
         await using var reg = new PipeWireRegistry(ctx);
-        await reg.WaitForInitialEnumerationAsync();
+        await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         var seen = new System.Collections.Concurrent.ConcurrentQueue<(PixelFormat Format, int Width, int Height)>();
         var ragged = 0;
@@ -227,41 +234,30 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
             seen.Enqueue((frame.Format, frame.Width, frame.Height));
         };
 
-        // First producer: BGRA at 160x120. Left to autoconnect so the daemon owns the routing and
-        // can move the stream when this one goes.
-        GstTestSource first = await GstTestSource.StartAsync(ctx, "gst-reneg",
+        await using GstTestSource first = await GstTestSource.StartAsync(ctx, "gst-reneg-a",
             "videotestsrc is-live=true ! video/x-raw,format=BGRA,width=160,height=120,framerate=30/1",
             mediaClass: "Video/Source");
-
-        try
-        {
-            cap.Connect(preferredFormats: stackalloc[] { PixelFormat.Bgra, PixelFormat.Yuv420 },
-                targetObjectName: "gst-reneg");
-
-            await WaitForAsync(() => seen.Any(f => f.Width == 160), TimeSpan.FromSeconds(15),
-                "no frame ever arrived from the first producer");
-        }
-        finally
-        {
-            await first.DisposeAsync();
-        }
-
-        // Second producer, different format and geometry, same node name so the daemon reattaches
-        // the stream that is already connected rather than this test connecting again.
-        await using GstTestSource second = await GstTestSource.StartAsync(ctx, "gst-reneg",
+        await using GstTestSource second = await GstTestSource.StartAsync(ctx, "gst-reneg-b",
             "videotestsrc is-live=true ! video/x-raw,format=I420,width=320,height=240,framerate=30/1",
             mediaClass: "Video/Source");
 
-        bool renegotiated = await TryWaitAsync(
-            () => seen.Any(f => f.Width == 320 && f.Height == 240), TimeSpan.FromSeconds(20));
+        cap.Connect(preferredFormats: stackalloc[] { PixelFormat.Bgra, PixelFormat.Yuv420 },
+            autoConnect: false, cancellationToken: cts.Token);
+        uint capNode = await cap.WaitForNodeIdAsync(cts.Token);
 
-        if (!renegotiated)
-        {
-            // The daemon is entitled not to reattach, and when it does not there is no second
-            // negotiation to check. Saying so beats asserting on a routing decision that is not
-            // ours to make.
-            Assert.Inconclusive("the daemon did not move the stream to the second producer.");
-        }
+        PipeWirePort input = await PortAsync(reg, capNode, PipeWirePortDirection.In, cts.Token);
+
+        PipeWireLink toFirst = await reg.CreateLinkAsync(
+            await PortAsync(reg, first.NodeId, PipeWirePortDirection.Out, cts.Token), input, cts.Token);
+        await WaitForAsync(() => seen.Any(f => f.Width == 160), TimeSpan.FromSeconds(15),
+            "no frame ever arrived from the first producer");
+
+        await reg.DestroyGlobalAsync(toFirst.LinkId, cts.Token);
+        await reg.CreateLinkAsync(
+            await PortAsync(reg, second.NodeId, PipeWirePortDirection.Out, cts.Token), input, cts.Token);
+
+        await WaitForAsync(() => seen.Any(f => f.Width == 320 && f.Height == 240), TimeSpan.FromSeconds(15),
+            "the stream linked to the second producer never delivered its geometry, so it did not negotiate again");
 
         Assert.AreEqual(0, Volatile.Read(ref ragged),
             "a frame carried less data than its own geometry needs, so something survived the first format");
@@ -270,6 +266,19 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
         Assert.AreEqual(320, width, "the stream is still reporting the first producer's width");
         Assert.AreEqual(240, height, "the stream is still reporting the first producer's height");
         Assert.AreEqual(PixelFormat.Yuv420, format, "the stream is still reporting the first producer's format");
+    }
+
+    /// <summary>The node's port facing <paramref name="direction"/>, once the registry has it.</summary>
+    private static async Task<PipeWirePort> PortAsync(
+        PipeWireRegistry reg, uint nodeId, PipeWirePortDirection direction, CancellationToken ct)
+    {
+        while (true)
+        {
+            PipeWirePort? port = reg.Current.GetPortsForNode(nodeId)
+                .FirstOrDefault(p => p.PortDirection == direction);
+            if (port is not null) return port;
+            await Task.Delay(50, ct);
+        }
     }
 
     private static async Task WaitForAsync(Func<bool> condition, TimeSpan budget, string message)

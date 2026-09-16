@@ -702,9 +702,19 @@ public sealed class ExportedNodeTests
             SpaDirection.Output,
             new Dictionary<string, string> { [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source" });
 
+        // Every cycle's io state, so a failure below says whether a quantum was lost at this end
+        // (published over a buffer the consumer had not taken) or after it.
+        node.ProduceTrace = new PipeWireExportedNode.ProduceCycleRecord[4096];
+
+        // The first sample of each published quantum, in cycle order, to line the ramp up with the
+        // cycles that wrote it.
+        var firstOfCycle = new float[4096];
+        var cycles = 0;
         node.ProcessCallback = (_, data) =>
         {
             Span<float> floats = MemoryMarshal.Cast<byte, float>(data);
+            if (cycles < firstOfCycle.Length) firstOfCycle[cycles] = next + 1;
+            cycles++;
             for (var i = 0; i < floats.Length; i++) floats[i] = ++next;
             return floats.Length * 4;
         };
@@ -726,9 +736,19 @@ public sealed class ExportedNodeTests
             RedirectStandardOutput = true,
             UseShellExecute = false,
         };
+        // pipewiresrc's own account of what it did with each buffer, and its stream's warnings: an
+        // input stream with no free buffer drops the cycle and says so ("out of buffers on port",
+        // audioconvert), which is what tells a consumer overrun from data lost at this end.
+        psi.Environment["GST_DEBUG"] = "pipewiresrc:6";
+        psi.Environment["GST_DEBUG_NO_COLOR"] = "1";
+        psi.Environment["PIPEWIRE_DEBUG"] = "2";
+
+        // min-buffers: pipewiresrc asks for one by default and negotiates two, so any moment
+        // GStreamer holds both (filesink writing, the machine loaded) drops a whole cycle. Sixteen
+        // is the headroom upstream's property exists to give a consumer that must not drop.
         foreach (string arg in new[]
                  {
-                     "-q", "pipewiresrc", $"target-object={name}", "num-buffers=40", "!",
+                     "-q", "pipewiresrc", $"target-object={name}", "num-buffers=40", "min-buffers=16", "!",
                      $"audio/x-raw,format=F32LE,channels={stereo},rate={Rate}", "!",
                      "filesink", $"location={output}",
                  })
@@ -769,13 +789,26 @@ public sealed class ExportedNodeTests
             while (start < got.Length && got[start] == 0f) start++;
             Assert.IsTrue(got.Length - start > 500, "GStreamer received only silence from the exported node");
 
+            // Every break must be a whole number of cycles skipped, and reported by the consumer.
+            // Our node records the value each published cycle started at; a lost cycle ends one run
+            // on a cycle's last value and resumes on a later cycle's first, forward. Anything else
+            // (a jump inside a cycle, backwards, a value never written) is data altered on the way.
+            var cycleStarts = new HashSet<float>(firstOfCycle.Take(Math.Min(cycles, firstOfCycle.Length)));
+            int dropsReported = errors.Split((char)10).Count(l => l.Contains("out of buffers", StringComparison.Ordinal));
+
             var breaks = 0;
+            var altered = 0;
             int firstBreak = -1;
+            var breakList = new List<string>();
             for (int i = start + 1; i < got.Length; i++)
             {
                 if (got[i] == got[i - 1] + 1f) continue;
                 breaks++;
                 if (firstBreak < 0) firstBreak = i;
+                bool wholeCycles = got[i] > got[i - 1] && cycleStarts.Contains(got[i]) && cycleStarts.Contains(got[i - 1] + 1f);
+                if (!wholeCycles) altered++;
+                if (breakList.Count < 16)
+                    breakList.Add($"{i - start}:{got[i] - got[i - 1] - 1f:+0;-0}{(wholeCycles ? "" : "!")}");
             }
 
             // What the stream looked like where it first went wrong, so a failure says whether the
@@ -783,9 +816,34 @@ public sealed class ExportedNodeTests
             string around = firstBreak < 0
                 ? ""
                 : string.Join(", ", got[Math.Max(start, firstBreak - 4)..Math.Min(got.Length, firstBreak + 6)]);
-            Assert.IsTrue(breaks <= 2,
-                $"the ramp GStreamer received broke {breaks} times in {got.Length - start} samples, so the exported "
-                + $"node's data reached it altered; first break at {firstBreak - start}: [{around}]");
+
+            string gstLog = Path.Combine(Path.GetTempPath(), $"{name}.gst.log");
+            if (altered > 0 || (breaks > 0 && dropsReported == 0))
+            {
+                // Status/buffer on entry -> buffer published : result, free buffers after / pool,
+                // and the ramp value that cycle started at.
+                var cycleLines = new System.Text.StringBuilder();
+                PipeWireExportedNode.ProduceCycleRecord[] trace = node.ProduceTrace!;
+                int recorded = Math.Min(node.ProduceTraceCount, trace.Length);
+                for (int c = 0, written = 0; c < recorded; c++)
+                {
+                    PipeWireExportedNode.ProduceCycleRecord r = trace[c];
+                    string at = r.Result == 2 && written < firstOfCycle.Length ? $" @{firstOfCycle[written++]}" : "";
+                    cycleLines.Append(System.Globalization.CultureInfo.InvariantCulture,
+                        $"{c}: s{r.EntryStatus}/b{(int)r.EntryBuffer} -> b{(int)r.Published} : {r.Result} free {r.FreeAfter}/{r.Pool}{at}")
+                        .Append((char)10);
+                }
+
+                await File.WriteAllTextAsync(gstLog, errors + (char)10 + "--- exported node cycles ---" + (char)10 + cycleLines, cts.Token);
+            }
+
+            string detail = $"{breaks} break(s) in {got.Length - start} samples, first at {firstBreak - start}: [{around}]; "
+                + $"breaks (index:jump, ! = not whole cycles): {string.Join(" ", breakList)}; "
+                + $"the consumer reported {dropsReported} drop(s); logs: {gstLog}";
+
+            Assert.AreEqual(0, altered, $"the exported node's data reached GStreamer altered: {detail}");
+            Assert.IsTrue(breaks == 0 || dropsReported > 0,
+                $"whole cycles went missing without the consumer reporting a drop, so they were lost between this node and it: {detail}");
         }
         finally
         {

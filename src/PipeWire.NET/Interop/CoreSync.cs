@@ -240,6 +240,17 @@ internal sealed class CoreSync : IDisposable
                 return;
             }
 
+            // The barrier's own sync refused. Every method needs X on its object (protocol-native
+            // process_messages: the method's permissions | PW_PERM_X), so a client confined to less
+            // than that on the core cannot sync at all: the daemon answers the call with EACCES
+            // against its sequence and no done follows. Without this the caller waited out its token
+            // for an answer that had already come.
+            if (Native.SPA_RESULT_ASYNC_SEQ(seq) == Native.SPA_RESULT_ASYNC_SEQ(self._seq))
+            {
+                self._done.TrySetException(new PipeWireRequestRefusedException("sync", res, id, text));
+                return;
+            }
+
             // Past here it is an answer to a request, so a barrier has nothing to report.
             if (!self._carriesRequest) return;
 
@@ -316,7 +327,7 @@ internal sealed class CoreSync : IDisposable
                 }
                 finally
                 {
-                    Native.pw_thread_loop_unlock(loop);
+                    _ctx.UnlockLoop(loop);
                 }
             }
         }

@@ -51,11 +51,15 @@ Two categories are excluded from every ordinary leg and have to be asked for by 
 metadata written in a loop - so anything sharing that session fails on this traffic rather than on
 anything of its own. Give it a session to itself.
 
-**`KillsTheDaemon`** is one test, and it does what it says: on PipeWire 1.6.8, asking the daemon to
-confine a client this connection does not manage segfaults it inside
-`pw_impl_client_update_permissions` instead of returning the refusal it should. Everything after it
-in the same run fails to connect. It stays in the tree because it is the test that will say when
-that is fixed.
+**`KillsTheDaemon`** is the permission tests, and on a stock PipeWire 1.6.8 they can do what the
+name says: withdrawing a client's read access makes `pw_global_update_permissions` destroy its
+resources while walking the global's resource list, and `pw_impl_client_update_permissions` calls it
+while walking the context's global list. A destroy runs hooks that can take other resources with it,
+and the global itself when it is an object the client exported, so the walks continue into destroyed
+or freed memory: `assert(!resource->destroyed)`, or a segfault. Everything after it in the same
+session fails to connect. `repro/permissions-crash.sh` reproduces it (confining a session manager's
+client). `repro/libpipewire-permissions.patch` fixes it; `build/verify-linux.sh` runs this
+category against a private daemon of its own that loads the patched library, and checks that it did.
 
 ## External tools
 

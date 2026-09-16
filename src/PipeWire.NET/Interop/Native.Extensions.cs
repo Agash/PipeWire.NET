@@ -100,6 +100,32 @@ internal static unsafe partial class Native
     }
 
     /// <summary>
+    /// <c>pw_loop_unlock</c>: releases one hold of the loop's lock and says whether it did.
+    /// </summary>
+    /// <returns>0, or the negative errno the loop refused with.</returns>
+    /// <remarks>
+    /// Upstream's <c>pw_thread_loop_unlock</c> calls this and discards the result, so a refusal is
+    /// silent - and it can refuse: SPA's <c>loop_unlock</c> returns <c>-EIO</c> without unlocking
+    /// when the loop's hold count (<c>impl-&gt;recurse</c>, shared by every thread) is already 0
+    /// (spa/plugins/support/loop.c). The mutex then stays held by the calling thread, and the next
+    /// thread to need it - the loop thread itself, or a join in <c>pw_thread_loop_stop</c> - waits
+    /// for ever. Checked here so that state is reported where it starts instead of found later as
+    /// a deadlock.
+    /// </remarks>
+    internal static int pw_loop_unlock(pw_loop* loop)
+    {
+        if (loop is null || loop->control is null) return -NativeConstants.EINVAL;
+        GetInterface(loop->control, out spa_loop_control_methods* m, out void* data);
+        if (m is null || m->unlock is null) return -NativeConstants.EOPNOTSUPP;
+        return m->unlock(data);
+    }
+
+    /// <summary><c>pw_thread_loop_unlock</c>, with the result upstream's discards.</summary>
+    /// <inheritdoc cref="pw_loop_unlock" path="/remarks"/>
+    internal static int pw_thread_loop_unlock_checked(pw_thread_loop* loop) =>
+        loop is null ? -NativeConstants.EINVAL : pw_loop_unlock(pw_thread_loop_get_loop(loop));
+
+    /// <summary>
     /// Runs <paramref name="func"/> with the loop's lock held, so it cannot overlap that loop's
     /// own callbacks. Synchronous: <paramref name="func"/> has returned when this does.
     /// </summary>

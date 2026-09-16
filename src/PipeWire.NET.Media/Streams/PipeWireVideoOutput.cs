@@ -298,6 +298,14 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     /// deliberately, independent of session-manager policy: a targeted link does not need a
     /// default device to exist. A test or a transport usually wants that; a camera app does not.
     /// </param>
+    /// <param name="driver">
+    /// Ask to be the graph's driver (<c>PW_STREAM_FLAG_DRIVER</c>), so cycles happen when this stream
+    /// triggers them rather than on another node's clock - upstream's video-src and audio-src connect
+    /// this way to pace their own output. Pair with <see cref="DriveAt"/> or
+    /// <see cref="TriggerProcess"/>. The daemon still decides: <see cref="IsDriving"/> says whether it
+    /// did. Without it the stream is only ever a follower, and a trigger just asks the real driver
+    /// for a cycle.
+    /// </param>
     /// <param name="cancellationToken">
     /// Abandons the wait for the loop lock. The connect request itself is issued
     /// synchronously once that is held, so there is nothing to recall after it.
@@ -306,6 +314,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
         uint targetNodeId = AnyNode,
         string? targetObjectName = null,
         bool autoConnect = true,
+        bool driver = false,
         CancellationToken cancellationToken = default)
     {
         if (_core is not null) throw new InvalidOperationException("Already connected.");
@@ -342,6 +351,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
 
         PipeWireStreamFlags flags = PipeWireStreamFlags.MapBuffers;
         if (autoConnect) flags |= PipeWireStreamFlags.Autoconnect;
+        if (driver) flags |= PipeWireStreamFlags.Driver;
 
         try
         {
@@ -688,7 +698,7 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     /// thread drives the cycle directly.
     /// </para>
     /// <para>
-    /// No-op before <see cref="Connect(uint, string?, bool, CancellationToken)"/> or <see cref="ConnectDmaBuf(ReadOnlySpan{long}, CancellationToken)"/>, and after disposal.
+    /// No-op before <see cref="Connect(uint, string?, bool, bool, CancellationToken)"/> or <see cref="ConnectDmaBuf(ReadOnlySpan{long}, CancellationToken)"/>, and after disposal.
     /// </para>
     /// </remarks>
     public void TriggerProcess() => _core?.TriggerProcess();
@@ -1608,6 +1618,11 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     /// <see cref="TriggerProcess"/> starts a cycle and returns; this waits for the daemon to report
     /// it finished, which is what a producer pacing its own output needs in order to know when the
     /// next frame may be submitted.
+    /// <para>
+    /// Upstream reports completion (<c>trigger_done</c>) only to a driving stream, so this faults with
+    /// <see cref="InvalidOperationException"/> when <see cref="IsDriving"/> is false rather than
+    /// waiting for a report that will not come. Connect with <c>driver: true</c> to be one.
+    /// </para>
     /// </remarks>
     public Task TriggerProcessAndWaitAsync(CancellationToken cancellationToken = default) =>
         _core?.TriggerAndWaitAsync(cancellationToken) ?? Task.CompletedTask;

@@ -154,6 +154,9 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
     // ------------------------------------------------------------------ producers behaving badly
 
     [TestMethod]
+    // With no fallback allowed, WirePlumber answers the lost target by erroring the stream: the
+    // consumer being told, which is what "rather than hanging" below asks for.
+    [ExpectsLibraryError("defined target not found")]
     public async Task AProducerThatDisappearsMidStream_LeavesTheConsumerUsable()
     {
         Require();
@@ -166,7 +169,14 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
         var frames = 0;
         var states = new List<PipeWireStreamState>();
 
-        await using var capture = new PipeWireVideoCapture(ctx, "pwnet-vanish-consumer");
+        // node.dont-fallback: once its producer is gone WirePlumber would otherwise move the
+        // consumer to the default video source, which is some other device (on the lab box an
+        // unfed loopback camera that fails to start). Surviving the loss is the subject here, and
+        // with the fallback refused the loss is reported to the stream as an error.
+        await using var capture = new PipeWireVideoCapture(ctx, "pwnet-vanish-consumer")
+        {
+            ExtraProperties = new Dictionary<string, string> { ["node.dont-fallback"] = "true" },
+        };
         capture.FrameReady += (_, _) => Interlocked.Increment(ref frames);
         capture.StateChanged += (_, _, s) => { lock (states) states.Add(s); };
 
@@ -183,13 +193,22 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
         }   // the producer is killed here
 
         int atDeath = Volatile.Read(ref frames);
+        Assert.IsTrue(atDeath > 0, "no frames arrived before the producer was killed");
         await WaitForAsync(() => registry.Current.GetNode(nodeId) is null, cts.Token);
 
-        // The consumer must survive its producer, and must be able to say so rather than hanging.
+        // The consumer must survive its producer, and must be told rather than left hanging: with
+        // no fallback allowed, the session manager's answer to the lost target is a stream error,
+        // and that has to reach this stream's state.
+        await WaitForAsync(() => { lock (states) return states.Contains(PipeWireStreamState.Error); }, cts.Token);
         lock (states)
-            Assert.IsTrue(states.Count > 0, "the consumer never reported a state at all");
+        {
+            int streaming = states.IndexOf(PipeWireStreamState.Streaming);
+            int error = states.LastIndexOf(PipeWireStreamState.Error);
+            Assert.IsTrue(streaming >= 0 && error > streaming,
+                $"the consumer did not go from streaming to an error when its producer went: {string.Join(" -> ", states)}");
+        }
 
-        Assert.IsTrue(atDeath > 0, "no frames arrived before the producer was killed");
+        // And it is still an object that can be torn down, which the await using below does.
     }
 
     [TestMethod]

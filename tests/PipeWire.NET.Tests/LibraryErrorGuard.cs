@@ -50,6 +50,10 @@ public abstract class PipeWireTestBase
     {
         _startedTicks = Environment.TickCount64;
         ConsoleTestLoggerFactory.StartCollectingErrors();
+
+        // Written before the test runs, so a test that hangs or takes the host down is still named:
+        // the last START without an outcome after it is the one that was running.
+        Trace("START");
     }
 
     private void Trace(string outcome)

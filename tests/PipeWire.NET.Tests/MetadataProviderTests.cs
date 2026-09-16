@@ -273,4 +273,45 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         Assert.AreEqual(expected, provider.Get(key),
             $"the serving process never held '{expected ?? "<null>"}` for '{key}'");
     }
+
+    /// <summary>
+    /// Binding a store through the connection that serves it is refused rather than hanging it.
+    /// </summary>
+    /// <remarks>
+    /// module-metadata answers a bind by marking the binding client busy - the daemon stops reading
+    /// its socket - until the exporter answers a ping. When the exporter is the same connection, that
+    /// answer is never read and the connection hangs, every later request included. The registry
+    /// knows which stores its own context serves and refuses those.
+    /// </remarks>
+    [TestMethod]
+    public async Task BindingAStoreThroughTheConnectionThatServesIt_IsRefusedRatherThanHanging()
+    {
+        if (!OperatingSystem.IsLinux()) Assert.Inconclusive("PipeWire is a Linux daemon.");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+        await using var ctx = new PipeWireContext("pwnet-provider-selfbind", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+        await using var registry = new PipeWireRegistry(ctx);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+
+        string name = $"pwnet-selfbind.{Environment.ProcessId}.{Random.Shared.Next():x}";
+        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, name);
+        await provider.ReadyAsync(cts.Token);
+
+        PipeWireMetadataObject? store = null;
+        for (var i = 0; i < 100 && store is null; i++)
+        {
+            await registry.WaitForInitialEnumerationAsync(cts.Token);
+            store = registry.Current.GetMetadataStore(name);
+            if (store is null) await Task.Delay(50, cts.Token);
+        }
+
+        Assert.IsNotNull(store, "the served store never reached the registry");
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => registry.BindMetadataStore(name));
+        Assert.ThrowsExactly<InvalidOperationException>(() => registry.BindMetadataStore(store.Id));
+
+        // Refused before anything reached the daemon, so the connection is still answering.
+        await Interop.CoreSync.RoundTripAsync(ctx, cts.Token);
+    }
 }

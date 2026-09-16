@@ -1193,7 +1193,7 @@ PipeWire.NET.Media.Streams.PipeWireAudioCapture.AnnounceLatency(PipeWireLatency,
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.AnyNode = UInt32
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.CommandReceived event
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.Connect(PipeWireNode, Int32, Int32, AudioSampleFormat, Boolean, Boolean, CancellationToken)
-PipeWire.NET.Media.Streams.PipeWireAudioCapture.Connect(UInt32, Int32, Int32, AudioSampleFormat, String, Boolean, Boolean, CancellationToken)
+PipeWire.NET.Media.Streams.PipeWireAudioCapture.Connect(UInt32, Int32, Int32, AudioSampleFormat, String, Boolean, Boolean, Boolean, CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.Controls : ImmutableArray<PipeWireStreamControl>
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.DisposeAsync()
 PipeWire.NET.Media.Streams.PipeWireAudioCapture.ExtraProperties : IReadOnlyDictionary<String, String>
@@ -1224,7 +1224,7 @@ PipeWire.NET.Media.Streams.PipeWireAudioOutput..ctor(PipeWireContext, String, In
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.AnnounceLatency(PipeWireLatency, PipeWireProcessLatency)
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.AnyNode = UInt32
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.CommandReceived event
-PipeWire.NET.Media.Streams.PipeWireAudioOutput.Connect(UInt32, String, Boolean, CancellationToken)
+PipeWire.NET.Media.Streams.PipeWireAudioOutput.Connect(UInt32, String, Boolean, Boolean, CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.Controls : ImmutableArray<PipeWireStreamControl>
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.DisposeAsync()
 PipeWire.NET.Media.Streams.PipeWireAudioOutput.DrainAsync(CancellationToken)
@@ -1262,7 +1262,7 @@ PipeWire.NET.Media.Streams.PipeWireVideoCapture.AnnounceLatency(PipeWireLatency,
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.AnyNode = UInt32
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.CommandReceived event
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.Connect(PipeWireNode, ReadOnlySpan<PixelFormat>, CancellationToken)
-PipeWire.NET.Media.Streams.PipeWireVideoCapture.Connect(UInt32, ReadOnlySpan<PixelFormat>, String, ReadOnlySpan<Int64>, Boolean, Boolean, Int32, Int32, Int32, Boolean, ReadOnlySpan<DmaBufDeviceOffer>, CancellationToken)
+PipeWire.NET.Media.Streams.PipeWireVideoCapture.Connect(UInt32, ReadOnlySpan<PixelFormat>, String, ReadOnlySpan<Int64>, Boolean, Boolean, Int32, Int32, Int32, Boolean, ReadOnlySpan<DmaBufDeviceOffer>, Boolean, CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.Controls : ImmutableArray<PipeWireStreamControl>
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.DisposeAsync()
 PipeWire.NET.Media.Streams.PipeWireVideoCapture.ExtraProperties : IReadOnlyDictionary<String, String>
@@ -1325,7 +1325,7 @@ PipeWire.NET.Media.Streams.PipeWireVideoOutput.AllocateDmaBufSyncHandler
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.AnnounceLatency(PipeWireLatency, PipeWireProcessLatency)
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.AnyNode = UInt32
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.CommandReceived event
-PipeWire.NET.Media.Streams.PipeWireVideoOutput.Connect(UInt32, String, Boolean, CancellationToken)
+PipeWire.NET.Media.Streams.PipeWireVideoOutput.Connect(UInt32, String, Boolean, Boolean, CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.ConnectDmaBuf(ReadOnlySpan<DmaBufDeviceOffer>, CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.ConnectDmaBuf(ReadOnlySpan<Int64>, CancellationToken)
 PipeWire.NET.Media.Streams.PipeWireVideoOutput.ConnectDmaBufSync(ReadOnlySpan<DmaBufDeviceOffer>, CancellationToken)

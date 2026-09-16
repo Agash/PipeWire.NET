@@ -95,9 +95,10 @@ internal static class PwTop
             string line = raw.TrimEnd();
             if (line.Length == 0) continue;
 
-            // A header row starts a new batch.
-            if (line.TrimStart().StartsWith("S ", StringComparison.Ordinal) ||
-                line.Contains("QUANT", StringComparison.Ordinal))
+            // A header row starts a new batch. Recognised by its QUANT column only: its leading "S"
+            // is also the state letter of every suspended node's row, and on a desktop session full
+            // of idle devices that split each batch and dropped the rows before every one of them.
+            if (line.Contains("QUANT", StringComparison.Ordinal))
             {
                 if (current.Count > 0) { last = current; current = []; }
                 continue;

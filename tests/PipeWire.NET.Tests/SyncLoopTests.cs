@@ -174,8 +174,13 @@ public sealed class SyncLoopTests
             if (match is null) await Task.Delay(50, cts.Token);
         }
 
-        if (match is null)
-            Assert.Inconclusive("the graph inserted no resampler, so no rate-match area was offered.");
+        // Not a skip: the sessions this runs in fix the graph at 48000 (clock.allowed-rates), so a
+        // 44100 stream is always resampled and a missing area is the reader failing, not the graph.
+        Assert.IsNotNull(match, "a 44100 stream in a 48000 graph was offered no rate-match area");
+
+        // The area is set up with the link, a moment before the first cycle delivers anything.
+        for (var i = 0; i < 60 && Interlocked.Read(ref receivedSamples) == 0; i++)
+            await Task.Delay(50, cts.Token);
 
         Assert.IsTrue(
             match!.Value.Rate is > 0.5 and < 2.0,
@@ -350,8 +355,7 @@ public sealed class SyncLoopTests
         await Task.Delay(700, cts.Token);
         long? baseline = await PwTop.ErrorsForAsync(nodeId, cts.Token);
 
-        if (baseline is null)
-            Assert.Inconclusive($"pw-top did not report node {nodeId}.");
+        Assert.IsNotNull(baseline, $"pw-top did not report node {nodeId}, which is streaming");
 
         await Task.Delay(2000, cts.Token);
         long? after = await PwTop.ErrorsForAsync(nodeId, cts.Token);

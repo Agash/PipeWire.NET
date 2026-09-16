@@ -114,9 +114,15 @@ public sealed partial class PipeWireLinkControl : IDisposable, IAsyncDisposable
     public event Action<PipeWireLinkControl>? StateChanged;
 
     internal static unsafe PipeWireLinkControl Bind(
-        PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger)
+        PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger,
+        Action<uint, PipeWireProperties>? propertiesObserved = null)
     {
-        var control = new PipeWireLinkControl(ctx, id, logger);
+        // The observer is in place before the proxy is bound: the first info after a bind is the
+        // only one that carries the object's properties (later ones set no PROPS in their change
+        // mask, so their dictionary arrives empty), and it can arrive the moment the bind is sent.
+        // Assigned after Bind returned, a fast daemon's first info found no observer and the
+        // properties never reached the registry.
+        var control = new PipeWireLinkControl(ctx, id, logger) { PropertiesObserved = propertiesObserved };
         control._bound = BoundProxy.Bind(
             ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Link, version, NativeConstants.PW_VERSION_LINK,
             sizeof(pw_link_events),

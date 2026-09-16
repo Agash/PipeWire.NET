@@ -38,6 +38,21 @@ public sealed class HostileConditionsTests : PipeWireTestBase
 
     // ------------------------------------------------------------------ lifecycle order
 
+    /// <summary>A small host-memory producer of this library's own, publishing, unrouted.</summary>
+    private static async Task<PipeWireVideoOutput> StartSourceAsync(
+        PipeWireContext ctx, string name, CancellationToken ct)
+    {
+        var output = new PipeWireVideoOutput(ctx, name, 64, 48, PixelFormat.Bgra, 30);
+        output.FillFrame += (_, pixels, _, _, _, _) =>
+        {
+            pixels.Fill(0x80);
+            return true;
+        };
+        output.Connect(autoConnect: false);
+        await output.WaitForNodeIdAsync(ct);
+        return output;
+    }
+
     /// <summary>
     /// Every accessor on a disposed capture, called anyway. Each has to answer rather than touch
     /// the native stream it no longer owns.
@@ -55,9 +70,14 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         await using var ctx = new PipeWireContext("pwnet-hc-disposed", ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
 
+        // Targeted at a producer of this test's own. Untargeted, the session manager routes a video
+        // capture to the default camera, and on a machine whose camera nothing feeds - the lab box's
+        // v4l2 loopback - the daemon logs a failed VIDIOC_STREAMON for every run of this test.
+        await using PipeWireVideoOutput source = await StartSourceAsync(ctx, "pwnet-hc-disposed-src", cts.Token);
+
         var capture = new PipeWireVideoCapture(ctx, "pwnet-hc-disposed-consumer");
         capture.Retention = FrameRetention.Owned;
-        capture.Connect();
+        capture.Connect((await source.WaitForNodeIdAsync(cts.Token)), [PixelFormat.Bgra]);
         await capture.DisposeAsync();
 
         // Reading state: all null or empty, none of them a throw and none of them a native call.
@@ -98,11 +118,20 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         await using var ctx = new PipeWireContext("pwnet-hc-nopull", ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
 
+        // Frames have to be flowing for "nothing retained" to mean anything: with no producer a
+        // puller gets nothing whether or not retention is on.
+        await using PipeWireVideoOutput source = await StartSourceAsync(ctx, "pwnet-hc-nopull-src", cts.Token);
+
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-hc-nopull-consumer");
         Assert.AreEqual(FrameRetention.None, capture.Retention, "retention must be off by default");
 
-        capture.Connect();
-        await Task.Delay(500, cts.Token);
+        var delivered = 0;
+        capture.FrameReady += (_, _) => Interlocked.Increment(ref delivered);
+        capture.Connect((await source.WaitForNodeIdAsync(cts.Token)), [PixelFormat.Bgra]);
+        await capture.WaitForStreamingAsync(cts.Token);
+
+        for (int i = 0; i < 60 && Volatile.Read(ref delivered) < 5; i++) await Task.Delay(50, cts.Token);
+        Assert.IsTrue(Volatile.Read(ref delivered) >= 5, "no frames flowed, so there was nothing to not retain");
 
         Assert.IsFalse(capture.TryGetFrame(out _));
         Assert.IsFalse(capture.TryGetBorrowedFrame(out _));
@@ -300,7 +329,14 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         var states = new List<PipeWireStreamState>();
         var frames = 0;
 
-        await using var capture = new PipeWireVideoCapture(ctx, "pwnet-hc-nowhere-consumer");
+        // Without node.dont-fallback WirePlumber links a stream whose target does not exist to the
+        // default source instead (linking/find-defined-target.lua), so "streaming" would be a correct
+        // answer about a different node. Set, the policy waits for the named target, which is the
+        // case this test is about.
+        await using var capture = new PipeWireVideoCapture(ctx, "pwnet-hc-nowhere-consumer")
+        {
+            ExtraProperties = new Dictionary<string, string> { ["node.dont-fallback"] = "true" },
+        };
         capture.StateChanged += (_, _, s) => { lock (states) states.Add(s); };
         capture.FrameReady += (_, _) => Interlocked.Increment(ref frames);
 

@@ -190,7 +190,9 @@ public sealed class TransportLifetimeTests : PipeWireTestBase
             return true;
         };
 
-        output.Connect(autoConnect: false);
+        // A self-paced sender asks to drive, as upstream's video-src does; a follower's triggers
+        // never report completion, whatever the caller waits for.
+        output.Connect(autoConnect: false, driver: true);
 
         uint? nodeId = null;
         for (var i = 0; i < 60 && nodeId is null; i++)
@@ -225,13 +227,38 @@ public sealed class TransportLifetimeTests : PipeWireTestBase
         capture.Connect(nodeId!.Value, [PixelFormat.Bgra]);
         await capture.WaitForStreamingAsync(cts.Token);
 
+        for (var i = 0; i < 100 && !output.IsDriving; i++) await Task.Delay(50, cts.Token);
+        Assert.IsTrue(output.IsDriving, "the daemon never made the driver-flagged output the graph's driver");
+
         int before = Volatile.Read(ref filled);
 
         const int triggers = 8;
         for (var i = 0; i < triggers; i++)
         {
-            await output.TriggerProcessAndWaitAsync(cts.Token)
-                .WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
+            int filledBefore = Volatile.Read(ref filled);
+            int seenBefore;
+            lock (tags) seenBefore = tags.Count;
+            try
+            {
+                await output.TriggerProcessAndWaitAsync(cts.Token)
+                    .WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
+            }
+            catch (TimeoutException)
+            {
+                // Which half went missing: the trigger itself (no fill ran), the cycle (filled but
+                // the consumer never got it), or only the completion report (delivered, but no
+                // trigger_done). A second trigger then says whether the graph is stuck or one
+                // report was lost.
+                int seenAfter;
+                lock (tags) seenAfter = tags.Count;
+                string state = $"trigger {i}: fills {Volatile.Read(ref filled) - filledBefore}, "
+                    + $"frames delivered {seenAfter - seenBefore}, driving {output.IsDriving}";
+                bool retried = await output.TriggerProcessAndWaitAsync(cts.Token)
+                    .WaitAsync(TimeSpan.FromSeconds(5), cts.Token)
+                    .ContinueWith(t => t.IsCompletedSuccessfully, TaskScheduler.Default);
+                Assert.Fail($"a triggered cycle never reported completion ({state}); "
+                    + $"a further trigger {(retried ? "did" : "did not either")}");
+            }
         }
 
         await Task.Delay(300, cts.Token);

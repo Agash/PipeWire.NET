@@ -250,17 +250,25 @@ public sealed class StreamingSurfaceTests
             await cap.WaitForStreamingAsync(cts.Token);
 
             var afterReneg = 0;
+            var states = new System.Collections.Concurrent.ConcurrentQueue<PipeWireStreamState>();
             cap.FrameReady += (_, _) => Interlocked.Increment(ref afterReneg);
+            cap.StateChanged += (_, _, s) => states.Enqueue(s);
 
             PixelFormat[] formats = [PixelFormat.Bgra];
             Assert.IsTrue(
                 cap.RequestFormat(formats, 160, 120), "the renegotiation offer was refused outright");
 
-            await Task.Delay(600, cts.Token);
+            // Survived means frames resume. A renegotiation takes the producer through a new format
+            // and new buffers, which under load takes longer than any fixed window this used to
+            // assume (600 ms, once too short on the lab box); a stream that did not survive never
+            // delivers again, however long this waits.
+            for (var i = 0; i < 200 && Volatile.Read(ref afterReneg) == 0; i++)
+                await Task.Delay(50, cts.Token);
 
             Assert.IsTrue(
                 Volatile.Read(ref afterReneg) > 0,
-                "no frame arrived after a renegotiation request, so the stream did not survive it");
+                "no frame arrived in 10 s after a renegotiation request, so the stream did not survive it; "
+                + $"states since: {string.Join(" -> ", states)}");
         }
     }
 

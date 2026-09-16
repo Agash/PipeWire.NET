@@ -1032,10 +1032,32 @@ public sealed unsafe partial class PipeWireExportedNode : IAsyncDisposable
         if (io is null || buffers is null || bufferCount == 0)
             return consuming ? (int)SpaStatus.NeedData : (int)SpaStatus.Ok;
 
-        return consuming
-            ? ConsumeCycle(io, buffers, bufferCount)
-            : ProduceCycle(io, buffers, free, bufferCount);
+        if (consuming) return ConsumeCycle(io, buffers, bufferCount);
+        if (ProduceTrace is not { } trace) return ProduceCycle(io, buffers, free, bufferCount);
+
+        int entryStatus = io->status;
+        uint entryBuffer = io->buffer_id;
+        int result = ProduceCycle(io, buffers, free, bufferCount);
+        uint freeCount = 0;
+        foreach (bool f in free) if (f) freeCount++;
+        trace[ProduceTraceCount++ % trace.Length] = new ProduceCycleRecord(
+            entryStatus, entryBuffer, result == (int)SpaStatus.HaveData ? io->buffer_id : uint.MaxValue,
+            result, freeCount, bufferCount);
+        return result;
     }
+
+    /// <summary>One source cycle as the io area saw it, for a test diagnosing lost or reused buffers.</summary>
+    internal readonly record struct ProduceCycleRecord(
+        int EntryStatus, uint EntryBuffer, uint Published, int Result, uint FreeAfter, uint Pool);
+
+    /// <summary>
+    /// Set by a test before the node runs to record every source cycle, round-robin. Written only by
+    /// the data loop and read once the node has stopped, so it needs no synchronisation, and it costs
+    /// nothing when null.
+    /// </summary>
+    internal ProduceCycleRecord[]? ProduceTrace { get; set; }
+
+    internal int ProduceTraceCount;
 
     /// <summary>One cycle of a sink: read the buffer the graph handed over, then ask for the next.</summary>
     /// <remarks>
@@ -1080,13 +1102,21 @@ public sealed unsafe partial class PipeWireExportedNode : IAsyncDisposable
     /// <summary>One cycle of a source: recycle what the graph returned, fill a free buffer, hand it over.</summary>
     /// <remarks>
     /// <para>
-    /// Upstream's <c>export-source.c</c> <c>impl_node_process</c>. It does not look at the status
-    /// on the way in: the buffer the graph finished with comes back in <c>buffer_id</c>, is
-    /// recycled, and the field is cleared, because it is stale until the graph hands another one
-    /// back; recycling it again on a cycle that runs first would hand out a buffer the consumer is
-    /// still reading, which arrives as a stream intact per buffer but jumping between them. Then a
-    /// free buffer is filled and published with <c>SPA_STATUS_HAVE_DATA</c>, or <c>-EPIPE</c> when
-    /// every buffer is still out.
+    /// A buffer still published (<c>SPA_STATUS_HAVE_DATA</c>) is left where it is and the cycle
+    /// produces nothing: the consumer has not taken it yet, so it is the next thing it must read.
+    /// That is what spa's own sources do (<c>audiotestsrc</c>, <c>videotestsrc</c>) and what
+    /// <c>pw_stream</c>'s output does (<c>stream.c</c> <c>impl_node_process_output</c>). Upstream's
+    /// <c>export-source.c</c> example skips the check and recycles the unread buffer, so every cycle
+    /// its consumer misses loses a whole quantum: pipewiresrc read that as a ramp jumping forward by
+    /// whole buffers.
+    /// </para>
+    /// <para>
+    /// Otherwise the buffer the graph finished with comes back in <c>buffer_id</c>, is recycled, and
+    /// the field is cleared, because it is stale until the graph hands another one back; recycling
+    /// it again on a cycle that runs first would hand out a buffer the consumer is still reading,
+    /// which arrives as a stream intact per buffer but jumping between them. Then a free buffer is
+    /// filled and published with <c>SPA_STATUS_HAVE_DATA</c>, or <c>-EPIPE</c> when every buffer is
+    /// still out.
     /// </para>
     /// <para>
     /// Where this goes beyond the example is the handler, which may write nothing or throw. A
@@ -1097,6 +1127,8 @@ public sealed unsafe partial class PipeWireExportedNode : IAsyncDisposable
     /// </remarks>
     private int ProduceCycle(spa_io_buffers* io, spa_buffer** buffers, bool[] free, uint bufferCount)
     {
+        if (io->status == (int)SpaStatus.HaveData) return (int)SpaStatus.HaveData;
+
         if (io->buffer_id < bufferCount)
         {
             free[io->buffer_id] = true;

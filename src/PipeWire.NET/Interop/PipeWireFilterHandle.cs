@@ -127,7 +127,7 @@ internal sealed unsafe class PipeWireFilterHandle : SafeHandle
                 }
                 finally
                 {
-                    Native.pw_thread_loop_unlock(loop);
+                    _loop.Unlock(loop);
                 }
             }
         }

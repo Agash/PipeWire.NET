@@ -685,8 +685,17 @@ public sealed class UpstreamExampleTests
         // silently became plain MIDI.
         Assert.AreEqual("8 bit raw midi", byName["ump_in"]);
 
+        // control.ump is one of the port's own properties, outside the keys the daemon copies onto
+        // the registry global (impl-port.c global_keys). It arrives with the port's info once the
+        // port is bound, and binding files it into the registry's record of the port.
         PipeWirePort ump = ports.Single(
             p => p.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_PORT_NAME) == "ump_in");
+        await using PipeWirePortControl bound = reg.BindPort(ump.PortId);
+        for (var i = 0; i < 50 && ump.Properties.GetValueOrDefault("control.ump") is null; i++)
+        {
+            await Task.Delay(100, cts.Token);
+            ump = reg.Current.GetPort(ump.Id) ?? ump;
+        }
 
         Assert.AreEqual(
             "true",

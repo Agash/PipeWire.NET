@@ -144,6 +144,15 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                 // sends its whole contents to a new listener, so a consumer that binds after the
                 // writes still sees them; if that stopped working, a client joining an existing
                 // session would start with an empty view of it.
+                //
+                // Waited for rather than assumed. The daemon stops reading a binding client until
+                // the store's exporter has answered its ping, which should put the replay ahead of
+                // this connection's own round trip - but that ordering is the daemon's and the
+                // exporter's between them, and on the desktop session the replay has been seen to
+                // arrive after. A replay that never comes still fails here.
+                for (int attempt = 0; attempt < 100 && consumer.Get("a") is null; attempt++)
+                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+
                 Assert.AreEqual("1", consumer.Get("a"), "the consumer never received the entries");
                 Assert.AreEqual("2", consumer.Get("b"));
 
@@ -156,6 +165,122 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                 Assert.IsNull(consumer.Get("a"),
                     "a cleared store left entries in a bound consumer, so the clear's subject was not understood");
                 Assert.IsNull(consumer.Get("b"));
+            }
+        }
+    }
+
+    /// <summary>
+    /// A change a served store makes while another client is still binding it reaches the
+    /// consumers already bound.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The daemon's side of an exported store (<c>module-metadata/metadata.c</c>) answers a new bind
+    /// by asking the exporter to replay its contents (<c>ADD_LISTENER</c>), then pings the exporter.
+    /// Until the pong, <c>metadata_property</c> forwards events only to binders still in that state,
+    /// so the replay does not reach consumers that already have it. It cannot tell the replay from a
+    /// live change, though: a change the exporter sent before it read the <c>ADD_LISTENER</c> lands in
+    /// the same window and every established consumer loses it. A lost clear leaves a consumer
+    /// reporting entries the store no longer has, for good.
+    /// </para>
+    /// <para>
+    /// Made deterministic by holding the exporter's loop: a third client's bind reaches the daemon,
+    /// the exporter cannot answer it yet, and the clear is made in that window. In the suite it
+    /// happens by chance, when WirePlumber (which binds every exported store) is slow to bind one
+    /// until just when the test clears it, which is what made
+    /// <see cref="AStoreClearedByItsServer_EmptiesEveryBoundConsumer"/> fail under load. Fixed by
+    /// <c>repro/module-metadata.patch</c>, which the private verify sessions load;
+    /// on a stock 1.6.8 daemon this fails every time.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task AChangeWhileAnotherClientBinds_ReachesTheConsumersAlreadyBound()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+        (PipeWireContext serverCtx, PipeWireRegistry serverReg) = await ConnectAsync("pwnet-bindrace-server", cts.Token);
+        (PipeWireContext clientCtx, PipeWireRegistry clientReg) = await ConnectAsync("pwnet-bindrace-client", cts.Token);
+        (PipeWireContext lateCtx, PipeWireRegistry lateReg) = await ConnectAsync("pwnet-bindrace-late", cts.Token);
+        await using (serverCtx)
+        await using (serverReg)
+        await using (clientCtx)
+        await using (clientReg)
+        await using (lateCtx)
+        await using (lateReg)
+        {
+            string storeName = Unique("pwnet-bindrace");
+            await using PipeWireMetadataProvider provider =
+                PipeWireMetadataProvider.Create(serverCtx, storeName, export: true);
+            await provider.ReadyAsync(cts.Token);
+            provider.Set("a", "1");
+
+            PipeWireMetadataStore? consumer = null;
+            for (int attempt = 0; attempt < 80 && consumer is null; attempt++)
+            {
+                await clientReg.WaitForInitialEnumerationAsync(cts.Token);
+                consumer = clientReg.BindMetadataStore(storeName);
+                if (consumer is null) await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+            }
+
+            Assert.IsNotNull(consumer, "the exported store never reached the other client");
+
+            await using (consumer)
+            {
+                await consumer.ReadyAsync(cts.Token);
+                Assert.AreEqual("1", consumer.Get("a"), "the consumer never received the entry");
+
+                // The consumer's own bind settled: the exporter has answered its ping. Two round
+                // trips on the exporter's connection put that pong ahead of the second reply.
+                await provider.ReadyAsync(cts.Token);
+                await provider.ReadyAsync(cts.Token);
+
+                PipeWireMetadataStore? late = null;
+                Exception? inWindow = null;
+
+                // On a thread of its own: the loop lock is a mutex the taking thread must release,
+                // so nothing in here may await and resume elsewhere.
+                var window = new Thread(() =>
+                {
+                    try
+                    {
+                        using (serverCtx.Lock())
+                        {
+                            late = lateReg.BindMetadataStore(storeName);
+
+                            // Time for the daemon to take the bind and send the exporter its
+                            // ADD_LISTENER and ping, which this lock keeps unanswered. Nothing can
+                            // confirm it from here: the daemon stops reading the binding client
+                            // until that pong (so a round trip on it cannot complete), and nothing
+                            // orders it against another connection. An idle daemon needs
+                            // microseconds. Too slow a one only makes this pass on a daemon with
+                            // the bug; it cannot make it fail on one without.
+                            Thread.Sleep(500);
+
+                            provider.Clear();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Rethrown on the test's thread; escaping here would end the test host.
+                        inWindow = ex;
+                    }
+                });
+                window.Start();
+                window.Join();
+                if (inWindow is not null) throw new AssertFailedException("the bind window failed", inWindow);
+
+                await using (late)
+                {
+                    Assert.IsNotNull(late, "the late client could not bind the store");
+
+                    for (int attempt = 0; attempt < 80 && consumer.Get("a") is not null; attempt++)
+                        await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+
+                    Assert.IsNull(consumer.Get("a"),
+                        "a clear made while another client was binding never reached the consumer "
+                        + "already bound: the daemon forwarded it only to the binder (module-metadata "
+                        + "metadata_property, fixed by repro/module-metadata.patch)");
+                }
             }
         }
     }

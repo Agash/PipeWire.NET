@@ -23,6 +23,20 @@ internal sealed unsafe class PipeWireLoopHandle : SafeHandle
 
     internal pw_thread_loop* Loop => (pw_thread_loop*)handle;
 
+    /// <summary>Told when this loop refuses an unlock; the owning context logs it.</summary>
+    internal Action<int>? RefusedUnlock { get; set; }
+
+    /// <summary>
+    /// Releases one hold of the loop lock taken with <c>pw_thread_loop_lock</c>, and reports a
+    /// refusal instead of discarding it as upstream's <c>pw_thread_loop_unlock</c> does.
+    /// </summary>
+    /// <inheritdoc cref="Native.pw_loop_unlock" path="/remarks"/>
+    internal void Unlock(pw_thread_loop* loop)
+    {
+        int rc = Native.pw_thread_loop_unlock_checked(loop);
+        if (rc < 0) RefusedUnlock?.Invoke(rc);
+    }
+
     // Set by deterministic disposal before the base runs. Stopping joins the loop thread, so a
     // finalizer doing it stalls every finalizer behind one abandoned loop. Only a deterministic
     // release stops inline; an abandoned loop goes to the reaper. Dispose the context explicitly

@@ -153,10 +153,15 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     /// <param name="parameter">Which parameter to read, such as <see cref="SpaParamType.Props"/>.</param>
     /// <param name="cancellationToken">Abandons the wait; the request itself cannot be recalled.</param>
     /// <returns>
-    /// The values, in the order the daemon sent them. Empty means the object has no such parameter,
-    /// which is not an error - a node with no volume control simply has no <c>Props</c>.
+    /// The values, in the order the daemon sent them. Empty when the object lists the parameter
+    /// but has no value for it now.
     /// </returns>
     /// <exception cref="ObjectDisposedException">The binding has been disposed.</exception>
+    /// <exception cref="PipeWireRequestRefusedException">
+    /// The object does not have the parameter at all: upstream's objects answer <c>enum_params</c>
+    /// for an id they do not support with <c>-ENOENT</c>, and that is passed on rather than read as
+    /// "no values", so a caller asking for the wrong parameter finds out.
+    /// </exception>
     public async Task<ImmutableArray<SpaObject>> EnumerateParametersAsync(
         SpaParamType parameter, CancellationToken cancellationToken = default)
     {
@@ -224,17 +229,7 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
 
         try
         {
-            try
-            {
-                await roundTrip.ConfigureAwait(false);
-            }
-            catch (PipeWireRequestRefusedException ex) when (IsNoSuchParameter(ex))
-            {
-                // Deliberately not logged or rethrown: an object without the parameter is the empty
-                // answer this method documents, not a failure. A filter node has no Props, and its
-                // node answers enum_params with -ENOENT.
-                return [];
-            }
+            await roundTrip.ConfigureAwait(false);
 
             if (!_answers.TryGetValue(key, out List<SpaObject>? got))
                 return [];
@@ -261,6 +256,30 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     /// </remarks>
     private static bool IsNoSuchParameter(PipeWireRequestRefusedException ex) =>
         ex.Result == -NativeConstants.ENOENT && ex.ObjectId is { } id && id != NativeConstants.PW_ID_CORE;
+
+    /// <summary>
+    /// Like <see cref="GetParameterAsync"/>, but an object that does not have the parameter at all
+    /// answers <see langword="null"/> instead of being refused.
+    /// </summary>
+    /// <remarks>
+    /// For the readers whose documented answer for "this object has no such setting" is empty - a
+    /// MIDI node's channel map, a filter's volume - where refusing would turn an ordinary node into
+    /// an error. Every other failure, including an object that is gone, still throws.
+    /// </remarks>
+    private protected async Task<SpaObject?> GetParameterOrNullAsync(
+        SpaParamType parameter, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await GetParameterAsync(parameter, cancellationToken).ConfigureAwait(false);
+        }
+        catch (PipeWireRequestRefusedException ex) when (IsNoSuchParameter(ex))
+        {
+            // Deliberately not logged or rethrown: the object not having the parameter is the
+            // answer the caller asked for, spelled as null.
+            return null;
+        }
+    }
 
     /// <summary>
     /// Reads the single value of a parameter that has one, or <see langword="null"/> if it has none.

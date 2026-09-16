@@ -21,6 +21,9 @@ namespace PipeWire.NET.Graph;
 public sealed unsafe class PipeWireFilterPort
 {
     private readonly void* _portData;
+
+    /// <summary>The native port this wraps, as the filter's events identify it.</summary>
+    internal void* PortData => _portData;
     private readonly PipeWireFilter _owner;
     private readonly PipeWireDspFormat _format;
 
@@ -60,7 +63,8 @@ public sealed unsafe class PipeWireFilterPort
     /// </para>
     /// <para>
     /// An empty span is normal, not an error: a port with nothing connected to it, or one the graph
-    /// skipped this cycle, has no buffer. Writing to it is simply not possible, so a filter has to
+    /// skipped this cycle, has no buffer, and a buffer too small for the count asked for is not
+    /// handed out either. Writing to it is simply not possible, so a filter has to
     /// check rather than assume.
     /// </para>
     /// <para>
@@ -83,8 +87,7 @@ public sealed unsafe class PipeWireFilterPort
             throw new InvalidOperationException(
                 $"port '{Name}' carries {_format}, not audio; GetSamples is audio-only.");
 
-        void* buffer = Interop.Native.pw_filter_get_dsp_buffer(_portData, sampleCount);
-        return buffer is null ? default : new Span<float>(buffer, checked((int)sampleCount));
+        return DspBuffer(sampleCount);
     }
 
     /// <summary>
@@ -94,7 +97,7 @@ public sealed unsafe class PipeWireFilterPort
     /// <param name="height">The frame height, from the graph's position area.</param>
     /// <returns>
     /// Four floats per pixel, row-major and tightly packed, or an empty span when the graph gave
-    /// this port no buffer for the cycle.
+    /// this port no buffer for the cycle, or one too small for a frame of this size.
     /// </returns>
     /// <remarks>
     /// <para>
@@ -117,9 +120,55 @@ public sealed unsafe class PipeWireFilterPort
             throw new InvalidOperationException(
                 $"port '{Name}' carries {_format}, not video; GetPixels is video-only.");
 
-        uint floats = checked(width * height * 4);
-        void* buffer = Interop.Native.pw_filter_get_dsp_buffer(_portData, floats);
-        return buffer is null ? default : new Span<float>(buffer, checked((int)floats));
+        return DspBuffer(checked(width * height * 4));
+    }
+
+    /// <summary>
+    /// <c>pw_filter_get_dsp_buffer</c>, bounded by the buffer it hands out.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same steps as upstream's (filter.c): dequeue, take the first data, on an output port
+    /// claim the chunk, queue it back, return the data. Done here rather than called, because
+    /// upstream's returns a bare pointer and never compares the count with the buffer's
+    /// <c>maxsize</c> - its callers are C, and size from the position area and live with it. A span
+    /// built over that pointer for the asked-for count is a write past the buffer whenever the two
+    /// disagree, and they do: the graph can publish a video size before the buffers it allocated for
+    /// the old one are replaced. That wrote past a DSP video buffer and took the test host down with
+    /// an access violation (lab box, 2026-09-15).
+    /// </para>
+    /// <para>
+    /// A cycle whose buffer cannot hold what was asked for returns empty, which a caller already
+    /// handles as "no buffer this cycle"; a partial frame or quantum is not one. An output port's
+    /// buffer is still queued back, with an empty chunk, so it is not lost to the graph.
+    /// </para>
+    /// </remarks>
+    private Span<float> DspBuffer(uint floats)
+    {
+        pw_buffer* buf = Interop.Native.pw_filter_dequeue_buffer(_portData);
+        if (buf is null) return default;
+
+        spa_buffer* sb = buf->buffer;
+        if (sb is null || sb->n_datas == 0 || sb->datas is null || sb->datas[0].data is null)
+        {
+            _ = Interop.Native.pw_filter_queue_buffer(_portData, buf);
+            return default;
+        }
+
+        spa_data* d = &sb->datas[0];
+        ulong bytes = (ulong)floats * sizeof(float);
+        bool fits = bytes <= d->maxsize;
+
+        if (Direction == PipeWirePortDirection.Out && d->chunk is not null)
+        {
+            d->chunk->offset = 0;
+            d->chunk->size = fits ? (uint)bytes : 0;
+            d->chunk->stride = sizeof(float);
+            d->chunk->flags = 0;
+        }
+
+        _ = Interop.Native.pw_filter_queue_buffer(_portData, buf);
+        return fits ? new Span<float>(d->data, checked((int)floats)) : default;
     }
 
     /// <summary>

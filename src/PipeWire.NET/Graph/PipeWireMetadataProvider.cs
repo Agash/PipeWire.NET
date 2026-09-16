@@ -232,6 +232,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
             if (exported is not null)
             {
                 _exported = new PipeWireProxyHandle(exported, _ctx.LoopOwner, _ctx.CoreOwner!);
+                _ctx.ServedStores.TryAdd(this, 0);
                 LogExported(Name);
             }
             else
@@ -241,6 +242,18 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
         }
 
         LogRegistered(Name);
+    }
+
+    /// <summary>The id of the global the daemon made for this store, once it has; otherwise null.</summary>
+    internal unsafe uint? ServedGlobalId
+    {
+        get
+        {
+            PipeWireProxyHandle? exported = _exported;
+            if (exported is null || exported.IsInvalid) return null;
+            uint id = Native.pw_proxy_get_bound_id(exported.Proxy);
+            return id == NativeConstants.SPA_ID_INVALID ? null : id;
+        }
     }
 
     /// <summary>
@@ -442,6 +455,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
         // The listener's memory goes with the handle, freed after the implementation is destroyed.
         // Before the implementation: the exported proxy points at it, and withdrawing the store
         // from the daemon has to happen while the thing being withdrawn still exists.
+        _ctx.ServedStores.TryRemove(this, out _);
         _exported?.Dispose();
         _exported = null;
 

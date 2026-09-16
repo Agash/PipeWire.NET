@@ -116,6 +116,12 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
     /// graph schedules them. Pair with <see cref="TriggerProcess"/>, and with
     /// <see cref="CommandReceived"/> to answer <see cref="SpaNodeCommand.RequestProcess"/>.
     /// </param>
+    /// <param name="autoConnect">
+    /// When true the session manager routes this stream. Pass <see langword="false"/> to publish
+    /// the node unlinked and link it deliberately (<see cref="Graph.PipeWireRegistry.CreateLinkAsync(Graph.PipeWirePort, Graph.PipeWirePort, CancellationToken)"/>),
+    /// out of the session manager's policy entirely: nothing moves it to another source when a
+    /// linked one goes, and nothing links it to a default. What a patchbay or a router wants.
+    /// </param>
     /// <param name="cancellationToken">
     /// Abandons the wait for the loop lock. The connect request itself is issued
     /// synchronously once that is held, so there is nothing to recall after it.
@@ -125,6 +131,7 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
         string? targetObjectName = null,
         bool stayWithTheSource = false,
         bool pullMode = false,
+        bool autoConnect = true,
         CancellationToken cancellationToken = default)
     {
         if (_core is not null) throw new InvalidOperationException("Already connected.");
@@ -159,7 +166,8 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
         try
         {
             core.Connect(SpaDirection.Input, targetNodeId,
-            PipeWireStreamFlags.Autoconnect | PipeWireStreamFlags.MapBuffers
+            PipeWireStreamFlags.MapBuffers
+                | (autoConnect ? PipeWireStreamFlags.Autoconnect : 0)
                 | (stayWithTheSource ? PipeWireStreamFlags.DontReconnect : 0)
                 | (pullMode ? PipeWireStreamFlags.Driver : 0),
             pod[..len],

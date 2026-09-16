@@ -295,21 +295,51 @@ public sealed class HostileControlTests : PipeWireTestBase
             ImmutableArray<SpaAudioChannel> map = await control.GetChannelMapAsync(cts.Token);
             Assert.AreEqual(2, map.Length, "a stereo node has two channels");
 
-            // Eight volumes for a two-channel node. PipeWire stores the array verbatim rather than
-            // refusing or truncating it, so the node reports eight from now on - the trap this pins,
-            // because nothing errors and a mixer would quietly be driving channels that do not exist.
+            // Eight volumes for a two-channel node. Nothing refuses it, and what the node does with it
+            // depends on whether it has a format yet (audioconvert.c): without one the array is
+            // stored as given, eight entries; with one, set_volume remaps and fix_volumes folds a
+            // count that does not match into that many copies of the average. Which of the two a
+            // fresh node is in is the session manager's timing, so both are the contract and
+            // anything else is not.
             await control.SetChannelVolumesAsync([.. Enumerable.Repeat(0.1f, 8)], cts.Token);
-            Assert.AreEqual(8, (await control.GetChannelVolumesAsync(cts.Token)).Length,
-                "PipeWire stores a mismatched volume array as given");
+            ImmutableArray<float> mismatched = await control.GetChannelVolumesAsync(cts.Token);
+            bool storedAsGiven = mismatched.Length == 8 && mismatched.All(v => Math.Abs(v - 0.1f) < 0.001f);
+            bool folded = mismatched.Length == 2 && mismatched.All(v => Math.Abs(v - 0.1f) < 0.001f);
+            Assert.IsTrue(storedAsGiven || folded,
+                $"a mismatched volume array was neither stored as given nor folded to the channel count: [{string.Join(", ", mismatched)}]");
 
             // The channel map does not follow it, which is what makes the map the authority.
             Assert.AreEqual(2, (await control.GetChannelMapAsync(cts.Token)).Length,
                 "the channel map must still describe the node, not the last bad write");
 
-            await control.SetChannelVolumesAsync([0.3f, 0.7f], cts.Token);
-            ImmutableArray<float> after = await control.GetChannelVolumesAsync(cts.Token);
-            Assert.AreEqual(2, after.Length);
-            Assert.AreEqual(0.3f, after[0], 0.01f);
+            // Read until the node has applied it, and write again if something else wrote over it.
+            // A set is a request the node processes on its own time. Under the full suite's load,
+            // on the lab box, a fresh node read two channels at unity for two seconds after this
+            // write, while 25 runs of the test alone never did: another writer (the session
+            // manager still configuring the new node) landing after ours. Corruption, the subject
+            // here, is a matching write that never takes, and that still fails; the history of
+            // every read is in the message either way.
+            var history = new List<string>();
+            ImmutableArray<float> after = [];
+            for (int write = 0; write < 3 && !Matches(after); write++)
+            {
+                await control.SetChannelVolumesAsync([0.3f, 0.7f], cts.Token);
+                for (int i = 0; i < 20; i++)
+                {
+                    after = await control.GetChannelVolumesAsync(cts.Token);
+                    history.Add($"w{write}:[{string.Join(",", after)}]");
+                    if (Matches(after)) break;
+                    await Task.Delay(50, cts.Token);
+                }
+            }
+
+            if (history.Count > 1)
+                Console.Error.WriteLine($"channel volumes converged after: {string.Join(" ", history)}");
+
+            Assert.IsTrue(Matches(after),
+                $"a matching write never took after the mismatched one; reads: {string.Join(" ", history)}");
+
+            static bool Matches(ImmutableArray<float> v) => v.Length == 2 && Math.Abs(v[0] - 0.3f) < 0.01f;
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }

@@ -192,6 +192,12 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
     /// fallback, and activates. <see cref="NegotiatedDevice"/> says which device was chosen; a producer
     /// that does not negotiate is offered the first device's modifiers without a device.
     /// </param>
+    /// <param name="autoConnect">
+    /// When true the session manager routes this stream. Pass <see langword="false"/> to publish
+    /// the node unlinked and link it deliberately (<see cref="Graph.PipeWireRegistry.CreateLinkAsync(Graph.PipeWirePort, Graph.PipeWirePort, CancellationToken)"/>),
+    /// out of the session manager's policy entirely: nothing moves it to another source when a
+    /// linked one goes, and nothing links it to a default. What a patchbay or a router wants.
+    /// </param>
     /// <param name="cancellationToken">
     /// Abandons the wait for the loop lock. The connect request itself is issued
     /// synchronously once that is held, so there is nothing to recall after it.
@@ -207,6 +213,7 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
         int preferredFrameRate = 30,
         bool requestExplicitSync = false,
         ReadOnlySpan<DmaBufDeviceOffer> deviceOffers = default,
+        bool autoConnect = true,
         CancellationToken cancellationToken = default)
     {
         if (_core is not null) throw new InvalidOperationException("Already connected.");
@@ -281,7 +288,8 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
         try
         {
             core.Connect(SpaDirection.Input, targetNodeId,
-            PipeWireStreamFlags.Autoconnect | PipeWireStreamFlags.MapBuffers
+            PipeWireStreamFlags.MapBuffers
+                | (autoConnect ? PipeWireStreamFlags.Autoconnect : 0)
                 | (stayWithTheSource ? PipeWireStreamFlags.DontReconnect : 0)
                 | (pullMode ? PipeWireStreamFlags.Driver : 0)
                 | (negotiateDevices ? PipeWireStreamFlags.Inactive : 0),

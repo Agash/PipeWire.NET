@@ -27,7 +27,7 @@ namespace PipeWire.NET;
 /// </para>
 /// </remarks>
 [SupportedOSPlatform("linux")]
-public sealed class PipeWireContext : IDisposable, IAsyncDisposable
+public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
 {
     // Lifecycle admission, in one order everywhere: the gate first, the native loop mutex
     // second, never nested the other way. Admission under the gate hands
@@ -86,6 +86,29 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     /// </summary>
     internal ILoggerFactory LoggerFactory { get; }
 
+    /// <summary>
+    /// Records a loop unlock the loop refused. The mutex is still held by this thread when this
+    /// runs, so whatever next needs it will wait; this is the only moment the cause is visible.
+    /// </summary>
+    internal void ReportRefusedUnlock(int result)
+    {
+        Interlocked.Increment(ref _refusedUnlocks);
+        LogRefusedUnlock(Environment.CurrentManagedThreadId, result, Environment.StackTrace);
+    }
+
+    /// <summary>Releases a hold taken with <c>pw_thread_loop_lock</c>, reporting a refusal.</summary>
+    internal unsafe void UnlockLoop(pw_thread_loop* loop)
+    {
+        int rc = Native.pw_thread_loop_unlock_checked(loop);
+        if (rc < 0) ReportRefusedUnlock(rc);
+    }
+
+    private long _refusedUnlocks;
+    private readonly ILogger _logger;
+
+    /// <summary>How many loop unlocks the loop has refused; anything but 0 is a held mutex.</summary>
+    internal long RefusedUnlocks => Interlocked.Read(ref _refusedUnlocks);
+
     /// <summary>Initializes PipeWire and creates the thread-loop + context (not yet started).</summary>
     /// <param name="name">Context name advertised to the daemon and used as the loop-thread name.</param>
     /// <param name="loggerFactory">
@@ -97,6 +120,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         ArgumentException.ThrowIfNullOrEmpty(name);
         _name = name;
         LoggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
+        _logger = LoggerFactory.CreateLogger<PipeWireContext>();
         _shutdownToken = _shutdown.Token;
         InitializeNative(name);
     }
@@ -287,6 +311,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
             throw new PipeWireInteropException("pw_thread_loop_new", -NativeConstants.ENOMEM);
 
         _loopHandle = new PipeWireLoopHandle(loop);
+        _loopHandle.RefusedUnlock = ReportRefusedUnlock;
 
         pw_context* context = Native.pw_context_new(
             Native.pw_thread_loop_get_loop(loop),
@@ -569,7 +594,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
             }
             finally
             {
-                Native.pw_thread_loop_unlock(loop);
+                UnlockLoop(loop);
             }
 
             if (core is null)
@@ -769,6 +794,14 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
     internal PipeWireLoopHandle LoopOwner =>
         _loopHandle ?? throw new ObjectDisposedException(nameof(PipeWireContext));
 
+    /// <summary>The metadata stores this connection exports, which it must not bind itself.</summary>
+    /// <remarks>
+    /// Kept by the providers (added on export, removed on dispose) and read by the registry, which
+    /// refuses to bind one of these through this connection: module-metadata would stop reading the
+    /// connection until it answered a ping it can then never be heard answering.
+    /// </remarks>
+    internal System.Collections.Concurrent.ConcurrentDictionary<Graph.PipeWireMetadataProvider, byte> ServedStores { get; } = new();
+
     /// <inheritdoc/>
     /// <summary>Tears down synchronously. Disposal here does no I/O.</summary>
     /// <remarks>
@@ -819,7 +852,7 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
             {
                 Native.pw_thread_loop_lock(loop.Loop);
                 try { Native.spa_hook_remove(_watchHook); }
-                finally { Native.pw_thread_loop_unlock(loop.Loop); }
+                finally { UnlockLoop(loop.Loop); }
             }
             else
             {
@@ -955,6 +988,10 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
         _loopHandle = null;
     }
 
+    [LoggerMessage(EventId = 34700, Level = LogLevel.Error,
+        Message = "the loop refused an unlock ({Result}) on managed thread {ThreadId}; the loop mutex is still held by that thread and the next thread that needs it will wait for ever. At: {StackTrace}")]
+    private partial void LogRefusedUnlock(int threadId, int result, string stackTrace);
+
     /// <summary>
     /// RAII scope holding the PipeWire thread-loop lock. Created by <see cref="Lock"/>.
     /// </summary>
@@ -1006,7 +1043,8 @@ public sealed class PipeWireContext : IDisposable, IAsyncDisposable
             if (Interlocked.Exchange(ref _released, 1) != 0) return;
             try
             {
-                Native.pw_thread_loop_unlock(_loop);
+                int rc = Native.pw_thread_loop_unlock_checked(_loop);
+                if (rc < 0) _context.ReportRefusedUnlock(rc);
                 _handle.DangerousRelease();
             }
             finally

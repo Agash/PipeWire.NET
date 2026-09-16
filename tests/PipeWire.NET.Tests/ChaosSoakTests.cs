@@ -548,8 +548,23 @@ public sealed class ChaosSoakTests : PipeWireTestBase
 
                 PipeWireGraphSnapshot graph = registry.Current;
 
-                PipeWirePort? output = graph.Ports.FirstOrDefault(p => p.PortDirection == PipeWirePortDirection.Out);
-                PipeWirePort? input = graph.Ports.FirstOrDefault(p => p.PortDirection == PipeWirePortDirection.In);
+                // Pairs that can negotiate, between two of the soak's own nodes. Arbitrary ports
+                // from the whole graph mostly cannot (on a desktop the first pair was MIDI into
+                // audio), so each attempt was a refusal the daemon logs as an error: hundreds per
+                // run, burying any real one, and reaching into the machine's own devices.
+                HashSet<uint> ours = graph.Nodes
+                    .Where(n => n.NodeName?.StartsWith(SoakPrefix, StringComparison.Ordinal) == true)
+                    .Select(n => n.NodeId)
+                    .ToHashSet();
+
+                PipeWirePort? output = graph.Ports.FirstOrDefault(p =>
+                    p.PortDirection == PipeWirePortDirection.Out && ours.Contains(p.NodeId) && p.DspFormat is not null);
+                PipeWirePort? input = output is null
+                    ? null
+                    : graph.Ports.FirstOrDefault(p =>
+                        p.PortDirection == PipeWirePortDirection.In && ours.Contains(p.NodeId)
+                        && p.NodeId != output.NodeId
+                        && string.Equals(p.DspFormat, output.DspFormat, StringComparison.Ordinal));
 
                 if (output is null || input is null)
                 {
@@ -562,12 +577,11 @@ public sealed class ChaosSoakTests : PipeWireTestBase
                     PipeWireLink link = await registry.CreateLinkAsync(output, input, ct);
                     await registry.DestroyGlobalAsync(link.LinkId, ct);
                 }
-                catch (ArgumentException) { /* the ports face the wrong way or one just left */ }
+                catch (ArgumentException) { /* one of the ports just left with its node */ }
                 catch (PipeWireException)
                 {
-                    // The daemon refused this pairing, which is the expected answer most of the
-                    // time: the actor links arbitrary ports from the whole graph, so most pairs
-                    // cannot negotiate a format at all. Refusing is the daemon working.
+                    // One end destroyed between the snapshot and the link: the maker is unmaking
+                    // these nodes continuously, and WirePlumber reaps some on its own.
                 }
             }
         }

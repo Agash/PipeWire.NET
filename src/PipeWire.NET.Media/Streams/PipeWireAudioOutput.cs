@@ -89,6 +89,12 @@ public sealed class PipeWireAudioOutput : IAsyncDisposable
     /// the node and leave it unrouted, so a caller can link it deliberately. A test or a transport
     /// usually wants that; a media player does not.
     /// </param>
+    /// <param name="driver">
+    /// Ask to be the graph's driver (<c>PW_STREAM_FLAG_DRIVER</c>), so cycles happen when this stream
+    /// triggers them rather than on another node's clock - upstream's video-src and audio-src connect
+    /// this way to pace their own output. Pair with <see cref="DriveAt"/>. The daemon still decides:
+    /// <see cref="IsDriving"/> says whether it did. Without it the stream is only ever a follower.
+    /// </param>
     /// <param name="cancellationToken">
     /// Abandons the wait for the loop lock. The connect request itself is issued
     /// synchronously once that is held, so there is nothing to recall after it.
@@ -97,6 +103,7 @@ public sealed class PipeWireAudioOutput : IAsyncDisposable
         uint targetNodeId = AnyNode,
         string? targetObjectName = null,
         bool autoConnect = true,
+        bool driver = false,
         CancellationToken cancellationToken = default)
     {
         if (_core is not null) throw new InvalidOperationException("Already connected.");
@@ -123,6 +130,7 @@ public sealed class PipeWireAudioOutput : IAsyncDisposable
 
         PipeWireStreamFlags flags = PipeWireStreamFlags.MapBuffers;
         if (autoConnect) flags |= PipeWireStreamFlags.Autoconnect;
+        if (driver) flags |= PipeWireStreamFlags.Driver;
 
         Span<byte> pod = stackalloc byte[256];
         int len = SpaFormatPod.WriteAudioFormat(pod, _format, _sampleRate, _channels);

@@ -32,9 +32,15 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
         : base(ctx, id) => _logger = logger;
 
     internal static unsafe PipeWireNodeControl Bind(
-        PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger)
+        PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger,
+        Action<uint, PipeWireProperties>? propertiesObserved = null)
     {
-        var control = new PipeWireNodeControl(ctx, id, logger);
+        // The observer is in place before the proxy is bound: the first info after a bind is the
+        // only one that carries the object's properties (later ones set no PROPS in their change
+        // mask, so their dictionary arrives empty), and it can arrive the moment the bind is sent.
+        // Assigned after Bind returned, a fast daemon's first info found no observer and the
+        // properties never reached the registry.
+        var control = new PipeWireNodeControl(ctx, id, logger) { PropertiesObserved = propertiesObserved };
         control.Attach(BoundProxy.Bind(
             ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Node, version, NativeConstants.PW_VERSION_NODE,
             sizeof(pw_node_events),
@@ -62,7 +68,7 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
     /// </remarks>
     public async Task<float?> GetVolumeAsync(CancellationToken cancellationToken = default)
     {
-        SpaObject? props = await GetParameterAsync(SpaParamType.Props, cancellationToken)
+        SpaObject? props = await GetParameterOrNullAsync(SpaParamType.Props, cancellationToken)
             .ConfigureAwait(false);
         return props?[(uint)SpaProp.Volume] is SpaFloat volume ? volume.Value : null;
     }
@@ -78,7 +84,7 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
     public async Task<ImmutableArray<float>> GetChannelVolumesAsync(
         CancellationToken cancellationToken = default)
     {
-        SpaObject? props = await GetParameterAsync(SpaParamType.Props, cancellationToken)
+        SpaObject? props = await GetParameterOrNullAsync(SpaParamType.Props, cancellationToken)
             .ConfigureAwait(false);
         return ReadFloatArray(props, SpaProp.ChannelVolumes);
     }
@@ -87,7 +93,7 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
     /// <param name="cancellationToken">Abandons the wait.</param>
     public async Task<bool?> GetMutedAsync(CancellationToken cancellationToken = default)
     {
-        SpaObject? props = await GetParameterAsync(SpaParamType.Props, cancellationToken)
+        SpaObject? props = await GetParameterOrNullAsync(SpaParamType.Props, cancellationToken)
             .ConfigureAwait(false);
         return props?[(uint)SpaProp.Mute] is SpaBool muted ? muted.Value : null;
     }
@@ -222,7 +228,7 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
     public async Task<ImmutableArray<SpaAudioChannel>> GetChannelMapAsync(
         CancellationToken cancellationToken = default)
     {
-        SpaObject? props = await GetParameterAsync(SpaParamType.Props, cancellationToken)
+        SpaObject? props = await GetParameterOrNullAsync(SpaParamType.Props, cancellationToken)
             .ConfigureAwait(false);
 
         if (props?[SpaProp.ChannelMap] is not SpaArray map)
@@ -256,7 +262,7 @@ public sealed partial class PipeWireNodeControl : PipeWireParameterObject
     /// <param name="cancellationToken">Abandons the wait.</param>
     public async Task<long?> GetLatencyOffsetAsync(CancellationToken cancellationToken = default)
     {
-        SpaObject? props = await GetParameterAsync(SpaParamType.Props, cancellationToken)
+        SpaObject? props = await GetParameterOrNullAsync(SpaParamType.Props, cancellationToken)
             .ConfigureAwait(false);
         return props?[(uint)SpaProp.LatencyOffsetNsec] is SpaLong offset ? offset.Value : null;
     }

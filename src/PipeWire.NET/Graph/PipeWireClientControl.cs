@@ -18,18 +18,22 @@ namespace PipeWire.NET.Graph;
 /// decision a restricted client sees an empty graph.
 /// </para>
 /// <para>
-/// An ordinary application cannot do this to another client - the daemon refuses - and it is
-/// refused out of band, on the core's error stream. That is why
+/// The daemon checks the manager permission (<c>M</c>) on the client object being changed. A
+/// restricted caller without it is refused, out of band, on the core's error stream, which is why
 /// <see cref="UpdatePermissionsAsync"/> round-trips rather than returning as soon as the call is
-/// made.
+/// made. An unrestricted client holds <c>M</c> on every other client by default
+/// (<c>module-access</c>), so in an ordinary session the change is simply applied: this is a
+/// session manager's tool, and it acts on whatever client it is pointed at.
 /// </para>
 /// <para>
-/// <strong>Do not write permissions to a client you do not manage.</strong> On PipeWire 1.6.8 the
-/// daemon does not refuse it, it dies: a default-deny entry against a client the caller has no
-/// manager rights over segfaults inside <c>pw_impl_client_update_permissions</c> and takes the
-/// session with it, so the round-trip never answers and the caller sees a cancellation rather than
-/// the documented refusal. Restricting the connection's own client is safe, and is what
-/// <see cref="ConfineToAsync"/> is normally for.
+/// <strong>On PipeWire 1.6.8, withdrawing read access can abort the daemon.</strong> When a change
+/// takes <c>R</c> away, <c>pw_global_update_permissions</c> destroys the client's resources on that
+/// object while walking the object's resource list, called from a walk over every object. A destroy
+/// can take other resources with it, and the object itself when the client exported it, so the walks
+/// continue into destroyed or freed memory (<c>assert(!resource->destroyed)</c>, or a segfault).
+/// Whether it happens depends on what the target holds and serves, the caller's own client included;
+/// the round-trip then never answers and the caller sees a cancellation. Fixed by the upstream patch this
+/// repository carries (<c>repro/libpipewire-permissions.patch</c>).
 /// </para>
 /// </remarks>
 [SupportedOSPlatform("linux")]
@@ -95,8 +99,7 @@ public sealed partial class PipeWireClientControl : IDisposable, IAsyncDisposabl
     /// client already had - so a self-directed grant silently does nothing.
     /// </para>
     /// <para>
-    /// Writing permissions to a client this connection does not manage can kill the daemon on
-    /// 1.6.8; see the remarks on this class.
+    /// Withdrawing read access can abort a 1.6.8 daemon; see the remarks on this class.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException"><paramref name="permissions"/> is empty.</exception>
@@ -142,8 +145,8 @@ public sealed partial class PipeWireClientControl : IDisposable, IAsyncDisposabl
     /// first, so nothing is left permitted by omission.
     /// </para>
     /// <para>
-    /// Safe against the connection's own client. Against a client this connection does not manage it
-    /// is the exact shape that kills the daemon on 1.6.8; see the remarks on this class.
+    /// The deny-everything default withdraws read access from everything not granted, which is the
+    /// change that can abort a 1.6.8 daemon; see the remarks on this class.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException">
