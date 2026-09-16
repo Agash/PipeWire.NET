@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
-using PipeWire.NET.Media.Streams;
 using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Tests;
@@ -19,7 +19,6 @@ namespace PipeWire.NET.Tests;
 [TestClass]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
-[TestCategory("RequiresGStreamer")]
 [SupportedOSPlatform("linux")]
 public sealed class StreamingSurfaceTests
 {
@@ -47,6 +46,7 @@ public sealed class StreamingSurfaceTests
     /// with. Retention producing frames without those would be pointless.
     /// </summary>
     [TestMethod]
+    [TestCategory("RequiresGStreamer")]
     public async Task AnOwnedFrame_CarriesWhatAConsumerPullsItFor()
     {
         RequireLinux();
@@ -86,6 +86,7 @@ public sealed class StreamingSurfaceTests
 
     /// <summary>Borrowed retention allocates nothing, so it must still deliver a usable frame.</summary>
     [TestMethod]
+    [TestCategory("RequiresGStreamer")]
     public async Task ABorrowedFrame_ArrivesAndDescribesItself()
     {
         RequireLinux();
@@ -120,6 +121,7 @@ public sealed class StreamingSurfaceTests
     /// permanently empty reading is what an error term computed from it would silently inherit.
     /// </summary>
     [TestMethod]
+    [TestCategory("RequiresGStreamer")]
     public async Task AStreamingCapture_ReportsItsQueueAndClock()
     {
         RequireLinux();
@@ -162,6 +164,7 @@ public sealed class StreamingSurfaceTests
 
     /// <summary>Retagging a live stream, rather than tearing it down to rename it.</summary>
     [TestMethod]
+    [TestCategory("RequiresGStreamer")]
     public async Task UpdatingPropertiesOnALiveStream_IsAccepted()
     {
         RequireLinux();
@@ -199,6 +202,7 @@ public sealed class StreamingSurfaceTests
     /// under load must not be dropping the connection with them.
     /// </summary>
     [TestMethod]
+    [TestCategory("RequiresGStreamer")]
     public async Task SkippingFrames_DoesNotStopTheStream()
     {
         RequireLinux();
@@ -233,64 +237,157 @@ public sealed class StreamingSurfaceTests
     }
 
     /// <summary>
-    /// Asking the producer for a different size mid-stream. What is pinned is that the offer goes
-    /// out and the stream survives it; whether the peer accepts is the peer's business.
+    /// A renegotiation request sent to a real gst producer leaves this side usable, whether or not
+    /// the producer answers.
     /// </summary>
+    /// <remarks>
+    /// <c>pipewiresink</c> wedges on this about a quarter of the time and never recovers, so what is
+    /// pinned is that its deadlock stays its own: the offer is accepted, this stream does not error,
+    /// teardown completes, and the connection still serves. Frames resuming is the peer's to do, and
+    /// is pinned against a producer that answers in
+    /// <see cref="RequestingADifferentFormat_IsSentAndSurvived"/>.
+    /// </remarks>
+    [TestMethod]
+    [TestCategory("RequiresGStreamer")]
+    public async Task ARenegotiationAGstProducerMayNotAnswer_LeavesThisSideUsable()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
+        (PipeWireContext ctx, GstTestSource src) = await SourceAsync("pwnet-surface-gstreneg");
+        await using (ctx)
+        await using (src)
+        {
+            var frames = 0;
+            PipeWireStreamState last = PipeWireStreamState.Unconnected;
+
+            await using (var cap = new PipeWireVideoCapture(ctx, "pwnet-surface-gstreneg-sink"))
+            {
+                cap.FrameReady += (_, _) => Interlocked.Increment(ref frames);
+                cap.StateChanged += (_, _, state) => last = state;
+
+                cap.Connect(src.NodeId);
+                await cap.WaitForStreamingAsync(cts.Token);
+
+                for (var i = 0; i < 100 && Volatile.Read(ref frames) == 0; i++)
+                    await Task.Delay(50, cts.Token);
+
+                Assert.IsTrue(Volatile.Read(ref frames) > 0, "the gst producer never delivered a frame");
+
+                PixelFormat[] formats = [PixelFormat.Bgra];
+                Assert.IsTrue(
+                    cap.RequestFormat(formats, 160, 120),
+                    "the renegotiation offer was refused outright");
+
+                // Long enough for the peer to either re-settle the link or wedge. Either is a pass;
+                // what is not is this side being taken down with it.
+                await Task.Delay(TimeSpan.FromSeconds(3), cts.Token);
+
+                Assert.AreNotEqual(
+                    PipeWireStreamState.Error, last,
+                    "a peer that did not answer the renegotiation put this stream into Error");
+
+                Assert.IsFalse(ctx.IsDisposed, "the context did not survive the renegotiation");
+            }
+
+            // Teardown of the renegotiating stream completed (the await using above would otherwise
+            // still be in it), and the connection still answers afterwards.
+            await using var reg = new PipeWireRegistry(ctx);
+            await reg.WaitForInitialEnumerationAsync(cts.Token);
+
+            Assert.IsTrue(
+                reg.Current.Nodes.Any(),
+                "the connection stopped serving after a renegotiation the peer did not answer");
+        }
+    }
+
+    /// <summary>
+    /// Asking the producer for a different size mid-stream: the offer goes out, the peer re-settles
+    /// the link, and frames resume.
+    /// </summary>
+    /// <remarks>
+    /// This library's own producer rather than gst, because <c>pipewiresink</c> deadlocks on a
+    /// consumer-initiated renegotiation about a quarter of the time (<c>on_param_changed</c> waits
+    /// for the gst pool while holding the loop lock the pool needs to go active). A gst producer
+    /// here would measure that bug rather than this renegotiation; the interop side is
+    /// <see cref="ARenegotiationAGstProducerMayNotAnswer_LeavesThisSideUsable"/>.
+    /// </remarks>
     [TestMethod]
     public async Task RequestingADifferentFormat_IsSentAndSurvived()
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
-        (PipeWireContext ctx, GstTestSource src) = await SourceAsync("pwnet-surface-reneg");
-        await using (ctx)
-        await using (src)
+
+        await using var ctx = new PipeWireContext("pwnet-surface-reneg", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+
+        await using var src = new PipeWireVideoOutput(
+            ctx, "pwnet-surface-reneg-src", 320, 240, PixelFormat.Bgra, 30);
+
+        src.FillFrame += (_, pixels, _, _, _, _) =>
         {
-            await using var cap = new PipeWireVideoCapture(ctx, "pwnet-surface-reneg-sink");
-            cap.Connect(src.NodeId);
-            await cap.WaitForStreamingAsync(cts.Token);
+            pixels.Fill(0x40);
+            return true;
+        };
 
-            var afterReneg = 0;
-            var states = new System.Collections.Concurrent.ConcurrentQueue<PipeWireStreamState>();
-            cap.FrameReady += (_, _) => Interlocked.Increment(ref afterReneg);
-            cap.StateChanged += (_, _, s) => states.Enqueue(s);
+        src.Connect(autoConnect: false);
 
-            PixelFormat[] formats = [PixelFormat.Bgra];
-            Assert.IsTrue(
-                cap.RequestFormat(formats, 160, 120), "the renegotiation offer was refused outright");
-
-            // Survived means frames resume. A renegotiation takes the producer through a new format
-            // and new buffers, which under load takes longer than any fixed window this used to
-            // assume (600 ms, once too short on the lab box); a stream that did not survive never
-            // delivers again, however long this waits.
-            for (var i = 0; i < 200 && Volatile.Read(ref afterReneg) == 0; i++)
-                await Task.Delay(50, cts.Token);
-
-            Assert.IsTrue(
-                Volatile.Read(ref afterReneg) > 0,
-                "no frame arrived in 10 s after a renegotiation request, so the stream did not survive it; "
-                + $"states since: {string.Join(" -> ", states)}");
+        uint? nodeId = null;
+        for (var i = 0; i < 100 && nodeId is null; i++)
+        {
+            nodeId = src.NodeId;
+            if (nodeId is null) await Task.Delay(50, cts.Token);
         }
+
+        Assert.IsNotNull(nodeId, "the producer was never given a node id");
+
+        await using var cap = new PipeWireVideoCapture(ctx, "pwnet-surface-reneg-sink");
+
+        var before = 0;
+        var afterReneg = 0;
+        var renegotiated = false;
+        var states = new ConcurrentQueue<PipeWireStreamState>();
+
+        cap.FrameReady += (_, _) =>
+        {
+            if (Volatile.Read(ref renegotiated)) Interlocked.Increment(ref afterReneg);
+            else Interlocked.Increment(ref before);
+        };
+
+        cap.Connect(nodeId!.Value, [PixelFormat.Bgra]);
+        await cap.WaitForStreamingAsync(cts.Token);
+
+        for (var i = 0; i < 100 && Volatile.Read(ref before) == 0; i++)
+            await Task.Delay(50, cts.Token);
+
+        Assert.IsTrue(
+            Volatile.Read(ref before) > 0,
+            "no frame arrived before the renegotiation, so there was nothing to interrupt");
+
+        cap.StateChanged += (_, _, state) => states.Enqueue(state);
+        Volatile.Write(ref renegotiated, true);
+
+        // A range the producer's own 320x240 sits inside, so the peer can re-settle on what it
+        // already has. What is being tested is that the offer goes out and the link comes back,
+        // not that the producer can be made to change size.
+        PixelFormat[] formats = [PixelFormat.Bgra];
+        Assert.IsTrue(
+            cap.RequestFormat(formats, 160, 120), "the renegotiation offer was refused outright");
+
+        // Survived means frames resume. A renegotiation takes the peer through a new format and new
+        // buffers, which under load takes longer than any fixed window this used to assume (600 ms,
+        // once too short on the lab box); a stream that did not survive never delivers again,
+        // however long this waits.
+        for (var i = 0; i < 200 && Volatile.Read(ref afterReneg) == 0; i++)
+            await Task.Delay(50, cts.Token);
+
+        Assert.IsTrue(
+            Volatile.Read(ref afterReneg) > 0,
+            "no frame arrived in 10 s after a renegotiation request, so the stream did not survive it; "
+            + $"states since: {string.Join(" -> ", states)}");
     }
 
-    /// <summary>A consumer that drives: the trigger and the driver role are both reachable.</summary>
-    /// <summary>
-    /// A MemFd frame maps to its own pixels at its offset, the way upstream maps it.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Not page alignment: buffer.h documents mapoffset as page aligned, but upstream's shared pool
-    /// sets it to each buffer's offset inside one memfd (buffers.c), so 64 or 8320 are normal. What a
-    /// consumer relies on is that mapping the fd the way pw_map_range_init does - round the offset
-    /// down to the page, then step in by the remainder - lands on the frame's own pixels.
-    /// </para>
-    /// <para>
-    /// Fed by GStreamer because that is where MemFd frames come from. pipewiresink offers MemFd only
-    /// and allocates the memfds itself (gstpipewiresink.c); this library's producer offers MemPtr,
-    /// and buffers.c picks MemPtr whenever both sides allow it, so a pool between two of this
-    /// library's streams is never MemFd and cannot exercise this path.
-    /// </para>
-    /// </remarks>
     [TestMethod]
+    [TestCategory("RequiresGStreamer")]
     public async Task AMemFdFrame_MapsToItsOwnPixelsAtItsOffset()
     {
         RequireLinux();
@@ -330,6 +427,7 @@ public sealed class StreamingSurfaceTests
     }
 
     [TestMethod]
+    [TestCategory("RequiresGStreamer")]
     public async Task APullModeCapture_CanTriggerItsOwnCycles()
     {
         RequireLinux();

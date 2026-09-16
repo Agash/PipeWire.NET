@@ -24,3 +24,21 @@ On publish, `FillFrame` and `FillSamples` give you a span over the daemon's buff
 For a fully GPU-resident publish, `PipeWireVideoOutput.ConnectDmaBuf(modifiers)` advertises a set of DRM format modifiers, negotiates one with the consumer, and backs the stream with DMA-BUF buffers you own. Allocate your GPU surfaces in the `AllocateDmaBuf` callback (export each once, e.g. via `vkGetMemoryFdKHR`) and write the chosen buffer in `FillDmaBuf`; `ReleaseDmaBuf` tears them down. The producer can self-pace with `TriggerProcess`, and `NodeId` lets a consumer target the node directly.
 
 On a machine with more than one GPU, pass `DmaBufDeviceOffer`s (a `DrmDevice` and the modifiers it can use) to `ConnectDmaBuf` or to the capture's `Connect(deviceOffers:)` instead of bare modifiers. Both ends then negotiate which device the buffers live on, as PipeWire's device-ID negotiation does; `NegotiatedDevice` reports the result and `AllocateDmaBuf` is handed it. A peer that does not negotiate still streams, with the device left undefined.
+
+## Renegotiating against a GStreamer producer
+
+`RequestFormat` asks the peer to re-settle the link mid-stream. Against `pipewiresink` that wedges
+the producer roughly a quarter of the time, and it does not recover.
+
+The cause is in `pipewiresink`, not here: its `on_param_changed` blocks the PipeWire thread loop
+until the gst buffer pool goes active again (`gstpipewiresink.c`), and the pool is only reactivated
+from the streaming thread, which needs the loop lock the blocked callback is holding. What it looks
+like from this side is a stream that goes to `Paused` and either stays there or returns to
+`Streaming` and never delivers again. Measured on PipeWire 1.6.8: 4 stalls in 15 runs, with the
+sink's `pipewire-main-l` thread parked in `__futex_wait` rather than `epoll_wait`, after logging the
+removal of every buffer and nothing since.
+
+This side stays healthy through it - the stream does not error, teardown completes, and the
+connection keeps serving - which is what
+`ARenegotiationAGstProducerMayNotAnswer_LeavesThisSideUsable` pins. Until upstream fixes it, treat
+mid-stream renegotiation as something to do against producers you control.
