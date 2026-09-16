@@ -26,6 +26,18 @@ namespace PipeWire.NET.Tests;
 [SupportedOSPlatform("linux")]
 internal static class SessionGates
 {
+    /// <summary>The same comparison, as a question rather than a gate.</summary>
+    /// <remarks>
+    /// For a test whose subject is broader than the one behaviour that needs a newer daemon:
+    /// skipping the whole test would stop checking everything else it covers, which on the
+    /// runner is most of it.
+    /// </remarks>
+    internal static bool DaemonAtLeast(int major, int minor, int patch)
+    {
+        string? reported = Environment.GetEnvironmentVariable("PWNET_DAEMON_VERSION");
+        return reported is null || CompareVersions(reported, major, minor, patch) >= 0;
+    }
+
     internal static void RequireDaemonAtLeast(int major, int minor, int patch)
     {
         string? reported = Environment.GetEnvironmentVariable("PWNET_DAEMON_VERSION");

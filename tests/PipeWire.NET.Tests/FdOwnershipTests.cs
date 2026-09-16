@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Text.RegularExpressions;
 using Microsoft.Win32.SafeHandles;
 
 using PipeWire.NET.Graph;
@@ -127,9 +129,13 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
         bool connected = await TryStartOverAsync(context, stream.SafeFileHandle);
 
         // A connect that did go through leaves a Running context, where a further start is a
-        // no-op rather than a second connect.
+        // no-op rather than a second connect. Bounded anyway: a no-op that is not one would
+        // otherwise hang here instead of failing.
         if (connected)
-            await context.StartAsync(stream.SafeFileHandle);
+        {
+            using var second = new CancellationTokenSource(ConnectBudget);
+            await context.StartAsync(stream.SafeFileHandle, second.Token);
+        }
     }
 
     /// <summary>
@@ -143,15 +149,35 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
     /// fails. The ownership contract these tests pin holds on both outcomes, so neither is
     /// treated as the expected one.
     /// </remarks>
+    /// <summary>
+    /// How long a connect over a descriptor that is not a daemon socket is given before it is
+    /// treated as one that never completes.
+    /// </summary>
+    /// <remarks>
+    /// A backstop only. The connect runs inside libpipewire, so a token cannot interrupt one that
+    /// never returns - measured on PipeWire 1.0.5, where the two tests below ran until the test
+    /// framework's own per-test ceiling killed them five minutes later. The version gate is what
+    /// actually keeps that from happening; this bounds the cancellable part.
+    /// </remarks>
+    private static readonly TimeSpan ConnectBudget = TimeSpan.FromSeconds(15);
+
     private static async Task<bool> TryStartOverAsync(PipeWireContext context, SafeHandle handle)
     {
+        using var bounded = new CancellationTokenSource(ConnectBudget);
+
         try
         {
-            await context.StartAsync(handle);
+            await context.StartAsync(handle, bounded.Token);
             return true;
         }
         catch (PipeWireException)
         {
+            return false;
+        }
+        catch (OperationCanceledException)
+        {
+            // The connect neither completed nor was refused. The ownership contract below is what
+            // these tests pin, and it holds on all three outcomes.
             return false;
         }
     }

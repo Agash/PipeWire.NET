@@ -322,7 +322,15 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
             return samples.Length;
         };
         output.StateChanged += (_, _, now) => { lock (states) states.Add(now); };
-        output.Connect();
+
+        // A sink of our own to play into, rather than whatever the session happens to route to.
+        // Auto-connect needs the session manager to find a target, and a headless session has
+        // none - the stream is then refused with "no target node available" before it can reach
+        // the state this test is about.
+        PipeWireNode sink = await registry.CreateVirtualSinkAsync(
+            "pwnet destroyed stream sink", cancellationToken: cts.Token);
+
+        output.Connect(sink.NodeId);
 
         uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
         await output.WaitForStreamingAsync(cts.Token);
@@ -355,7 +363,12 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
             samples.Clear();
             return samples.Length;
         };
-        next.Connect();
+        // The same explicit target as the first stream: this one is proving the context still
+        // works, not that the session manager can find somewhere to route to.
+        next.Connect(sink.NodeId);
         await next.WaitForStreamingAsync(cts.Token);
+
+        await next.DisposeAsync();
+        await registry.DestroyGlobalAsync(sink.NodeId, cts.Token);
     }
 }

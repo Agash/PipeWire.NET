@@ -372,11 +372,27 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
             () => output.ConnectDmaBuf(ReadOnlySpan<DmaBufDeviceOffer>.Empty));
 
         // The same refusal reached through the sync form, which has state to unwind on the way out.
-        Assert.ThrowsExactly<ArgumentException>(
-            () => output.ConnectDmaBufSync(ReadOnlySpan<long>.Empty));
+        //
+        // Which refusal comes first depends on the machine: explicit sync needs a DRM render node
+        // to create syncobj timelines, and a host without one is told that before the offers are
+        // ever looked at. Both are correct refusals of the same call, and asserting only the second
+        // would fail on every runner that has no GPU.
+        if (DrmSyncobj.IsAvailable)
+        {
+            Assert.ThrowsExactly<ArgumentException>(
+                () => output.ConnectDmaBufSync(ReadOnlySpan<long>.Empty));
 
-        Assert.ThrowsExactly<ArgumentException>(
-            () => output.ConnectDmaBufSync(ReadOnlySpan<DmaBufDeviceOffer>.Empty));
+            Assert.ThrowsExactly<ArgumentException>(
+                () => output.ConnectDmaBufSync(ReadOnlySpan<DmaBufDeviceOffer>.Empty));
+        }
+        else
+        {
+            Assert.ThrowsExactly<InvalidOperationException>(
+                () => output.ConnectDmaBufSync(ReadOnlySpan<long>.Empty));
+
+            Assert.ThrowsExactly<InvalidOperationException>(
+                () => output.ConnectDmaBufSync(ReadOnlySpan<DmaBufDeviceOffer>.Empty));
+        }
 
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => output.StampSyncPoints(-1, 1, 2));
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => output.StampSyncPoints(4096, 1, 2));

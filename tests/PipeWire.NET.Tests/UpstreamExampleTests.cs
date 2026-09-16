@@ -719,9 +719,15 @@ public sealed class UpstreamExampleTests
             ump = reg.Current.GetPort(ump.Id) ?? ump;
         }
 
-        Assert.AreEqual(
-            "true",
-            ump.Properties.GetValueOrDefault("control.ump")?.ToLowerInvariant(),
-            "the UMP port reached the graph as plain MIDI, so MIDI 2.0 packets would be misread");
+        // The daemon only records the distinction from 1.6.8; before that a UMP port really is
+        // announced as plain MIDI and there is nothing on the wire to assert against. The rest of
+        // this test still runs, which is most of what it covers.
+        if (SessionGates.DaemonAtLeast(1, 6, 8))
+        {
+            Assert.AreEqual(
+                "true",
+                ump.Properties.GetValueOrDefault("control.ump")?.ToLowerInvariant(),
+                "the UMP port reached the graph as plain MIDI, so MIDI 2.0 packets would be misread");
+        }
     }
 }

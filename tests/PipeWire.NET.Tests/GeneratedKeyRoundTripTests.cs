@@ -134,6 +134,25 @@ public sealed class GeneratedKeyRoundTripTests
         PwTools.Require();
 
         using var cts = new CancellationTokenSource(Budget);
+
+        // A sink of our own, so the set below does not depend on the session having hardware. A
+        // headless runner has no card and therefore no ports at all, which made this fail for a
+        // reason that says nothing about whether the generated names match the wire.
+        await using var ctx = new PipeWireContext("pwnet-typenames", ConsoleTestLoggerFactory.Instance);
+        await ctx.StartAsync(cts.Token);
+        await using var reg = new PipeWireRegistry(ctx);
+        await reg.WaitForInitialEnumerationAsync(cts.Token);
+
+        PipeWireNode sink = await reg.CreateVirtualSinkAsync(
+            "pwnet type names", cancellationToken: cts.Token);
+
+        for (var i = 0; i < 100 && !reg.Current.Ports.Any(p => p.NodeId == sink.NodeId); i++)
+            await Task.Delay(50, cts.Token);
+
+        Assert.IsTrue(
+            reg.Current.Ports.Any(p => p.NodeId == sink.NodeId),
+            "the virtual sink never published a port, so there is nothing to compare against");
+
         PwDump dump = await PwDump.CaptureAsync(cts.Token);
 
         // pw-dump prints the full "PipeWire:Interface:Node" in each entry's type field.
@@ -161,6 +180,8 @@ public sealed class GeneratedKeyRoundTripTests
                 $"the daemon reports no object of type '{expected}'; the generated name does not "
                 + $"match the wire. Present: {string.Join(", ", types.Order(StringComparer.Ordinal))}");
         }
+
+        await reg.DestroyGlobalAsync(sink.NodeId, cts.Token);
     }
 
     /// <summary>

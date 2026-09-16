@@ -221,10 +221,17 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         Assert.IsTrue(threadsAfter <= threadsBefore + 1,
             $"threads grew {threadsBefore} -> {threadsAfter}, so loop threads are being stranded");
 
-        // Resident memory is the one that would show a per-pw_init allocation never released.
-        // Generous, because the allocator keeps what it takes: 100 rounds leaking even 8KB apiece
-        // would be 800KB and fail this.
-        Assert.IsTrue(rssAfter - rssBefore < 512 * 1024,
+        // Resident memory is the coarse backstop; the descriptor and thread counts above are the
+        // precise ones, and they are exact. What this catches is a per-pw_init allocation never
+        // released, which at these round counts is hundreds of kilobytes.
+        //
+        // The bound is what the allocator keeps, not what the process needs: glibc returns pages to
+        // its own arenas rather than the kernel, and how much it holds differs by version - the same
+        // 100 rounds retain about 600KB on Ubuntu 26.04 where they retained under 512KB on 24.04.
+        // A megabyte still fails a leak of 10KB a round, and stops a glibc upgrade reading as one.
+        const long RetainedBound = 1024 * 1024;
+
+        Assert.IsTrue(rssAfter - rssBefore < RetainedBound,
             $"resident memory grew {(rssAfter - rssBefore) / 1024}KB over {Rounds} contexts");
     }
 

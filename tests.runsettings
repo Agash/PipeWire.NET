@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A ceiling on any single test, so a hang is a named failure instead of a silent leg.
+
+  Every test here talks to a daemon, and several connect over descriptors that are not daemon
+  sockets on purpose. Whether such a connect completes, is refused, or waits forever for a handshake
+  depends on the PipeWire version underneath, which differs between a developer machine and a CI
+  runner. An await with no deadline turns the last of those into a run that produces no output at
+  all: the step sits until the job's own limit kills it, and the log ends at the command echo with
+  nothing to say which test was running.
+
+  The number is deliberately far above any real test. The slowest legitimate tests here are the
+  daemon end-to-end ones at roughly a minute, so five minutes cannot fire on a test that is merely
+  slow - it only catches one that is never coming back.
+-->
+<RunSettings>
+  <MSTest>
+    <TestTimeout>300000</TestTimeout>
+  </MSTest>
+</RunSettings>
