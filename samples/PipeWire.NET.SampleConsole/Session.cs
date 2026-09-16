@@ -33,7 +33,22 @@ internal sealed class Session : IAsyncDisposable
         var context = new PipeWireContext(name);
         try
         {
-            await context.StartAsync(cancellationToken).ConfigureAwait(false);
+            // Bounded, like the enumeration below. The only token here is the one Ctrl+C cancels,
+            // so a daemon that accepts the socket and never finishes the handshake would otherwise
+            // leave the command waiting for ever with nothing on screen to say why.
+            using var bounded = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken, bounded.Token);
+
+            try
+            {
+                await context.StartAsync(linked.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException(
+                    "the daemon did not complete the connection within 15s.");
+            }
         }
         catch
         {

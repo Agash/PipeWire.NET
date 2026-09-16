@@ -3,7 +3,7 @@
 <!-- Most CP0001 below are the 0.x package split moving types between assemblies, not dropped
      APIs; the Generated.* block is the ABI layer going internal after 0.2.3-alpha. Both come
      out once a newer release is the compared baseline. Regenerate with
-     dotnet pack -p:ApiCompatGenerateSuppressionFile=true after reviewing every entry here:
+     dotnet pack -p:GenerateCompatibilitySuppressionFile=true after reviewing every entry here:
      anything not covered by those two decisions is a real break. -->
 <Suppressions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <Suppression>
@@ -1038,6 +1038,13 @@
   <Suppression>
     <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:PipeWire.NET.PipeWireSource</Target>
+    <Left>lib/net10.0/PipeWire.NET.dll</Left>
+    <Right>lib/net10.0/PipeWire.NET.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:PipeWire.NET.PipeWireStreamState</Target>
     <Left>lib/net10.0/PipeWire.NET.dll</Left>
     <Right>lib/net10.0/PipeWire.NET.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>
@@ -2165,6 +2172,13 @@
   <Suppression>
     <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:PipeWire.NET.PipeWireSource</Target>
+    <Left>lib/net11.0/PipeWire.NET.dll</Left>
+    <Right>lib/net11.0/PipeWire.NET.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:PipeWire.NET.PipeWireStreamState</Target>
     <Left>lib/net11.0/PipeWire.NET.dll</Left>
     <Right>lib/net11.0/PipeWire.NET.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>

@@ -565,6 +565,15 @@ internal static unsafe partial class Native
     [DllImport("libpipewire-0.3", EntryPoint = "pw_stream_set_error", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern unsafe int pw_stream_set_error_raw(pw_stream* stream, int res, sbyte* error);
 
+    /// <summary>The version string of the libpipewire this process actually loaded.</summary>
+    /// <remarks>
+    /// Not generated: the declaration is in a header the generator does not read. It matters
+    /// because the bindings are produced against one release and the library resolved at runtime is
+    /// whatever the machine has, and the two disagreeing is not always a clean failure.
+    /// </remarks>
+    [DllImport("libpipewire-0.3", EntryPoint = "pw_get_library_version", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern unsafe sbyte* pw_get_library_version();
+
     /// <summary>
     /// Puts the filter into the error state and tells the daemon why.
     /// </summary>

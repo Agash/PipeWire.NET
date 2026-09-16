@@ -1624,10 +1624,12 @@ PipeWire.NET.PipeWireContext.EnterLoop()
 PipeWire.NET.PipeWireContext.IsDisposed : Boolean
 PipeWire.NET.PipeWireContext.IterateLoop(Int32)
 PipeWire.NET.PipeWireContext.LeaveLoop()
+PipeWire.NET.PipeWireContext.LibraryVersion : Version
 PipeWire.NET.PipeWireContext.LoadModule(String, String)
 PipeWire.NET.PipeWireContext.Lock()
 PipeWire.NET.PipeWireContext.LoopDescriptor : Int32
 PipeWire.NET.PipeWireContext.LoopLock
+PipeWire.NET.PipeWireContext.MinimumLibraryVersion : Version
 PipeWire.NET.PipeWireContext.RunInProcess : Boolean
 PipeWire.NET.PipeWireContext.StartAsync(CancellationToken)
 PipeWire.NET.PipeWireContext.StartAsync(SafeHandle, CancellationToken)

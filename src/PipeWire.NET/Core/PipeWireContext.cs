@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using PipeWire.NET.Interop;
@@ -160,7 +161,63 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     private static unsafe bool InitOnce()
     {
         Native.pw_init(null, null);
+        RequireASupportedLibrary();
         return true;
+    }
+
+    /// <summary>The oldest libpipewire this library is built against and supports.</summary>
+    /// <remarks>
+    /// The bindings are generated from the headers of one release, recorded in
+    /// <c>generate/HEADER-VERSION</c>, and this is that release's series. Running them against an
+    /// older library is not a supported configuration.
+    /// </remarks>
+    public static Version MinimumLibraryVersion { get; } = new(1, 6);
+
+    /// <summary>The libpipewire this process loaded, or <see langword="null"/> if it will not say.</summary>
+    /// <remarks>
+    /// <c>pw_get_library_version</c>, parsed down to major and minor. Worth reading when a report
+    /// does not reproduce: behaviour that is version-dependent is the usual reason.
+    /// </remarks>
+    public static Version? LibraryVersion => ParseLibraryVersion();
+
+    private static unsafe Version? ParseLibraryVersion()
+    {
+        string? text = Marshal.PtrToStringUTF8((IntPtr)Native.pw_get_library_version());
+        if (string.IsNullOrEmpty(text)) return null;
+
+        // "1.6.8", sometimes with a suffix. Only the leading two numbers are compared.
+        int firstDot = text.IndexOf('.', StringComparison.Ordinal);
+        if (firstDot <= 0) return null;
+
+        int secondDot = text.IndexOf('.', firstDot + 1);
+        string minorText = secondDot < 0 ? text[(firstDot + 1)..] : text[(firstDot + 1)..secondDot];
+
+        return int.TryParse(text[..firstDot], CultureInfo.InvariantCulture, out int major)
+            && int.TryParse(minorText, CultureInfo.InvariantCulture, out int minor)
+            ? new Version(major, minor)
+            : null;
+    }
+
+    /// <summary>
+    /// Refuses a libpipewire older than the one these bindings were generated against.
+    /// </summary>
+    /// <remarks>
+    /// Checked once, before anything connects, because the failure it prevents is not a clean one.
+    /// The bindings carry the newer release's struct layouts and interface versions; against an
+    /// older library the mismatch does not surface as an error but as a call that never comes back
+    /// - measured on 1.0.5, where a connection is established and the first registry round trip
+    /// then waits for an event that is never delivered. A refusal naming both versions is the
+    /// difference between a bug report and a process that has to be killed.
+    /// </remarks>
+    private static void RequireASupportedLibrary()
+    {
+        Version? runtime = ParseLibraryVersion();
+        if (runtime is null || runtime >= MinimumLibraryVersion) return;
+
+        throw new PipeWireException(
+            $"libpipewire {runtime} is older than the {MinimumLibraryVersion} these bindings are "
+            + "generated against, and the combination hangs rather than failing. Upgrade PipeWire, "
+            + "or use a build of this library generated against the installed release.");
     }
 
     /// <summary>
