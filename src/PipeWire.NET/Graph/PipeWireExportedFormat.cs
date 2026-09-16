@@ -10,7 +10,7 @@ namespace PipeWire.NET.Graph;
 /// <remarks>
 /// A node that implements itself has to answer the graph's questions about what it carries, which a
 /// stream does not: <c>pw_stream</c> builds these pods from its constructor arguments. This is the
-/// same information, in the form <see cref="PipeWireExportedNode"/> hands back when the graph
+/// same information, in the form <see cref="PipeWireNodeProvider"/> hands back when the graph
 /// enumerates its port parameters.
 /// </remarks>
 [SupportedOSPlatform("linux")]

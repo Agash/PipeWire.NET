@@ -8,10 +8,9 @@ namespace PipeWire.NET.Tests;
 /// The shipped public surface, and the documentation that claims to describe it.
 /// </summary>
 /// <remarks>
-/// Two things rot silently. A rename lands everywhere the compiler can see and nowhere it cannot,
-/// so README samples keep naming members that no longer exist. And a 0.x package has no compiler
-/// check on its own surface at all, so a type going public by accident ships as a promise. Both are
-/// cheap to catch here and expensive to catch after a release.
+/// A 0.x package has no compiler check on its own surface, so a type going public by accident ships
+/// as a promise. That is cheap to catch here and expensive to catch after a release. The
+/// documentation's own claims are checked by compiling them, in DocumentationExampleTests.
 /// </remarks>
 [TestClass]
 public sealed class PublicSurfaceTests : PipeWireTestBase
@@ -19,7 +18,7 @@ public sealed class PublicSurfaceTests : PipeWireTestBase
     private static readonly Assembly[] Shipped =
     [
         typeof(Graph.PipeWireRegistry).Assembly,
-        typeof(Media.Streams.PipeWireAudioCapture).Assembly,
+        typeof(Media.PipeWireAudioCapture).Assembly,
     ];
 
     internal static string RepoRoot()
@@ -124,64 +123,6 @@ public sealed class PublicSurfaceTests : PipeWireTestBase
     }
 
     [TestMethod]
-    public void EveryMemberTheReadmeNames_ExistsInTheShippedSurface()
-    {
-        string readme = File.ReadAllText(Path.Combine(RepoRoot(), "README.md"));
-
-        var known = new HashSet<string>(StringComparer.Ordinal);
-        var membersByType = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-
-        foreach (Assembly assembly in Shipped)
-        {
-            foreach (Type type in assembly.GetExportedTypes())
-            {
-                known.Add(type.Name);
-
-                HashSet<string> members = membersByType.TryGetValue(type.Name, out HashSet<string>? existing)
-                    ? existing
-                    : membersByType[type.Name] = new HashSet<string>(StringComparer.Ordinal);
-
-                foreach (MemberInfo member in type.GetMembers())
-                {
-                    known.Add(member.Name);
-                    members.Add(member.Name);
-                }
-            }
-        }
-
-        var missing = new List<string>();
-
-        foreach (string block in CodeBlocks(readme))
-        {
-            // A member access on a lowercase receiver: `frame.Width`, `source.MediaClass`. Anything
-            // starting uppercase is a type or namespace and is checked by the compiler in samples,
-            // or is prose like a D-Bus interface name.
-            foreach (System.Text.RegularExpressions.Match m in
-                System.Text.RegularExpressions.Regex.Matches(block, @"\b[a-z][A-Za-z0-9_]*\.([A-Z][A-Za-z0-9_]*)"))
-            {
-                string name = m.Groups[1].Value;
-                if (!known.Contains(name) && !missing.Contains(name)) missing.Add(name);
-            }
-
-            // Static access on one of our own types: PipeWireMediaFlow.Source. The pattern above
-            // needs a lowercase receiver, so it skipped these entirely. Only receivers that are
-            // themselves shipped types are checked, which leaves System.Threading and the like alone.
-            foreach (System.Text.RegularExpressions.Match m in
-                System.Text.RegularExpressions.Regex.Matches(block, @"\b([A-Z][A-Za-z0-9_]*)\.([A-Z][A-Za-z0-9_]*)"))
-            {
-                if (!membersByType.TryGetValue(m.Groups[1].Value, out HashSet<string>? members)) continue;
-
-                string member = m.Groups[2].Value;
-                string qualified = $"{m.Groups[1].Value}.{member}";
-                if (!members.Contains(member) && !missing.Contains(qualified)) missing.Add(qualified);
-            }
-        }
-
-        Assert.IsTrue(missing.Count == 0,
-            $"the README names members that do not exist: {string.Join(", ", missing)}");
-    }
-
-    [TestMethod]
     public void EveryPublicControl_CanBeObtainedFromSomewhereInThePublicSurface()
     {
         // A public type with no factory reachable from the surface cannot be obtained by any
@@ -259,34 +200,5 @@ public sealed class PublicSurfaceTests : PipeWireTestBase
         }
 
         return type;
-    }
-
-    private static IEnumerable<string> CodeBlocks(string markdown)
-    {
-        string[] lines = markdown.ReplaceLineEndings("\n").Split('\n');
-        var current = new StringBuilder();
-        bool inCSharp = false;
-
-        foreach (string line in lines)
-        {
-            if (line.StartsWith("```", StringComparison.Ordinal))
-            {
-                if (inCSharp)
-                {
-                    yield return current.ToString();
-                    current.Clear();
-                    inCSharp = false;
-                }
-                else
-                {
-                    inCSharp = line.Contains("csharp", StringComparison.Ordinal)
-                            || line.Contains("cs", StringComparison.Ordinal);
-                }
-
-                continue;
-            }
-
-            if (inCSharp) current.AppendLine(line);
-        }
     }
 }

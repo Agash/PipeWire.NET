@@ -2,7 +2,6 @@ using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
-using PipeWire.NET.Media.Streams;
 
 namespace PipeWire.NET.Tests;
 
@@ -70,8 +69,8 @@ public sealed class GraphScenarioTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode source = await registry.CreateVirtualNodeAsync("Deck A", "pwnet_pb_a", cts.Token);
-            PipeWireNode sink = await registry.CreateVirtualNodeAsync("Deck B", "pwnet_pb_b", cts.Token);
+            PipeWireNode source = await registry.CreateVirtualSinkAsync("Deck A", "pwnet_pb_a", cts.Token);
+            PipeWireNode sink = await registry.CreateVirtualSinkAsync("Deck B", "pwnet_pb_b", cts.Token);
 
             PipeWireGraphSnapshot ready = await WaitForAsync(
                 registry,
@@ -136,13 +135,13 @@ public sealed class GraphScenarioTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode first = await registry.CreateVirtualNodeAsync("First", "pwnet_stale_1", cts.Token);
+            PipeWireNode first = await registry.CreateVirtualSinkAsync("First", "pwnet_stale_1", cts.Token);
             uint id = first.NodeId;
 
             await registry.DestroyGlobalAsync(id, cts.Token);
             await WaitForAsync(registry, g => g.GetNode(id) is null, cts.Token);
 
-            PipeWireNode second = await registry.CreateVirtualNodeAsync("Second", "pwnet_stale_2", cts.Token);
+            PipeWireNode second = await registry.CreateVirtualSinkAsync("Second", "pwnet_stale_2", cts.Token);
 
             if (second.NodeId != id)
                 Assert.Inconclusive("the daemon did not reuse the id this run; the hazard is unchanged");
@@ -213,7 +212,7 @@ public sealed class GraphScenarioTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode sink = await registry.CreateVirtualNodeAsync("Target", "pwnet_select", cts.Token);
+            PipeWireNode sink = await registry.CreateVirtualSinkAsync("Target", "pwnet_select", cts.Token);
             PipeWireGraphSnapshot graph = await WaitForPortsAsync(registry, sink.NodeId, cts.Token);
 
             PipeWireNode node = graph.GetNode(sink.NodeId)!;
@@ -274,9 +273,9 @@ public sealed class GraphScenarioTests : PipeWireTestBase
                 await ConnectAsync("pwnet-routing-builder", cts.Token);
             await using (builderContext)
             {
-                PipeWireNode a = await builder.CreateVirtualNode("Routed A")
+                PipeWireNode a = await builder.CreateVirtualSink("Routed A")
                                               .WithName("pwnet_route_a").WithLinger().ExecuteAsync(cts.Token);
-                PipeWireNode b = await builder.CreateVirtualNode("Routed B")
+                PipeWireNode b = await builder.CreateVirtualSink("Routed B")
                                               .WithName("pwnet_route_b").WithLinger().ExecuteAsync(cts.Token);
                 sourceId = a.NodeId;
                 sinkId = b.NodeId;
@@ -351,8 +350,8 @@ public sealed class GraphScenarioTests : PipeWireTestBase
 
             for (int cycle = 0; cycle < 5; cycle++)
             {
-                PipeWireNode a = await registry.CreateVirtualNodeAsync($"RB A{cycle}", $"{prefix}a{cycle}", cts.Token);
-                PipeWireNode b = await registry.CreateVirtualNodeAsync($"RB B{cycle}", $"{prefix}b{cycle}", cts.Token);
+                PipeWireNode a = await registry.CreateVirtualSinkAsync($"RB A{cycle}", $"{prefix}a{cycle}", cts.Token);
+                PipeWireNode b = await registry.CreateVirtualSinkAsync($"RB B{cycle}", $"{prefix}b{cycle}", cts.Token);
 
                 PipeWireGraphSnapshot ready = await WaitForAsync(
                     registry,

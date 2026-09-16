@@ -17,7 +17,7 @@ public sealed class DrmFormatTests
     /// <summary>Renders a fourcc back into the four characters it packs, for readable failures.</summary>
     private static string Tag(uint fourcc)
     {
-        uint v = fourcc & ~NativeConstants.DRM_FORMAT_BIG_ENDIAN;
+        uint v = fourcc & ~NativeLibdrm.DRM_FORMAT_BIG_ENDIAN;
         StringBuilder sb = new(4);
         for (int i = 0; i < 4; i++) sb.Append((char)((v >> (8 * i)) & 0xFF));
         return sb.ToString();
@@ -27,8 +27,8 @@ public sealed class DrmFormatTests
     public void FourccPacksItsCharactersLittleEndian()
     {
         // The property every other assertion here relies on being readable.
-        Assert.AreEqual("NV12", Tag(NativeConstants.DRM_FORMAT_NV12));
-        Assert.AreEqual("AR24", Tag(NativeConstants.DRM_FORMAT_ARGB8888));
+        Assert.AreEqual("NV12", Tag(NativeLibdrm.DRM_FORMAT_NV12));
+        Assert.AreEqual("AR24", Tag(NativeLibdrm.DRM_FORMAT_ARGB8888));
     }
 
     /// <summary>
@@ -39,14 +39,14 @@ public sealed class DrmFormatTests
     [TestMethod]
     public void ByteOrderIsReversedBetweenSpaAndDrmNames()
     {
-        Assert.AreEqual(NativeConstants.DRM_FORMAT_ABGR8888, DrmFormat.FromVideoFormat(SpaVideoFormat.Rgba));
-        Assert.AreEqual(NativeConstants.DRM_FORMAT_ARGB8888, DrmFormat.FromVideoFormat(SpaVideoFormat.Bgra));
-        Assert.AreEqual(NativeConstants.DRM_FORMAT_RGBA8888, DrmFormat.FromVideoFormat(SpaVideoFormat.Abgr));
-        Assert.AreEqual(NativeConstants.DRM_FORMAT_BGRA8888, DrmFormat.FromVideoFormat(SpaVideoFormat.Argb));
+        Assert.AreEqual(NativeLibdrm.DRM_FORMAT_ABGR8888, DrmFormat.FromVideoFormat(SpaVideoFormat.Rgba));
+        Assert.AreEqual(NativeLibdrm.DRM_FORMAT_ARGB8888, DrmFormat.FromVideoFormat(SpaVideoFormat.Bgra));
+        Assert.AreEqual(NativeLibdrm.DRM_FORMAT_RGBA8888, DrmFormat.FromVideoFormat(SpaVideoFormat.Abgr));
+        Assert.AreEqual(NativeLibdrm.DRM_FORMAT_BGRA8888, DrmFormat.FromVideoFormat(SpaVideoFormat.Argb));
 
         // Same reversal on the 24-bit pair, where it is easiest to get backwards.
-        Assert.AreEqual(NativeConstants.DRM_FORMAT_BGR888, DrmFormat.FromVideoFormat(SpaVideoFormat.Rgb));
-        Assert.AreEqual(NativeConstants.DRM_FORMAT_RGB888, DrmFormat.FromVideoFormat(SpaVideoFormat.Bgr));
+        Assert.AreEqual(NativeLibdrm.DRM_FORMAT_BGR888, DrmFormat.FromVideoFormat(SpaVideoFormat.Rgb));
+        Assert.AreEqual(NativeLibdrm.DRM_FORMAT_RGB888, DrmFormat.FromVideoFormat(SpaVideoFormat.Bgr));
     }
 
     [TestMethod]
@@ -82,9 +82,9 @@ public sealed class DrmFormatTests
         uint be = DrmFormat.FromVideoFormat(SpaVideoFormat.Gray16Be);
 
         Assert.AreNotEqual(le, be, "the two grey layouts must not share a fourcc");
-        Assert.AreEqual(0u, le & NativeConstants.DRM_FORMAT_BIG_ENDIAN);
-        Assert.AreEqual(NativeConstants.DRM_FORMAT_BIG_ENDIAN, be & NativeConstants.DRM_FORMAT_BIG_ENDIAN);
-        Assert.AreEqual(le, be & ~NativeConstants.DRM_FORMAT_BIG_ENDIAN);
+        Assert.AreEqual(0u, le & NativeLibdrm.DRM_FORMAT_BIG_ENDIAN);
+        Assert.AreEqual(NativeLibdrm.DRM_FORMAT_BIG_ENDIAN, be & NativeLibdrm.DRM_FORMAT_BIG_ENDIAN);
+        Assert.AreEqual(le, be & ~NativeLibdrm.DRM_FORMAT_BIG_ENDIAN);
     }
 
     /// <summary>

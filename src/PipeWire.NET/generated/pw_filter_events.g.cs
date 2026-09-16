@@ -9,6 +9,8 @@
 #pragma warning disable CA1720 // Identifiers should not contain type names
 #pragma warning disable CA1815 // Override Equals and operator equals on value types
 
+using PipeWire.NET.Graph;
+
 namespace PipeWire.NET.Interop;
 
 internal unsafe partial struct pw_filter_events

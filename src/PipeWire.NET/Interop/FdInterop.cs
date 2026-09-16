@@ -39,7 +39,7 @@ internal static partial class FdInterop
     {
         int listening = 0;
         int size = sizeof(int);
-        if (NativeConstants.getsockopt(fd, NativeConstants.SOL_SOCKET, NativeConstants.SO_ACCEPTCONN, &listening, &size) < 0)
+        if (NativeLibc.getsockopt(fd, NativeLibc.SOL_SOCKET, NativeLibc.SO_ACCEPTCONN, &listening, &size) < 0)
             return false;
 
         return listening != 0;
@@ -67,7 +67,7 @@ internal static partial class FdInterop
     /// </remarks>
     internal static SafeFileHandle DuplicateWithCloseOnExec(int fd)
     {
-        int duplicate = NativeConstants.fcntl(fd, NativeConstants.F_DUPFD_CLOEXEC, LowestDuplicate);
+        int duplicate = NativeLibc.fcntl(fd, NativeLibc.F_DUPFD_CLOEXEC, LowestDuplicate);
         if (duplicate < 0)
             throw new PipeWireInteropException("fcntl(F_DUPFD_CLOEXEC)", -Marshal.GetLastPInvokeError());
 

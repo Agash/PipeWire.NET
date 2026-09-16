@@ -13,7 +13,7 @@ namespace PipeWire.NET.Graph;
 /// A device this process serves, so other clients see a card they can select a profile on.
 /// </summary>
 /// <remarks>
-/// The counterpart to <see cref="PipeWireDeviceControl"/>, which is a client of somebody else's
+/// The counterpart to <see cref="PipeWireDeviceProxy"/>, which is a client of somebody else's
 /// device. This hosts one: the process implements <c>spa_device</c>, exports it, and the daemon
 /// publishes it as a global that appears in a mixer alongside real hardware.
 /// <para>
@@ -21,7 +21,7 @@ namespace PipeWire.NET.Graph;
 /// nodes it provides through <c>object_info</c>, and each of those is a node implementation and a
 /// node export of its own. A device announcing no objects is legal and selectable, and reports its
 /// profiles and routes, but it carries no audio. For audio use
-/// <see cref="PipeWireRegistry.CreateVirtualNode"/>.
+/// <see cref="PipeWireRegistry.CreateVirtualSink"/>.
 /// </para>
 /// <para>
 /// Needs <c>libpipewire-module-client-device</c>, which <c>client.conf</c> loads unless
@@ -59,6 +59,11 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
 
     private GCHandle _self;
     private PipeWireProxyHandle? _exported;
+
+    // Set only when the device came out of a SPA plugin: the handle owns the device, and clearing
+    // it is what unloads the plugin's instance. Null for a device this process implements.
+    private spa_handle* _spaHandle;
+
     private volatile bool _disposed;
 
     private PipeWireDeviceProvider(PipeWireContext ctx, string name, ILogger logger)
@@ -128,7 +133,64 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         return provider;
     }
 
-    /// <summary>The <c>device.name</c> this was created with.</summary>
+    /// <summary>
+    /// Loads a SPA monitor factory and publishes the device it provides, rather than implementing
+    /// one here.
+    /// </summary>
+    /// <param name="context">A started context.</param>
+    /// <param name="factoryName">The factory, e.g. <c>api.v4l2.enum.udev</c> or <c>api.bluez5.enum.dbus</c>.</param>
+    /// <param name="properties">Properties for both the factory and the exported device.</param>
+    /// <param name="libraryName">
+    /// The SPA library to load the factory from, e.g. <c>v4l2/libspa-v4l2</c>. Optional: when null
+    /// the factory is resolved through the context's <c>context.spa-libs</c> map, which on a client
+    /// covers only a handful of prefixes and will not find most factories.
+    /// </param>
+    /// <returns>The provider, which serves the device until disposed.</returns>
+    /// <remarks>
+    /// <para>
+    /// What upstream's <c>export-spa-device</c> and <c>bluez-session</c> do. Unlike
+    /// <see cref="Create"/> nothing about the device is described here, because nothing about it is
+    /// ours: the plugin enumerates the hardware, answers for its own profiles and routes, and
+    /// creates nodes for what it finds. <see cref="SetParameter"/> therefore does not apply to a
+    /// device obtained this way.
+    /// </para>
+    /// <para>
+    /// The counterpart for a plugin that provides a node rather than a device is
+    /// <see cref="PipeWireNodeProvider.FromSpaFactory"/>.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="context"/> is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="factoryName"/> is null or empty.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// The factory is not installed, provides no device interface, or the export was refused.
+    /// </exception>
+    public static PipeWireDeviceProvider FromSpaFactory(
+        PipeWireContext context,
+        string factoryName,
+        IReadOnlyDictionary<string, string>? properties = null,
+        string? libraryName = null)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentException.ThrowIfNullOrEmpty(factoryName);
+
+        var provider = new PipeWireDeviceProvider(
+            context, factoryName, context.LoggerFactory.CreateLogger($"PipeWire.NET.Device.{factoryName}"));
+
+        pw_proxy* exported = SpaFactoryExport.Load(
+            context,
+            factoryName,
+            NativeConstants.SPA_TYPE_INTERFACE_Device,
+            "device",
+            properties,
+            libraryName,
+            out provider._spaHandle);
+
+        provider._exported = new PipeWireProxyHandle(exported, context.LoopOwner, context.CoreOwner!);
+        provider.LogExported(factoryName);
+        return provider;
+    }
+
+    /// <summary>The <c>device.name</c> this was created with, or the factory it was loaded from.</summary>
     public string Name => _name;
 
     private void Publish()
@@ -252,9 +314,20 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
     /// daemon holds was fixed when the device was exported.
     /// </remarks>
     /// <exception cref="ObjectDisposedException">The provider has been disposed.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// The device came from <see cref="FromSpaFactory"/>, so its parameters are the plugin's.
+    /// </exception>
     public void SetParameter(SpaParamType parameter, ImmutableArray<SpaObject> values)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (_spaHandle is not null)
+        {
+            throw new InvalidOperationException(
+                $"'{_name}' is served by a SPA plugin, which answers its own parameters; "
+                + "only a device built with Create has parameters this process can set.");
+        }
+
         _params = _params.SetItem(parameter, values);
 
         // Toggle and emit under one hold of the loop lock: the flags live in native memory the
@@ -342,7 +415,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         void* obj, spa_hook* listener, spa_device_events* events, void* data)
     {
         PipeWireDeviceProvider? self = FromData(obj);
-        if (self is null || listener is null) return -NativeConstants.EINVAL;
+        if (self is null || listener is null) return -NativeLibc.EINVAL;
 
         try
         {
@@ -367,7 +440,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         catch (Exception ex)
         {
             self.LogCallbackThrew(nameof(OnAddListener), ex);
-            return -NativeConstants.EIO;
+            return -NativeLibc.EIO;
         }
     }
 
@@ -375,7 +448,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
     private static int OnSync(void* obj, int seq)
     {
         PipeWireDeviceProvider? self = FromData(obj);
-        if (self is null) return -NativeConstants.EINVAL;
+        if (self is null) return -NativeLibc.EINVAL;
 
         try
         {
@@ -389,7 +462,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         catch (Exception ex)
         {
             self.LogCallbackThrew(nameof(OnSync), ex);
-            return -NativeConstants.EIO;
+            return -NativeLibc.EIO;
         }
     }
 
@@ -398,7 +471,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         void* obj, int seq, uint id, uint start, uint num, spa_pod* filter)
     {
         PipeWireDeviceProvider? self = FromData(obj);
-        if (self is null) return -NativeConstants.EINVAL;
+        if (self is null) return -NativeLibc.EINVAL;
 
         try
         {
@@ -440,7 +513,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         catch (Exception ex)
         {
             self.LogCallbackThrew(nameof(OnEnumParams), ex);
-            return -NativeConstants.EIO;
+            return -NativeLibc.EIO;
         }
     }
 
@@ -473,7 +546,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
     private static int OnSetParam(void* obj, uint id, uint flags, spa_pod* param)
     {
         PipeWireDeviceProvider? self = FromData(obj);
-        if (self is null) return -NativeConstants.EINVAL;
+        if (self is null) return -NativeLibc.EINVAL;
 
         try
         {
@@ -520,7 +593,7 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
         catch (Exception ex)
         {
             self.LogCallbackThrew(nameof(OnSetParam), ex);
-            return -NativeConstants.EIO;
+            return -NativeLibc.EIO;
         }
     }
 
@@ -614,6 +687,14 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
             if (_iface->type is not null) NativeMemory.Free(_iface->type);
             NativeMemory.Free(_iface);
             _iface = null;
+        }
+
+        // After the proxy, never before: the export refers to the interface this handle owns, and
+        // clearing it underneath a live proxy leaves the daemon dispatching through freed memory.
+        if (_spaHandle is not null)
+        {
+            if (_spaHandle->clear is not null) _ = _spaHandle->clear(_spaHandle);
+            _spaHandle = null;
         }
 
         if (_methods is not null) { NativeMemory.Free(_methods); _methods = null; }

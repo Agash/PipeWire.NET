@@ -27,7 +27,7 @@ public sealed class SpaPodProjectionTests
         new(
             SpaType.ObjectFormat,
             SpaParamType.EnumFormat,
-            [.. properties.Select(p => new SpaProperty(p.Key, 0, p.Value))]);
+            [.. properties.Select(p => new SpaPodProperty(p.Key, 0, p.Value))]);
 
     private static SpaChoice Enum(params int[] values) =>
         new(SpaChoiceType.Enum, SpaType.Int, [new SpaInt(values[0]), .. values.Select(v => (SpaValue)new SpaInt(v))]);
@@ -269,9 +269,9 @@ public sealed class SpaPodProjectionTests
         SpaObject mine = Format((SpaFormat.AudioRate, new SpaInt(48000)));
         SpaObject theirs = new(SpaType.ObjectFormat, SpaParamType.EnumFormat,
         [
-            new SpaProperty(SpaFormat.AudioRate, SpaPodPropFlags.None, new SpaInt(48000)),
-            new SpaProperty(SpaFormat.AudioChannels, SpaPodPropFlags.None, new SpaInt(2)),
-            new SpaProperty(SpaFormat.AudioFormat, SpaPodPropFlags.Drop, new SpaId(283)),
+            new SpaPodProperty(SpaFormat.AudioRate, SpaPodPropFlags.None, new SpaInt(48000)),
+            new SpaPodProperty(SpaFormat.AudioChannels, SpaPodPropFlags.None, new SpaInt(2)),
+            new SpaPodProperty(SpaFormat.AudioFormat, SpaPodPropFlags.Drop, new SpaId(283)),
         ]);
 
         SpaObject? got = SpaPodProjection.Project(mine, theirs);
@@ -286,9 +286,9 @@ public sealed class SpaPodProjectionTests
     public void ThePropertyFlags_AreTheAndOfBothSides()
     {
         SpaObject mine = new(SpaType.ObjectFormat, SpaParamType.EnumFormat,
-            [new SpaProperty(SpaFormat.AudioRate, SpaPodPropFlags.Mandatory | SpaPodPropFlags.DontFixate, new SpaInt(48000))]);
+            [new SpaPodProperty(SpaFormat.AudioRate, SpaPodPropFlags.Mandatory | SpaPodPropFlags.DontFixate, new SpaInt(48000))]);
         SpaObject theirs = new(SpaType.ObjectFormat, SpaParamType.EnumFormat,
-            [new SpaProperty(SpaFormat.AudioRate, SpaPodPropFlags.Mandatory, new SpaInt(48000))]);
+            [new SpaPodProperty(SpaFormat.AudioRate, SpaPodPropFlags.Mandatory, new SpaInt(48000))]);
 
         Assert.AreEqual(SpaPodPropFlags.Mandatory, SpaPodProjection.Project(mine, theirs)!.Find(SpaFormat.AudioRate)!.Flags,
             "filter.h 98: flags are p1->flags & p2->flags");

@@ -2,7 +2,6 @@ using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
-using PipeWire.NET.Media.Streams;
 
 namespace PipeWire.NET.Tests;
 
@@ -133,12 +132,12 @@ public sealed class LocalV4l2Tests
         await using var ctx = new PipeWireContext("pwnet-v4l2-export", ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
 
-        PipeWireExportedNode device;
+        PipeWireDeviceProvider device;
         try
         {
             // The library is named outright: a client's context.spa-libs map has no api.v4l2.* entry,
             // so resolving by factory name alone fails even though libspa-v4l2 is installed.
-            device = PipeWireExportedNode.ExportSpaDevice(
+            device = PipeWireDeviceProvider.FromSpaFactory(
                 ctx, "api.v4l2.enum.udev", libraryName: "v4l2/libspa-v4l2");
         }
         catch (InvalidOperationException ex)
@@ -147,7 +146,7 @@ public sealed class LocalV4l2Tests
             return;
         }
 
-        await using (device)
+        using (device)
         {
             // Exporting a monitor does not itself create a node - it enumerates hardware and the
             // graph creates nodes for what it finds. Surviving the export is the contract here.

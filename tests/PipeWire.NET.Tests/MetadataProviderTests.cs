@@ -187,7 +187,7 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         await registry.WaitForInitialEnumerationAsync(cts.Token);
         Assert.IsNull(
             registry.Current.Objects.FirstOrDefault(o =>
-                o is PipeWireMetadataObject metadata && metadata.MetadataName == name),
+                o is PipeWireMetadata metadata && metadata.MetadataName == name),
             "an unexported store is visible in the graph");
 
         provider.Dispose();
@@ -217,12 +217,12 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireMetadataStore? store = null;
+        PipeWireMetadataProxy? store = null;
         long appearUntil = Environment.TickCount64 + 20_000;
         while (store is null && Environment.TickCount64 < appearUntil)
         {
             await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
-            store = readerRegistry.BindMetadataStore(name);
+            store = readerRegistry.BindMetadata(name);
             if (store is null)
                 await Task.Delay(TimeSpan.FromMilliseconds(100), cts.Token);
         }
@@ -298,18 +298,18 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, name);
         await provider.ReadyAsync(cts.Token);
 
-        PipeWireMetadataObject? store = null;
+        PipeWireMetadata? store = null;
         for (var i = 0; i < 100 && store is null; i++)
         {
             await registry.WaitForInitialEnumerationAsync(cts.Token);
-            store = registry.Current.GetMetadataStore(name);
+            store = registry.Current.GetMetadata(name);
             if (store is null) await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(store, "the served store never reached the registry");
 
-        Assert.ThrowsExactly<InvalidOperationException>(() => registry.BindMetadataStore(name));
-        Assert.ThrowsExactly<InvalidOperationException>(() => registry.BindMetadataStore(store.Id));
+        Assert.ThrowsExactly<InvalidOperationException>(() => registry.BindMetadata(name));
+        Assert.ThrowsExactly<InvalidOperationException>(() => registry.BindMetadata(store.Id));
 
         // Refused before anything reached the daemon, so the connection is still answering.
         await Interop.CoreSync.RoundTripAsync(ctx, cts.Token);

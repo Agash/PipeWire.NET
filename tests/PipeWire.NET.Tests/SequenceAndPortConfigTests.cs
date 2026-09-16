@@ -156,7 +156,7 @@ public sealed class SequenceAndPortConfigTests : PipeWireTestBase
     public void APortConfigCarryingAFormatFilter_KeepsIt()
     {
         var filter = new SpaObject(SpaType.ObjectFormat, SpaParamType.EnumFormat,
-            [new SpaProperty((uint)SpaFormat.AudioChannels, 0, new SpaInt(2))]);
+            [new SpaPodProperty((uint)SpaFormat.AudioChannels, 0, new SpaInt(2))]);
 
         var written = new PipeWirePortConfig(
             SpaDirection.Input, SpaParamPortConfigMode.Dsp, Format: filter);
@@ -207,13 +207,13 @@ public sealed class SequenceAndPortConfigTests : PipeWireTestBase
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await registry.CreateVirtualNode("PortConfigLive")
+        PipeWireNode node = await registry.CreateVirtualSink("PortConfigLive")
             .WithName($"pwnet_pconf_{Environment.ProcessId}_{Random.Shared.Next():x}")
             .ExecuteAsync(cts.Token);
 
         try
         {
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
             await control.ReadyAsync(cts.Token);
 
             ImmutableArray<PipeWirePortConfig> configs =

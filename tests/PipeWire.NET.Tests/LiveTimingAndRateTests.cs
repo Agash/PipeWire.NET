@@ -3,7 +3,6 @@ using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
-using PipeWire.NET.Media.Streams;
 using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Tests;

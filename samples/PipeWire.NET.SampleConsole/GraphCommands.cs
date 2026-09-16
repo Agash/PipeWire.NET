@@ -53,7 +53,7 @@ internal static class GraphCommands
             }
         }
 
-        foreach (PipeWireMetadataObject metadata in graph.MetadataStores)
+        foreach (PipeWireMetadata metadata in graph.Metadata)
             Console.WriteLine($"Metadata [{metadata.Id}] {metadata.MetadataName ?? "?"}");
 
         return 0;
@@ -124,7 +124,7 @@ internal static class GraphCommands
 
         Console.WriteLine($"Node [{node.NodeId}] {node.Description ?? node.NodeName}:");
 
-        await using PipeWireNodeControl control = session.Registry.BindNode(node.NodeId);
+        await using PipeWireNodeProxy control = session.Registry.BindNode(node.NodeId);
         await control.ReadyAsync(cancellationToken).ConfigureAwait(false);
 
         float? before = await control.GetVolumeAsync(cancellationToken).ConfigureAwait(false);
@@ -153,7 +153,7 @@ internal static class GraphCommands
         await using var session = await Session.ConnectAsync(
             "sample-defaults", cancellationToken).ConfigureAwait(false);
 
-        PipeWireMetadataStore? store = session.Registry.BindMetadataStore("default");
+        PipeWireMetadataProxy? store = session.Registry.BindMetadata("default");
         if (store is null)
         {
             Console.Error.WriteLine("No 'default' metadata store; this session has no session manager.");
@@ -179,7 +179,7 @@ internal static class GraphCommands
     internal static async Task<PipeWireNode?> DefaultSinkNodeAsync(
         Session session, CancellationToken cancellationToken)
     {
-        PipeWireMetadataStore? store = session.Registry.BindMetadataStore("default");
+        PipeWireMetadataProxy? store = session.Registry.BindMetadata("default");
         if (store is null)
             return null;
 

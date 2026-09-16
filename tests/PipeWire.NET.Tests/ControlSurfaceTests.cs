@@ -53,11 +53,11 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("Formats")
+            PipeWireNode node = await registry.CreateVirtualSink("Formats")
                 .WithName($"pwnet_formats_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
             await control.ReadyAsync(cts.Token);
 
             // An adapter reports the formats it can be configured for. An empty result is a valid
@@ -80,7 +80,7 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null)
                 Assert.Inconclusive("no session manager, so no default store.");
 
@@ -112,7 +112,7 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null)
                 Assert.Inconclusive("no session manager, so no default store.");
 
@@ -129,7 +129,7 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
             if (self is null)
                 Assert.Inconclusive("the registry reported no clients.");
 
-            PipeWireClientControl client = registry.BindClient(self!.Id);
+            PipeWireClientProxy client = registry.BindClient(self!.Id);
             await client.DisposeAsync();
 
             await Assert.ThrowsExactlyAsync<ObjectDisposedException>(
@@ -151,7 +151,7 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
             if (self is null)
                 Assert.Inconclusive("the registry reported no clients.");
 
-            await using PipeWireClientControl client = registry.BindClient(self!.Id);
+            await using PipeWireClientProxy client = registry.BindClient(self!.Id);
 
             // Reducing a real client's permissions can cut off the connection that would restore
             // them, so only the argument guard is driven here.
@@ -201,11 +201,11 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("Subscribe")
+            PipeWireNode node = await registry.CreateVirtualSink("Subscribe")
                 .WithName($"pwnet_sub_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
             await control.ReadyAsync(cts.Token);
 
             control.SubscribeParameters(SpaParamType.Props);
@@ -262,11 +262,11 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("Guards")
+            PipeWireNode node = await registry.CreateVirtualSink("Guards")
                 .WithName($"pwnet_guards_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
             await control.ReadyAsync(cts.Token);
 
             Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => control.SetVolumeAsync(-1f));
@@ -304,7 +304,7 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
         var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireMetadataStore? store = registry.BindMetadataStore("settings");
+        PipeWireMetadataProxy? store = registry.BindMetadata("settings");
         store?.Dispose();
 
         registry.Dispose();
@@ -324,7 +324,7 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null)
                 Assert.Inconclusive("no session manager, so no default store.");
 

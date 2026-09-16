@@ -2,7 +2,6 @@ using System.Runtime.Versioning;
 using System.Threading;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Media;
-using PipeWire.NET.Media.Streams;
 
 namespace PipeWire.NET.Tests;
 

@@ -56,7 +56,7 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null) Assert.Inconclusive("no session manager, so no default store.");
 
             await using (store)
@@ -66,7 +66,7 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                 string key = Unique("pwnet.type");
                 var raised = new ConcurrentQueue<string?>();
 
-                void OnChanged(PipeWireMetadataStore _, PipeWireMetadataEntry e)
+                void OnChanged(PipeWireMetadataProxy _, PipeWireMetadataEntry e)
                 {
                     if (e.Key == key) raised.Enqueue(e.Value);
                 }
@@ -121,11 +121,11 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
             provider.Set("a", "1");
             provider.Set("b", "2");
 
-            PipeWireMetadataStore? consumer = null;
+            PipeWireMetadataProxy? consumer = null;
             for (int attempt = 0; attempt < 80 && consumer is null; attempt++)
             {
                 await clientReg.WaitForInitialEnumerationAsync(cts.Token);
-                consumer = clientReg.BindMetadataStore(storeName);
+                consumer = clientReg.BindMetadata(storeName);
                 if (consumer is null) await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
             }
 
@@ -217,11 +217,11 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
             await provider.ReadyAsync(cts.Token);
             provider.Set("a", "1");
 
-            PipeWireMetadataStore? consumer = null;
+            PipeWireMetadataProxy? consumer = null;
             for (int attempt = 0; attempt < 80 && consumer is null; attempt++)
             {
                 await clientReg.WaitForInitialEnumerationAsync(cts.Token);
-                consumer = clientReg.BindMetadataStore(storeName);
+                consumer = clientReg.BindMetadata(storeName);
                 if (consumer is null) await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
             }
 
@@ -237,7 +237,7 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                 await provider.ReadyAsync(cts.Token);
                 await provider.ReadyAsync(cts.Token);
 
-                PipeWireMetadataStore? late = null;
+                PipeWireMetadataProxy? late = null;
                 Exception? inWindow = null;
 
                 // On a thread of its own: the loop lock is a mutex the taking thread must release,
@@ -248,7 +248,7 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                     {
                         using (serverCtx.Lock())
                         {
-                            late = lateReg.BindMetadataStore(storeName);
+                            late = lateReg.BindMetadata(storeName);
 
                             // Time for the daemon to take the bind and send the exporter its
                             // ADD_LISTENER and ping, which this lock keeps unanswered. Nothing can
@@ -318,11 +318,11 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
             provider.Set("a", "1");
             provider.Set("b", "2");
 
-            PipeWireMetadataStore? consumer = null;
+            PipeWireMetadataProxy? consumer = null;
             for (int attempt = 0; attempt < 80 && consumer is null; attempt++)
             {
                 await clientReg.WaitForInitialEnumerationAsync(cts.Token);
-                consumer = clientReg.BindMetadataStore(storeName);
+                consumer = clientReg.BindMetadata(storeName);
                 if (consumer is null) await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
             }
 
@@ -403,7 +403,7 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null) Assert.Inconclusive("no session manager, so no default store.");
 
             await using (store)

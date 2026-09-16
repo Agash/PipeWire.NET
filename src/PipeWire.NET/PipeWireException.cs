@@ -78,7 +78,7 @@ public class PipeWireException : Exception
     public bool IsPermissionDenied => Result is -13 or -1;
 
     /// <summary>True when the connection is gone (<c>-EPIPE</c>).</summary>
-    public bool IsDisconnected => Result == -NativeConstants.EPIPE;
+    public bool IsDisconnected => Result == -NativeLibc.EPIPE;
 
     /// <summary>
     /// True when the object the request was against no longer exists (<c>-ENOENT</c>).
@@ -96,7 +96,7 @@ public class PipeWireException : Exception
     /// and the daemon processing the request.
     /// </para>
     /// </remarks>
-    public bool IsObjectGone => Result == -NativeConstants.ENOENT;
+    public bool IsObjectGone => Result == -NativeLibc.ENOENT;
 
     /// <summary>Throws if <paramref name="result"/> reports a failure.</summary>
     internal static void ThrowIfFailed(int result, string operation, uint? objectId = null)

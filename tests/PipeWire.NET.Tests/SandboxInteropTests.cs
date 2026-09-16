@@ -110,7 +110,7 @@ public sealed class SandboxInteropTests : PipeWireTestBase
         PipeWireSecurityContext? available = registry.Current.SecurityContext;
         if (available is null) Assert.Inconclusive("this daemon exposes no security context.");
 
-        await using PipeWireSecurityContextControl control = registry.BindSecurityContext(available!.Id);
+        await using PipeWireSecurityContextProxy control = registry.BindSecurityContext(available!.Id);
 
         string path = Path.Combine(Path.GetTempPath(), $"pwnet-sandbox-{Environment.ProcessId}");
         File.Delete(path);

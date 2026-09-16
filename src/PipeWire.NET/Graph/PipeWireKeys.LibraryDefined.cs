@@ -8,7 +8,7 @@ namespace PipeWire.NET.Graph;
 /// Everything else on <see cref="PipeWireKeys"/> is derived from a <c>PW_KEY_*</c> or
 /// <c>SPA_KEY_*</c> macro. These two are not: a module's filename and arguments reach a client as
 /// fields of <c>struct pw_module_info</c>, not as dictionary entries, so no header declares a name
-/// for them. <c>PipeWireModuleReader</c> publishes them into the module's property bag under these
+/// for them. <c>PipeWireModuleProxy</c> publishes them into the module's property bag under these
 /// names so a caller reads them the same way as every other module property.
 /// </para>
 /// <para>

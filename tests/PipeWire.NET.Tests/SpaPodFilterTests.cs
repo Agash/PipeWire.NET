@@ -13,10 +13,10 @@ namespace PipeWire.NET.Tests;
 [TestClass]
 public sealed class SpaPodFilterTests : PipeWireTestBase
 {
-    private static SpaObject Obj(params SpaProperty[] props) =>
+    private static SpaObject Obj(params SpaPodProperty[] props) =>
         new(SpaType.ObjectProps, SpaParamType.Props, [.. props]);
 
-    private static SpaProperty Prop(uint key, SpaValue value, SpaPodPropFlags flags = SpaPodPropFlags.None) =>
+    private static SpaPodProperty Prop(uint key, SpaValue value, SpaPodPropFlags flags = SpaPodPropFlags.None) =>
         new(key, flags, value);
 
     private static SpaChoice Enum(params SpaValue[] alts) =>

@@ -45,11 +45,11 @@ internal static class SpaPodProjection
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentNullException.ThrowIfNull(filter);
 
-        var result = ImmutableArray.CreateBuilder<SpaProperty>(candidate.Properties.Length);
+        var result = ImmutableArray.CreateBuilder<SpaPodProperty>(candidate.Properties.Length);
 
-        foreach (SpaProperty p1 in candidate.Properties)
+        foreach (SpaPodProperty p1 in candidate.Properties)
         {
-            SpaProperty? p2 = filter.Find(p1.Key);
+            SpaPodProperty? p2 = filter.Find(p1.Key);
             if (p2 is not null)
             {
                 if (FilterProp(p1, p2) is not { } narrowed) return null;
@@ -65,7 +65,7 @@ internal static class SpaPodProjection
             }
         }
 
-        foreach (SpaProperty p2 in filter.Properties)
+        foreach (SpaPodProperty p2 in filter.Properties)
         {
             if (candidate.Find(p2.Key) is not null) continue;
             if ((p2.Flags & SpaPodPropFlags.Mandatory) != 0) return null;
@@ -83,13 +83,13 @@ internal static class SpaPodProjection
     /// The result's flags are the AND of both sides' (filter.h 98), so a property is mandatory in the
     /// answer only if both said so.
     /// </remarks>
-    internal static SpaProperty? FilterProp(SpaProperty p1, SpaProperty p2)
+    internal static SpaPodProperty? FilterProp(SpaPodProperty p1, SpaPodProperty p2)
     {
         ArgumentNullException.ThrowIfNull(p1);
         ArgumentNullException.ThrowIfNull(p2);
 
         return FilterValues(p1.Value, p2.Value) is { } value
-            ? new SpaProperty(p1.Key, p1.Flags & p2.Flags, value)
+            ? new SpaPodProperty(p1.Key, p1.Flags & p2.Flags, value)
             : null;
     }
 

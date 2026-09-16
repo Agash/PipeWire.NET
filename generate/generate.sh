@@ -127,9 +127,17 @@ BLOCK_BEGIN='# >>> naming block'
 ANONYMOUS_ENUM='__AnonymousEnum_type_L32_C1'
 BLOCK_END='# <<< end naming block'
 
-# Enums a consumer reads directly, so they belong in the front-door namespace, not beside the ABI.
-PUBLIC_ENUMS="PipeWireStreamState PipeWireStreamFlags PipeWireNodeState PipeWireLinkState
-PipeWireFilterState PipeWireFilterFlags PipeWireFilterPortFlags"
+# Enums a consumer reads directly, so they are public and live beside the types that hand them out
+# rather than beside the ABI: a node's state is read off a PipeWire.NET.Graph node, a stream's off a
+# PipeWire.NET.Media stream. The namespace is per enum because those two answers differ; a single
+# front-door namespace would put a stream flag somewhere no stream is.
+PUBLIC_ENUMS="PipeWireNodeState=PipeWire.NET.Graph
+PipeWireLinkState=PipeWire.NET.Graph
+PipeWireFilterState=PipeWire.NET.Graph
+PipeWireFilterFlags=PipeWire.NET.Graph
+PipeWireFilterPortFlags=PipeWire.NET.Graph
+PipeWireStreamState=PipeWire.NET.Media
+PipeWireStreamFlags=PipeWire.NET.Media"
 
 OUT="$REPO_ROOT/src/PipeWire.NET/generated"
 mkdir -p "$OUT"
@@ -260,7 +268,13 @@ if [ "$REFRESH_NAMES" = "1" ]; then
       override["SPA_META_TRANSFORMATION_180"]  = "Rotate180"
       override["SPA_META_TRANSFORMATION_270"]  = "Rotate270"
       split(pascal_members, pm, /[ \n]+/); for (i in pm) if (pm[i] != "") wantPascal[pm[i]] = 1
-      split(public_enums,  pe, /[ \n]+/); for (i in pe) if (pe[i] != "") isPublic[pe[i]]  = 1
+      # "Name=Namespace" per entry: the enums that are public, and where each one lives.
+      split(public_enums, pe, /[ \n]+/)
+      for (i in pe) {
+        if (pe[i] == "") continue
+        split(pe[i], kv, "=")
+        publicNs[kv[1]] = kv[2]
+      }
       nTypes = 0
       nPublic = 0
     }
@@ -317,7 +331,7 @@ if [ "$REFRESH_NAMES" = "1" ]; then
         name = order[i]
         # PipeWire.NET.Interop is the default namespace (--namespace), so only the types that
         # move out of it need an entry.
-        if (name in isPublic) ns = "PipeWire.NET"
+        if (name in publicNs) ns = publicNs[name]
         else if (name ~ /^Spa/) ns = "PipeWire.NET.Spa"
         else continue
         print "--with-namespace"; print name "=" ns
@@ -450,6 +464,22 @@ if [ -n "$STRAYS" ]; then
   exit 1
 fi
 
+# The same check for the enums named in PUBLIC_ENUMS. They are matched by exact name too, so one
+# whose entry went missing lands back in the ABI namespace as internal - which reads in the diff as
+# a type that simply disappeared from the public surface.
+for entry in $PUBLIC_ENUMS; do
+  enum="${entry%%=*}"; want="${entry#*=}"
+  if [ ! -f "$WORK/$enum.cs" ]; then
+    echo "ERROR: $enum is named in PUBLIC_ENUMS but the generator emitted no such type."
+    exit 1
+  fi
+  if ! grep -q "^namespace $want;" "$WORK/$enum.cs"; then
+    echo "ERROR: $enum is not in $want. Run generate.sh --refresh-names:"
+    grep "^namespace" "$WORK/$enum.cs"
+    exit 1
+  fi
+done
+
 # Rename plain .cs to .g.cs and copy into the repo.
 #
 # Empty opaque structs are collapsed on the way. A type that several traversed headers
@@ -491,6 +521,47 @@ for f in "$WORK"/*.cs; do
   fi
 done
 
+# The enums named in PUBLIC_ENUMS live outside the ABI namespace, and ClangSharp only writes the
+# using for that in the file it puts the P/Invokes in (Native.cs). Every other file that names one -
+# pw_stream_events, pw_node_info, the event structs - gets no using and no qualification, so the
+# output does not compile. This was invisible while they were in PipeWire.NET: the ABI namespace is
+# nested inside it, so the names resolved with no using at all.
+#
+# So the usings are added here. Sorted into the existing block rather than appended, because
+# ClangSharp writes that block sorted and CI regenerates and diffs - an unsorted insertion would
+# show up as drift on every run.
+python3 - "$OUT" "$PUBLIC_ENUMS" <<'PY'
+import io, os, re, sys
+
+out_dir, public_enums = sys.argv[1], sys.argv[2]
+wanted = dict(line.split('=') for line in public_enums.split() if line)
+
+for fn in sorted(os.listdir(out_dir)):
+    if not fn.endswith('.g.cs'):
+        continue
+    path = os.path.join(out_dir, fn)
+    text = io.open(path, encoding='utf-8').read()
+    if '\nnamespace ' not in text:
+        continue
+    head, body = text.split('\nnamespace ', 1)
+    declared = re.search(r'^namespace ([\w.]+);', 'namespace ' + body).group(1)
+
+    needed = {ns for enum, ns in wanted.items()
+              if ns != declared and re.search(r'\b' + enum + r'\b', body)}
+    usings = set(re.findall(r'^using ([\w.]+);', head, re.M))
+    missing = needed - usings
+    if not missing:
+        continue
+
+    block = '\n'.join(f'using {u};' for u in sorted(usings | missing))
+    if usings:
+        head = re.sub(r'(^using [\w.]+;\n)+', block + '\n', head, count=1, flags=re.M)
+    else:
+        head = head.rstrip('\n') + '\n\n' + block + '\n'
+    io.open(path, 'w', encoding='utf-8', newline='\n').write(head + '\nnamespace ' + body)
+    print(f"  added {', '.join(sorted(missing))} to {fn}")
+PY
+
 # The flagged set is reviewed, not merely accepted: a new bitmask from a header bump should be seen
 # by someone who can confirm it really is one, rather than slipping through as a side effect.
 EXPECTED_FLAGS="PipeWireFilterFlags PipeWireFilterPortFlags PipeWireMemblockFlags PipeWireMemmapFlags PipeWireStreamFlags SpaVideoChromaSite SpaVideoFlags SpaVideoMultiviewFlags"
@@ -502,91 +573,128 @@ if [ "$ACTUAL_FLAGS" != "$EXPECTED_FLAGS" ]; then
   exit 1
 fi
 
-# Second pass: everything macro-shaped, plus the few libc declarations this library needs.
+# The macro passes: one per library whose headers they read.
 #
 # Split from the ABI pass because emitting macros needs --generate macro-bindings, and that leaves
 # diagnostics behind from macros ClangSharp cannot translate. The ABI pass fails on any diagnostic
 # at all, which is what catches a type landing in the wrong namespace; keeping the noisy work here
-# lets that guard stay absolute while this one tolerates exactly one known class.
+# lets that guard stay absolute while these tolerate exactly two known classes.
+#
+# Split three ways rather than one because the output is read by people: a fourcc code from
+# drm_fourcc.h and an errno from the C library are not PipeWire constants, and one class called
+# NativeConstants holding all of them said they were. Each pass names its own class - see
+# generate/pipewire-constants.rsp, libc.rsp and libdrm.rsp - and each runs with file=multi, so the
+# structs land in files of their own rather than inside the constants file.
 #
 # The old comment claiming macro-bindings is fatal on the PipeWire headers was wrong - it exits 0.
-# The reason to split is the noise, not a failure. See generate/constants.rsp.
+# The reason to split from the ABI pass is the noise, not a failure.
 {
   sed 's/from libpipewire-0.3 headers/from the libpipewire-0.3, libdrm and libc headers/' "$WORK/header.txt"
   printf '\nusing PipeWire.NET.Interop;\n'
 } > "$WORK/header-constants.txt"
 
-"$TOOL" "@$REPO_ROOT/generate/constants.rsp" \
-  --file "$REPO_ROOT/generate/constants_composite.h" \
-  --header-file "$WORK/header-constants.txt" \
-  --resource-directory "$CLANG_RESOURCE_DIR" \
-  --output "$WORK/NativeConstants.cs" 2>&1 | tee "$WORK/gen-constants.log"
+# <rsp base name> <the class it must emit>. Runs the pass, checks its log, and copies its output
+# into generated/ as .g.cs.
+run_macro_pass() {
+  local name="$1"
+  local class="$2"
+  local dir="$WORK/$name"
+  mkdir -p "$dir"
 
-CONST_EXIT=${PIPESTATUS[0]}
+  "$TOOL" "@$REPO_ROOT/generate/$name.rsp" \
+    --file "$REPO_ROOT/generate/${name}_composite.h" \
+    --header-file "$WORK/header-constants.txt" \
+    --resource-directory "$CLANG_RESOURCE_DIR" \
+    --output "$dir" 2>&1 | tee "$WORK/gen-$name.log"
 
-# Two known classes, and only those. Function-like macros take arguments, so they are not
-# constants and there is nothing here that wants them - drm_fourcc.h's AMD_FMT_MOD_SET and the
-# BROADCOM column-height helpers are the whole of that class. 'Const' is glibc's
-# __attribute_const__ on gnu_dev_makedev/major/minor: an optimiser hint that the result depends only
-# on the arguments, with nothing a binding could carry, so dropping it loses nothing. Anything else
-# in the log is a real diagnostic and fails the run.
-CONST_OTHER=$(grep -i "warning\|error" "$WORK/gen-constants.log" \
-  | grep -v "Function like macro definition records are not supported" \
-  | grep -v "Unsupported attribute: 'Const'" \
-  | grep -v "^Processing " || true)
+  local pass_exit=${PIPESTATUS[0]}
 
-if [ -n "$CONST_OTHER" ]; then
-  echo "ERROR: the constants generator reported an unexpected diagnostic:"
-  echo "$CONST_OTHER"
-  exit 1
-fi
+  # Two known classes, and only those. Function-like macros take arguments, so they are not
+  # constants and there is nothing here that wants them - drm_fourcc.h's AMD_FMT_MOD_SET and the
+  # BROADCOM column-height helpers are the whole of that class. 'Const' is glibc's
+  # __attribute_const__ on gnu_dev_makedev/major/minor: an optimiser hint that the result depends
+  # only on the arguments, with nothing a binding could carry, so dropping it loses nothing.
+  # Anything else in the log is a real diagnostic and fails the run.
+  local other
+  other=$(grep -i "warning\|error" "$WORK/gen-$name.log" \
+    | grep -v "Function like macro definition records are not supported" \
+    | grep -v "Unsupported attribute: 'Const'" \
+    | grep -v "^Processing " || true)
 
-if [ ! -s "$WORK/NativeConstants.cs" ]; then
-  echo "ERROR: the constants generator produced no output (exit $CONST_EXIT)."
-  exit 1
-fi
+  if [ -n "$other" ]; then
+    echo "ERROR: the $name pass reported an unexpected diagnostic:"
+    echo "$other"
+    exit 1
+  fi
 
-# A cheap tripwire on the allowlist: if a --include glob stops matching because a header moved or a
-# family was renamed, the file still generates and simply omits them, which nothing else notices.
-for family in PW_KEY_ PW_VERSION_ PW_TYPE_INTERFACE_ DRM_FORMAT_; do
-  n=$(grep -oE "${family}[A-Za-z_0-9]+" "$WORK/NativeConstants.cs" | sort -u | wc -l)
+  if [ ! -s "$dir/$class.cs" ]; then
+    echo "ERROR: the $name pass produced no $class.cs (exit $pass_exit)."
+    exit 1
+  fi
+}
+
+run_macro_pass pipewire-constants NativeConstants
+run_macro_pass libc              NativeLibc
+run_macro_pass libdrm            NativeLibdrm
+
+PW_CONSTANTS="$WORK/pipewire-constants/NativeConstants.cs"
+
+# A cheap tripwire on each allowlist: if a --include glob stops matching because a header moved or
+# a family was renamed, the file still generates and simply omits them, which nothing else notices.
+for family in PW_KEY_ PW_VERSION_ PW_TYPE_INTERFACE_; do
+  n=$(grep -oE "${family}[A-Za-z_0-9]+" "$PW_CONSTANTS" | sort -u | wc -l)
   if [ "$n" -lt 9 ]; then
     echo "ERROR: only $n ${family}* constants were generated; the allowlist or a traversed header moved."
     exit 1
   fi
 done
 
+n=$(grep -oE "DRM_FORMAT_[A-Za-z_0-9]+" "$WORK/libdrm/NativeLibdrm.cs" | sort -u | wc -l)
+if [ "$n" -lt 9 ]; then
+  echo "ERROR: only $n DRM_FORMAT_* constants were generated; the allowlist or a header moved."
+  exit 1
+fi
+
 # C writes octal with a leading zero (PW_PERM_R is 0400) and ClangSharp copies the literal across
 # unchanged. C# has no octal literal and reads a leading zero as nothing, so 0400 compiles - as
 # decimal 400 instead of 256. Nothing fails; every permission built from it is simply wrong. So the
 # initialisers are rewritten to hex here, and the run stops if any leading-zero literal survives.
 # The NativeTypeName strings keep their octal on purpose: they quote the C source, they are not math.
-python3 - "$WORK/NativeConstants.cs" <<'PY'
+python3 - "$PW_CONSTANTS" "$WORK/libc/NativeLibc.cs" "$WORK/libdrm/NativeLibdrm.cs" <<'PY'
 import io, re, sys
 
-path = sys.argv[1]
-lines = io.open(path, encoding='utf-8').read().split('\n')
 octal = re.compile(r'(?<![\w.x])0([0-7]+)(?![\w.])')
 fixed = 0
-for i, line in enumerate(lines):
-    m = re.match(r'(\s*public const \w+ \w+ = )(.*)$', line)
-    if not m:
-        continue
-    new = octal.sub(lambda t: hex(int(t.group(1), 8)), m.group(2))
-    if new != m.group(2):
-        lines[i] = m.group(1) + new
-        fixed += 1
-io.open(path, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines))
+for path in sys.argv[1:]:
+    lines = io.open(path, encoding='utf-8').read().split('\n')
+    for i, line in enumerate(lines):
+        m = re.match(r'(\s*public const \w+ \w+ = )(.*)$', line)
+        if not m:
+            continue
+        new = octal.sub(lambda t: hex(int(t.group(1), 8)), m.group(2))
+        if new != m.group(2):
+            lines[i] = m.group(1) + new
+            fixed += 1
+    io.open(path, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines))
 
-left = [l.strip() for l in lines if re.match(r'\s*public const ', l) and octal.search(l.split('=', 1)[1])]
-if left:
-    print('ERROR: leading-zero literals remain in constant initialisers:')
-    print('\n'.join(left))
-    sys.exit(1)
+    left = [l.strip() for l in lines
+            if re.match(r'\s*public const ', l) and octal.search(l.split('=', 1)[1])]
+    if left:
+        print(f'ERROR: leading-zero literals remain in constant initialisers in {path}:')
+        print('\n'.join(left))
+        sys.exit(1)
 print(f"Rewrote {fixed} octal initialisers to hex")
 PY
 
-cp "$WORK/NativeConstants.cs" "$OUT/NativeConstants.g.cs"
+# Into generated/, one .g.cs per emitted file. The extern-visibility rewrite is the ABI loop's, for
+# the same reason: --with-access-specifier sets the type's accessibility, not its members'.
+for dir in pipewire-constants libc libdrm; do
+  for f in "$WORK/$dir"/*.cs; do
+    base=$(basename "$f" .cs)
+    cp "$f" "$OUT/${base}.g.cs"
+    sed -i 's/^\(\s*\)public static extern /\1internal static extern /' "$OUT/${base}.g.cs"
+  done
+done
 
 
 # A third pass for spa/pod/filter.h was tried and removed; see HANDOFF for the measurements.
@@ -605,7 +713,7 @@ cp "$WORK/NativeConstants.cs" "$OUT/NativeConstants.g.cs"
 # So it is derived from the generated file rather than written: same literals, transposed into the
 # other representation. No names are invented here - the identifier is carried across unchanged -
 # which is what keeps this a mechanical step rather than a second source of truth.
-python3 - "$WORK/NativeConstants.cs" "$OUT/PipeWireKeys.g.cs" "$WORK/header.txt" <<'PY'
+python3 - "$PW_CONSTANTS" "$OUT/PipeWireKeys.g.cs" "$WORK/header.txt" <<'PY'
 import io, re, sys
 
 src, out_path, header_path = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -659,7 +767,7 @@ PY
 # uint64_t, spa_param_info.flags a uint32_t). Member names are the macro suffix Pascal-cased; the one
 # addition is a zero None where upstream has none, because a flags enum without one has no name for
 # "nothing set".
-python3 - "$WORK/NativeConstants.cs" "$OUT" "$WORK/header.txt" "$REPO_ROOT/generate/constants.rsp" <<'PY'
+python3 - "$PW_CONSTANTS" "$OUT" "$WORK/header.txt" "$REPO_ROOT/generate/pipewire-constants.rsp" <<'PY'
 import io, re, sys, os
 
 src, out_dir, header_path, rsp_path = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]

@@ -54,7 +54,7 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
             var created = new List<uint>();
             for (int i = 0; i < 12; i++)
             {
-                PipeWireNode node = await registry.CreateVirtualNode("Ordering")
+                PipeWireNode node = await registry.CreateVirtualSink("Ordering")
                     .WithName(Unique("pwnet_order"))
                     .ExecuteAsync(cts.Token);
 
@@ -89,9 +89,9 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode source = await registry.CreateVirtualNode("OrderSrc")
+            PipeWireNode source = await registry.CreateVirtualSink("OrderSrc")
                 .WithName(Unique("pwnet_order_src")).ExecuteAsync(cts.Token);
-            PipeWireNode sink = await registry.CreateVirtualNode("OrderSink")
+            PipeWireNode sink = await registry.CreateVirtualSink("OrderSink")
                 .WithName(Unique("pwnet_order_sink")).ExecuteAsync(cts.Token);
 
             ImmutableArray<PipeWirePort> outputs = await PortsAsync(
@@ -134,8 +134,8 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
         await using (b)
         await using (rb)
         {
-            PipeWireMetadataStore? writer = ra.BindMetadataStore("default");
-            PipeWireMetadataStore? reader = rb.BindMetadataStore("default");
+            PipeWireMetadataProxy? writer = ra.BindMetadata("default");
+            PipeWireMetadataProxy? reader = rb.BindMetadata("default");
             if (writer is null || reader is null)
                 Assert.Inconclusive("no session manager, so no default store.");
 
@@ -177,7 +177,7 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("Barrier")
+            PipeWireNode node = await registry.CreateVirtualSink("Barrier")
                 .WithName(Unique("pwnet_barrier")).ExecuteAsync(cts.Token);
 
             await CoreSync.RoundTripAsync(ctx, cts.Token);

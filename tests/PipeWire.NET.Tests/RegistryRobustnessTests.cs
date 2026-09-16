@@ -81,8 +81,8 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
             registry.LinkRemoved += _ => Bang("LinkRemoved");
             registry.GraphChanged += (_, _) => Bang("GraphChanged");
 
-            PipeWireNode a = await registry.CreateVirtualNodeAsync("HA", "pwnet_hostile_a", cts.Token);
-            PipeWireNode b = await registry.CreateVirtualNodeAsync("HB", "pwnet_hostile_b", cts.Token);
+            PipeWireNode a = await registry.CreateVirtualSinkAsync("HA", "pwnet_hostile_a", cts.Token);
+            PipeWireNode b = await registry.CreateVirtualSinkAsync("HB", "pwnet_hostile_b", cts.Token);
 
             PipeWireGraphSnapshot ready = await WaitForAsync(
                 registry,
@@ -127,7 +127,7 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
             registry.GraphChanged += (_, _) => throw new InvalidOperationException("no");
             registry.PortAdded += _ => throw new InvalidOperationException("no");
 
-            PipeWireNode node = await registry.CreateVirtualNodeAsync("C", "pwnet_consistent", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync("C", "pwnet_consistent", cts.Token);
             PipeWireGraphSnapshot graph = await WaitForAsync(
                 registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
 
@@ -163,7 +163,7 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
             registry.PortAdded += _ => throw new InvalidOperationException("hostile");
             registry.PortAdded += port => seenPorts.Add(port.NodeId);
 
-            PipeWireNode node = await registry.CreateVirtualNodeAsync("SV", "pwnet_starve", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync("SV", "pwnet_starve", cts.Token);
             await WaitForAsync(registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
 
             Assert.IsTrue(Volatile.Read(ref good) > 0,
@@ -187,7 +187,7 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
             // hostile handler registered first must not stop the stream.
             registry.GraphChanged += (_, _) => throw new InvalidOperationException("hostile");
 
-            PipeWireNode node = await registry.CreateVirtualNodeAsync("WS", "pwnet_watchstarve", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync("WS", "pwnet_watchstarve", cts.Token);
             PipeWireGraphSnapshot graph = await WaitForAsync(
                 registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
 
@@ -224,7 +224,7 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
 
             try
             {
-                await registry.CreateVirtualNodeAsync("S", "pwnet_suicidal", cts.Token);
+                await registry.CreateVirtualSinkAsync("S", "pwnet_suicidal", cts.Token);
             }
             catch (ObjectDisposedException)
             {
@@ -249,7 +249,7 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNodeAsync("D", "pwnet_dirs", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync("D", "pwnet_dirs", cts.Token);
             PipeWireGraphSnapshot graph = await WaitForAsync(
                 registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
 
@@ -278,7 +278,7 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNodeAsync("N", "pwnet_nullports", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync("N", "pwnet_nullports", cts.Token);
             PipeWireGraphSnapshot graph = await WaitForAsync(
                 registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
             PipeWirePort real = graph.GetPortsForNode(node.NodeId, PipeWirePortDirection.Out).First();
@@ -308,7 +308,7 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
             Assert.ThrowsExactly<ObjectDisposedException>(
                 () => registry.DestroyGlobalAsync(1, CancellationToken.None));
             await Assert.ThrowsExactlyAsync<ObjectDisposedException>(
-                () => registry.CreateVirtualNodeAsync("X", "pwnet_after", CancellationToken.None));
+                () => registry.CreateVirtualSinkAsync("X", "pwnet_after", CancellationToken.None));
         }
     }
 }

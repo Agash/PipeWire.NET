@@ -30,7 +30,7 @@ public sealed class FilterTests : PipeWireTestBase
     private static async Task<(PipeWireNode Sink, uint FilterNodeId)> LinkToSinkAsync(
         PipeWireRegistry registry, PipeWireFilter filter, string sinkName, CancellationToken cancellationToken)
     {
-        PipeWireNode sink = await registry.CreateVirtualNode("FilterSink")
+        PipeWireNode sink = await registry.CreateVirtualSink("FilterSink")
             .WithName(sinkName).ExecuteAsync(cancellationToken);
 
         await filter.ConnectAsync(cancellationToken: cancellationToken);

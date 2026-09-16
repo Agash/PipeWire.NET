@@ -18,12 +18,12 @@ namespace PipeWire.NET.Tests;
 [SupportedOSPlatform("linux")]
 public sealed class ExportedFormatTests
 {
-    private static SpaProperty Prop(SpaKey key, SpaValue value) => new(key, SpaPodPropFlags.None, value);
+    private static SpaPodProperty Prop(SpaKey key, SpaValue value) => new(key, SpaPodPropFlags.None, value);
 
     /// <summary>The format audioadapter's configure_format sets on a mono F32 follower, as it logged it.</summary>
-    private static byte[] AdapterFormat(params SpaProperty[] extra)
+    private static byte[] AdapterFormat(params SpaPodProperty[] extra)
     {
-        var props = new List<SpaProperty>
+        var props = new List<SpaPodProperty>
         {
             Prop(SpaFormat.MediaType, new SpaId((uint)SpaMediaType.Audio)),
             Prop(SpaFormat.MediaSubtype, new SpaId((uint)SpaMediaSubtype.Raw)),

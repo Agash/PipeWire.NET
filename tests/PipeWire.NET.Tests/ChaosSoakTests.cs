@@ -338,7 +338,7 @@ public sealed class ChaosSoakTests : PipeWireTestBase
                 // drop some creates mid-run, which the soak then (correctly) reports as faults.
                 await SessionGates.RequireAudioRouteAsync(warmReg, cts.Token).ConfigureAwait(false);
 
-                PipeWireNode warm = await warmReg.CreateVirtualNode("Warm")
+                PipeWireNode warm = await warmReg.CreateVirtualSink("Warm")
                     .WithName(Unique("pwnet_soak_warm")).ExecuteAsync(cts.Token);
                 await warmReg.DestroyGlobalAsync(warm.NodeId, cts.Token);
             }
@@ -464,7 +464,7 @@ public sealed class ChaosSoakTests : PipeWireTestBase
                 // No media.class: these are made and unmade continuously, and presenting each one
                 // to the session manager as a routable sink is what fills its event queue with
                 // activations it can never finish.
-                PipeWireNode node = await registry.CreateVirtualNode("Soak")
+                PipeWireNode node = await registry.CreateVirtualSink("Soak")
                     .WithName(Unique("pwnet_soak")).WithMediaClass("").ExecuteAsync(ct);
                 if (node.ObjectSerial is { } serial) created.Add(serial);
 
@@ -477,7 +477,7 @@ public sealed class ChaosSoakTests : PipeWireTestBase
                 // The id is already in `created`, so the cleanup accounting is unaffected.
                 try
                 {
-                    await using (PipeWireNodeControl control = registry.BindNode(node.NodeId))
+                    await using (PipeWireNodeProxy control = registry.BindNode(node.NodeId))
                     {
                         await control.ReadyAsync(ct);
                         for (int i = 0; i < 5 && !ct.IsCancellationRequested; i++)
@@ -522,7 +522,7 @@ public sealed class ChaosSoakTests : PipeWireTestBase
 
                     try
                     {
-                        await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+                        await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
                         await control.ReadyAsync(ct);
                         _ = await control.GetVolumeAsync(ct);
                     }

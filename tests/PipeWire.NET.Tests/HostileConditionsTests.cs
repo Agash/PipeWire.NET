@@ -4,7 +4,6 @@ using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
-using PipeWire.NET.Media.Streams;
 using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Tests;
@@ -250,7 +249,7 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         // the interesting ones: a name must not be able to inject a second property.
         try
         {
-            PipeWireNode node = await reg.CreateVirtualNode("Hostile").WithName(name)
+            PipeWireNode node = await reg.CreateVirtualSink("Hostile").WithName(name)
                                          .ExecuteAsync(cts.Token);
 
             PipeWireNode? live = reg.Current.GetNode(node.NodeId);
@@ -282,7 +281,7 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         const string Name = "pwnet_hc_nul\0hidden";
         try
         {
-            PipeWireNode node = await reg.CreateVirtualNode("Nul").WithName(Name)
+            PipeWireNode node = await reg.CreateVirtualSink("Nul").WithName(Name)
                                          .ExecuteAsync(cts.Token);
 
             string? stored = reg.Current.GetNode(node.NodeId)?.NodeName;
@@ -308,7 +307,7 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         var name = "pwnet_hc_" + new string('x', 8192);
-        PipeWireNode node = await reg.CreateVirtualNode("Long").WithName(name).ExecuteAsync(cts.Token);
+        PipeWireNode node = await reg.CreateVirtualSink("Long").WithName(name).ExecuteAsync(cts.Token);
 
         string? stored = reg.Current.GetNode(node.NodeId)?.NodeName;
         Assert.AreEqual(name, stored, "a name that was accepted must come back whole");
@@ -374,7 +373,7 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         // A patchbay holding a stale id and acting on it is the everyday version of this.
-        PipeWireNode node = await reg.CreateVirtualNode("Gone")
+        PipeWireNode node = await reg.CreateVirtualSink("Gone")
                                      .WithName("pwnet_hc_gone").ExecuteAsync(cts.Token);
         uint staleId = node.NodeId;
         await reg.DestroyGlobalAsync(staleId, cts.Token);
@@ -472,7 +471,7 @@ public sealed class HostileConditionsTests : PipeWireTestBase
                 // a session item for it, then tries to link it - and these nodes exist for a few
                 // milliseconds, so it never finds a target and every one of them ends as an
                 // aborted activation. Nothing here needs the node to be a sink.
-                PipeWireNode n = await reg.CreateVirtualNode($"Storm {w}-{i}")
+                PipeWireNode n = await reg.CreateVirtualSink($"Storm {w}-{i}")
                                           .WithName($"pwnet_hc_storm_{w}_{i}")
                                           .WithMediaClass("").ExecuteAsync(cts.Token);
                 Assert.IsNotNull(n.ObjectSerial, "a created node arrived without a serial");
@@ -528,7 +527,7 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await reg.CreateVirtualNode("Doomed")
+        PipeWireNode node = await reg.CreateVirtualSink("Doomed")
                                      .WithName("pwnet_hc_kicked_node").ExecuteAsync(cts.Token);
         Assert.IsNotNull(reg.Current.GetNode(node.NodeId));
         uint? clientId = await FindOurClientIdAsync(AppName, cts.Token);
@@ -555,7 +554,7 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         long startedTicks = Environment.TickCount64;
         try
         {
-            await reg.CreateVirtualNode("After").WithName("pwnet_hc_after").ExecuteAsync(prompt.Token);
+            await reg.CreateVirtualSink("After").WithName("pwnet_hc_after").ExecuteAsync(prompt.Token);
             Assert.Fail("a create on a destroyed connection reported success");
         }
         catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException

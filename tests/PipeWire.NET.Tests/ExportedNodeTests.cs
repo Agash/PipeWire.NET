@@ -4,7 +4,6 @@ using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
-using PipeWire.NET.Media.Streams;
 using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Tests;
@@ -65,7 +64,7 @@ public sealed class ExportedNodeTests
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-        await using PipeWireExportedNode node = PipeWireExportedNode.Export(
+        await using PipeWireNodeProvider node = PipeWireNodeProvider.Create(
             ctx,
             name,
             PipeWireExportedFormat.AudioF32(Rate, Channels),
@@ -141,7 +140,7 @@ public sealed class ExportedNodeTests
         // the graph inserted in its place.
         uint next = 0;
 
-        await using PipeWireExportedNode node = PipeWireExportedNode.Export(
+        await using PipeWireNodeProvider node = PipeWireNodeProvider.Create(
             ctx,
             name,
             PipeWireExportedFormat.AudioF32(Rate, Channels),
@@ -266,7 +265,7 @@ public sealed class ExportedNodeTests
 
         uint next = 0;
 
-        await using PipeWireExportedNode node = PipeWireExportedNode.Export(
+        await using PipeWireNodeProvider node = PipeWireNodeProvider.Create(
             ctx,
             name,
             PipeWireExportedFormat.AudioF32(Rate, Channels),
@@ -365,10 +364,10 @@ public sealed class ExportedNodeTests
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireExportedNode node;
+        PipeWireNodeProvider node;
         try
         {
-            node = PipeWireExportedNode.ExportSpaFactory(
+            node = PipeWireNodeProvider.FromSpaFactory(
                 ctx,
                 "audiotestsrc",
                 new Dictionary<string, string>
@@ -429,7 +428,7 @@ public sealed class ExportedNodeTests
 
         var consumed = new List<float>();
 
-        await using PipeWireExportedNode sink = PipeWireExportedNode.Export(
+        await using PipeWireNodeProvider sink = PipeWireNodeProvider.Create(
             ctx,
             sinkName,
             PipeWireExportedFormat.AudioF32(Rate, Channels),
@@ -533,7 +532,7 @@ public sealed class ExportedNodeTests
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireExportedNode node = PipeWireExportedNode.Export(
+        PipeWireNodeProvider node = PipeWireNodeProvider.Create(
             ctx, name, PipeWireExportedFormat.AudioF32(Rate, Channels));
 
         var appeared = false;
@@ -592,7 +591,7 @@ public sealed class ExportedNodeTests
 
         var calls = 0;
 
-        await using PipeWireExportedNode node = PipeWireExportedNode.Export(
+        await using PipeWireNodeProvider node = PipeWireNodeProvider.Create(
             ctx,
             name,
             PipeWireExportedFormat.AudioF32(Rate, Channels),
@@ -695,7 +694,7 @@ public sealed class ExportedNodeTests
 
         const int stereo = 2;
         uint next = 0;
-        await using PipeWireExportedNode node = PipeWireExportedNode.Export(
+        await using PipeWireNodeProvider node = PipeWireNodeProvider.Create(
             ctx,
             name,
             PipeWireExportedFormat.AudioF32(Rate, stereo),
@@ -704,7 +703,7 @@ public sealed class ExportedNodeTests
 
         // Every cycle's io state, so a failure below says whether a quantum was lost at this end
         // (published over a buffer the consumer had not taken) or after it.
-        node.ProduceTrace = new PipeWireExportedNode.ProduceCycleRecord[4096];
+        node.ProduceTrace = new PipeWireNodeProvider.ProduceCycleRecord[4096];
 
         // The first sample of each published quantum, in cycle order, to line the ramp up with the
         // cycles that wrote it.
@@ -823,11 +822,11 @@ public sealed class ExportedNodeTests
                 // Status/buffer on entry -> buffer published : result, free buffers after / pool,
                 // and the ramp value that cycle started at.
                 var cycleLines = new System.Text.StringBuilder();
-                PipeWireExportedNode.ProduceCycleRecord[] trace = node.ProduceTrace!;
+                PipeWireNodeProvider.ProduceCycleRecord[] trace = node.ProduceTrace!;
                 int recorded = Math.Min(node.ProduceTraceCount, trace.Length);
                 for (int c = 0, written = 0; c < recorded; c++)
                 {
-                    PipeWireExportedNode.ProduceCycleRecord r = trace[c];
+                    PipeWireNodeProvider.ProduceCycleRecord r = trace[c];
                     string at = r.Result == 2 && written < firstOfCycle.Length ? $" @{firstOfCycle[written++]}" : "";
                     cycleLines.Append(System.Globalization.CultureInfo.InvariantCulture,
                         $"{c}: s{r.EntryStatus}/b{(int)r.EntryBuffer} -> b{(int)r.Published} : {r.Result} free {r.FreeAfter}/{r.Pool}{at}")
@@ -886,7 +885,7 @@ public sealed class ExportedNodeTests
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         uint next = 0;
-        await using PipeWireExportedNode node = PipeWireExportedNode.Export(
+        await using PipeWireNodeProvider node = PipeWireNodeProvider.Create(
             ctx,
             name,
             PipeWireExportedFormat.AudioF32(Rate, Channels),

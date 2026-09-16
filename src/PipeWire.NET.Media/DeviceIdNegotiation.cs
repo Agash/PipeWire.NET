@@ -10,18 +10,6 @@ using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Media;
 
-/// <summary>What a peer said about device-ID negotiation in its <c>SPA_PARAM_PeerCapability</c>.</summary>
-/// <param name="NegotiatesDeviceIds">Whether it takes part (<c>pipewire.device-id-negotiation</c> >= 1).</param>
-/// <param name="AvailableDevices">
-/// The devices it can work with (<c>pipewire.device-ids</c>), empty when it named none - which means
-/// any, as upstream's video-play-fixate reads it.
-/// </param>
-internal readonly record struct PeerCapabilities(bool NegotiatesDeviceIds, ImmutableArray<ulong> AvailableDevices)
-{
-    /// <summary>Whether <paramref name="device"/> is one the peer can work with.</summary>
-    public bool Accepts(ulong device) => AvailableDevices.IsDefaultOrEmpty || AvailableDevices.Contains(device);
-}
-
 /// <summary>
 /// The wire side of DMA-BUF device-ID negotiation: the Capability param a stream advertises and the
 /// PeerCapability param it is answered with.
@@ -72,7 +60,7 @@ internal static class DeviceIdNegotiation
         var dict = new SpaObject(
             SpaType.ObjectParamDict,
             SpaParamType.Capability,
-            [new SpaProperty(SpaParamDict.Info, SpaPodPropFlags.HintDict, new SpaStruct(fields.ToImmutable()))]);
+            [new SpaPodProperty(SpaParamDict.Info, SpaPodPropFlags.HintDict, new SpaStruct(fields.ToImmutable()))]);
 
         return SpaPod.ToBytes(dict);
     }
@@ -98,12 +86,12 @@ internal static class DeviceIdNegotiation
         bool negotiates = false;
         var devices = ImmutableArray.CreateBuilder<ulong>();
 
-        foreach (SpaProperty peer in peers.Properties)
+        foreach (SpaPodProperty peer in peers.Properties)
         {
             // Keyed by peer id; the value is that peer's Capability ParamDict, or None.
             if (peer.Value is not SpaObject { ObjectType: SpaType.ObjectParamDict } dict) continue;
 
-            SpaProperty? info = dict.Properties.FirstOrDefault(p => p.Key == (SpaKey)SpaParamDict.Info);
+            SpaPodProperty? info = dict.Properties.FirstOrDefault(p => p.Key == (SpaKey)SpaParamDict.Info);
             if (info?.Value is not SpaStruct { Fields: var f } || f.Length < 1 || f[0] is not SpaInt) continue;
 
             // spa_param_dict_info_parse: Int n, then n (String key, String value) pairs.

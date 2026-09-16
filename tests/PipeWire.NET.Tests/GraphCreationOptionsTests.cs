@@ -60,7 +60,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
             var nameless = new PipeWireNode(0x7FFF0000, null, null, null);
 
             Assert.ThrowsExactly<ArgumentException>(
-                () => registry.CreateVirtualNode("Targeted").WithTarget(nameless));
+                () => registry.CreateVirtualSink("Targeted").WithTarget(nameless));
         }
     }
 
@@ -77,10 +77,10 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode target = await registry.CreateVirtualNode("StayTarget")
+            PipeWireNode target = await registry.CreateVirtualSink("StayTarget")
                 .WithName(Unique("pwnet_stay_target")).ExecuteAsync(cts.Token);
 
-            PipeWireNode node = await registry.CreateVirtualNode("Staying")
+            PipeWireNode node = await registry.CreateVirtualSink("Staying")
                 .WithName(Unique("pwnet_stay")).WithTarget(target).WithDontReconnect()
                 .ExecuteAsync(cts.Token);
 
@@ -114,7 +114,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         {
             long before = registry.Current.Version;
 
-            PipeWireNodeCreation pending = registry.CreateVirtualNode("Inert")
+            PipeWireNodeBuilder pending = registry.CreateVirtualSink("Inert")
                                                    .WithName("pwnet_inert")
                                                    .WithLinger();
 
@@ -148,12 +148,12 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
                 await ConnectAsync("pwnet-linger-owner", cts.Token);
             await using (ownerContext)
             {
-                lingering = (await owner.CreateVirtualNode("Lingering")
+                lingering = (await owner.CreateVirtualSink("Lingering")
                                         .WithName("pwnet_lingering")
                                         .WithLinger()
                                         .ExecuteAsync(cts.Token)).NodeId;
 
-                transient = (await owner.CreateVirtualNode("Transient")
+                transient = (await owner.CreateVirtualSink("Transient")
                                         .WithName("pwnet_transient")
                                         .ExecuteAsync(cts.Token)).NodeId;
 
@@ -187,8 +187,8 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode a = await registry.CreateVirtualNodeAsync("PA", "pwnet_pa", cts.Token);
-            PipeWireNode b = await registry.CreateVirtualNodeAsync("PB", "pwnet_pb", cts.Token);
+            PipeWireNode a = await registry.CreateVirtualSinkAsync("PA", "pwnet_pa", cts.Token);
+            PipeWireNode b = await registry.CreateVirtualSinkAsync("PB", "pwnet_pb", cts.Token);
 
             PipeWireGraphSnapshot ready = await WaitForAsync(
                 registry,
@@ -217,7 +217,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNodeAsync("V", "pwnet_version", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync("V", "pwnet_version", cts.Token);
             PipeWireGraphSnapshot graph = await WaitForAsync(
                 registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
 
@@ -245,10 +245,10 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         await using (maker)
         await using (makerRegistry)
         {
-            PipeWireNode source = await makerRegistry.CreateVirtualNode("LingerSrc")
+            PipeWireNode source = await makerRegistry.CreateVirtualSink("LingerSrc")
                 .WithName($"pwnet_linger_src_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .WithLinger().ExecuteAsync(cts.Token);
-            PipeWireNode sink = await makerRegistry.CreateVirtualNode("LingerSink")
+            PipeWireNode sink = await makerRegistry.CreateVirtualSink("LingerSink")
                 .WithName($"pwnet_linger_sink_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .WithLinger().ExecuteAsync(cts.Token);
 
@@ -290,7 +290,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode source = await registry.CreateVirtualNode("VirtualMic")
+            PipeWireNode source = await registry.CreateVirtualSink("VirtualMic")
                 .WithName($"pwnet_vmic_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .WithMediaClass("Audio/Source")
                 .ExecuteAsync(cts.Token);
@@ -316,12 +316,12 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode mono = await registry.CreateVirtualNode("MonoSink")
+            PipeWireNode mono = await registry.CreateVirtualSink("MonoSink")
                 .WithName($"pwnet_mono_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .WithChannelPositions("[ MONO ]")
                 .ExecuteAsync(cts.Token);
 
-            PipeWireNode surround = await registry.CreateVirtualNode("SurroundSink")
+            PipeWireNode surround = await registry.CreateVirtualSink("SurroundSink")
                 .WithName($"pwnet_surround_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .WithChannelPositions("[ FL FR FC LFE SL SR ]")
                 .ExecuteAsync(cts.Token);
@@ -375,10 +375,10 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode source = await registry.CreateVirtualNode("LinkById")
+            PipeWireNode source = await registry.CreateVirtualSink("LinkById")
                 .WithName($"pwnet_lbi_src_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
-            PipeWireNode sink = await registry.CreateVirtualNode("LinkById")
+            PipeWireNode sink = await registry.CreateVirtualSink("LinkById")
                 .WithName($"pwnet_lbi_sink_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
 
@@ -418,7 +418,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         {
             string nick = $"pwnet nick {Random.Shared.Next():x}";
 
-            PipeWireNode node = await registry.CreateVirtualNode("Props")
+            PipeWireNode node = await registry.CreateVirtualSink("Props")
                 .WithName($"pwnet_props_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .WithProperty("node.nick", nick)
                 .WithProperty("node.virtual", "true")
@@ -445,7 +445,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         {
             // media.class is one the library sets itself, reached here through the general form
             // rather than the named helper, so this covers both.
-            PipeWireNode node = await registry.CreateVirtualNode("Override")
+            PipeWireNode node = await registry.CreateVirtualSink("Override")
                 .WithName($"pwnet_override_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .WithProperty("media.class", "Audio/Source")
                 .ExecuteAsync(cts.Token);
@@ -470,7 +470,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNodeCreation creation = registry.CreateVirtualNode("ManyProps")
+            PipeWireNodeBuilder creation = registry.CreateVirtualSink("ManyProps")
                 .WithName($"pwnet_many_{Environment.ProcessId}_{Random.Shared.Next():x}");
 
             // Past the eight the library sets itself, and long enough to overflow the stack scratch.
@@ -495,7 +495,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-        PipeWireNodeCreation creation = registry.CreateVirtualNode("Guard");
+        PipeWireNodeBuilder creation = registry.CreateVirtualSink("Guard");
 
         Assert.ThrowsExactly<ArgumentException>(() => creation.WithProperty("", "v"));
         Assert.ThrowsExactly<ArgumentNullException>(() => creation.WithProperty("k", null!));
@@ -514,7 +514,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("Listed")
+            PipeWireNode node = await registry.CreateVirtualSink("Listed")
                 .WithName(Unique("pwnet_linger_listed"))
                 .WithLinger()
                 .ExecuteAsync(cts.Token);

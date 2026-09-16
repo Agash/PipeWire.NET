@@ -1,7 +1,7 @@
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
-using PipeWire.NET.Media.Streams;
+using PipeWire.NET.Media;
 
 namespace PipeWire.NET.Tests;
 
@@ -201,7 +201,7 @@ public sealed class LifecycleLockTests : PipeWireTestBase
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await registry.CreateVirtualNodeAsync(
+        PipeWireNode node = await registry.CreateVirtualSinkAsync(
             "ReaperSrc", "pwnet_reaper_src", cts.Token);
 
         // Abandoned in a separate frame: values created inside this async method can stay rooted

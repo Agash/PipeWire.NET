@@ -65,9 +65,9 @@ public sealed class LinkStateTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode source = await registry.CreateVirtualNode("LinkState")
+            PipeWireNode source = await registry.CreateVirtualSink("LinkState")
                 .WithName(Unique("pwnet_ls_src")).ExecuteAsync(cts.Token);
-            PipeWireNode sink = await registry.CreateVirtualNode("LinkState")
+            PipeWireNode sink = await registry.CreateVirtualSink("LinkState")
                 .WithName(Unique("pwnet_ls_sink")).ExecuteAsync(cts.Token);
 
             PipeWirePort output = await PortAsync(registry, source.NodeId, PipeWirePortDirection.Out, cts.Token);
@@ -75,7 +75,7 @@ public sealed class LinkStateTests : PipeWireTestBase
 
             PipeWireLink link = await registry.CreateLinkAsync(output, input, cts.Token);
 
-            await using (PipeWireLinkControl control = registry.BindLink(link.LinkId))
+            await using (PipeWireLinkProxy control = registry.BindLink(link.LinkId))
             {
                 await control.ReadyAsync(cts.Token);
 
@@ -112,9 +112,9 @@ public sealed class LinkStateTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode source = await registry.CreateVirtualNode("LinkEvents")
+            PipeWireNode source = await registry.CreateVirtualSink("LinkEvents")
                 .WithName(Unique("pwnet_le_src")).ExecuteAsync(cts.Token);
-            PipeWireNode sink = await registry.CreateVirtualNode("LinkEvents")
+            PipeWireNode sink = await registry.CreateVirtualSink("LinkEvents")
                 .WithName(Unique("pwnet_le_sink")).ExecuteAsync(cts.Token);
 
             PipeWirePort output = await PortAsync(registry, source.NodeId, PipeWirePortDirection.Out, cts.Token);
@@ -124,7 +124,7 @@ public sealed class LinkStateTests : PipeWireTestBase
 
             var seen = new ConcurrentQueue<PipeWireLinkState>();
 
-            await using (PipeWireLinkControl control = registry.BindLink(link.LinkId))
+            await using (PipeWireLinkProxy control = registry.BindLink(link.LinkId))
             {
                 control.StateChanged += c => seen.Enqueue(c.State);
 
@@ -169,15 +169,15 @@ public sealed class LinkStateTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode source = await registry.CreateVirtualNode("PortParams")
+            PipeWireNode source = await registry.CreateVirtualSink("PortParams")
                 .WithName(Unique("pwnet_pp_src")).ExecuteAsync(cts.Token);
-            PipeWireNode sink = await registry.CreateVirtualNode("PortParams")
+            PipeWireNode sink = await registry.CreateVirtualSink("PortParams")
                 .WithName(Unique("pwnet_pp_sink")).ExecuteAsync(cts.Token);
 
             PipeWirePort output = await PortAsync(registry, source.NodeId, PipeWirePortDirection.Out, cts.Token);
             PipeWirePort input = await PortAsync(registry, sink.NodeId, PipeWirePortDirection.In, cts.Token);
 
-            await using (PipeWirePortControl port = registry.BindPort(output.PortId))
+            await using (PipeWirePortProxy port = registry.BindPort(output.PortId))
             {
                 // What it will accept, before anything is linked to it. A port that offers nothing
                 // could not be linked at all, so this is the one that must not be empty.
@@ -222,12 +222,12 @@ public sealed class LinkStateTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("PortSet")
+            PipeWireNode node = await registry.CreateVirtualSink("PortSet")
                 .WithName(Unique("pwnet_ps")).ExecuteAsync(cts.Token);
 
             PipeWirePort input = await PortAsync(registry, node.NodeId, PipeWirePortDirection.In, cts.Token);
 
-            await using (PipeWirePortControl port = registry.BindPort(input.PortId))
+            await using (PipeWirePortProxy port = registry.BindPort(input.PortId))
             {
                 ImmutableArray<SpaObject> supported = await port.EnumerateSupportedFormatsAsync(cts.Token);
                 if (supported.IsEmpty) Assert.Inconclusive("the port reported no format to try setting.");
@@ -272,9 +272,9 @@ public sealed class LinkStateTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode source = await registry.CreateVirtualNode("PortSub")
+            PipeWireNode source = await registry.CreateVirtualSink("PortSub")
                 .WithName(Unique("pwnet_psub_src")).ExecuteAsync(cts.Token);
-            PipeWireNode sink = await registry.CreateVirtualNode("PortSub")
+            PipeWireNode sink = await registry.CreateVirtualSink("PortSub")
                 .WithName(Unique("pwnet_psub_sink")).ExecuteAsync(cts.Token);
 
             PipeWirePort output = await PortAsync(registry, source.NodeId, PipeWirePortDirection.Out, cts.Token);
@@ -282,7 +282,7 @@ public sealed class LinkStateTests : PipeWireTestBase
 
             PipeWireLink link = await registry.CreateLinkAsync(output, input, cts.Token);
 
-            await using (PipeWirePortControl port = registry.BindPort(input.PortId))
+            await using (PipeWirePortProxy port = registry.BindPort(input.PortId))
             {
                 // Linked, so there are formats to report. An unlinked port answers empty and
                 // would leave the wait below hanging on nothing.
@@ -344,9 +344,9 @@ public sealed class LinkStateTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode source = await registry.CreateVirtualNode("LinkProps")
+            PipeWireNode source = await registry.CreateVirtualSink("LinkProps")
                 .WithName(Unique("pwnet_lp_src")).ExecuteAsync(cts.Token);
-            PipeWireNode sink = await registry.CreateVirtualNode("LinkProps")
+            PipeWireNode sink = await registry.CreateVirtualSink("LinkProps")
                 .WithName(Unique("pwnet_lp_sink")).ExecuteAsync(cts.Token);
 
             PipeWirePort output = await PortAsync(registry, source.NodeId, PipeWirePortDirection.Out, cts.Token);

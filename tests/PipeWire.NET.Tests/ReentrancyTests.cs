@@ -61,7 +61,7 @@ public sealed class ReentrancyTests : PipeWireTestBase
                     _ = registry.Current.GetNode(n.NodeId);
                     _ = registry.Current.GetPortsForNode(n.NodeId);
 
-                    using PipeWireNodeControl control = registry.BindNode(n.NodeId);
+                    using PipeWireNodeProxy control = registry.BindNode(n.NodeId);
                     Interlocked.Increment(ref bound);
                 }
                 catch (ArgumentException)
@@ -79,7 +79,7 @@ public sealed class ReentrancyTests : PipeWireTestBase
             {
                 for (int i = 0; i < 10; i++)
                 {
-                    PipeWireNode node = await registry.CreateVirtualNode("Reentrant")
+                    PipeWireNode node = await registry.CreateVirtualSink("Reentrant")
                         .WithName(Unique("pwnet_reentrant")).ExecuteAsync(cts.Token);
                     await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
                 }
@@ -141,7 +141,7 @@ public sealed class ReentrancyTests : PipeWireTestBase
             {
                 for (int i = 0; i < 10; i++)
                 {
-                    PipeWireNode node = await registry.CreateVirtualNode("Mutate")
+                    PipeWireNode node = await registry.CreateVirtualSink("Mutate")
                         .WithName(Unique("pwnet_mutate")).ExecuteAsync(cts.Token);
                     await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
                 }
@@ -170,7 +170,7 @@ public sealed class ReentrancyTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null) Assert.Inconclusive("no session manager, so no default store.");
 
             await using (store)
@@ -182,7 +182,7 @@ public sealed class ReentrancyTests : PipeWireTestBase
                 var wrote = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 var faults = new ConcurrentQueue<string>();
 
-                void OnChanged(PipeWireMetadataStore s, PipeWireMetadataEntry e)
+                void OnChanged(PipeWireMetadataProxy s, PipeWireMetadataEntry e)
                 {
                     if (e.Key != trigger || e.Value is null) return;
 
@@ -233,10 +233,10 @@ public sealed class ReentrancyTests : PipeWireTestBase
 
             for (int round = 0; round < 6; round++)
             {
-                PipeWireNode node = await registry.CreateVirtualNode("SelfDispose")
+                PipeWireNode node = await registry.CreateVirtualSink("SelfDispose")
                     .WithName(Unique("pwnet_selfdispose")).ExecuteAsync(cts.Token);
 
-                PipeWireNodeControl control = registry.BindNode(node.NodeId);
+                PipeWireNodeProxy control = registry.BindNode(node.NodeId);
                 var attempted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
                 control.InfoChanged += _ =>
@@ -302,7 +302,7 @@ public sealed class ReentrancyTests : PipeWireTestBase
         registry.NodeAdded += OnAdded;
         try
         {
-            PipeWireNode node = await registry.CreateVirtualNode("DisposeSelf")
+            PipeWireNode node = await registry.CreateVirtualSink("DisposeSelf")
                 .WithName(Unique("pwnet_dispose_self")).ExecuteAsync(cts.Token);
 
             Exception? thrown = await attempted.Task.WaitAsync(TimeSpan.FromSeconds(20), cts.Token);

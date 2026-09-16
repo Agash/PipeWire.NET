@@ -51,7 +51,7 @@ public sealed class ToolOracleTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("Oracle")
+            PipeWireNode node = await registry.CreateVirtualSink("Oracle")
                 .WithName(Unique("pwnet_oracle")).ExecuteAsync(cts.Token);
 
             // Both views are taken after the same barrier, so neither is a moving target - and the
@@ -99,7 +99,7 @@ public sealed class ToolOracleTests : PipeWireTestBase
             await AssertWeSeeAllAsync("Module", d => d.IdsOfKind("Module"),
                 g => g.Modules.Select(m => m.Id), dump, registry, cts.Token);
             await AssertWeSeeAllAsync("Metadata", d => d.IdsOfKind("Metadata"),
-                g => g.MetadataStores.Select(m => m.Id), dump, registry, cts.Token);
+                g => g.Metadata.Select(m => m.Id), dump, registry, cts.Token);
 
             // And the properties we parsed for our own node match what pw-dump read independently.
             PwDump.Entry? theirs = dump.ById(node.NodeId);
@@ -224,11 +224,11 @@ public sealed class ToolOracleTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("WpctlOracle")
+            PipeWireNode node = await registry.CreateVirtualSink("WpctlOracle")
                 .WithName(Unique("pwnet_wpctl")).ExecuteAsync(cts.Token);
             string nodeName = node.NodeName!;
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
             await control.ReadyAsync(cts.Token);
 
             // wpctl sets and we read, not the other way round. WirePlumber applies its own policy to
@@ -389,7 +389,7 @@ public sealed class ToolOracleTests : PipeWireTestBase
 
                 if (!dumped) Assert.Inconclusive("pw-mon printed nothing, so it never started.");
 
-                PipeWireNode node = await registry.CreateVirtualNode("MonOracle")
+                PipeWireNode node = await registry.CreateVirtualSink("MonOracle")
                     .WithName(Unique("pwnet_mon")).ExecuteAsync(cts.Token);
 
                 await registry.DestroyGlobalAsync(node.NodeId, cts.Token);

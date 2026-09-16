@@ -70,13 +70,13 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             // The shape a streaming app builds: several sources feeding one submix, each at its own
             // level, the submix at a master level.
             string submixName = Unique("pwnet_submix");
-            PipeWireNode submix = await registry.CreateVirtualNode("Submix")
+            PipeWireNode submix = await registry.CreateVirtualSink("Submix")
                 .WithName(submixName).ExecuteAsync(cts.Token);
 
             var sources = new List<PipeWireNode>();
             for (int i = 0; i < 3; i++)
             {
-                sources.Add(await registry.CreateVirtualNode($"Source{i}")
+                sources.Add(await registry.CreateVirtualSink($"Source{i}")
                     .WithName(Unique($"pwnet_src{i}")).ExecuteAsync(cts.Token));
             }
 
@@ -113,12 +113,12 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             }
 
             // Levels: each source quieter than the last, the submix at master level.
-            await using PipeWireNodeControl master = registry.BindNode(submix.NodeId);
+            await using PipeWireNodeProxy master = registry.BindNode(submix.NodeId);
             await master.SetVolumeAsync(0.8f, cts.Token);
 
             for (int i = 0; i < sources.Count; i++)
             {
-                await using PipeWireNodeControl channel = registry.BindNode(sources[i].NodeId);
+                await using PipeWireNodeProxy channel = registry.BindNode(sources[i].NodeId);
                 await channel.SetChannelVolumesAsync([0.2f * (i + 1), 0.2f * (i + 1)], cts.Token);
             }
 
@@ -129,7 +129,7 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             Assert.AreEqual(0.8f, await SettledVolumeAsync(master, 0.8f, cts.Token), 0.01f);
             for (int i = 0; i < sources.Count; i++)
             {
-                await using PipeWireNodeControl channel = registry.BindNode(sources[i].NodeId);
+                await using PipeWireNodeProxy channel = registry.BindNode(sources[i].NodeId);
                 float want = 0.2f * (i + 1);
                 float got = await SettledChannelVolumeAsync(channel, want, cts.Token);
                 Assert.AreEqual(want, got, 0.01f, $"source {i} level did not stick");
@@ -163,9 +163,9 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode a = await registry.CreateVirtualNode("CascadeA")
+            PipeWireNode a = await registry.CreateVirtualSink("CascadeA")
                 .WithName(Unique("pwnet_casc_a")).ExecuteAsync(cts.Token);
-            PipeWireNode b = await registry.CreateVirtualNode("CascadeB")
+            PipeWireNode b = await registry.CreateVirtualSink("CascadeB")
                 .WithName(Unique("pwnet_casc_b")).ExecuteAsync(cts.Token);
 
             ImmutableArray<PipeWirePort> aPorts = await PortsOfAsync(registry, a.NodeId, 4, cts.Token);
@@ -209,9 +209,9 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
         {
             // The classic insert: source -> filter -> sink, with the filter doing the work. This is
             // the arrangement an equaliser or a noise gate lives in.
-            PipeWireNode source = await registry.CreateVirtualNode("InsertSrc")
+            PipeWireNode source = await registry.CreateVirtualSink("InsertSrc")
                 .WithName(Unique("pwnet_insert_src")).ExecuteAsync(cts.Token);
-            PipeWireNode sink = await registry.CreateVirtualNode("InsertSink")
+            PipeWireNode sink = await registry.CreateVirtualSink("InsertSink")
                 .WithName(Unique("pwnet_insert_sink")).ExecuteAsync(cts.Token);
 
             await using PipeWireFilter filter = PipeWireFilter.Create(ctx, Unique("pwnet_insert_filter"));
@@ -312,7 +312,7 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
 
             // And its parameters are readable, which is the part that needs the binding to work
             // against a node this library never created.
-            await using PipeWireNodeControl control = registry.BindNode(produced.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(produced.NodeId);
             await control.ReadyAsync(cts.Token);
 
             Assert.IsTrue(control.Parameters.Length > 0, "a real producer must describe its parameters");
@@ -347,14 +347,14 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
 
             // What a settings panel shows: the card, the nodes it provides, and which of them is the
             // system default. Every hop has to resolve, or the panel shows an orphan.
-            await using PipeWireDeviceControl device = registry.BindDevice(card!.Id);
+            await using PipeWireDeviceProxy device = registry.BindDevice(card!.Id);
             await device.ReadyAsync(cts.Token);
 
             Assert.IsTrue(device.CanRead(SpaParamType.EnumProfile));
             SpaObject? profile = await device.GetProfileAsync(cts.Token);
             Assert.IsNotNull(profile, "a card in use reports its profile");
 
-            PipeWireMetadataStore? defaults = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? defaults = registry.BindMetadata("default");
             if (defaults is null)
                 Assert.Inconclusive("no session manager, so no default store.");
 
@@ -393,7 +393,7 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
                     "the default sink must be something audio can be sent to");
 
                 // And it is controllable, which is what a volume slider needs.
-                await using PipeWireNodeControl control = registry.BindNode(defaultSink.NodeId);
+                await using PipeWireNodeProxy control = registry.BindNode(defaultSink.NodeId);
                 await control.ReadyAsync(cts.Token);
                 Assert.IsTrue(control.CanWrite(SpaParamType.Props),
                     "the default sink must accept a volume change");
@@ -417,7 +417,7 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             var created = new List<uint>();
             for (int i = 0; i < 4; i++)
             {
-                PipeWireNode node = await registry.CreateVirtualNode($"Ui{i}")
+                PipeWireNode node = await registry.CreateVirtualSink($"Ui{i}")
                     .WithName(Unique($"pwnet_ui{i}")).ExecuteAsync(cts.Token);
                 created.Add(node.NodeId);
             }
@@ -448,7 +448,7 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
     /// session and reliable on a busy one.
     /// </remarks>
     private static async Task<float> SettledVolumeAsync(
-        PipeWireNodeControl node, float want, CancellationToken cancellationToken)
+        PipeWireNodeProxy node, float want, CancellationToken cancellationToken)
     {
         // Generous on purpose: a write returns when the daemon has processed it, not when the
         // node has applied it, and on a session busy retrying dead ALSA devices that lag is
@@ -466,7 +466,7 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
 
     /// <inheritdoc cref="SettledVolumeAsync"/>
     private static async Task<float> SettledChannelVolumeAsync(
-        PipeWireNodeControl node, float want, CancellationToken cancellationToken)
+        PipeWireNodeProxy node, float want, CancellationToken cancellationToken)
     {
         float last = float.NaN;
         for (int attempt = 0; attempt < 80; attempt++)

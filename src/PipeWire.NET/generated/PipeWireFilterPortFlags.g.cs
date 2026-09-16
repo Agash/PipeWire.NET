@@ -11,7 +11,7 @@
 
 using PipeWire.NET.Interop;
 
-namespace PipeWire.NET;
+namespace PipeWire.NET.Graph;
 
 [NativeTypeName("unsigned int")]
 [System.Flags]

@@ -209,7 +209,7 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
                 if (Native.pw_context_load_module(context, (sbyte*)n, (sbyte*)a, null) is null)
                 {
                     throw new PipeWireInteropException(
-                        $"pw_context_load_module({name})", -NativeConstants.ENOENT);
+                        $"pw_context_load_module({name})", -NativeLibc.ENOENT);
                 }
             }
         }
@@ -308,7 +308,7 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
             loop = Native.pw_thread_loop_new((sbyte*)n, null);
 
         if (loop is null)
-            throw new PipeWireInteropException("pw_thread_loop_new", -NativeConstants.ENOMEM);
+            throw new PipeWireInteropException("pw_thread_loop_new", -NativeLibc.ENOMEM);
 
         _loopHandle = new PipeWireLoopHandle(loop);
         _loopHandle.RefusedUnlock = ReportRefusedUnlock;
@@ -322,7 +322,7 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
         {
             _loopHandle.Dispose();
             _loopHandle = null;
-            throw new PipeWireInteropException("pw_context_new", -NativeConstants.ENOMEM);
+            throw new PipeWireInteropException("pw_context_new", -NativeLibc.ENOMEM);
         }
 
         _contextHandle = new PipeWireContextHandle(context, _loopHandle);
@@ -545,7 +545,7 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
         // A host that drives the loop itself must not also have a thread doing it: two iterators on
         // one loop is a race over the poll set, not a speedup.
         if (!DriveExternally && Native.pw_thread_loop_start(loop) < 0)
-            throw new PipeWireInteropException("pw_thread_loop_start", -NativeConstants.EAGAIN);
+            throw new PipeWireInteropException("pw_thread_loop_start", -NativeLibc.EAGAIN);
 
         // The loop thread is live from here, but _started is only set once this returns and disposal
         // gates pw_thread_loop_stop on it - so a throw below would strand the thread.
@@ -584,7 +584,7 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
 
                 pw_properties* props = Native.pw_properties_new_dict(&native);
                 if (props is null)
-                    throw new PipeWireInteropException("pw_properties_new_dict", -NativeConstants.ENOMEM);
+                    throw new PipeWireInteropException("pw_properties_new_dict", -NativeLibc.ENOMEM);
 
                 core = connectFd < 0
                     ? (RunInProcess
@@ -604,11 +604,11 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
                 // disposal closes it. A raw descriptor stays the caller's; nothing here closes it.
                 throw connectFd < 0
                     ? new PipeWireConnectFailedException(
-                        "pw_context_connect", -NativeConstants.ENOENT,
+                        "pw_context_connect", -NativeLibc.ENOENT,
                         objectId: null,
                         "ensure the PipeWire daemon is running (pipewire.service / wireplumber.service)")
                     : new PipeWireConnectFailedException(
-                        "pw_context_connect_fd", -NativeConstants.ENOENT,
+                        "pw_context_connect_fd", -NativeLibc.ENOENT,
                         objectId: null,
                         "the fd must be a connected PipeWire socket (as returned by a portal "
                         + "OpenPipeWireRemote request), not a plain file, and the daemon must be "
@@ -902,10 +902,10 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
 
     /// <inheritdoc cref="CoreSync.IsConnectionFatal"/>
     private static bool IsConnectionFatal(int result) => result is
-        -NativeConstants.EPIPE or
-        -NativeConstants.ECONNABORTED or
-        -NativeConstants.ECONNRESET or
-        -NativeConstants.ENOTCONN;
+        -NativeLibc.EPIPE or
+        -NativeLibc.ECONNABORTED or
+        -NativeLibc.ECONNRESET or
+        -NativeLibc.ENOTCONN;
 
     private void DisposeCore()
     {

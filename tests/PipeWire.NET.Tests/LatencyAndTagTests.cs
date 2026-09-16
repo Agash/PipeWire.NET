@@ -37,9 +37,9 @@ public sealed class LatencyAndTagTests : PipeWireTestBase
         // would reject it, and there is no meaningful value to substitute for a unit not sent.
         var partial = new SpaObject(SpaType.ObjectParamLatency, SpaParamType.Latency,
         [
-            new SpaProperty((uint)SpaParamLatency.Direction, 0, new SpaId((uint)SpaDirection.Input)),
-            new SpaProperty((uint)SpaParamLatency.MinNs, 0, new SpaLong(1_000L)),
-            new SpaProperty((uint)SpaParamLatency.MaxNs, 0, new SpaLong(2_000L)),
+            new SpaPodProperty((uint)SpaParamLatency.Direction, 0, new SpaId((uint)SpaDirection.Input)),
+            new SpaPodProperty((uint)SpaParamLatency.MinNs, 0, new SpaLong(1_000L)),
+            new SpaPodProperty((uint)SpaParamLatency.MaxNs, 0, new SpaLong(2_000L)),
         ]);
 
         PipeWireLatency? read = PipeWireLatency.From(partial);
@@ -58,7 +58,7 @@ public sealed class LatencyAndTagTests : PipeWireTestBase
         // Props also carries floats and longs, so reading it as a latency would produce a
         // plausible-looking value out of unrelated properties rather than an obvious failure.
         var props = new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-            [new SpaProperty(SpaProp.Volume, 0, new SpaFloat(0.5f))]);
+            [new SpaPodProperty(SpaProp.Volume, 0, new SpaFloat(0.5f))]);
 
         Assert.IsNull(PipeWireLatency.From(props));
         Assert.IsNull(PipeWireLatency.From(null));
@@ -121,8 +121,8 @@ public sealed class LatencyAndTagTests : PipeWireTestBase
         // actually present reads past the end of the struct or invents empty entries.
         var lying = new SpaObject(SpaType.ObjectParamTag, SpaParamType.Tag,
         [
-            new SpaProperty((uint)SpaParamTag.Direction, 0, new SpaId((uint)SpaDirection.Input)),
-            new SpaProperty((uint)SpaParamTag.Info, 0, new SpaStruct(
+            new SpaPodProperty((uint)SpaParamTag.Direction, 0, new SpaId((uint)SpaDirection.Input)),
+            new SpaPodProperty((uint)SpaParamTag.Info, 0, new SpaStruct(
             [
                 new SpaInt(99),
                 new SpaString("k"),
@@ -143,7 +143,7 @@ public sealed class LatencyAndTagTests : PipeWireTestBase
     {
         var truncated = new SpaObject(SpaType.ObjectParamTag, SpaParamType.Tag,
         [
-            new SpaProperty((uint)SpaParamTag.Info, 0, new SpaStruct(
+            new SpaPodProperty((uint)SpaParamTag.Info, 0, new SpaStruct(
             [
                 new SpaInt(2),
                 new SpaString("k"),
@@ -176,7 +176,7 @@ public sealed class LatencyAndTagTests : PipeWireTestBase
         // from index 0 when it is absent costs one type check.
         var noCount = new SpaObject(SpaType.ObjectParamTag, SpaParamType.Tag,
         [
-            new SpaProperty((uint)SpaParamTag.Info, 0, new SpaStruct(
+            new SpaPodProperty((uint)SpaParamTag.Info, 0, new SpaStruct(
                 [new SpaString("k"), new SpaString("v")])),
         ]);
 
@@ -209,11 +209,11 @@ public sealed class LatencyAndTagTests : PipeWireTestBase
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await registry.CreateVirtualNode("LatencyLive")
+        PipeWireNode node = await registry.CreateVirtualSink("LatencyLive")
             .WithName($"pwnet_lat_{Environment.ProcessId}_{Random.Shared.Next():x}")
             .ExecuteAsync(cts.Token);
 
-        await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+        await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
         await control.ReadyAsync(cts.Token);
 
         Assert.IsNull(

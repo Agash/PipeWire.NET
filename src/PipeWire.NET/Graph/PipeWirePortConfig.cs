@@ -53,7 +53,7 @@ public sealed record PipeWirePortConfig(
     /// </remarks>
     public SpaObject ToParameter()
     {
-        var properties = new List<SpaProperty>(5)
+        var properties = new List<SpaPodProperty>(5)
         {
             new((uint)SpaParamPortConfig.Direction, 0, new SpaId((uint)Direction)),
             new((uint)SpaParamPortConfig.Mode, 0, new SpaId((uint)Mode)),
@@ -62,7 +62,7 @@ public sealed record PipeWirePortConfig(
         };
 
         if (Format is not null)
-            properties.Add(new SpaProperty((uint)SpaParamPortConfig.Format, 0, Format));
+            properties.Add(new SpaPodProperty((uint)SpaParamPortConfig.Format, 0, Format));
 
         return new SpaObject(SpaType.ObjectParamPortConfig, SpaParamType.PortConfig, [.. properties]);
     }

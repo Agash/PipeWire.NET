@@ -79,7 +79,7 @@ public sealed class GraphThreadingTests : PipeWireTestBase
                 catch (Exception ex) { faulted ??= ex; }
             };
 
-            PipeWireNode node = await registry.CreateVirtualNodeAsync("RE", "pwnet_reentrant", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync("RE", "pwnet_reentrant", cts.Token);
             await WaitForAsync(registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
 
             Assert.IsNull(faulted, $"reading the graph from a handler threw: {faulted}");
@@ -102,7 +102,7 @@ public sealed class GraphThreadingTests : PipeWireTestBase
 
             registry.PortAdded += _ => handlerThreads.Add(Environment.CurrentManagedThreadId);
 
-            PipeWireNode node = await registry.CreateVirtualNodeAsync("TI", "pwnet_threadid", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync("TI", "pwnet_threadid", cts.Token);
             await WaitForAsync(registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
 
             Assert.IsFalse(handlerThreads.IsEmpty, "no PortAdded handler ran");
@@ -129,10 +129,10 @@ public sealed class GraphThreadingTests : PipeWireTestBase
             var seen = 0;
             registry.PortAdded += _ => { Interlocked.Increment(ref seen); throw new InvalidOperationException("boom"); };
 
-            PipeWireNode first = await registry.CreateVirtualNodeAsync("T1", "pwnet_throw_1", cts.Token);
+            PipeWireNode first = await registry.CreateVirtualSinkAsync("T1", "pwnet_throw_1", cts.Token);
             await WaitForAsync(registry, g => g.GetPortsForNode(first.NodeId).Length == 4, cts.Token);
 
-            PipeWireNode second = await registry.CreateVirtualNodeAsync("T2", "pwnet_throw_2", cts.Token);
+            PipeWireNode second = await registry.CreateVirtualSinkAsync("T2", "pwnet_throw_2", cts.Token);
             PipeWireGraphSnapshot after = await WaitForAsync(
                 registry, g => g.GetPortsForNode(second.NodeId).Length == 4, cts.Token);
 
@@ -189,7 +189,7 @@ public sealed class GraphThreadingTests : PipeWireTestBase
 
             for (int i = 0; i < 20; i++)
             {
-                PipeWireNode n = await registry.CreateVirtualNodeAsync($"R{i}", $"pwnet_race_{i}", cts.Token);
+                PipeWireNode n = await registry.CreateVirtualSinkAsync($"R{i}", $"pwnet_race_{i}", cts.Token);
                 await registry.DestroyGlobalAsync(n.NodeId, cts.Token);
             }
 
@@ -234,7 +234,7 @@ public sealed class GraphThreadingTests : PipeWireTestBase
                 catch (Exception ex) { issued.TrySetException(ex); }
             };
 
-            PipeWireNode trigger = await registry.CreateVirtualNodeAsync(
+            PipeWireNode trigger = await registry.CreateVirtualSinkAsync(
                 "Nested", "pwnet_nested_trigger", cts.Token);
 
             Assert.IsTrue(await issued.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token),
@@ -273,7 +273,7 @@ public sealed class GraphThreadingTests : PipeWireTestBase
 
             for (int i = 0; i < 10; i++)
             {
-                PipeWireNode n = await registry.CreateVirtualNodeAsync($"MW{i}", $"pwnet_mw_{i}", cts.Token);
+                PipeWireNode n = await registry.CreateVirtualSinkAsync($"MW{i}", $"pwnet_mw_{i}", cts.Token);
                 await registry.DestroyGlobalAsync(n.NodeId, cts.Token);
             }
 
@@ -306,7 +306,7 @@ public sealed class GraphThreadingTests : PipeWireTestBase
                 {
                     for (int i = 0; i < 30; i++)
                     {
-                        PipeWireNode n = await registry.CreateVirtualNodeAsync($"DR{i}", $"pwnet_dr_{i}", cts.Token);
+                        PipeWireNode n = await registry.CreateVirtualSinkAsync($"DR{i}", $"pwnet_dr_{i}", cts.Token);
                         await registry.DestroyGlobalAsync(n.NodeId, cts.Token);
                         Interlocked.Increment(ref churned);
                     }

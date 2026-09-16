@@ -2,7 +2,6 @@ using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
-using PipeWire.NET.Media.Streams;
 using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Tests;
@@ -106,7 +105,7 @@ public sealed class SyncLoopTests
         await reg.WaitForInitialEnumerationAsync(cts.Token);
         PipeWireNode node = await WaitForNodeAsync(reg, nodeName, cts.Token);
 
-        await using PipeWireNodeControl control = reg.BindNode(node.NodeId);
+        await using PipeWireNodeProxy control = reg.BindNode(node.NodeId);
 
         PipeWireProcessLatency? reported = null;
         for (var i = 0; i < 40 && reported?.Ns != announcedNs; i++)

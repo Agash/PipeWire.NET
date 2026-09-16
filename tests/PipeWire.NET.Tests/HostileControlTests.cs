@@ -54,10 +54,10 @@ public sealed class HostileControlTests : PipeWireTestBase
         {
             for (int round = 0; round < 6; round++)
             {
-                PipeWireNode node = await registry.CreateVirtualNode("Vanish")
+                PipeWireNode node = await registry.CreateVirtualSink("Vanish")
                     .WithName(UniqueName("pwnet_vanish")).ExecuteAsync(cts.Token);
 
-                await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+                await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
                 // Read and destroy at the same time. Whichever wins, the read must end - with a
                 // value, with an empty answer, or with an exception - and never hang.
@@ -84,12 +84,12 @@ public sealed class HostileControlTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("DisposeRace")
+            PipeWireNode node = await registry.CreateVirtualSink("DisposeRace")
                 .WithName(UniqueName("pwnet_disposerace")).ExecuteAsync(cts.Token);
 
             for (int round = 0; round < 10; round++)
             {
-                PipeWireNodeControl control = registry.BindNode(node.NodeId);
+                PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
                 // Every reader must end one way or another.
                 Task[] readers =
@@ -123,10 +123,10 @@ public sealed class HostileControlTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("CancelRace")
+            PipeWireNode node = await registry.CreateVirtualSink("CancelRace")
                 .WithName(UniqueName("pwnet_cancelrace")).ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
             // Cancel after a delay that sweeps across the whole exchange, so the token fires before
             // the request, during the wait, and after the answers have arrived.
@@ -157,10 +157,10 @@ public sealed class HostileControlTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("Overlap")
+            PipeWireNode node = await registry.CreateVirtualSink("Overlap")
                 .WithName(UniqueName("pwnet_overlap")).ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
             await control.ReadyAsync(cts.Token);
 
             // The correlation key is the daemon's own sequence number. If two requests in flight
@@ -200,10 +200,10 @@ public sealed class HostileControlTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("Nonsense")
+            PipeWireNode node = await registry.CreateVirtualSink("Nonsense")
                 .WithName(UniqueName("pwnet_nonsense")).ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
             // A Props object carrying a key from a completely different object type, a value of the
             // wrong type for the key it claims, and a key no enum defines. The daemon is entitled to
@@ -211,11 +211,11 @@ public sealed class HostileControlTests : PipeWireTestBase
             SpaObject[] nonsense =
             [
                 new(SpaType.ObjectProps, SpaParamType.Props,
-                    [new SpaProperty((uint)SpaParamRoute.Index, 0, new SpaInt(9999))]),
+                    [new SpaPodProperty((uint)SpaParamRoute.Index, 0, new SpaInt(9999))]),
                 new(SpaType.ObjectProps, SpaParamType.Props,
-                    [new SpaProperty((uint)SpaProp.Volume, 0, new SpaString("not a float"))]),
+                    [new SpaPodProperty((uint)SpaProp.Volume, 0, new SpaString("not a float"))]),
                 new(SpaType.ObjectProps, SpaParamType.Props,
-                    [new SpaProperty(0xDEAD_BEEF, 0, new SpaBool(true))]),
+                    [new SpaPodProperty(0xDEAD_BEEF, 0, new SpaBool(true))]),
                 new(SpaType.ObjectProps, SpaParamType.Props, []),
             ];
 
@@ -239,10 +239,10 @@ public sealed class HostileControlTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("EdgeVolume")
+            PipeWireNode node = await registry.CreateVirtualSink("EdgeVolume")
                 .WithName(UniqueName("pwnet_edgevol")).ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
             // The API refuses what it can prove is wrong before it reaches the wire.
             await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
@@ -283,10 +283,10 @@ public sealed class HostileControlTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("ChannelCount")
+            PipeWireNode node = await registry.CreateVirtualSink("ChannelCount")
                 .WithName(UniqueName("pwnet_chancount")).ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
             await control.SetChannelVolumesAsync([0.3f, 0.7f], cts.Token);
             ImmutableArray<float> before = await control.GetChannelVolumesAsync(cts.Token);
@@ -397,10 +397,10 @@ public sealed class HostileControlTests : PipeWireTestBase
         {
             for (int round = 0; round < 5; round++)
             {
-                PipeWireNode node = await registry.CreateVirtualNode("SubDestroy")
+                PipeWireNode node = await registry.CreateVirtualSink("SubDestroy")
                     .WithName(UniqueName("pwnet_subdestroy")).ExecuteAsync(cts.Token);
 
-                PipeWireNodeControl control = registry.BindNode(node.NodeId);
+                PipeWireNodeProxy control = registry.BindNode(node.NodeId);
                 control.ParameterChanged += (_, _) => { };
                 control.SubscribeParameters(SpaParamType.Props, SpaParamType.Format, SpaParamType.Latency);
 
@@ -422,10 +422,10 @@ public sealed class HostileControlTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("ThrowingSub")
+            PipeWireNode node = await registry.CreateVirtualSink("ThrowingSub")
                 .WithName(UniqueName("pwnet_throwsub")).ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
             int survivors = 0;
             control.ParameterChanged += (_, _) => throw new InvalidOperationException("first");
@@ -462,7 +462,7 @@ public sealed class HostileControlTests : PipeWireTestBase
             if (me is null)
                 Assert.Inconclusive("this connection is not visible as a client object.");
 
-            await using PipeWireClientControl control = registry.BindClient(me!.Id);
+            await using PipeWireClientProxy control = registry.BindClient(me!.Id);
 
             // Past both stackalloc thresholds - more than 32 items and more than 1024 bytes - so the
             // dictionary is built in pinned heap memory instead. If that pinning were wrong, the GC
@@ -492,7 +492,7 @@ public sealed class HostileControlTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null)
                 Assert.Inconclusive("no session manager, so no default store.");
 
@@ -535,7 +535,7 @@ public sealed class HostileControlTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null)
                 Assert.Inconclusive("no session manager, so no default store.");
 
@@ -565,7 +565,7 @@ public sealed class HostileControlTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null)
                 Assert.Inconclusive("no session manager, so no default store.");
 
@@ -617,8 +617,8 @@ public sealed class HostileControlTests : PipeWireTestBase
         await using (ctxB)
         await using (regB)
         {
-            PipeWireMetadataStore? mine = regA.BindMetadataStore("default");
-            PipeWireMetadataStore? theirs = regB.BindMetadataStore("default");
+            PipeWireMetadataProxy? mine = regA.BindMetadata("default");
+            PipeWireMetadataProxy? theirs = regB.BindMetadata("default");
             if (mine is null || theirs is null)
                 Assert.Inconclusive("no session manager, so no default store.");
 

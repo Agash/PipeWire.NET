@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
-using PipeWire.NET.Media.Streams;
 using PipeWire.NET;
 
 namespace PipeWire.NET.SampleConsole;
@@ -19,7 +18,7 @@ internal static class ServeCommands
         await using var session = await Session.ConnectAsync(
             "sample-serve", cancellationToken).ConfigureAwait(false);
 
-        PipeWireNode node = await session.Registry.CreateVirtualNode("Sample virtual source")
+        PipeWireNode node = await session.Registry.CreateVirtualSink("Sample virtual source")
             .WithMediaClass("Audio/Source")
             .WithName("sample_source")
             .ExecuteAsync(cancellationToken).ConfigureAwait(false);

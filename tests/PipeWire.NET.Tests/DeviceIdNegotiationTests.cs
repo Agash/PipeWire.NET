@@ -33,7 +33,7 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     /// <summary>A PeerCapability the way the daemon hands it over: a PeerParam object keyed by peer id.</summary>
     private static byte[] PeerCapability(params (uint PeerId, byte[]? Capability)[] peers)
     {
-        var props = ImmutableArray.CreateBuilder<SpaProperty>();
+        var props = ImmutableArray.CreateBuilder<SpaPodProperty>();
         foreach ((uint peerId, byte[]? capability) in peers)
         {
             SpaValue value = SpaNone.Instance;
@@ -43,7 +43,7 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
                 value = parsed!;
             }
 
-            props.Add(new SpaProperty(peerId, 0, value));
+            props.Add(new SpaPodProperty(peerId, 0, value));
         }
 
         return SpaPod.ToBytes(new SpaObject(SpaType.ObjectPeerParam, SpaParamType.PeerCapability, props.ToImmutable()));
@@ -113,7 +113,7 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
         var dict = (SpaObject)value!;
         Assert.AreEqual(SpaType.ObjectParamDict, dict.ObjectType);
         Assert.AreEqual(SpaParamType.Capability, dict.ObjectId);
-        SpaProperty info = dict.Properties.Single();
+        SpaPodProperty info = dict.Properties.Single();
         Assert.AreEqual((SpaKey)SpaParamDict.Info, info.Key);
         Assert.AreEqual(SpaPodPropFlags.HintDict, info.Flags);
         var fields = ((SpaStruct)info.Value).Fields;
@@ -162,7 +162,7 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
 
         byte[] capability = SpaPod.ToBytes(new SpaObject(SpaType.ObjectParamDict, SpaParamType.Capability,
         [
-            new SpaProperty(SpaParamDict.Info, SpaPodPropFlags.HintDict, new SpaStruct(
+            new SpaPodProperty(SpaParamDict.Info, SpaPodPropFlags.HintDict, new SpaStruct(
             [
                 new SpaInt(2),
                 new SpaString("pipewire.device-id-negotiation"), new SpaString("1"),
@@ -186,7 +186,7 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
             modifiers: [0, 0x0100000000000001], deviceId: CardB.Id);
 
         Assert.IsTrue(SpaPod.TryParse(pod.AsSpan(0, len), out SpaValue? value));
-        SpaProperty device = ((SpaObject)value!).Properties.Single(p => p.Key == (SpaKey)SpaFormat.VideoDeviceId);
+        SpaPodProperty device = ((SpaObject)value!).Properties.Single(p => p.Key == (SpaKey)SpaFormat.VideoDeviceId);
         Assert.AreEqual(SpaPodPropFlags.Mandatory, device.Flags);
         CollectionAssert.AreEqual(BitConverter.GetBytes(CardB.Id), ((SpaBytes)device.Value).Value.ToArray());
 
@@ -216,11 +216,11 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
         // first live run of the end-to-end tests streamed on the right device and reported none.
         byte[] pod = SpaPod.ToBytes(new SpaObject(SpaType.ObjectFormat, SpaParamType.Format,
         [
-            new SpaProperty(SpaFormat.MediaType, 0, new SpaId((uint)SpaMediaType.Video)),
-            new SpaProperty(SpaFormat.MediaSubtype, 0, new SpaId((uint)SpaMediaSubtype.Raw)),
-            new SpaProperty(SpaFormat.VideoDeviceId, SpaPodPropFlags.Mandatory,
+            new SpaPodProperty(SpaFormat.MediaType, 0, new SpaId((uint)SpaMediaType.Video)),
+            new SpaPodProperty(SpaFormat.MediaSubtype, 0, new SpaId((uint)SpaMediaSubtype.Raw)),
+            new SpaPodProperty(SpaFormat.VideoDeviceId, SpaPodPropFlags.Mandatory,
                 new SpaChoice(SpaChoiceType.None, SpaType.Bytes, [new SpaBytes([.. BitConverter.GetBytes(CardB.Id)])])),
-            new SpaProperty(SpaFormat.VideoFormat, 0, new SpaChoice(SpaChoiceType.None, SpaType.Id, [new SpaId((uint)SpaVideoFormat.Bgra)])),
+            new SpaPodProperty(SpaFormat.VideoFormat, 0, new SpaChoice(SpaChoiceType.None, SpaType.Id, [new SpaId((uint)SpaVideoFormat.Bgra)])),
         ]));
 
         SpaFormatPod.VideoFormatInfo info;

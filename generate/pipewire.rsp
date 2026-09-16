@@ -92,7 +92,7 @@
 /usr/include/pipewire-0.3/pipewire/resource.h
 # NB: pipewire/keys.h is intentionally NOT traversed here. PW_KEY_* are #define string
 # macros, which need generate-macro-bindings; this pass keeps that off (see the --config
-# note below). They come from the constants pass (constants.rsp) into PipeWireKeys.g.cs.
+# note below). They come from the macro pass (pipewire-constants.rsp) into PipeWireKeys.g.cs.
 
 # - SPA support / buffers / pod -
 --traverse
@@ -317,19 +317,19 @@ spa_video_transfer_function=SpaVideoTransferFunction
 
 # Types that belong somewhere other than the default ABI namespace.
 --with-namespace
-PipeWireFilterFlags=PipeWire.NET
+PipeWireFilterFlags=PipeWire.NET.Graph
 --with-namespace
-PipeWireFilterPortFlags=PipeWire.NET
+PipeWireFilterPortFlags=PipeWire.NET.Graph
 --with-namespace
-PipeWireFilterState=PipeWire.NET
+PipeWireFilterState=PipeWire.NET.Graph
 --with-namespace
-PipeWireLinkState=PipeWire.NET
+PipeWireLinkState=PipeWire.NET.Graph
 --with-namespace
-PipeWireNodeState=PipeWire.NET
+PipeWireNodeState=PipeWire.NET.Graph
 --with-namespace
-PipeWireStreamFlags=PipeWire.NET
+PipeWireStreamFlags=PipeWire.NET.Media
 --with-namespace
-PipeWireStreamState=PipeWire.NET
+PipeWireStreamState=PipeWire.NET.Media
 --with-namespace
 SpaAudioChannel=PipeWire.NET.Spa
 --with-namespace
@@ -2146,4 +2146,4 @@ types=unix
 # because on this header set it emits some 215 diagnostics (CompoundLiteralExpr in the
 # SPA_POD_INIT_* / PW_MAP_RANGE_INIT family, function-like macros), and this ABI pass fails
 # on any diagnostic, which is what catches a type landing in the wrong place. Macro constants - PW_VERSION_*, the flag families, the id
-# sentinels - come from the separate constants pass instead (generate/constants.rsp).
+# sentinels - come from the separate macro pass instead (generate/pipewire-constants.rsp).

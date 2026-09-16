@@ -4,7 +4,7 @@ namespace PipeWire.NET.Graph;
 /// What a client may do with one object.
 /// </summary>
 /// <param name="ObjectId">
-/// The global id, or <see cref="PipeWireClientControl.AnyObject"/> for the default applied to
+/// The global id, or <see cref="PipeWireClientProxy.AnyObject"/> for the default applied to
 /// everything not named individually.
 /// </param>
 /// <param name="Permissions">What is permitted. Absolute, not added to what was there before.</param>

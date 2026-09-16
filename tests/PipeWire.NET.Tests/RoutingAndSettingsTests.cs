@@ -41,7 +41,7 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
         string sinkName = Unique("pwnet_target_sink");
-        PipeWireNode sink = await registry.CreateVirtualNode("Target sink")
+        PipeWireNode sink = await registry.CreateVirtualSink("Target sink")
             .WithName(sinkName).ExecuteAsync(cts.Token);
 
         PipeWireNode source = await registry.CreateVirtualSource("Targeting source")
@@ -119,7 +119,7 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireMetadataStore? settings = registry.BindMetadataStore("settings");
+        PipeWireMetadataProxy? settings = registry.BindMetadata("settings");
         if (settings is null)
             Assert.Inconclusive("this session has no settings store.");
 
@@ -164,7 +164,7 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireMetadataStore? settings = registry.BindMetadataStore("settings");
+        PipeWireMetadataProxy? settings = registry.BindMetadata("settings");
         if (settings is null)
             Assert.Inconclusive("this session has no settings store.");
 
@@ -208,7 +208,7 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireMetadataStore? settings = registry.BindMetadataStore("settings");
+        PipeWireMetadataProxy? settings = registry.BindMetadata("settings");
         if (settings is null)
             Assert.Inconclusive("this session has no settings store.");
 
@@ -247,7 +247,7 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireMetadataStore? settings = registry.BindMetadataStore("settings");
+        PipeWireMetadataProxy? settings = registry.BindMetadata("settings");
         if (settings is null)
             Assert.Inconclusive("this session has no settings store.");
 

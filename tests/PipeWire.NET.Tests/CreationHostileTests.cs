@@ -50,7 +50,7 @@ public sealed class CreationHostileTests : PipeWireTestBase
             // A link between two ports that cannot be linked: the daemon reports the failure on the
             // error stream after the proxy is bound, which is the window where a waiter has an id
             // and no object. It has to fault rather than wait for a global that is not coming.
-            PipeWireNode node = await registry.CreateVirtualNode("Refuse")
+            PipeWireNode node = await registry.CreateVirtualSink("Refuse")
                 .WithName(Unique("pwnet_refuse")).ExecuteAsync(cts.Token);
 
             PipeWirePort[] ports = await PortsAsync(registry, node.NodeId, cts.Token);
@@ -98,7 +98,7 @@ public sealed class CreationHostileTests : PipeWireTestBase
             {
                 for (int round = 0; round < 10; round++)
                 {
-                    PipeWireNode node = await registry.CreateVirtualNode("Vanish")
+                    PipeWireNode node = await registry.CreateVirtualSink("Vanish")
                         .WithName(Unique("pwnet_vanish")).ExecuteAsync(cts.Token);
 
                     while (doomed.TryDequeue(out uint id))
@@ -158,7 +158,7 @@ public sealed class CreationHostileTests : PipeWireTestBase
                 {
                     // The killer races the creation from the other connection. Whichever wins, the
                     // proxy must not be left filed for an object that no longer exists.
-                    Task<PipeWireNode> creating = registry.CreateVirtualNode("ProxyRace")
+                    Task<PipeWireNode> creating = registry.CreateVirtualSink("ProxyRace")
                         .WithName(Unique("pwnet_proxyrace")).ExecuteAsync(cts.Token);
 
                     while (doomed.TryDequeue(out uint id))
@@ -202,7 +202,7 @@ public sealed class CreationHostileTests : PipeWireTestBase
         {
             // PipeWire reuses ids. A snapshot is immutable, so the object it recorded under an id
             // must stay that object even after the daemon has handed the id to something else.
-            PipeWireNode first = await registry.CreateVirtualNode("Reuse")
+            PipeWireNode first = await registry.CreateVirtualSink("Reuse")
                 .WithName(Unique("pwnet_reuse_first")).ExecuteAsync(cts.Token);
 
             await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -217,7 +217,7 @@ public sealed class CreationHostileTests : PipeWireTestBase
             var created = new List<uint>();
             for (int i = 0; i < 30 && !reused; i++)
             {
-                PipeWireNode next = await registry.CreateVirtualNode("Reuse")
+                PipeWireNode next = await registry.CreateVirtualSink("Reuse")
                     .WithName(Unique("pwnet_reuse_next")).ExecuteAsync(cts.Token);
 
                 created.Add(next.NodeId);

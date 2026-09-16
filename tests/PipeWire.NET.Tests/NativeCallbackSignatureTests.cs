@@ -32,7 +32,7 @@ public sealed class NativeCallbackSignatureTests
     private static readonly Assembly[] Shipped =
     [
         typeof(Graph.PipeWireRegistry).Assembly,
-        typeof(Media.Streams.PipeWireAudioCapture).Assembly,
+        typeof(Media.PipeWireAudioCapture).Assembly,
     ];
 
     [TestMethod]

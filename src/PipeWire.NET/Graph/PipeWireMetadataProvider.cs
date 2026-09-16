@@ -15,7 +15,7 @@ namespace PipeWire.NET.Graph;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The counterpart to <see cref="PipeWireMetadataStore"/>, which consumes somebody else's store.
+/// The counterpart to <see cref="PipeWireMetadataProxy"/>, which consumes somebody else's store.
 /// The session's <c>default</c> store is shared by everything on the machine, so an application
 /// with state of its own wants a store of its own rather than a key prefix in the shared one.
 /// </para>
@@ -87,7 +87,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
     public IReadOnlyCollection<PipeWireMetadataEntry> Entries => [.. _entries.Values];
 
     /// <summary>Reads one entry, or <see langword="null"/> if it is not set.</summary>
-    public string? Get(string key, uint subject = PipeWireMetadataStore.SubjectCore)
+    public string? Get(string key, uint subject = PipeWireMetadataProxy.SubjectCore)
     {
         ArgumentNullException.ThrowIfNull(key);
         return _entries.TryGetValue((subject, key), out PipeWireMetadataEntry? entry) ? entry.Value : null;
@@ -171,7 +171,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
                     _ctx.ContextHandle, (sbyte*)n, Native.pw_properties_new_dict(&dict), 0);
 
             if (impl is null)
-                throw new PipeWireInteropException("pw_context_create_metadata", -NativeConstants.ENOMEM);
+                throw new PipeWireInteropException("pw_context_create_metadata", -NativeLibc.ENOMEM);
 
             _handle = new PipeWireImplMetadataHandle(impl, _ctx.LoopOwner);
 
@@ -220,7 +220,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
                 pw_metadata* implementation = Native.pw_impl_metadata_get_implementation(impl);
 
                 if (implementation is null)
-                    throw new PipeWireInteropException("pw_impl_metadata_get_implementation", -NativeConstants.EINVAL);
+                    throw new PipeWireInteropException("pw_impl_metadata_get_implementation", -NativeLibc.EINVAL);
 
                 fixed (byte* t = typeUtf8)
                 {
@@ -285,7 +285,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
     /// <param name="value">Its value, or <see langword="null"/> to remove it.</param>
     /// <param name="type">
     /// The value's type, such as <c>Spa:String:JSON</c>, or <see langword="null"/> for none.
-    /// Null by default, matching <see cref="PipeWireMetadataStore.SetAsync"/> and
+    /// Null by default, matching <see cref="PipeWireMetadataProxy.SetAsync"/> and
     /// <c>pw-metadata</c>. The type takes part in echo matching, so the two halves of this library
     /// have to agree on it.
     /// </param>
@@ -296,7 +296,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
         string key,
         string? value,
         string? type = null,
-        uint subject = PipeWireMetadataStore.SubjectCore)
+        uint subject = PipeWireMetadataProxy.SubjectCore)
     {
         ArgumentNullException.ThrowIfNull(key);
         ThrowIfContainsNul(key, nameof(key));

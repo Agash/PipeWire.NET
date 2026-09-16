@@ -2,7 +2,6 @@ using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
-using PipeWire.NET.Media.Streams;
 using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Tests;
@@ -217,7 +216,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
                 Assert.AreEqual(id, port.NodeId);
 
             // And it must be linkable to a node we create separately.
-            PipeWireNode sink = await reg.CreateVirtualNode("Sink")
+            PipeWireNode sink = await reg.CreateVirtualSink("Sink")
                                          .WithName("pwnet_art_sink").ExecuteAsync(cts.Token);
             PipeWireGraphSnapshot ready = await WaitForAsync(
                 reg, g => g.GetPortsForNode(sink.NodeId).Length == 4, cts.Token);

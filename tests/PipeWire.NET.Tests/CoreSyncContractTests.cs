@@ -202,11 +202,11 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("SyncErr")
+            PipeWireNode node = await registry.CreateVirtualSink("SyncErr")
                 .WithName($"pwnet_syncerr_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
             await control.ReadyAsync(cts.Token);
 
             for (int i = 0; i < 5; i++)
@@ -299,7 +299,7 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null) Assert.Inconclusive("no session manager, so no default store.");
 
             await using (store)
@@ -368,7 +368,7 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("DestroyOnce")
+            PipeWireNode node = await registry.CreateVirtualSink("DestroyOnce")
                 .WithName($"pwnet_destroyonce_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
 
@@ -377,7 +377,7 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
             // pw_proxy_destroy on the same pointer is a use-after-free, not an exception.
             for (int round = 0; round < 6; round++)
             {
-                PipeWireNodeControl control = registry.BindNode(node.NodeId);
+                PipeWireNodeProxy control = registry.BindNode(node.NodeId);
                 await control.DisposeAsync();
                 await control.DisposeAsync();
                 await control.DisposeAsync();
@@ -392,7 +392,7 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
             GC.Collect();
 
             // And one that is finalized after having been disposed, which must not destroy twice.
-            PipeWireNodeControl disposedThenCollected = registry.BindNode(node.NodeId);
+            PipeWireNodeProxy disposedThenCollected = registry.BindNode(node.NodeId);
             await disposedThenCollected.DisposeAsync();
             disposedThenCollected = null!;
 
@@ -402,7 +402,7 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
 
             // The node is still there and still answers, so nothing destroyed anything it shouldn't.
             Assert.IsNotNull(registry.Current.GetNode(node.NodeId));
-            await using PipeWireNodeControl fresh = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy fresh = registry.BindNode(node.NodeId);
             Assert.IsNotNull(await fresh.GetVolumeAsync(cts.Token));
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
@@ -411,7 +411,7 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
 
     private static void BindAndDrop(PipeWireRegistry registry, uint nodeId)
     {
-        PipeWireNodeControl control = registry.BindNode(nodeId);
+        PipeWireNodeProxy control = registry.BindNode(nodeId);
         GC.KeepAlive(control.Id);
     }
 }

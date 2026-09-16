@@ -1,7 +1,7 @@
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
-using PipeWire.NET.Media.Streams;
+using PipeWire.NET.Media;
 
 namespace PipeWire.NET.Tests;
 
@@ -189,7 +189,7 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
         var reports = new System.Collections.Concurrent.ConcurrentQueue<Spa.SpaObject>();
         var arrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        PipeWireProfilerReader reader;
+        PipeWireProfilerProxy reader;
         try
         {
             reader = registry.BindProfiler(profiler!.Id);

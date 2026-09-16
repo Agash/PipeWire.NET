@@ -74,14 +74,14 @@ public sealed class GraphInvariantTests : PipeWireTestBase
             registry.NodeAdded += OnAdded;
             try
             {
-                PipeWireNode source = await registry.CreateVirtualNode("GlobalOnce")
+                PipeWireNode source = await registry.CreateVirtualSink("GlobalOnce")
                     .WithName($"pwnet_once_src_{Environment.ProcessId}_{Random.Shared.Next():x}").ExecuteAsync(cts.Token);
-                PipeWireNode sink = await registry.CreateVirtualNode("GlobalOnce")
+                PipeWireNode sink = await registry.CreateVirtualSink("GlobalOnce")
                     .WithName($"pwnet_once_sink_{Environment.ProcessId}_{Random.Shared.Next():x}").ExecuteAsync(cts.Token);
 
                 // Things that change a node without creating or destroying it: linking it, which
                 // moves it out of idle, and writing a param, which the daemon applies to it.
-                await using (PipeWireNodeControl control = registry.BindNode(source.NodeId))
+                await using (PipeWireNodeProxy control = registry.BindNode(source.NodeId))
                 {
                     await control.ReadyAsync(cts.Token);
                     await control.SetVolumeAsync(0.4f, cts.Token);
@@ -147,7 +147,7 @@ public sealed class GraphInvariantTests : PipeWireTestBase
         {
             for (int round = 0; round < 25; round++)
             {
-                PipeWireNode node = await registry.CreateVirtualNode("Invariant")
+                PipeWireNode node = await registry.CreateVirtualSink("Invariant")
                     .WithName($"pwnet_inv_{Environment.ProcessId}_{round}_{Random.Shared.Next():x}")
                     .ExecuteAsync(cts.Token);
 
@@ -188,7 +188,7 @@ public sealed class GraphInvariantTests : PipeWireTestBase
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await registry.CreateVirtualNode("Held")
+        PipeWireNode node = await registry.CreateVirtualSink("Held")
             .WithName($"pwnet_held_{Environment.ProcessId}_{Random.Shared.Next():x}")
             .ExecuteAsync(cts.Token);
 

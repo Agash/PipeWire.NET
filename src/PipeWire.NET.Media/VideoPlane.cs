@@ -1,4 +1,3 @@
-using PipeWire.NET.Media.Streams;
 
 namespace PipeWire.NET.Media;
 

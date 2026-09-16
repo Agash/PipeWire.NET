@@ -51,7 +51,7 @@ internal static partial class Descriptors
     /// <exception cref="IOException">The kernel refused.</exception>
     internal static int CreateEventfd()
     {
-        int fd = NativeConstants.eventfd(0, NativeConstants.O_CLOEXEC);
+        int fd = NativeLibc.eventfd(0, NativeLibc.O_CLOEXEC);
         if (fd < 0)
             throw new IOException($"eventfd failed with errno {Marshal.GetLastPInvokeError()}.");
 
@@ -94,10 +94,10 @@ internal static partial class Descriptors
     internal static unsafe int SignalEventfd(int fd)
     {
         ulong one = 1;
-        while (NativeConstants.write(fd, &one, 8) < 0)
+        while (NativeLibc.write(fd, &one, 8) < 0)
         {
             int errno = Marshal.GetLastPInvokeError();
-            if (errno != NativeConstants.EINTR) return errno;
+            if (errno != NativeLibc.EINTR) return errno;
         }
 
         return 0;
@@ -115,36 +115,36 @@ internal static partial class Descriptors
 
         while (true)
         {
-            var pfd = new PosixPollFd { fd = fd, events = (short)NativeConstants.POLLIN };
+            var pfd = new PosixPollFd { fd = fd, events = (short)NativeLibc.POLLIN };
             int remaining = (int)Math.Max(0, deadline - Environment.TickCount64);
 
-            int ready = NativeConstants.poll(&pfd, 1, remaining);
+            int ready = NativeLibc.poll(&pfd, 1, remaining);
             if (ready < 0)
             {
                 int errno = Marshal.GetLastPInvokeError();
-                if (errno == NativeConstants.EINTR) continue;
+                if (errno == NativeLibc.EINTR) continue;
                 return new SyncWait(SyncWaitOutcome.Failed, errno);
             }
 
-            if (ready == 0) return new SyncWait(SyncWaitOutcome.TimedOut, NativeConstants.ETIME);
+            if (ready == 0) return new SyncWait(SyncWaitOutcome.TimedOut, NativeLibc.ETIME);
 
-            if ((pfd.revents & NativeConstants.POLLNVAL) != 0)
-                return new SyncWait(SyncWaitOutcome.Failed, NativeConstants.EBADF);
+            if ((pfd.revents & NativeLibc.POLLNVAL) != 0)
+                return new SyncWait(SyncWaitOutcome.Failed, NativeLibc.EBADF);
 
-            if ((pfd.revents & (NativeConstants.POLLERR | NativeConstants.POLLHUP)) != 0)
-                return new SyncWait(SyncWaitOutcome.Failed, NativeConstants.EIO);
+            if ((pfd.revents & (NativeLibc.POLLERR | NativeLibc.POLLHUP)) != 0)
+                return new SyncWait(SyncWaitOutcome.Failed, NativeLibc.EIO);
 
             ulong taken;
-            if (NativeConstants.read(fd, &taken, 8) >= 0) return new SyncWait(SyncWaitOutcome.Reached, 0);
+            if (NativeLibc.read(fd, &taken, 8) >= 0) return new SyncWait(SyncWaitOutcome.Reached, 0);
 
             int readErrno = Marshal.GetLastPInvokeError();
-            if (readErrno != NativeConstants.EINTR) return new SyncWait(SyncWaitOutcome.Failed, readErrno);
+            if (readErrno != NativeLibc.EINTR) return new SyncWait(SyncWaitOutcome.Failed, readErrno);
         }
     }
 
     internal static void CloseDescriptor(int fd)
     {
-        if (fd >= 0) _ = NativeConstants.close(fd);
+        if (fd >= 0) _ = NativeLibc.close(fd);
     }
 
 }

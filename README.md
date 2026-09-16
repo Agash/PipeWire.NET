@@ -22,11 +22,16 @@ foreach (PipeWireNode node in registry.Nodes)
     Console.WriteLine($"[{node.NodeId}] {node.Description} ({node.MediaClass})");
 ```
 
+**Reading somebody else's object, or being one?** That is the decision this API turns on, and
+picking wrong compiles and then does nothing you wanted.
+[docs/choosing-a-type.md](docs/choosing-a-type.md) is one table per case;
+[docs/pipewire-roles.md](docs/pipewire-roles.md) is why the two sides differ in kind.
+
 ## Packages
 
 | Package              | What it holds                                                                                                                                                                                   |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PipeWire.NET`       | Context and loop, registry and snapshots, virtual nodes and links, node/device/client controls, metadata stores, virtual device and metadata providers, in-graph DSP filters, the SPA pod codec |
+| `PipeWire.NET`       | Context and loop, registry and snapshots, virtual sinks and sources, links, the node/device/client/metadata proxies, the node/device/metadata providers, in-graph DSP filters, the SPA pod codec |
 | `PipeWire.NET.Media` | Audio/video capture and output, DMA-BUF and explicit sync, frame timestamps and clock alignment                                                                                                 |
 
 ## Requirements
@@ -51,7 +56,7 @@ The library and the sample publish as NativeAOT.
 
 The native bindings are generated from the PipeWire headers of one specific release, recorded in`generate/HEADER-VERSION` and enforced by the generator. That release is what the committed bindings describe, and it is the version the gating test job runs against.
 
-Older daemons arent rejected I believe, and should mostly work: the library binds a small, long-stable part of the protocol. What an older daemon can lack is usually a whole interface, and binding one that is not there fails at the bind rather than silently misbehaving.
+Older daemons are not rejected and should mostly work: the library binds a small, long-stable part of the protocol. What an older daemon can lack is usually a whole interface, and binding one that is not there fails at the bind rather than silently misbehaving.
 
 If you need a specific older release supported, open an issue with the version.
 
@@ -66,7 +71,7 @@ dotnet add package PipeWire.NET.Media    # audio and video streams
 
 Everything starts with a `PipeWireContext`: one connection, one realtime loop. Native calls that must serialize with the loop go through `Lock()` (or `TryLock`), which hands out a scope; disposal waits out every live scope, so a callback can never outlive the loop it runs on.
 
-`PipeWireRegistry` keeps a live, immutable `Current` snapshot of the graph: nodes, ports, links, devices, clients, metadata stores. Read it directly for point queries, or consume `WatchAsync` for a snapshot per change.
+`PipeWireRegistry` keeps a live, immutable `Current` snapshot of the graph: nodes, ports, links, devices, clients, metadata. Read it directly for point queries, or consume `WatchAsync` for a snapshot per change.
 
 ```csharp
 await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
@@ -94,7 +99,8 @@ await ctx.StartAsync(fd, cancellationToken);
 ### Creating nodes and links
 
 ```csharp
-PipeWireNode source = await registry.CreateVirtualNode("Audio/Source")
+// A source other clients can record from; CreateVirtualSink is the other direction.
+PipeWireNode source = await registry.CreateVirtualSource("Sample tone")
     .WithName("sample_tone")
     .ExecuteAsync(cancellationToken);
 
@@ -108,36 +114,36 @@ await registry.DestroyGlobalAsync(source.NodeId, cancellationToken);
 
 A creation can opt out of cleanup-on-dispose with `WithLinger`, in which case the daemon object survives the process and `LingeringIds` lists what was left behind for later destruction. A link can be `Passive`, so it follows the graph without forcing the nodes active.
 
-## Control
+## Acting on one object
 
-Bind a control to act on one object: volumes and mutes on nodes, profiles and routes on devices, permissions on clients, defaults and clock on metadata stores. Controls are used with `await using` and report readiness through `ReadyAsync`.
+Bind a proxy to act on one object: volumes and mutes on nodes, profiles and routes on devices, permissions on clients, defaults and clock on metadata. A proxy is used with `await using` and reports readiness through `ReadyAsync`.
 
 ```csharp
-await using PipeWireNodeControl control = registry.BindNode(nodeId);
-await control.ReadyAsync(cancellationToken);
+await using PipeWireNodeProxy node = registry.BindNode(nodeId);
+await node.ReadyAsync(cancellationToken);
 
-float? volume = await control.GetVolumeAsync(cancellationToken);
-bool? muted = await control.GetMutedAsync(cancellationToken);
+float? volume = await node.GetVolumeAsync(cancellationToken);
+bool? muted = await node.GetMutedAsync(cancellationToken);
 Console.WriteLine($"volume {volume}, muted {muted}");
 
-await control.SetVolumeAsync(0.5f, cancellationToken);
-await control.SetMutedAsync(false, cancellationToken);
+await node.SetVolumeAsync(0.5f, cancellationToken);
+await node.SetMutedAsync(false, cancellationToken);
 ```
 
 Device routes and profiles work the same way through `registry.BindDevice`:
 
 ```csharp
-await using PipeWireDeviceControl device = registry.BindDevice(deviceId);
+await using PipeWireDeviceProxy device = registry.BindDevice(deviceId);
 await device.ReadyAsync(cancellationToken);
 
 foreach (SpaObject route in await device.EnumerateRoutesAsync(cancellationToken))
     Console.WriteLine(route);
 ```
 
-The session defaults (default sink/source, graph clock rate and quantum) live in the `default` metadata store, which may be absent on a session without a session manager:
+The session defaults (default sink/source, graph clock rate and quantum) live in the `default` metadata store, which is absent on a session with no session manager running:
 
 ```csharp
-PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+PipeWireMetadataProxy? store = registry.BindMetadata("default");
 if (store is not null)
 {
     await using (store)
@@ -159,7 +165,7 @@ await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "sample_gain");
 PipeWireFilterPort input = filter.AddAudioPort(PipeWirePortDirection.In, "in");
 PipeWireFilterPort output = filter.AddAudioPort(PipeWirePortDirection.Out, "out");
 
-filter.ProcessCallback = (_, sampleCount) =>
+filter.ProcessCallback = (_, sampleCount, in _) =>
 {
     Span<float> dry = input.GetSamples(sampleCount);
     Span<float> wet = output.GetSamples(sampleCount);
@@ -167,7 +173,7 @@ filter.ProcessCallback = (_, sampleCount) =>
         wet[(int)i] = dry[(int)i] * 0.5f;
 };
 
-await filter.ConnectAsync(cancellationToken);
+await filter.ConnectAsync(PipeWireFilterFlags.RtProcess, cancellationToken);
 ```
 
 For virtual hardware there is `PipeWireDeviceProvider` (profiles, routes, parameters served to the daemon) and for session state `PipeWireMetadataProvider`. The sample project and `DeviceProviderTests` show both ends: export the object, then read it back through the ordinary client path.
@@ -216,26 +222,8 @@ On Linux this is how you feed a tool like OBS: publish a node here, then add a P
 
 `VideoFrame` carries the pixels (`Pixels`, `Stride`, `Width`, `Height`, `Format`), the negotiated `Color` info, the backing memory (`BufferType`, `Fd`, `MapOffset`), and timing (see below). For a DMA-BUF frame it also exposes the DRM format `Modifier` and the per-plane layout (`Planes`: fd, offset, stride, size per plane, e.g. two planes for `Nv12`), so a multi-plane tiled surface can be imported correctly. `AudioFrame` carries `Samples`, `SampleRate`, `Channels`, `Format`, `FrameCount`, and timing.
 
-### Timing and A/V sync
-
-Every stream runs off one graph clock. Each frame carries four times, all in nanoseconds:
-
-- `PresentationTimestampNs`: the producer's timestamp from the buffer header (`spa_meta_header.pts`), in the producer's clock. It crosses the graph intact for video, so a video consumer aligns on it. No audio converter or mixer copies the header, so audio arrives without one and this is null.
-- `QueuedTimeNs`: the graph cycle time the buffer was queued in (`pw_buffer.time`, CLOCK_MONOTONIC). This is what an audio consumer aligns on, and what GStreamer's pipewiresrc falls back to when there is no header.
-- `GraphTimeNs`: the graph time of the cycle that delivered the frame (`pw_time.now`). One value per cycle, so frames delivered together share it.
-- `StreamPositionNs` and `DelayNs`: the stream's media position and its latency, for sample-accurate timestamping.
-
-Audio and video from one producer meet on one timeline when the video is stamped in the graph's clock, which is what the outputs do unless you set `NextPresentationTimestampNs` yourself.
-
-### Zero copy
-
-On capture, `frame.Pixels` points straight into the daemon's mapped buffer, so reading is free. Capture also accepts DMA-BUF buffers, so a GPU source can hand frames over without touching the CPU; `frame.BufferType` and `frame.Fd` expose the descriptor for GPU import.
-
-On publish, `FillFrame` and `FillSamples` give you a span over the daemon's buffer, so you write the frame once with no intermediate copy.
-
-For a fully GPU-resident publish, `PipeWireVideoOutput.ConnectDmaBuf(modifiers)` advertises a set of DRM format modifiers, negotiates one with the consumer, and backs the stream with DMA-BUF buffers you own. Allocate your GPU surfaces in the `AllocateDmaBuf` callback (export each once, e.g. via `vkGetMemoryFdKHR`) and write the chosen buffer in `FillDmaBuf`; `ReleaseDmaBuf` tears them down. The producer can self-pace with `TriggerProcess`, and `NodeId` lets a consumer target the node directly.
-
-On a machine with more than one GPU, pass `DmaBufDeviceOffer`s (a `DrmDevice` and the modifiers it can use) to `ConnectDmaBuf` or to the capture's `Connect(deviceOffers:)` instead of bare modifiers. Both ends then negotiate which device the buffers live on, as PipeWire's device-ID negotiation does; `NegotiatedDevice` reports the result and `AllocateDmaBuf` is handed it. A peer that does not negotiate still streams, with the device left undefined.
+Frame timing, A/V sync and the zero-copy paths (DMA-BUF, explicit sync, multi-GPU device
+negotiation) are their own guide: [docs/streaming.md](docs/streaming.md).
 
 ## Screen capture on Wayland
 
@@ -271,7 +259,7 @@ dotnet run --project samples/PipeWire.NET.SampleConsole -- serve
 
 ## How it is built
 
-The low-level bindings in `src/PipeWire.NET/generated/` are produced by[ClangSharpPInvokeGenerator](https://github.com/dotnet/ClangSharp) from the installed PipeWire headers and committed to the repo, so consumers never run the generator. The hand-written high-level types (`PipeWireContext`, `PipeWireRegistry`, the node/device/client controls, the stream classes, `PipeWireFilter`, the providers) and the SPA pod helpers sit on top.
+The low-level bindings in `src/PipeWire.NET/generated/` are produced by [ClangSharpPInvokeGenerator](https://github.com/dotnet/ClangSharp) from the installed PipeWire headers and committed to the repo, so consumers never run the generator. Four passes produce them: the ABI (`pipewire.rsp`) and one per library whose macros are needed (`pipewire-constants.rsp`, `libc.rsp`, `libdrm.rsp`). The hand-written high-level types (`PipeWireContext`, `PipeWireRegistry`, the node/device/client proxies, the stream classes, `PipeWireFilter`, the providers) and the SPA pod helpers sit on top.
 
 To regenerate after a PipeWire version bump (on Linux, with `libpipewire-0.3-dev` and
 `libclang-dev`):
@@ -282,6 +270,15 @@ bash generate/generate.sh
 ```
 
 CI runs the generator on every build and fails if the committed output drifts.
+
+## Documentation
+
+| | |
+|---|---|
+| [choosing-a-type.md](docs/choosing-a-type.md) | which type to reach for, per case, with the upstream name for each |
+| [pipewire-roles.md](docs/pipewire-roles.md) | consuming an object versus being one, and what the second role costs |
+| [streaming.md](docs/streaming.md) | frame timing, A/V sync, DMA-BUF and explicit sync |
+| [running-tests.md](docs/running-tests.md) | the test categories, and which need a daemon, a GPU or a patched one |
 
 ## Testing
 

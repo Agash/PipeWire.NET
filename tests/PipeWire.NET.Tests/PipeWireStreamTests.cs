@@ -5,7 +5,6 @@ using PipeWire.NET.Graph;
 using PipeWire.NET.Interop;
 using PipeWire.NET.Spa;
 using PipeWire.NET.Media;
-using PipeWire.NET.Media.Streams;
 
 namespace PipeWire.NET.Tests;
 
@@ -534,7 +533,7 @@ public sealed class NativeLibraryResolutionTests : PipeWireTestBase
         await using var registry = new PipeWireRegistry(ctx);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         await registry.WaitForInitialEnumerationAsync(cts.Token);
-        PipeWireNode sink = await registry.CreateVirtualNodeAsync(
+        PipeWireNode sink = await registry.CreateVirtualSinkAsync(
             "RoundTripSink", "pwnet_roundtrip_sink", cts.Token);
 
         const int rate = 48000, channels = 2;
@@ -596,7 +595,7 @@ public sealed class NativeLibraryResolutionTests : PipeWireTestBase
         await using var registry = new PipeWireRegistry(ctx);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         await registry.WaitForInitialEnumerationAsync(cts.Token);
-        PipeWireNode sink = await registry.CreateVirtualNodeAsync(
+        PipeWireNode sink = await registry.CreateVirtualSinkAsync(
             "RoundTripVideoSink", "pwnet_roundtrip_vsink", cts.Token);
 
         await using var output = new PipeWireVideoOutput(ctx, "PipeWire.NET.Test.VideoSource",
@@ -814,8 +813,8 @@ public sealed class StreamGuardTests : PipeWireTestBase
         // a real negotiation, so the node it targets is torn down again immediately after.
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
-        PipeWireNode node = await registry.CreateVirtualNodeAsync("GuardSrc", "pwnet_guard_src", cts.Token);
-        await using PipeWireNodeControl nodeControl = registry.BindNode(node.NodeId);
+        PipeWireNode node = await registry.CreateVirtualSinkAsync("GuardSrc", "pwnet_guard_src", cts.Token);
+        await using PipeWireNodeProxy nodeControl = registry.BindNode(node.NodeId);
         Assert.AreEqual(2, (await nodeControl.GetChannelMapAsync(cts.Token)).Length);
         await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
     }
@@ -842,8 +841,8 @@ public sealed class StreamGuardTests : PipeWireTestBase
 
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
-        PipeWireNode node = await registry.CreateVirtualNodeAsync("GuardAudioSrc", "pwnet_guard_asrc", cts.Token);
-        await using PipeWireNodeControl nodeControl = registry.BindNode(node.NodeId);
+        PipeWireNode node = await registry.CreateVirtualSinkAsync("GuardAudioSrc", "pwnet_guard_asrc", cts.Token);
+        await using PipeWireNodeProxy nodeControl = registry.BindNode(node.NodeId);
         Assert.AreEqual(2, (await nodeControl.GetChannelMapAsync(cts.Token)).Length);
         await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
     }

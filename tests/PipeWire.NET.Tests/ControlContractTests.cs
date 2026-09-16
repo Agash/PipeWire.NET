@@ -22,7 +22,7 @@ public sealed class ControlContractTests : PipeWireTestBase
 {
     // ------------------------------------------------------------------ the pods the helpers build
 
-    private static SpaObject Props(params SpaProperty[] properties) =>
+    private static SpaObject Props(params SpaPodProperty[] properties) =>
         new(SpaType.ObjectProps, SpaParamType.Props, [.. properties]);
 
     [TestMethod]
@@ -30,7 +30,7 @@ public sealed class ControlContractTests : PipeWireTestBase
     {
         // What SetVolumeAsync sends. Under a different object type or key the daemon accepts it and
         // silently does nothing, so the shape is the thing worth pinning.
-        SpaObject pod = Props(new SpaProperty(SpaProp.Volume, 0, new SpaFloat(0.5f)));
+        SpaObject pod = Props(new SpaPodProperty(SpaProp.Volume, 0, new SpaFloat(0.5f)));
 
         Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(pod), out SpaValue? read));
         var parsed = (SpaObject)read!;
@@ -45,7 +45,7 @@ public sealed class ControlContractTests : PipeWireTestBase
     {
         // The array's child type is what says how the daemon reads the values that follow. Declared
         // as anything else, the bytes are the same length and mean something different.
-        var pod = Props(new SpaProperty(SpaProp.ChannelVolumes, 0,
+        var pod = Props(new SpaPodProperty(SpaProp.ChannelVolumes, 0,
             new SpaArray(SpaType.Float, [new SpaFloat(0.25f), new SpaFloat(0.75f)])));
 
         Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(pod), out SpaValue? read));
@@ -63,15 +63,15 @@ public sealed class ControlContractTests : PipeWireTestBase
         // Props object nested in the Route. Flattened, the daemon reads the volume as a route field
         // it does not have.
         var props = Props(
-            new SpaProperty(SpaProp.Mute, 0, new SpaBool(false)),
-            new SpaProperty(SpaProp.ChannelVolumes, 0, new SpaArray(SpaType.Float, [new SpaFloat(0.4f)])));
+            new SpaPodProperty(SpaProp.Mute, 0, new SpaBool(false)),
+            new SpaPodProperty(SpaProp.ChannelVolumes, 0, new SpaArray(SpaType.Float, [new SpaFloat(0.4f)])));
 
         var route = new SpaObject(SpaType.ObjectParamRoute, SpaParamType.Route,
         [
-            new SpaProperty(SpaParamRoute.Index, 0, new SpaInt(2)),
-            new SpaProperty(SpaParamRoute.Device, 0, new SpaInt(1)),
-            new SpaProperty(SpaParamRoute.Props, 0, props),
-            new SpaProperty(SpaParamRoute.Save, 0, new SpaBool(true)),
+            new SpaPodProperty(SpaParamRoute.Index, 0, new SpaInt(2)),
+            new SpaPodProperty(SpaParamRoute.Device, 0, new SpaInt(1)),
+            new SpaPodProperty(SpaParamRoute.Props, 0, props),
+            new SpaPodProperty(SpaParamRoute.Save, 0, new SpaBool(true)),
         ]);
 
         Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(route), out SpaValue? read));
@@ -91,7 +91,7 @@ public sealed class ControlContractTests : PipeWireTestBase
     {
         // Switching profile is one field. Sending more risks the daemon matching on something else.
         var pod = new SpaObject(SpaType.ObjectParamProfile, SpaParamType.Profile,
-            [new SpaProperty(SpaParamProfile.Index, 0, new SpaInt(3))]);
+            [new SpaPodProperty(SpaParamProfile.Index, 0, new SpaInt(3))]);
 
         Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(pod), out SpaValue? read));
         var parsed = (SpaObject)read!;
@@ -140,7 +140,7 @@ public sealed class ControlContractTests : PipeWireTestBase
     [TestMethod]
     public void APermissionEntry_IsAbsoluteAndCarriesTheObjectItIsAbout()
     {
-        var confine = new PipeWireObjectPermission(PipeWireClientControl.AnyObject, PipeWirePermissions.None);
+        var confine = new PipeWireObjectPermission(PipeWireClientProxy.AnyObject, PipeWirePermissions.None);
         var grant = new PipeWireObjectPermission(42, PipeWirePermissions.Read | PipeWirePermissions.Execute);
 
         Assert.AreEqual(uint.MaxValue, confine.ObjectId, "the catch-all id is the wildcard");
@@ -177,7 +177,7 @@ public sealed class ControlContractTests : PipeWireTestBase
     [TestMethod]
     public void AMetadataEntryReportsRemovalAsANullValue_AndKeepsItsSubject()
     {
-        var removal = new PipeWireMetadataEntry(PipeWireMetadataStore.SubjectCore, "default.audio.sink", null, null);
+        var removal = new PipeWireMetadataEntry(PipeWireMetadataProxy.SubjectCore, "default.audio.sink", null, null);
 
         Assert.IsNull(removal.Value, "a removal is a null value, not an empty string");
         Assert.IsNull(removal.NameValue);
@@ -230,7 +230,7 @@ public sealed class ControlContractTests : PipeWireTestBase
         Assert.AreEqual(0, graph.Clients.Length);
         Assert.AreEqual(0, graph.Factories.Length);
         Assert.AreEqual(0, graph.Modules.Length);
-        Assert.AreEqual(0, graph.MetadataStores.Length);
+        Assert.AreEqual(0, graph.Metadata.Length);
         Assert.IsNull(graph.Core);
         Assert.IsNull(graph.Profiler);
         Assert.IsNull(graph.SecurityContext);
@@ -238,7 +238,7 @@ public sealed class ControlContractTests : PipeWireTestBase
         Assert.IsNull(graph.GetClient(1));
         Assert.IsNull(graph.GetFactory(1));
         Assert.IsNull(graph.GetModule(1));
-        Assert.IsNull(graph.GetMetadataStore("default"));
+        Assert.IsNull(graph.GetMetadata("default"));
         Assert.IsFalse(graph.TryGetObject(1, out _));
     }
 
@@ -272,10 +272,10 @@ public sealed class ControlContractTests : PipeWireTestBase
             new PipeWireClient(2, PipeWirePermissions.None, 3, null, null, null, null, null, null, null),
             new PipeWireFactory(3, PipeWirePermissions.None, 3, null, null, null, null),
             new PipeWireModule(4, PipeWirePermissions.None, 3, null, null, null, null),
-            new PipeWireMetadataObject(5, PipeWirePermissions.None, 3, null),
+            new PipeWireMetadata(5, PipeWirePermissions.None, 3, null),
             new PipeWireProfiler(6, PipeWirePermissions.None, 3),
             new PipeWireSecurityContext(7, PipeWirePermissions.None, 3),
-            new PipeWireCoreObject(8, PipeWirePermissions.None, 4, null, null, null, null),
+            new PipeWireCore(8, PipeWirePermissions.None, 4, null, null, null, null),
         ];
 
         PipeWireObjectKind[] kinds = [.. objects.Select(o => o.Kind)];

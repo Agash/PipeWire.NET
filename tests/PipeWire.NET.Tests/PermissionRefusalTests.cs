@@ -87,7 +87,7 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
         PipeWireClient? self = OurClient(registry, name);
         Assert.IsNotNull(self, "this connection's own client is not visible in the graph.");
 
-        PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+        PipeWireMetadataProxy? store = registry.BindMetadata("default");
         if (store is null)
             Assert.Inconclusive("no session manager, so no default store.");
 
@@ -100,7 +100,7 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
             // halves of the rollback are exercised, not just the easy one.
             await store.SetAsync(key, "v1", cancellationToken: cts.Token);
 
-            await using (PipeWireClientControl control = registry.BindClient(self!.Id))
+            await using (PipeWireClientProxy control = registry.BindClient(self!.Id))
             {
                 // Writes to this store only. Everything else keeps its permissions, so the
                 // connection stays alive to hear the refusal.
@@ -148,13 +148,13 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
         Assert.IsNotNull(self, "this connection's own client is not visible in the graph.");
 
         // Synchronous disposal: tearing a binding down does no I/O.
-        using (PipeWireClientControl control = registry.BindClient(self!.Id))
+        using (PipeWireClientProxy control = registry.BindClient(self!.Id))
         {
             // A default is the method's own to write, so one in the grants contradicts the
             // confining it exists to do.
             await Assert.ThrowsExactlyAsync<ArgumentException>(
                 async () => await control.ConfineToAsync(
-                    [new PipeWireObjectPermission(PipeWireClientControl.AnyObject, PipeWirePermissions.Read)],
+                    [new PipeWireObjectPermission(PipeWireClientProxy.AnyObject, PipeWirePermissions.Read)],
                     cts.Token));
             await Assert.ThrowsExactlyAsync<ArgumentNullException>(
                 async () => await control.UpdatePropertiesAsync(null!, cts.Token));
@@ -185,14 +185,14 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
         PipeWireClient? self = OurClient(registry, name);
         Assert.IsNotNull(self, "this connection's own client is not visible in the graph.");
 
-        await using (PipeWireClientControl control = registry.BindClient(self!.Id))
+        await using (PipeWireClientProxy control = registry.BindClient(self!.Id))
         {
             await control.UpdatePermissionsAsync(
                 new[] { new PipeWireObjectPermission(factory!.Id, PipeWirePermissions.None) }, cts.Token);
         }
 
         PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
-            () => registry.CreateVirtualNode("Denied").WithName(Unique("pwnet_denied")).ExecuteAsync(cts.Token));
+            () => registry.CreateVirtualSink("Denied").WithName(Unique("pwnet_denied")).ExecuteAsync(cts.Token));
 
         Assert.IsTrue(refused.Result < 0, "a refusal must carry the daemon's code");
         Console.Error.WriteLine($"after losing the factory: {refused.Message}");
@@ -218,7 +218,7 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
         PipeWireSecurityContext? available = registry.Current.SecurityContext;
         if (available is null) Assert.Inconclusive("this daemon exposes no security context.");
 
-        await using PipeWireSecurityContextControl control = registry.BindSecurityContext(available!.Id);
+        await using PipeWireSecurityContextProxy control = registry.BindSecurityContext(available!.Id);
 
         var properties = new Dictionary<string, string>(StringComparer.Ordinal)
         {

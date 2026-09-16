@@ -49,7 +49,7 @@ public static class SessionHygiene
             await using var registry = new PipeWireRegistry(ctx);
             await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null) return;
 
             await using (store)

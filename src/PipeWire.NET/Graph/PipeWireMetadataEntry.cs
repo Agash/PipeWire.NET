@@ -6,7 +6,7 @@ namespace PipeWire.NET.Graph;
 /// One entry in a metadata store.
 /// </summary>
 /// <param name="Subject">
-/// Which object the entry is about. <see cref="PipeWireMetadataStore.SubjectCore"/> means the
+/// Which object the entry is about. <see cref="PipeWireMetadataProxy.SubjectCore"/> means the
 /// daemon itself, which is where settings that belong to no single object live.
 /// </param>
 /// <param name="Key">The entry key, such as <c>default.audio.sink</c>.</param>

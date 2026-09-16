@@ -87,7 +87,7 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
         try
         {
             // A node created through one of them has to become visible to all of them, by id.
-            PipeWireNode node = await clients[0].Registry.CreateVirtualNode("Harmony")
+            PipeWireNode node = await clients[0].Registry.CreateVirtualSink("Harmony")
                 .WithName(Unique("pwnet_harmony"))
                 .ExecuteAsync(cts.Token);
 
@@ -104,7 +104,7 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
 
             // And every one of them must be able to bind and drive it at the same time: eight
             // proxies to one global, eight independent parameter caches.
-            PipeWireNodeControl[] controls = [.. clients.Select(c => c.Registry.BindNode(node.NodeId))];
+            PipeWireNodeProxy[] controls = [.. clients.Select(c => c.Registry.BindNode(node.NodeId))];
             try
             {
                 await Task.WhenAll(controls.Select(c => c.ReadyAsync(cts.Token)));
@@ -124,7 +124,7 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
             }
             finally
             {
-                foreach (PipeWireNodeControl c in controls)
+                foreach (PipeWireNodeProxy c in controls)
                     await c.DisposeAsync();
             }
 
@@ -160,7 +160,7 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
         await using Client a = await ConnectAsync("pwnet-fight-a", cts.Token);
         await using Client b = await ConnectAsync("pwnet-fight-b", cts.Token);
 
-        PipeWireNode node = await a.Registry.CreateVirtualNode("Contended")
+        PipeWireNode node = await a.Registry.CreateVirtualSink("Contended")
             .WithName(Unique("pwnet_contended"))
             .ExecuteAsync(cts.Token);
 
@@ -174,8 +174,8 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
         }, TimeSpan.FromSeconds(10), cts.Token);
         Assert.IsTrue(visibleToB, "the second client never saw the contended node");
 
-        await using PipeWireNodeControl ca = a.Registry.BindNode(node.NodeId);
-        await using PipeWireNodeControl cb = b.Registry.BindNode(node.NodeId);
+        await using PipeWireNodeProxy ca = a.Registry.BindNode(node.NodeId);
+        await using PipeWireNodeProxy cb = b.Registry.BindNode(node.NodeId);
         await Task.WhenAll(ca.ReadyAsync(cts.Token), cb.ReadyAsync(cts.Token));
 
         // Three writers with no coordination between them. The library makes no ordering promise
@@ -237,8 +237,8 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
         await using Client a = await ConnectAsync("pwnet-meta-a", cts.Token);
         await using Client b = await ConnectAsync("pwnet-meta-b", cts.Token);
 
-        PipeWireMetadataStore? sa = a.Registry.BindMetadataStore("default");
-        PipeWireMetadataStore? sb = b.Registry.BindMetadataStore("default");
+        PipeWireMetadataProxy? sa = a.Registry.BindMetadata("default");
+        PipeWireMetadataProxy? sb = b.Registry.BindMetadata("default");
         if (sa is null || sb is null)
             Assert.Inconclusive("no default metadata store on this session.");
 
@@ -255,7 +255,7 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
             };
 
             // Our client writes; the other one must see it.
-            await sa.SetAsync(key, "from-a", "Spa:String", PipeWireMetadataStore.SubjectCore, cts.Token);
+            await sa.SetAsync(key, "from-a", "Spa:String", PipeWireMetadataProxy.SubjectCore, cts.Token);
             if (!await EventuallyAsync(() => Task.FromResult(sb.Get(key) == "from-a"),
                     TimeSpan.FromSeconds(10), cts.Token))
             {
@@ -294,12 +294,12 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
                 Task.Run(async () =>
                 {
                     for (int i = 0; i < 30; i++)
-                        await sa.SetAsync(key, $"a-{i}", "Spa:String", PipeWireMetadataStore.SubjectCore, cts.Token);
+                        await sa.SetAsync(key, $"a-{i}", "Spa:String", PipeWireMetadataProxy.SubjectCore, cts.Token);
                 }, cts.Token),
                 Task.Run(async () =>
                 {
                     for (int i = 0; i < 30; i++)
-                        await sb.SetAsync(key, $"b-{i}", "Spa:String", PipeWireMetadataStore.SubjectCore, cts.Token);
+                        await sb.SetAsync(key, $"b-{i}", "Spa:String", PipeWireMetadataProxy.SubjectCore, cts.Token);
                 }, cts.Token));
 
             await PwTools.SetMetadataAsync(key, "final", cts.Token);
@@ -310,7 +310,7 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
                     TimeSpan.FromSeconds(25), cts.Token),
                 $"after a burst the clients settled on a='{sa.Get(key)}' b='{sb.Get(key)}', not the last write");
 
-            await sa.SetAsync(key, null, "Spa:String", PipeWireMetadataStore.SubjectCore, cts.Token);
+            await sa.SetAsync(key, null, "Spa:String", PipeWireMetadataProxy.SubjectCore, cts.Token);
         }
     }
 
@@ -448,7 +448,7 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
             {
                 while (!linked.Token.IsCancellationRequested)
                 {
-                    PipeWireNode n = await churner.Registry.CreateVirtualNode("Churn")
+                    PipeWireNode n = await churner.Registry.CreateVirtualSink("Churn")
                         .WithName(Unique("pwnet_churn"))
                         .ExecuteAsync(linked.Token);
 
@@ -518,13 +518,13 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
         {
             Client doomed = await ConnectAsync($"pwnet-doomed-{round}", cts.Token);
 
-            PipeWireNode n = await doomed.Registry.CreateVirtualNode("Doomed")
+            PipeWireNode n = await doomed.Registry.CreateVirtualSink("Doomed")
                 .WithName(Unique("pwnet_doomed"))
                 .ExecuteAsync(cts.Token);
 
             abandoned.Add(n.NodeId);
 
-            PipeWireNodeControl control = doomed.Registry.BindNode(n.NodeId);
+            PipeWireNodeProxy control = doomed.Registry.BindNode(n.NodeId);
             await control.ReadyAsync(cts.Token);
 
             // Disposed out from under an outstanding read, with the node never removed.
@@ -549,11 +549,11 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
             }, TimeSpan.FromSeconds(25), cts.Token),
             "nodes owned by clients that went away stayed in the surviving client's graph");
 
-        PipeWireNode fresh = await survivor.Registry.CreateVirtualNode("Survivor")
+        PipeWireNode fresh = await survivor.Registry.CreateVirtualSink("Survivor")
             .WithName(Unique("pwnet_survivor"))
             .ExecuteAsync(cts.Token);
 
-        await using PipeWireNodeControl c = survivor.Registry.BindNode(fresh.NodeId);
+        await using PipeWireNodeProxy c = survivor.Registry.BindNode(fresh.NodeId);
         await c.ReadyAsync(cts.Token);
         Assert.IsNotNull(await c.GetVolumeAsync(cts.Token));
 

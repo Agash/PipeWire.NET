@@ -332,7 +332,7 @@ public static class SpaPod
         var objectType = (SpaType)MemoryMarshal.Read<uint>(body);
         var objectId = (SpaParamType)MemoryMarshal.Read<uint>(body[4..]);
 
-        var properties = ImmutableArray.CreateBuilder<SpaProperty>();
+        var properties = ImmutableArray.CreateBuilder<SpaPodProperty>();
         int offset = 8;
         while (offset + 16 <= body.Length)
         {
@@ -345,7 +345,7 @@ public static class SpaPod
                 return false;
             }
 
-            properties.Add(new SpaProperty(key, flags, propertyValue));
+            properties.Add(new SpaPodProperty(key, flags, propertyValue));
             offset += 8 + consumed;
         }
 
@@ -501,10 +501,10 @@ public static class SpaPod
         return total;
     }
 
-    private static int SumProperties(ImmutableArray<SpaProperty> properties)
+    private static int SumProperties(ImmutableArray<SpaPodProperty> properties)
     {
         int total = 0;
-        foreach (SpaProperty property in properties)
+        foreach (SpaPodProperty property in properties)
             total = checked(total + 8 + Pad(8 + BodySize(property.Value)));
         return total;
     }
@@ -628,7 +628,7 @@ public static class SpaPod
                 MemoryMarshal.Write<uint>(body, (uint)o.ObjectType);
                 MemoryMarshal.Write<uint>(body[4..], (uint)o.ObjectId);
                 int offset = 8;
-                foreach (SpaProperty property in o.Properties)
+                foreach (SpaPodProperty property in o.Properties)
                 {
                     MemoryMarshal.Write<uint>(body[offset..], property.Key.Value);
                     MemoryMarshal.Write<uint>(body[(offset + 4)..], (uint)property.Flags);

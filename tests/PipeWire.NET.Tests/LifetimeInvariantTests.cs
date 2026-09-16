@@ -2,7 +2,6 @@ using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
-using PipeWire.NET.Media.Streams;
 
 namespace PipeWire.NET.Tests;
 
@@ -52,9 +51,9 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
 
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode sink = await registry.CreateVirtualNode("Monotonic")
+        PipeWireNode sink = await registry.CreateVirtualSink("Monotonic")
             .WithName("pwnet_monotonic_sink").ExecuteAsync(cts.Token);
-        PipeWireNode source = await registry.CreateVirtualNode("MonotonicSrc")
+        PipeWireNode source = await registry.CreateVirtualSink("MonotonicSrc")
             .WithName("pwnet_monotonic_src").ExecuteAsync(cts.Token);
 
         await registry.DestroyGlobalAsync(source.NodeId, cts.Token);
@@ -82,7 +81,7 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
             Task<PipeWireNode>[] creations =
             [
                 .. Enumerable.Range(0, 6).Select(i =>
-                    registry.CreateVirtualNode($"Waiter{round}_{i}")
+                    registry.CreateVirtualSink($"Waiter{round}_{i}")
                             .WithName($"pwnet_waiter_{round}_{i}")
                             .ExecuteAsync(cts.Token)),
             ];
@@ -109,10 +108,10 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
         var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await registry.CreateVirtualNode("Order")
+        PipeWireNode node = await registry.CreateVirtualSink("Order")
             .WithName("pwnet_order_sink").ExecuteAsync(cts.Token);
 
-        PipeWireNodeControl control = registry.BindNode(node.NodeId);
+        PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
         // Deliberately the wrong order. The handle chain is what makes this survive: the bound proxy
         // holds the core, which holds the context, which holds the loop, so none of them can have
@@ -147,7 +146,7 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
             {
                 try
                 {
-                    PipeWireNode node = await registry.CreateVirtualNode($"Teardown{round}")
+                    PipeWireNode node = await registry.CreateVirtualSink($"Teardown{round}")
                         .WithName($"pwnet_teardown_{round}").ExecuteAsync(linkedCts.Token);
                     await registry.DestroyGlobalAsync(node.NodeId, linkedCts.Token);
                 }
@@ -177,7 +176,7 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
         // No delay: the creation needs a full daemon round trip while disposal only needs to
         // signal, so disposal wins and the shutdown hook surfaces ObjectDisposedException to the
         // in-flight wait instead of leaving it parked on a stopped loop.
-        Task<PipeWireNode> creation = Task.Run(() => registry.CreateVirtualNode("Disposing")
+        Task<PipeWireNode> creation = Task.Run(() => registry.CreateVirtualSink("Disposing")
             .WithName("pwnet_disposing_inflight").ExecuteAsync(cts.Token));
         await ctx.DisposeAsync();
 
@@ -212,7 +211,7 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await registry.CreateVirtualNode("Finalize")
+        PipeWireNode node = await registry.CreateVirtualSink("Finalize")
             .WithName("pwnet_finalize_sink").ExecuteAsync(cts.Token);
 
         // Bound and dropped without disposing, which is what an application will eventually do by
@@ -230,7 +229,7 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
 
     private static void BindAndAbandon(PipeWireRegistry registry, uint nodeId)
     {
-        PipeWireNodeControl control = registry.BindNode(nodeId);
+        PipeWireNodeProxy control = registry.BindNode(nodeId);
         GC.KeepAlive(control.Id);
     }
 

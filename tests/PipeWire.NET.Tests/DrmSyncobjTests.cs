@@ -53,7 +53,7 @@ public sealed class DrmSyncobjTests
             long elapsed = Environment.TickCount64 - start;
 
             Assert.AreEqual(SyncWaitOutcome.TimedOut, early.Outcome, "an unsignalled point was not waited for");
-            Assert.AreEqual(NativeConstants.ETIME, early.Errno);
+            Assert.AreEqual(NativeLibc.ETIME, early.Errno);
             Assert.IsTrue(elapsed >= 150,
                 $"the wait gave up after {elapsed}ms of a 200ms deadline - the deadline is not absolute CLOCK_MONOTONIC");
 

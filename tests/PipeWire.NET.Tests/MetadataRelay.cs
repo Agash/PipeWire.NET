@@ -29,7 +29,7 @@ internal static class MetadataRelay
 
     /// <summary>
     /// Waits for <paramref name="key"/> to reach <paramref name="reader"/> through its
-    /// <see cref="PipeWireMetadataStore.EntryChanged"/> event.
+    /// <see cref="PipeWireMetadataProxy.EntryChanged"/> event.
     /// </summary>
     /// <param name="reader">The store expected to learn about the write.</param>
     /// <param name="key">The key to watch for.</param>
@@ -37,14 +37,14 @@ internal static class MetadataRelay
     /// <param name="cancellationToken">Abandons the wait.</param>
     /// <returns>The value the event carried.</returns>
     internal static async Task<string?> AwaitRelayAsync(
-        PipeWireMetadataStore reader,
+        PipeWireMetadataProxy reader,
         string key,
         Func<Task> write,
         CancellationToken cancellationToken)
     {
         var arrived = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        void OnChanged(PipeWireMetadataStore _, PipeWireMetadataEntry entry)
+        void OnChanged(PipeWireMetadataProxy _, PipeWireMetadataEntry entry)
         {
             if (entry.Key == key) arrived.TrySetResult(entry.Value);
         }

@@ -142,11 +142,11 @@ public sealed class PipeWireGraphSnapshot
     public ImmutableArray<PipeWireModule> Modules => OfKind<PipeWireModule>(ref _modules);
 
     /// <summary>Every metadata store, such as <c>default</c> and <c>settings</c>.</summary>
-    public ImmutableArray<PipeWireMetadataObject> MetadataStores =>
-        OfKind<PipeWireMetadataObject>(ref _metadata);
+    public ImmutableArray<PipeWireMetadata> Metadata =>
+        OfKind<PipeWireMetadata>(ref _metadata);
 
     /// <summary>The daemon core, or <see langword="null"/> if it has not been seen yet.</summary>
-    public PipeWireCoreObject? Core => Single<PipeWireCoreObject>();
+    public PipeWireCore? Core => Single<PipeWireCore>();
 
     /// <summary>The daemon profiler, or <see langword="null"/> if the daemon has none.</summary>
     public PipeWireProfiler? Profiler => Single<PipeWireProfiler>();
@@ -162,7 +162,7 @@ public sealed class PipeWireGraphSnapshot
     private ImmutableArray<PipeWireClient> _clients;
     private ImmutableArray<PipeWireFactory> _factories;
     private ImmutableArray<PipeWireModule> _modules;
-    private ImmutableArray<PipeWireMetadataObject> _metadata;
+    private ImmutableArray<PipeWireMetadata> _metadata;
 
     // Filtered on first read and kept, for the same reason the indexes are: most snapshots are
     // published and replaced without anyone asking.
@@ -227,9 +227,9 @@ public sealed class PipeWireGraphSnapshot
 
     /// <summary>The metadata store with this name, or <see langword="null"/> if there is none.</summary>
     /// <param name="name">The store name, such as <c>default</c>.</param>
-    public PipeWireMetadataObject? GetMetadataStore(string name)
+    public PipeWireMetadata? GetMetadata(string name)
     {
-        foreach (PipeWireMetadataObject store in MetadataStores)
+        foreach (PipeWireMetadata store in Metadata)
         {
             if (string.Equals(store.MetadataName, name, StringComparison.Ordinal))
                 return store;

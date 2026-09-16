@@ -10,8 +10,8 @@ namespace PipeWire.NET.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The audit put <c>StreamProperties</c>, <c>PipeWireNodeCreation</c> and
-/// <c>PipeWireLinkCreation</c> at or near zero strongly-asserted members. They were not unused -
+/// The audit put <c>StreamProperties</c>, <c>PipeWireNodeBuilder</c> and
+/// <c>PipeWireLinkBuilder</c> at or near zero strongly-asserted members. They were not unused -
 /// tests build objects with them constantly - but every assertion was made against the resulting
 /// graph rather than against the builder. A <c>With...</c> that silently dropped its argument would
 /// pass all of them, because the property it failed to set was never the property being checked.

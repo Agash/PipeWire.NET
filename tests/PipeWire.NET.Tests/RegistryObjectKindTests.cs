@@ -104,20 +104,20 @@ public sealed unsafe class RegistryObjectKindTests : PipeWireTestBase
             "card", null, null, "alsa", "Audio/Device", null, null, null);
         var client = new PipeWireClient(11, PipeWirePermissions.None, 3,
             "firefox", 99, null, null, null, null, null);
-        var settings = new PipeWireMetadataObject(12, PipeWirePermissions.None, 3, "settings");
-        var defaults = new PipeWireMetadataObject(13, PipeWirePermissions.None, 3, "default");
-        var core = new PipeWireCoreObject(0, PipeWirePermissions.None, 4, "pipewire-0", "1.6.8", null, null);
+        var settings = new PipeWireMetadata(12, PipeWirePermissions.None, 3, "settings");
+        var defaults = new PipeWireMetadata(13, PipeWirePermissions.None, 3, "default");
+        var core = new PipeWireCore(0, PipeWirePermissions.None, 4, "pipewire-0", "1.6.8", null, null);
 
         var graph = new PipeWireGraphSnapshot(1, [], [], [], [device, client, settings, defaults, core]);
 
         CollectionAssert.AreEquivalent(new uint[] { 10 }, graph.Devices.Select(d => d.Id).ToArray());
         CollectionAssert.AreEquivalent(new uint[] { 11 }, graph.Clients.Select(c => c.Id).ToArray());
-        CollectionAssert.AreEquivalent(new uint[] { 12, 13 }, graph.MetadataStores.Select(m => m.Id).ToArray());
+        CollectionAssert.AreEquivalent(new uint[] { 12, 13 }, graph.Metadata.Select(m => m.Id).ToArray());
         Assert.AreSame(core, graph.Core);
         Assert.IsNull(graph.Profiler, "the daemon in this graph has no profiler");
 
-        Assert.AreSame(defaults, graph.GetMetadataStore("default"));
-        Assert.IsNull(graph.GetMetadataStore("Default"), "store names are compared exactly");
+        Assert.AreSame(defaults, graph.GetMetadata("default"));
+        Assert.IsNull(graph.GetMetadata("Default"), "store names are compared exactly");
 
         Assert.AreSame(device, graph.GetDevice(10));
         Assert.IsNull(graph.GetDevice(11), "a client id must not resolve as a device");

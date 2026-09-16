@@ -39,9 +39,9 @@ public sealed class SpaValueModelTests : PipeWireTestBase
             new SpaUnknown((SpaType)999, [4, 5]));
         Assert.AreEqual(
             new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-                [new SpaProperty(1, 0, new SpaFloat(1f))]),
+                [new SpaPodProperty(1, 0, new SpaFloat(1f))]),
             new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-                [new SpaProperty(1, 0, new SpaFloat(1f))]));
+                [new SpaPodProperty(1, 0, new SpaFloat(1f))]));
     }
 
     [TestMethod]
@@ -267,8 +267,8 @@ public sealed class SpaValueModelTests : PipeWireTestBase
     {
         var props = new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
         [
-            new SpaProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.5f)),
-            new SpaProperty((uint)SpaProp.Mute, SpaPodPropFlags.Readonly, new SpaBool(false)),
+            new SpaPodProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.5f)),
+            new SpaPodProperty((uint)SpaProp.Mute, SpaPodPropFlags.Readonly, new SpaBool(false)),
         ]);
 
         Assert.AreEqual(new SpaFloat(0.5f), props[SpaProp.Volume]);

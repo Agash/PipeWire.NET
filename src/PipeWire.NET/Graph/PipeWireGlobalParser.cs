@@ -176,7 +176,7 @@ internal static unsafe class PipeWireGlobalParser
             props);
 
     /// <summary>Builds a metadata store. Always succeeds; the name is optional.</summary>
-    internal static PipeWireMetadataObject ParseMetadata(
+    internal static PipeWireMetadata ParseMetadata(
         uint id, PipeWirePermissions permissions, uint version, PipeWireProperties props) =>
         new(id, permissions, version, props.Text(PipeWireKeys.PW_KEY_METADATA_NAME),
             props.Id(PipeWireKeys.PW_KEY_CLIENT_ID),
@@ -185,7 +185,7 @@ internal static unsafe class PipeWireGlobalParser
             props);
 
     /// <summary>Builds the core object. Always succeeds; every field is optional.</summary>
-    internal static PipeWireCoreObject ParseCore(
+    internal static PipeWireCore ParseCore(
         uint id, PipeWirePermissions permissions, uint version, PipeWireProperties props) =>
         new(id, permissions, version,
             props.Text(PipeWireKeys.PW_KEY_CORE_NAME),

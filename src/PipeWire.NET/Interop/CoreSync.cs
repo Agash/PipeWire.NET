@@ -286,10 +286,10 @@ internal sealed class CoreSync : IDisposable
     /// is a refusal.
     /// </remarks>
     private static bool IsConnectionFatal(int result) => result is
-        -NativeConstants.EPIPE or
-        -NativeConstants.ECONNABORTED or
-        -NativeConstants.ECONNRESET or
-        -NativeConstants.ENOTCONN;
+        -NativeLibc.EPIPE or
+        -NativeLibc.ECONNABORTED or
+        -NativeLibc.ECONNRESET or
+        -NativeLibc.ENOTCONN;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnDone(void* data, uint id, int seq)

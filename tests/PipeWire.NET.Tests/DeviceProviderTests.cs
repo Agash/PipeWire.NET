@@ -38,17 +38,17 @@ public sealed class DeviceProviderTests : PipeWireTestBase
     [
         new SpaObject(SpaType.ObjectParamProfile, SpaParamType.EnumProfile,
         [
-            new SpaProperty((uint)SpaParamProfile.Index, 0, new SpaInt(0)),
-            new SpaProperty((uint)SpaParamProfile.Name, 0, new SpaString("off")),
-            new SpaProperty((uint)SpaParamProfile.Description, 0, new SpaString("Off")),
-            new SpaProperty((uint)SpaParamProfile.Priority, 0, new SpaInt(0)),
+            new SpaPodProperty((uint)SpaParamProfile.Index, 0, new SpaInt(0)),
+            new SpaPodProperty((uint)SpaParamProfile.Name, 0, new SpaString("off")),
+            new SpaPodProperty((uint)SpaParamProfile.Description, 0, new SpaString("Off")),
+            new SpaPodProperty((uint)SpaParamProfile.Priority, 0, new SpaInt(0)),
         ]),
         new SpaObject(SpaType.ObjectParamProfile, SpaParamType.EnumProfile,
         [
-            new SpaProperty((uint)SpaParamProfile.Index, 0, new SpaInt(1)),
-            new SpaProperty((uint)SpaParamProfile.Name, 0, new SpaString("stereo")),
-            new SpaProperty((uint)SpaParamProfile.Description, 0, new SpaString("Stereo")),
-            new SpaProperty((uint)SpaParamProfile.Priority, 0, new SpaInt(100)),
+            new SpaPodProperty((uint)SpaParamProfile.Index, 0, new SpaInt(1)),
+            new SpaPodProperty((uint)SpaParamProfile.Name, 0, new SpaString("stereo")),
+            new SpaPodProperty((uint)SpaParamProfile.Description, 0, new SpaString("Stereo")),
+            new SpaPodProperty((uint)SpaParamProfile.Priority, 0, new SpaInt(100)),
         ]),
     ];
 
@@ -64,22 +64,22 @@ public sealed class DeviceProviderTests : PipeWireTestBase
     [
         new SpaObject(SpaType.ObjectParamRoute, SpaParamType.EnumRoute,
         [
-            new SpaProperty((uint)SpaParamRoute.Index, 0, new SpaInt(0)),
-            new SpaProperty((uint)SpaParamRoute.Name, 0, new SpaString("speaker")),
-            new SpaProperty((uint)SpaParamRoute.Description, 0, new SpaString("Speaker")),
-            new SpaProperty((uint)SpaParamRoute.Priority, 0, new SpaInt(100)),
-            new SpaProperty((uint)SpaParamRoute.Direction, 0, new SpaId((uint)SpaDirection.Output)),
-            new SpaProperty((uint)SpaParamRoute.Available, 0,
+            new SpaPodProperty((uint)SpaParamRoute.Index, 0, new SpaInt(0)),
+            new SpaPodProperty((uint)SpaParamRoute.Name, 0, new SpaString("speaker")),
+            new SpaPodProperty((uint)SpaParamRoute.Description, 0, new SpaString("Speaker")),
+            new SpaPodProperty((uint)SpaParamRoute.Priority, 0, new SpaInt(100)),
+            new SpaPodProperty((uint)SpaParamRoute.Direction, 0, new SpaId((uint)SpaDirection.Output)),
+            new SpaPodProperty((uint)SpaParamRoute.Available, 0,
                             new SpaId((uint)SpaParamAvailability.Yes)),
         ]),
         new SpaObject(SpaType.ObjectParamRoute, SpaParamType.EnumRoute,
         [
-            new SpaProperty((uint)SpaParamRoute.Index, 0, new SpaInt(1)),
-            new SpaProperty((uint)SpaParamRoute.Name, 0, new SpaString("headphone")),
-            new SpaProperty((uint)SpaParamRoute.Description, 0, new SpaString("Headphones")),
-            new SpaProperty((uint)SpaParamRoute.Priority, 0, new SpaInt(50)),
-            new SpaProperty((uint)SpaParamRoute.Direction, 0, new SpaId((uint)SpaDirection.Output)),
-            new SpaProperty((uint)SpaParamRoute.Available, 0,
+            new SpaPodProperty((uint)SpaParamRoute.Index, 0, new SpaInt(1)),
+            new SpaPodProperty((uint)SpaParamRoute.Name, 0, new SpaString("headphone")),
+            new SpaPodProperty((uint)SpaParamRoute.Description, 0, new SpaString("Headphones")),
+            new SpaPodProperty((uint)SpaParamRoute.Priority, 0, new SpaInt(50)),
+            new SpaPodProperty((uint)SpaParamRoute.Direction, 0, new SpaId((uint)SpaDirection.Output)),
+            new SpaPodProperty((uint)SpaParamRoute.Available, 0,
                             new SpaId((uint)SpaParamAvailability.Unknown)),
         ]),
     ];
@@ -158,7 +158,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
 
-        await using PipeWireDeviceControl control = readerRegistry.BindDevice(id);
+        await using PipeWireDeviceProxy control = readerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
 
         ImmutableArray<SpaObject> profiles =
@@ -203,17 +203,17 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
 
-        await using PipeWireDeviceControl control = readerRegistry.BindDevice(id);
+        await using PipeWireDeviceProxy control = readerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
 
         // The filter objects: one matching nothing, one matching the stereo profile.
         var surround = new SpaObject(SpaType.ObjectParamProfile, SpaParamType.EnumProfile,
         [
-            new SpaProperty((uint)SpaParamProfile.Name, 0, new SpaString("surround")),
+            new SpaPodProperty((uint)SpaParamProfile.Name, 0, new SpaString("surround")),
         ]);
         var stereo = new SpaObject(SpaType.ObjectParamProfile, SpaParamType.EnumProfile,
         [
-            new SpaProperty((uint)SpaParamProfile.Name, 0, new SpaString("stereo")),
+            new SpaPodProperty((uint)SpaParamProfile.Name, 0, new SpaString("stereo")),
         ]);
 
         // Filtered first, on a fresh device: the daemon has cached nothing yet, so these run the
@@ -291,7 +291,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireDeviceControl control = readerRegistry.BindDevice(id);
+        PipeWireDeviceProxy control = readerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
         control.SubscribeParameters(SpaParamType.EnumProfile);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -386,7 +386,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
 
-        await using PipeWireDeviceControl control = readerRegistry.BindDevice(id);
+        await using PipeWireDeviceProxy control = readerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
 
         Assert.HasCount(2, await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token));
@@ -479,7 +479,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
 
-        await using PipeWireDeviceControl control = readerRegistry.BindDevice(id);
+        await using PipeWireDeviceProxy control = readerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
 
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(8));
@@ -539,7 +539,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
 
-        await using PipeWireDeviceControl control = readerRegistry.BindDevice(id);
+        await using PipeWireDeviceProxy control = readerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
 
         PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
@@ -581,7 +581,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await using var writerRegistry = new PipeWireRegistry(writer);
         await writerRegistry.WaitForInitialEnumerationAsync(cts.Token);
 
-        await using PipeWireDeviceControl control = writerRegistry.BindDevice(id);
+        await using PipeWireDeviceProxy control = writerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
         await control.SetProfileAsync(1, cancellationToken: cts.Token);
 
@@ -636,7 +636,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
 
-        await using PipeWireDeviceControl control = readerRegistry.BindDevice(id);
+        await using PipeWireDeviceProxy control = readerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
         control.SubscribeParameters(SpaParamType.EnumProfile);
         control.ParameterChanged += (_, _) => throw new InvalidOperationException("deliberate");
@@ -678,7 +678,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
 
-        await using PipeWireDeviceControl control = readerRegistry.BindDevice(id);
+        await using PipeWireDeviceProxy control = readerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
 
         await Assert.ThrowsExactlyAsync<ArgumentException>(
@@ -723,7 +723,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
 
-        await using PipeWireDeviceControl control = readerRegistry.BindDevice(id);
+        await using PipeWireDeviceProxy control = readerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
 
         ImmutableArray<SpaObject> routes =

@@ -135,7 +135,7 @@ public sealed class GraphStressTests : PipeWireTestBase
             // impose one of its own.
             var huge = new string('x', length);
 
-            PipeWireNode node = await registry.CreateVirtualNodeAsync(
+            PipeWireNode node = await registry.CreateVirtualSinkAsync(
                 huge, $"pwnet_long_{length}", cts.Token);
 
             Assert.IsNotNull(registry.Current.GetNode(node.NodeId));
@@ -157,7 +157,7 @@ public sealed class GraphStressTests : PipeWireTestBase
             // Four bytes per char, so a char-based size estimate would under-reserve by 4x.
             var emoji = string.Concat(Enumerable.Repeat("🔊", 300));
 
-            PipeWireNode node = await registry.CreateVirtualNodeAsync(emoji, "pwnet_utf8", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync(emoji, "pwnet_utf8", cts.Token);
             Assert.AreEqual(emoji, node.Description);
         }
     }
@@ -175,7 +175,7 @@ public sealed class GraphStressTests : PipeWireTestBase
             // Warm up so first-call allocations are not counted as growth.
             for (int i = 0; i < 5; i++)
             {
-                PipeWireNode warm = await registry.CreateVirtualNodeAsync($"W{i}", $"pwnet_w{i}", cts.Token);
+                PipeWireNode warm = await registry.CreateVirtualSinkAsync($"W{i}", $"pwnet_w{i}", cts.Token);
                 await registry.DestroyGlobalAsync(warm.NodeId, cts.Token);
                 await WaitForAsync(registry, g => g.GetNode(warm.NodeId) is null, cts.Token);
             }
@@ -193,7 +193,7 @@ public sealed class GraphStressTests : PipeWireTestBase
             {
                 // No media.class: see the storm test. A node that lives for a few milliseconds
                 // has no business being offered to the session manager as something to route to.
-                PipeWireNode node = await registry.CreateVirtualNode($"Churn {i}")
+                PipeWireNode node = await registry.CreateVirtualSink($"Churn {i}")
                                                   .WithName($"pwnet_churn_{i}")
                                                   .WithMediaClass("")
                                                   .ExecuteAsync(cts.Token);
@@ -254,7 +254,7 @@ public sealed class GraphStressTests : PipeWireTestBase
         {
             const int Degree = 12;
             Task<PipeWireNode>[] creates = [.. Enumerable.Range(0, Degree).Select(
-                i => Task.Run(() => registry.CreateVirtualNodeAsync($"P{i}", $"pwnet_par_{i}", cts.Token), cts.Token))];
+                i => Task.Run(() => registry.CreateVirtualSinkAsync($"P{i}", $"pwnet_par_{i}", cts.Token), cts.Token))];
 
             PipeWireNode[] nodes = await Task.WhenAll(creates);
 
@@ -277,7 +277,7 @@ public sealed class GraphStressTests : PipeWireTestBase
         await using (context)
         {
             Task<PipeWireNode>[] creates = [.. Enumerable.Range(0, 8).Select(
-                i => registry.CreateVirtualNodeAsync($"T{i}", $"pwnet_tear_{i}", cts.Token))];
+                i => registry.CreateVirtualSinkAsync($"T{i}", $"pwnet_tear_{i}", cts.Token))];
 
             // Tear down underneath them. Whatever each task does, the process must survive: an
             // ObjectDisposedException or a completed node are both fine, an abort is not.
@@ -328,7 +328,7 @@ public sealed class GraphStressTests : PipeWireTestBase
             // CancellationToken.None is the case with no escape hatch: if disposal does not fail
             // the waiters, nothing ever will.
             Task<PipeWireNode>[] creates = [.. Enumerable.Range(0, 6).Select(
-                i => registry.CreateVirtualNodeAsync($"N{i}", $"pwnet_notok_{i}", CancellationToken.None))];
+                i => registry.CreateVirtualSinkAsync($"N{i}", $"pwnet_notok_{i}", CancellationToken.None))];
 
             await registry.DisposeAsync();
 
@@ -379,7 +379,7 @@ public sealed class GraphStressTests : PipeWireTestBase
                 tight.CancelAfter(TimeSpan.FromMilliseconds(i % 5));
                 try
                 {
-                    PipeWireNode node = await registry.CreateVirtualNodeAsync(
+                    PipeWireNode node = await registry.CreateVirtualSinkAsync(
                         $"C{i}", $"pwnet_cx_{i}", tight.Token);
                     created++;
                     await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
@@ -441,7 +441,7 @@ public sealed class GraphStressTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode a = await registry.CreateVirtualNodeAsync("CA", "pwnet_ca", cts.Token);
+            PipeWireNode a = await registry.CreateVirtualSinkAsync("CA", "pwnet_ca", cts.Token);
             PipeWireGraphSnapshot held = await WaitForAsync(
                 registry, g => g.GetPortsForNode(a.NodeId).Length == 4, cts.Token);
 
@@ -449,7 +449,7 @@ public sealed class GraphStressTests : PipeWireTestBase
 
             for (int i = 0; i < 15; i++)
             {
-                PipeWireNode churn = await registry.CreateVirtualNodeAsync($"CC{i}", $"pwnet_cc_{i}", cts.Token);
+                PipeWireNode churn = await registry.CreateVirtualSinkAsync($"CC{i}", $"pwnet_cc_{i}", cts.Token);
                 await registry.DestroyGlobalAsync(churn.NodeId, cts.Token);
             }
 
@@ -491,7 +491,7 @@ public sealed class GraphStressTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNodeAsync("DD", "pwnet_dd", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync("DD", "pwnet_dd", cts.Token);
 
             ulong? serial = node.ObjectSerial;
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);

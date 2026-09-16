@@ -215,12 +215,12 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
     public void AWellFormedProfilerReport_ParsesToItsObject()
     {
         var expected = new SpaObject(SpaType.ObjectProfiler, SpaParamType.Props,
-            [new SpaProperty(1, 0, new SpaInt(7))]);
+            [new SpaPodProperty(1, 0, new SpaInt(7))]);
         byte[] pod = SpaPod.ToBytes(expected);
 
         fixed (byte* p = pod)
         {
-            Assert.IsTrue(PipeWireProfilerReader.TryParseReport(
+            Assert.IsTrue(PipeWireProfilerProxy.TryParseReport(
                 (spa_pod*)p, out System.Collections.Immutable.ImmutableArray<SpaObject> reports, out int size));
             Assert.AreEqual(pod.Length, size);
             Assert.HasCount(1, reports);
@@ -232,7 +232,7 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
     public void AMalformedProfilerReport_IsRefusedRatherThanSpanned()
     {
         // Null names no size at all.
-        Assert.IsFalse(PipeWireProfilerReader.TryParseReport(null, out _, out int nullSize));
+        Assert.IsFalse(PipeWireProfilerProxy.TryParseReport(null, out _, out int nullSize));
         Assert.AreEqual(0, nullSize);
 
         // An unknown pod type with a buffer-consistent size: well-framed but not a report.
@@ -243,7 +243,7 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
         BitConverter.TryWriteBytes(unknown.AsSpan(), 8u);
         BitConverter.TryWriteBytes(unknown.AsSpan(4), 0xDEADBEEFu);
         fixed (byte* u = unknown)
-            Assert.IsFalse(PipeWireProfilerReader.TryParseReport((spa_pod*)u, out _, out _));
+            Assert.IsFalse(PipeWireProfilerProxy.TryParseReport((spa_pod*)u, out _, out _));
 
         // A size near uint.MaxValue must refuse before spanning: only the header is read.
         byte[] huge = new byte[8];
@@ -252,7 +252,7 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
         fixed (byte* h = huge)
         {
             Assert.IsFalse(
-                PipeWireProfilerReader.TryParseReport((spa_pod*)h, out _, out int size));
+                PipeWireProfilerProxy.TryParseReport((spa_pod*)h, out _, out int size));
             Assert.AreEqual(int.MaxValue, size);
         }
 
@@ -262,7 +262,7 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
         BitConverter.TryWriteBytes(integer.AsSpan(4), (uint)SpaType.Int);
         BitConverter.TryWriteBytes(integer.AsSpan(8), 42);
         fixed (byte* i = integer)
-            Assert.IsFalse(PipeWireProfilerReader.TryParseReport((spa_pod*)i, out _, out _));
+            Assert.IsFalse(PipeWireProfilerProxy.TryParseReport((spa_pod*)i, out _, out _));
     }
 
     // - Errors -

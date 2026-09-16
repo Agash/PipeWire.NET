@@ -90,7 +90,7 @@ public sealed class NativeLibcTests
         Descriptors.CloseDescriptor(fd);
 
         ulong scratch;
-        nint result = NativeConstants.read(fd, &scratch, 8);
+        nint result = NativeLibc.read(fd, &scratch, 8);
 
         Assert.IsTrue(result < 0, "reading a closed descriptor unexpectedly succeeded");
         Assert.AreEqual(
@@ -126,7 +126,7 @@ public sealed class NativeLibcTests
         if (!match.Success) Assert.Inconclusive($"EINTR is not defined directly in {header}.");
 
         Assert.AreEqual(
-            NativeConstants.EINTR,
+            NativeLibc.EINTR,
             int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture),
             $"{header} defines a different EINTR than the retry loops compare against");
     }
@@ -154,7 +154,7 @@ public sealed class NativeLibcTests
             Assert.AreNotEqual(original, copy, "the duplicate reused the original's number");
             Assert.IsTrue(copy >= 3, "the duplicate landed on a stdio descriptor");
 
-            int flags = NativeConstants.fcntl(copy, FGetfd, 0);
+            int flags = NativeLibc.fcntl(copy, FGetfd, 0);
             Assert.IsTrue(flags >= 0, "F_GETFD failed on the duplicate");
             Assert.AreEqual(
                 FdCloexec,
@@ -234,7 +234,7 @@ public sealed class NativeLibcTests
             long elapsed = Environment.TickCount64 - start;
 
             Assert.AreEqual(SyncWaitOutcome.TimedOut, wait.Outcome);
-            Assert.AreEqual(NativeConstants.ETIME, wait.Errno);
+            Assert.AreEqual(NativeLibc.ETIME, wait.Errno);
             Assert.IsTrue(elapsed >= 150, $"the wait returned after {elapsed}ms, before its 200ms deadline");
         }
         finally
@@ -259,7 +259,7 @@ public sealed class NativeLibcTests
         SyncWait wait = Descriptors.WaitEventfd(fd, TimeSpan.FromMilliseconds(200));
 
         Assert.AreEqual(SyncWaitOutcome.Failed, wait.Outcome);
-        Assert.AreEqual(NativeConstants.EBADF, wait.Errno);
+        Assert.AreEqual(NativeLibc.EBADF, wait.Errno);
         Assert.AreNotEqual(0, Descriptors.SignalEventfd(fd), "a signal into a closed descriptor reported success");
     }
 

@@ -207,7 +207,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                     _registryOwner = new PipeWireProxyHandle(
                         (pw_proxy*)registry, _ctx.LoopOwner, _ctx.CoreOwner);
                 if (registry is null)
-                    throw new PipeWireInteropException("pw_core_get_registry", -NativeConstants.ENOMEM);
+                    throw new PipeWireInteropException("pw_core_get_registry", -NativeLibc.ENOMEM);
 
                 _events = (pw_registry_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_registry_events));
                 _events->version       = NativeConstants.PW_VERSION_REGISTRY_EVENTS;
@@ -438,7 +438,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         if (_awaitingPublish.TryRemove(id, out PublishWaiters? waiters))
         {
             waiters.FailAll(new PipeWireInteropException(
-                "bind", -NativeConstants.EINVAL, id, reason));
+                "bind", -NativeLibc.EINVAL, id, reason));
         }
     }
 
@@ -494,7 +494,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                 // publish that satisfies this waiter is not always what was created. That is a
                 // lost race rather than a broken invariant, and it is reported as one.
                 throw new PipeWireException(
-                    "create", -NativeConstants.ENOENT, id,
+                    "create", -NativeLibc.ENOENT, id,
                     $"global {id} arrived as {published.Kind} rather than {typeof(T).Name}; "
                     + "the id was reused before the new object was observed");
             }
@@ -748,7 +748,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// announces those as separate globals while the node initialises. Await them through
     /// <see cref="WatchAsync"/> or <see cref="PortAdded"/> rather than assuming they are present:
     /// <code>
-    /// var node = await registry.CreateVirtualNodeAsync("Mix", ct);
+    /// var node = await registry.CreateVirtualSinkAsync("Mix", ct);
     /// await foreach (var graph in registry.WatchAsync(ct))
     ///     if (graph.GetPortsForNode(node.NodeId).Length == 4) break;
     /// </code>
@@ -758,23 +758,26 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// the registry factories and will not appear in a factory listing.
     /// </para>
     /// </remarks>
-    public Task<PipeWireNode> CreateVirtualNodeAsync(
+    public Task<PipeWireNode> CreateVirtualSinkAsync(
         string description, string? name = null, CancellationToken cancellationToken = default) =>
-        CreateVirtualNode(description, name).ExecuteAsync(cancellationToken);
+        CreateVirtualSink(description, name).ExecuteAsync(cancellationToken);
 
     /// <summary>
-    /// Describes a virtual node for creation, so options can be chained before it is made.
+    /// Describes a virtual sink for creation, so options can be chained before it is made.
     /// </summary>
+    /// <param name="description">What a mixer shows for it.</param>
+    /// <param name="name">Its <c>node.name</c>. Generated when omitted.</param>
     /// <remarks>
-    /// A stereo sink unless told otherwise: <see cref="PipeWireNodeCreation.WithMediaClass"/> makes
-    /// it a source and <see cref="PipeWireNodeCreation.WithChannelPositions"/> changes its channel
-    /// map, so the defaults are a starting point rather than what this can build. Nothing reaches
-    /// the daemon until <see cref="PipeWireNodeCreation.ExecuteAsync"/> is awaited.
+    /// A stereo sink from the <c>support.null-audio-sink</c> factory unless told otherwise:
+    /// <see cref="PipeWireNodeBuilder.WithMediaClass"/> makes it a source and
+    /// <see cref="PipeWireNodeBuilder.WithChannelPositions"/> changes its channel map, so the
+    /// defaults are a starting point rather than what this can build. Nothing reaches the daemon
+    /// until <see cref="PipeWireNodeBuilder.ExecuteAsync"/> is awaited.
     /// </remarks>
-    public PipeWireNodeCreation CreateVirtualNode(string description, string? name = null)
+    public PipeWireNodeBuilder CreateVirtualSink(string description, string? name = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(description);
-        return new PipeWireNodeCreation(this, description, name, default);
+        return new PipeWireNodeBuilder(this, description, name, default);
     }
 
     /// <summary>
@@ -783,7 +786,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// <param name="description">What a mixer shows for it.</param>
     /// <param name="name">Its <c>node.name</c>. Generated when omitted.</param>
     /// <remarks>
-    /// The same factory as <see cref="CreateVirtualNode"/> with <c>media.class</c> set to
+    /// The same factory as <see cref="CreateVirtualSink"/> with <c>media.class</c> set to
     /// <c>Audio/Source</c>, named because it is the second of the two shapes that factory makes and
     /// there is nothing in "virtual node" to say which one a caller gets. A sink is something to
     /// play into; this is something to capture from, which is how a virtual microphone is built.
@@ -792,8 +795,8 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// no audio on its own, it gives other clients somewhere to read from.
     /// </para>
     /// </remarks>
-    public PipeWireNodeCreation CreateVirtualSource(string description, string? name = null) =>
-        CreateVirtualNode(description, name).WithMediaClass("Audio/Source");
+    public PipeWireNodeBuilder CreateVirtualSource(string description, string? name = null) =>
+        CreateVirtualSink(description, name).WithMediaClass("Audio/Source");
 
     internal async Task<PipeWireNode> ExecuteNodeCreationAsync(
         string description, string? name, PipeWireObjectOptions options, CancellationToken cancellationToken)
@@ -846,12 +849,12 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// Describes a link for creation, so options can be chained before it is made.
     /// </summary>
     /// <remarks>
-    /// Nothing reaches the daemon until <see cref="PipeWireLinkCreation.ExecuteAsync"/> is awaited.
+    /// Nothing reaches the daemon until <see cref="PipeWireLinkBuilder.ExecuteAsync"/> is awaited.
     /// Port directions are validated here rather than at execution, so a mistake surfaces where it
     /// was made.
     /// </remarks>
     /// <exception cref="ArgumentException">A port faces the wrong way.</exception>
-    public PipeWireLinkCreation CreateLink(PipeWirePort output, PipeWirePort input)
+    public PipeWireLinkBuilder CreateLink(PipeWirePort output, PipeWirePort input)
     {
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(input);
@@ -861,7 +864,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         if (input.PortDirection != PipeWirePortDirection.In)
             throw new ArgumentException($"Port {input.PortId} is not an input port.", nameof(input));
 
-        return new PipeWireLinkCreation(this, output, input, default);
+        return new PipeWireLinkBuilder(this, output, input, default);
     }
 
     /// <summary>
@@ -880,7 +883,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// An id is not a port in the current graph, or a port faces the wrong way.
     /// </exception>
     /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
-    public PipeWireLinkCreation CreateLink(uint outputPortId, uint inputPortId)
+    public PipeWireLinkBuilder CreateLink(uint outputPortId, uint inputPortId)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -956,7 +959,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// can see. This destroys the object for every client on the machine, not just for this one.
     /// </summary>
     /// <remarks>
-    /// The counterpart to <see cref="PipeWireNodeCreation.WithLinger"/>: an object created to
+    /// The counterpart to <see cref="PipeWireNodeBuilder.WithLinger"/>: an object created to
     /// outlive its creator cannot be removed by disconnecting, so this is the only way to take it
     /// down. Removal is asynchronous in the graph - the object leaves
     /// <see cref="Current"/> when the daemon's <c>global_remove</c> arrives, not when this returns.
@@ -1240,15 +1243,15 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// </remarks>
     /// <exception cref="ArgumentException">The id is not a node in the current graph.</exception>
     /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
-    public unsafe PipeWireNodeControl BindNode(uint nodeId)
+    public unsafe PipeWireNodeProxy BindNode(uint nodeId)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         PipeWireNode node = Current.GetNode(nodeId)
             ?? throw new ArgumentException($"{nodeId} is not a node in the current graph.", nameof(nodeId));
 
-        PipeWireNodeControl control =
-            PipeWireNodeControl.Bind(_ctx, RegistryHandle, nodeId, node.InterfaceVersion, _logger, EnrichGlobal);
+        PipeWireNodeProxy control =
+            PipeWireNodeProxy.Bind(_ctx, RegistryHandle, nodeId, node.InterfaceVersion, _logger, EnrichGlobal);
         return control;
     }
 
@@ -1258,15 +1261,15 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// <param name="deviceId">The device to bind.</param>
     /// <exception cref="ArgumentException">The id is not a device in the current graph.</exception>
     /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
-    public unsafe PipeWireDeviceControl BindDevice(uint deviceId)
+    public unsafe PipeWireDeviceProxy BindDevice(uint deviceId)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         PipeWireDevice device = Current.GetDevice(deviceId)
             ?? throw new ArgumentException($"{deviceId} is not a device in the current graph.", nameof(deviceId));
 
-        PipeWireDeviceControl control =
-            PipeWireDeviceControl.Bind(_ctx, RegistryHandle, deviceId, device.InterfaceVersion, _logger, EnrichGlobal);
+        PipeWireDeviceProxy control =
+            PipeWireDeviceProxy.Bind(_ctx, RegistryHandle, deviceId, device.InterfaceVersion, _logger, EnrichGlobal);
         return control;
     }
 
@@ -1281,14 +1284,14 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// </remarks>
     /// <exception cref="ArgumentException">The id is not a client in the current graph.</exception>
     /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
-    public unsafe PipeWireClientControl BindClient(uint clientId)
+    public unsafe PipeWireClientProxy BindClient(uint clientId)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         PipeWireClient client = Current.GetClient(clientId)
             ?? throw new ArgumentException($"{clientId} is not a client in the current graph.", nameof(clientId));
 
-        return PipeWireClientControl.Bind(_ctx, RegistryHandle, clientId, client.InterfaceVersion, _logger);
+        return PipeWireClientProxy.Bind(_ctx, RegistryHandle, clientId, client.InterfaceVersion, _logger);
     }
 
     /// <summary>
@@ -1303,15 +1306,15 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// </remarks>
     /// <exception cref="ArgumentException">The id is not a port in the current graph.</exception>
     /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
-    public unsafe PipeWirePortControl BindPort(uint portId)
+    public unsafe PipeWirePortProxy BindPort(uint portId)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         PipeWirePort port = Current.GetPort(portId)
             ?? throw new ArgumentException($"{portId} is not a port in the current graph.", nameof(portId));
 
-        PipeWirePortControl control =
-            PipeWirePortControl.Bind(_ctx, RegistryHandle, portId, port.InterfaceVersion, _logger, EnrichGlobal);
+        PipeWirePortProxy control =
+            PipeWirePortProxy.Bind(_ctx, RegistryHandle, portId, port.InterfaceVersion, _logger, EnrichGlobal);
         return control;
     }
 
@@ -1326,7 +1329,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// </remarks>
     /// <exception cref="ArgumentException">The id is not a security context in the current graph.</exception>
     /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
-    public unsafe PipeWireSecurityContextControl BindSecurityContext(uint securityContextId)
+    public unsafe PipeWireSecurityContextProxy BindSecurityContext(uint securityContextId)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -1336,7 +1339,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                 $"{securityContextId} is not a security context in the current graph.",
                 nameof(securityContextId));
 
-        return PipeWireSecurityContextControl.Bind(
+        return PipeWireSecurityContextProxy.Bind(
             _ctx, RegistryHandle, securityContextId, context.InterfaceVersion, _logger);
     }
 
@@ -1351,7 +1354,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// </remarks>
     /// <exception cref="ArgumentException">The id is not the profiler in the current graph.</exception>
     /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
-    public unsafe PipeWireProfilerReader BindProfiler(uint profilerId)
+    public unsafe PipeWireProfilerProxy BindProfiler(uint profilerId)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -1360,7 +1363,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             : throw new ArgumentException(
                 $"{profilerId} is not the profiler in the current graph.", nameof(profilerId));
 
-        return PipeWireProfilerReader.Bind(
+        return PipeWireProfilerProxy.Bind(
             _ctx, RegistryHandle, profilerId, profiler.InterfaceVersion, _logger);
     }
 
@@ -1373,20 +1376,20 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// is flowing. Negotiating, paused, active and errored are all reported on the link's own info
     /// event, which needs the proxy bound, so this is per link rather than something the graph
     /// carries for all of them: a session with hundreds of links should not pay a proxy each to
-    /// answer a question about a few. Await <see cref="PipeWireLinkControl.ReadyAsync"/> before
+    /// answer a question about a few. Await <see cref="PipeWireLinkProxy.ReadyAsync"/> before
     /// reading, or the state is whatever it was initialised to.
     /// </remarks>
     /// <exception cref="ArgumentException">The id is not a link in the current graph.</exception>
     /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
-    public unsafe PipeWireLinkControl BindLink(uint linkId)
+    public unsafe PipeWireLinkProxy BindLink(uint linkId)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         PipeWireLink link = Current.GetLink(linkId)
             ?? throw new ArgumentException($"{linkId} is not a link in the current graph.", nameof(linkId));
 
-        PipeWireLinkControl control =
-            PipeWireLinkControl.Bind(_ctx, RegistryHandle, linkId, link.InterfaceVersion, _logger, EnrichGlobal);
+        PipeWireLinkProxy control =
+            PipeWireLinkProxy.Bind(_ctx, RegistryHandle, linkId, link.InterfaceVersion, _logger, EnrichGlobal);
         return control;
     }
 
@@ -1396,7 +1399,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// <param name="storeId">The store to bind.</param>
     /// <remarks>
     /// The store pushes everything it holds as soon as the listener attaches, so await
-    /// <see cref="PipeWireMetadataStore.ReadyAsync"/> before reading or the answer is whatever
+    /// <see cref="PipeWireMetadataProxy.ReadyAsync"/> before reading or the answer is whatever
     /// happened to have arrived.
     /// </remarks>
     /// <exception cref="ArgumentException">The id is not a metadata store in the current graph.</exception>
@@ -1405,12 +1408,12 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// The store is one this connection serves, which cannot be bound through it without hanging
     /// the connection.
     /// </exception>
-    public unsafe PipeWireMetadataStore BindMetadataStore(uint storeId)
+    public unsafe PipeWireMetadataProxy BindMetadata(uint storeId)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         IPipeWireObject? store = Current.Objects.FirstOrDefault(o => o.Id == storeId);
-        if (store is not PipeWireMetadataObject metadata)
+        if (store is not PipeWireMetadata metadata)
         {
             throw new ArgumentException(
                 $"{storeId} is not a metadata store in the current graph.", nameof(storeId));
@@ -1431,7 +1434,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                 + "PipeWireMetadataProvider itself, or bind the store from another context.");
         }
 
-        return PipeWireMetadataStore.Bind(_ctx, RegistryHandle, storeId, metadata.InterfaceVersion, _logger);
+        return PipeWireMetadataProxy.Bind(_ctx, RegistryHandle, storeId, metadata.InterfaceVersion, _logger);
     }
 
     /// <summary>
@@ -1449,13 +1452,13 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// The store is one this connection serves (a <see cref="PipeWireMetadataProvider"/> on the same
     /// context), which cannot be bound through it without hanging the connection.
     /// </exception>
-    public PipeWireMetadataStore? BindMetadataStore(string name)
+    public PipeWireMetadataProxy? BindMetadata(string name)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        PipeWireMetadataObject? store = Current.GetMetadataStore(name);
-        return store is null ? null : BindMetadataStore(store.Id);
+        PipeWireMetadata? store = Current.GetMetadata(name);
+        return store is null ? null : BindMetadata(store.Id);
     }
 
     /// <summary>
@@ -1524,7 +1527,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         if (Current.GetModule(moduleId) is not { } module)
             throw new ArgumentException($"{moduleId} is not a module in the current graph.", nameof(moduleId));
 
-        PipeWireModuleReader reader = BindModuleReader(moduleId, module.InterfaceVersion);
+        PipeWireModuleProxy reader = BindModuleReader(moduleId, module.InterfaceVersion);
         try
         {
             PipeWireProperties full = await reader.Properties
@@ -1543,8 +1546,8 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         return Current.GetModule(moduleId) ?? module;
     }
 
-    private unsafe PipeWireModuleReader BindModuleReader(uint moduleId, uint version) =>
-        PipeWireModuleReader.Bind(_ctx, RegistryHandle, moduleId, version);
+    private unsafe PipeWireModuleProxy BindModuleReader(uint moduleId, uint version) =>
+        PipeWireModuleProxy.Bind(_ctx, RegistryHandle, moduleId, version);
 
     /// <summary>
     /// Replaces a stored object with one built from its full properties.

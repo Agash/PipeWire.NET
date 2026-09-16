@@ -137,7 +137,7 @@ public sealed class PenHarness : PipeWireTestBase
                 foreach (PipeWireNode node in reg.Current.Nodes)
                 {
                     if (ct.IsCancellationRequested) break;
-                    PipeWireNodeControl? control = null;
+                    PipeWireNodeProxy? control = null;
                     try
                     {
                         control = reg.BindNode(node.NodeId);
@@ -171,7 +171,7 @@ public sealed class PenHarness : PipeWireTestBase
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(ct);
 
-        var held = new List<PipeWireNodeControl>();
+        var held = new List<PipeWireNodeProxy>();
         foreach (PipeWireNode node in reg.Current.Nodes)
         {
             try { held.Add(reg.BindNode(node.NodeId)); } catch (Exception) { }
@@ -183,7 +183,7 @@ public sealed class PenHarness : PipeWireTestBase
         {
             while (!ct.IsCancellationRequested)
             {
-                foreach (PipeWireNodeControl c in held)
+                foreach (PipeWireNodeProxy c in held)
                 {
                     if (ct.IsCancellationRequested) break;
                     try { await c.GetVolumeAsync(ct); ok++; }
@@ -198,7 +198,7 @@ public sealed class PenHarness : PipeWireTestBase
         }
         finally
         {
-            foreach (PipeWireNodeControl c in held) await c.DisposeAsync();
+            foreach (PipeWireNodeProxy c in held) await c.DisposeAsync();
             Report($"PEN bindall: reads={ok} failed={gone}");
         }
         return (held.Count, ok);
@@ -212,7 +212,7 @@ public sealed class PenHarness : PipeWireTestBase
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(ct);
 
-        PipeWireMetadataStore? store = reg.BindMetadataStore("default");
+        PipeWireMetadataProxy? store = reg.BindMetadata("default");
         if (store is null) { Report("PEN meta: no default store"); return 0; }
 
         await using (store)

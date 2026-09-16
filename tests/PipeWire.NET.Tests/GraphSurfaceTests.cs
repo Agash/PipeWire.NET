@@ -2,7 +2,6 @@ using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
-using PipeWire.NET.Media.Streams;
 
 namespace PipeWire.NET.Tests;
 
@@ -11,7 +10,7 @@ namespace PipeWire.NET.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The audit put <c>PipeWireNodeCreation</c> and <c>PipeWireLinkCreation</c> at zero
+/// The audit put <c>PipeWireNodeBuilder</c> and <c>PipeWireLinkBuilder</c> at zero
 /// strongly-asserted members. They are used constantly - almost every graph test builds objects
 /// with them - but the assertions were always about the resulting graph, never about the builder.
 /// A <c>With...</c> that dropped its argument would pass every one of them, because the property it
@@ -97,7 +96,7 @@ public sealed class GraphSurfaceTests
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         PipeWireNode created = await reg
-            .CreateVirtualNode(nodeName, "Audio/Sink")
+            .CreateVirtualSink(nodeName, "Audio/Sink")
             .WithName(nodeName)
             .WithMediaClass("Audio/Sink")
             .WithChannelPositions("[ FL FR ]")
@@ -115,7 +114,7 @@ public sealed class GraphSurfaceTests
 
         // Bound for its info: audio.position and node.autoconnect are not global keys, so the
         // registry event never carries them and only the node's own info reports what it holds.
-        await using PipeWireNodeControl control = reg.BindNode(node.NodeId);
+        await using PipeWireNodeProxy control = reg.BindNode(node.NodeId);
         PipeWireProperties props = await WaitForBoundPropertiesAsync(
             () => reg.Current.Nodes.FirstOrDefault(n => n.NodeId == node.NodeId)?.Properties,
             PipeWireKeys.SPA_KEY_AUDIO_POSITION,
@@ -181,7 +180,7 @@ public sealed class GraphSurfaceTests
         await WaitForNodeAsync(reg, $"{name}-src", cts.Token);
 
         PipeWireNode sink = await reg
-            .CreateVirtualNode($"{name}-sink", "Audio/Sink")
+            .CreateVirtualSink($"{name}-sink", "Audio/Sink")
             .WithName($"{name}-sink")
             .ExecuteAsync(cts.Token);
 
@@ -214,7 +213,7 @@ public sealed class GraphSurfaceTests
 
         // Neither the marker nor link.passive is a global key - a link's registry event carries only
         // its endpoints and origin - so the link is found by id and bound for its full properties.
-        await using PipeWireLinkControl control = reg.BindLink(link.LinkId);
+        await using PipeWireLinkProxy control = reg.BindLink(link.LinkId);
         PipeWireProperties made = await WaitForBoundPropertiesAsync(
             () => reg.Current.Links.FirstOrDefault(l => l.LinkId == link.LinkId)?.Properties,
             "pwnet.test.marker",

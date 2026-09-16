@@ -1,6 +1,5 @@
 using System.Runtime.Versioning;
 using PipeWire.NET.Media;
-using PipeWire.NET.Media.Streams;
 using PipeWire.NET;
 
 namespace PipeWire.NET.SampleConsole;

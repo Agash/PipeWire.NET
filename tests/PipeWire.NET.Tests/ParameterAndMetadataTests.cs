@@ -48,10 +48,10 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
         await using (registry)
         {
             // A node we create ourselves, so nothing in the session is disturbed by changing it.
-            PipeWireNode node = await registry.CreateVirtualNode("Params")
+            PipeWireNode node = await registry.CreateVirtualSink("Params")
                 .WithName(Unique("pwnet_param_sink")).ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
             float? volume = await control.GetVolumeAsync(cts.Token);
             Assert.IsNotNull(volume, "an audio sink must report a volume");
@@ -86,10 +86,10 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("Mute")
+            PipeWireNode node = await registry.CreateVirtualSink("Mute")
                 .WithName(Unique("pwnet_mute_sink")).ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
             // Deliberately no assertion about the starting mute. A session manager restores
             // mute by node.name, so a node created with a name used before (the other TFM leg
@@ -142,10 +142,10 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("PropInfo")
+            PipeWireNode node = await registry.CreateVirtualSink("PropInfo")
                 .WithName("pwnet_propinfo_sink").ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
             ImmutableArray<SpaObject> info = await control.EnumeratePropertyInfoAsync(cts.Token);
             Assert.IsTrue(info.Length > 0, "a sink must describe the properties it supports");
@@ -172,10 +172,10 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("NoParam")
+            PipeWireNode node = await registry.CreateVirtualSink("NoParam")
                 .WithName("pwnet_noparam_sink").ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
             await control.ReadyAsync(cts.Token);
 
@@ -201,7 +201,7 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("BindKind")
+            PipeWireNode node = await registry.CreateVirtualSink("BindKind")
                 .WithName("pwnet_bindkind_sink").ExecuteAsync(cts.Token);
 
             // Binding a node as a device would hand the daemon a proxy of the wrong interface and
@@ -229,7 +229,7 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             if (card is null)
                 Assert.Inconclusive("this session has no ALSA card to enumerate.");
 
-            await using PipeWireDeviceControl control = registry.BindDevice(card!.Id);
+            await using PipeWireDeviceProxy control = registry.BindDevice(card!.Id);
 
             ImmutableArray<SpaObject> profiles = await control.EnumerateProfilesAsync(cts.Token);
             Assert.IsTrue(profiles.Length > 0, "an ALSA card must offer at least one profile");
@@ -264,7 +264,7 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             // finishes) instead of skipping fast.
             await SessionGates.RequireAudioRouteAsync(registry, cts.Token).ConfigureAwait(false);
 
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null)
                 Assert.Inconclusive("no session manager is running, so there is no default store.");
 
@@ -292,7 +292,7 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
                 Assert.IsTrue(sink!.Value!.Contains("name", StringComparison.Ordinal),
                     "the raw value is JSON");
                 Assert.IsNotNull(sink.NameValue, "the node name must be readable out of the JSON");
-                Assert.AreEqual(PipeWireMetadataStore.SubjectCore, sink.Subject,
+                Assert.AreEqual(PipeWireMetadataProxy.SubjectCore, sink.Subject,
                     "a session-wide default is about the daemon, not about one object");
 
                 // And it names a node that is actually in the graph when the session is coherent.
@@ -318,7 +318,7 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireMetadataStore? store = registry.BindMetadataStore("settings");
+            PipeWireMetadataProxy? store = registry.BindMetadata("settings");
             if (store is null)
                 Assert.Inconclusive("this daemon has no settings store.");
 
@@ -341,10 +341,10 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("Subscribe")
+            PipeWireNode node = await registry.CreateVirtualSink("Subscribe")
                 .WithName("pwnet_subscribe_sink").ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
             var changed = new TaskCompletionSource<SpaObject>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
@@ -374,10 +374,10 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("BindRace")
+            PipeWireNode node = await registry.CreateVirtualSink("BindRace")
                 .WithName("pwnet_bindrace_sink").ExecuteAsync(cts.Token);
 
-            PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            PipeWireNodeProxy control = registry.BindNode(node.NodeId);
             Task<float?> reading = control.GetVolumeAsync(cts.Token);
             await control.DisposeAsync();
 
@@ -399,10 +399,10 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNode("Info")
+            PipeWireNode node = await registry.CreateVirtualSink("Info")
                 .WithName("pwnet_info_sink").ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
             // Nothing is populated until the daemon has sent its info, which it does unprompted.
             await control.ReadyAsync(cts.Token);
@@ -437,7 +437,7 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             if (card is null)
                 Assert.Inconclusive("this session has no ALSA card.");
 
-            await using PipeWireDeviceControl control = registry.BindDevice(card!.Id);
+            await using PipeWireDeviceProxy control = registry.BindDevice(card!.Id);
             await control.ReadyAsync(cts.Token);
 
             Assert.IsTrue(control.Parameters.Length > 0, "the device must describe its parameters");
@@ -463,7 +463,7 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             if (me is null)
                 Assert.Inconclusive("this connection is not visible as a client object.");
 
-            await using PipeWireClientControl control = registry.BindClient(me!.Id);
+            await using PipeWireClientProxy control = registry.BindClient(me!.Id);
 
             // A client may always change its own properties, whatever its permissions are, so this
             // exercises the whole write path without needing to be a session manager.
@@ -478,7 +478,7 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     /// </summary>
     /// <remarks>
     /// <para>
-    /// What <see cref="PipeWireClientControl.ConfineToAsync"/> is for: a session manager sandboxing an
+    /// What <see cref="PipeWireClientProxy.ConfineToAsync"/> is for: a session manager sandboxing an
     /// application. The client confined is a second connection of this test's own, never someone
     /// else's: it binds a few objects first, so the daemon has resources of its to take away.
     /// </para>
@@ -507,7 +507,7 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
         await using (app)
         {
             // Objects the application holds bound, so confining it has resources to destroy.
-            var held = new List<PipeWireNodeControl>();
+            var held = new List<PipeWireNodeProxy>();
             foreach (PipeWireNode node in app.Current.Nodes.Take(4))
                 held.Add(app.BindNode(node.NodeId));
 
@@ -523,7 +523,7 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
 
             Assert.IsNotNull(confined, "the application's client never reached the manager's graph");
 
-            await using PipeWireClientControl control = manager.BindClient(confined.Id);
+            await using PipeWireClientProxy control = manager.BindClient(confined.Id);
             await control.ConfineToAsync(
                 [new PipeWireObjectPermission(0, PipeWirePermissions.Read)], cts.Token);
 
@@ -552,7 +552,7 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             await manager.WaitForInitialEnumerationAsync(cts.Token);
             Assert.IsTrue(manager.Current.Nodes.Length > 0, "confining another client emptied the manager's view");
 
-            foreach (PipeWireNodeControl c in held) await c.DisposeAsync();
+            foreach (PipeWireNodeProxy c in held) await c.DisposeAsync();
         }
     }
 }

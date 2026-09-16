@@ -71,7 +71,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
                 await ConnectAsync("pwnet-owner", cts.Token);
             await using (ownerContext)
             {
-                PipeWireNode node = await owner.CreateVirtualNodeAsync(
+                PipeWireNode node = await owner.CreateVirtualSinkAsync(
                     "Cascade", "pwnet_cascade", cts.Token);
                 nodeId = node.NodeId;
 
@@ -101,7 +101,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
 
         await using (context)
         {
-            PipeWireNode node = await registry.CreateVirtualNodeAsync(
+            PipeWireNode node = await registry.CreateVirtualSinkAsync(
                 "D", "pwnet_dispose_node", cts.Token);
 
             // A second pw_proxy_destroy trips an assertion in PipeWire and aborts the process, so
@@ -133,8 +133,8 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode a = await registry.CreateVirtualNodeAsync("L1", "pwnet_rel_a", cts.Token);
-            PipeWireNode b = await registry.CreateVirtualNodeAsync("L2", "pwnet_rel_b", cts.Token);
+            PipeWireNode a = await registry.CreateVirtualSinkAsync("L1", "pwnet_rel_a", cts.Token);
+            PipeWireNode b = await registry.CreateVirtualSinkAsync("L2", "pwnet_rel_b", cts.Token);
 
             PipeWireGraphSnapshot ready = await WaitForAsync(
                 registry,
@@ -171,7 +171,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
         await using (registry)
         {
             var seen = new List<long>();
-            PipeWireNode node = await registry.CreateVirtualNodeAsync("W", "pwnet_watch", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync("W", "pwnet_watch", cts.Token);
 
             await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cts.Token))
             {
@@ -223,7 +223,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNodeAsync("P", "pwnet_perms", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync("P", "pwnet_perms", cts.Token);
 
             Assert.AreNotEqual(PipeWirePermissions.None, node.Permissions,
                 "the registry must decode the permission bits the daemon reports");
@@ -256,9 +256,9 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode a = await registry.CreateVirtualNode("Cleanup A")
+            PipeWireNode a = await registry.CreateVirtualSink("Cleanup A")
                 .WithName(tag + "_a").WithLinger().ExecuteAsync(cts.Token);
-            PipeWireNode b = await registry.CreateVirtualNode("Cleanup B")
+            PipeWireNode b = await registry.CreateVirtualSink("Cleanup B")
                 .WithName(tag + "_b").WithLinger().ExecuteAsync(cts.Token);
 
             PipeWirePort output = await WaitForPortAsync(registry, a.NodeId, PipeWirePortDirection.Out, cts.Token);
@@ -277,12 +277,12 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
             await using var readerRegistry = new PipeWireRegistry(reader);
             await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
 
-            PipeWireMetadataStore? store = null;
+            PipeWireMetadataProxy? store = null;
             long appearUntil = Environment.TickCount64 + 20_000;
             while (store is null && Environment.TickCount64 < appearUntil)
             {
                 await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
-                store = readerRegistry.BindMetadataStore(tag + "_meta");
+                store = readerRegistry.BindMetadata(tag + "_meta");
                 if (store is null)
                     await Task.Delay(TimeSpan.FromMilliseconds(100), cts.Token);
             }
@@ -377,7 +377,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
         graph.Nodes.Any(n => n.NodeName is not null && n.NodeName.Contains(tag, StringComparison.Ordinal))
         || graph.Devices.Any(d => d.DeviceName is not null && d.DeviceName.Contains(tag, StringComparison.Ordinal))
         || graph.Objects.Any(o =>
-            o is PipeWireMetadataObject metadata
+            o is PipeWireMetadata metadata
             && metadata.MetadataName is not null
             && metadata.MetadataName.Contains(tag, StringComparison.Ordinal));
 
@@ -391,7 +391,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
             if (d.DeviceName is not null && d.DeviceName.Contains(tag, StringComparison.Ordinal))
                 left.Add($"device {d.Id} '{d.DeviceName}'");
         foreach (IPipeWireObject o in graph.Objects)
-            if (o is PipeWireMetadataObject metadata
+            if (o is PipeWireMetadata metadata
                 && metadata.MetadataName is not null
                 && metadata.MetadataName.Contains(tag, StringComparison.Ordinal))
                 left.Add($"metadata {o.Id} '{metadata.MetadataName}'");

@@ -41,14 +41,14 @@ public readonly record struct DrmDevice
     public string? RenderNodePath { get; }
 
     /// <summary>The major number (<c>major(dev_t)</c>).</summary>
-    public uint Major => NativeConstants.gnu_dev_major((nuint)Id);
+    public uint Major => NativeLibc.gnu_dev_major((nuint)Id);
 
     /// <summary>The minor number (<c>minor(dev_t)</c>).</summary>
-    public uint Minor => NativeConstants.gnu_dev_minor((nuint)Id);
+    public uint Minor => NativeLibc.gnu_dev_minor((nuint)Id);
 
     /// <summary>The device with the given major and minor numbers (<c>makedev</c>).</summary>
     public static DrmDevice FromNumbers(uint major, uint minor) =>
-        new(NativeConstants.gnu_dev_makedev(major, minor));
+        new(NativeLibc.gnu_dev_makedev(major, minor));
 
     /// <summary>The device behind a render node.</summary>
     /// <param name="path">The render node, such as <c>/dev/dri/renderD128</c>.</param>
@@ -71,7 +71,7 @@ public readonly record struct DrmDevice
             throw new IOException($"the kernel describes {name} as '{numbers}', not major:minor.");
         }
 
-        return new DrmDevice(NativeConstants.gnu_dev_makedev(major, minor), path);
+        return new DrmDevice(NativeLibc.gnu_dev_makedev(major, minor), path);
     }
 
     /// <summary>Every render node on this machine, in order of minor number.</summary>
@@ -109,17 +109,3 @@ public readonly record struct DrmDevice
             ? string.Create(CultureInfo.InvariantCulture, $"{Major}:{Minor}")
             : string.Create(CultureInfo.InvariantCulture, $"{Major}:{Minor} ({RenderNodePath})");
 }
-
-/// <summary>
-/// One device and the DRM format modifiers it can use, offered as one candidate in a DMA-BUF
-/// negotiation.
-/// </summary>
-/// <remarks>
-/// Modifiers are per device: a tiling layout one GPU exports another may not import. Upstream's
-/// video-src-fixate builds one format per device, each with that device's own modifiers, which is
-/// what one of these becomes.
-/// </remarks>
-/// <param name="Device">The device.</param>
-/// <param name="Modifiers">Its modifiers, in priority order.</param>
-[SupportedOSPlatform("linux")]
-public readonly record struct DmaBufDeviceOffer(DrmDevice Device, ImmutableArray<long> Modifiers);

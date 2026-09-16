@@ -470,18 +470,18 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
     public void ReadFloatArray_ReturnsEmptyWhenThePropertyIsAbsent()
     {
         // A node with no channel volumes has no array to read, which is not an error.
-        Assert.AreEqual(0, PipeWireNodeControl.ReadFloatArray(null, SpaProp.ChannelVolumes).Length);
+        Assert.AreEqual(0, PipeWireNodeProxy.ReadFloatArray(null, SpaProp.ChannelVolumes).Length);
 
         var props = new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-            [new SpaProperty(SpaProp.Volume, 0, new SpaFloat(0.5f))]);
-        Assert.AreEqual(0, PipeWireNodeControl.ReadFloatArray(props, SpaProp.ChannelVolumes).Length);
+            [new SpaPodProperty(SpaProp.Volume, 0, new SpaFloat(0.5f))]);
+        Assert.AreEqual(0, PipeWireNodeProxy.ReadFloatArray(props, SpaProp.ChannelVolumes).Length);
 
         var withVolumes = new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-            [new SpaProperty(SpaProp.ChannelVolumes, 0,
+            [new SpaPodProperty(SpaProp.ChannelVolumes, 0,
                 new SpaArray(SpaType.Float, [new SpaFloat(0.5f), new SpaFloat(0.25f)]))]);
         CollectionAssert.AreEqual(
             new[] { 0.5f, 0.25f },
-            PipeWireNodeControl.ReadFloatArray(withVolumes, SpaProp.ChannelVolumes).ToArray());
+            PipeWireNodeProxy.ReadFloatArray(withVolumes, SpaProp.ChannelVolumes).ToArray());
     }
 
     [TestMethod]
@@ -497,7 +497,7 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
         var o = (SpaObject)value!;
         Assert.AreEqual(3, ((SpaInt)o[(uint)SpaParamBuffers.Blocks]!).Value);
 
-        SpaProperty? metaType = o.Find((uint)SpaParamBuffers.MetaType);
+        SpaPodProperty? metaType = o.Find((uint)SpaParamBuffers.MetaType);
         Assert.IsNotNull(metaType, "the sync buffers param must carry a metaType");
         Assert.AreNotEqual(SpaPodPropFlags.None, metaType.Flags & SpaPodPropFlags.Mandatory,
             "the metaType must be mandatory, not advisory");

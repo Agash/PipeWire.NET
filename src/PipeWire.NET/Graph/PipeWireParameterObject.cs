@@ -255,7 +255,7 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     /// <see cref="PipeWireException.IsObjectGone"/>.
     /// </remarks>
     private static bool IsNoSuchParameter(PipeWireRequestRefusedException ex) =>
-        ex.Result == -NativeConstants.ENOENT && ex.ObjectId is { } id && id != NativeConstants.PW_ID_CORE;
+        ex.Result == -NativeLibc.ENOENT && ex.ObjectId is { } id && id != NativeConstants.PW_ID_CORE;
 
     /// <summary>
     /// Like <see cref="GetParameterAsync"/>, but an object that does not have the parameter at all
@@ -455,7 +455,7 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
 
         // The size is the producer's, and it is used to build the very span the parser then bounds
         // itself against, so a lie here is one the parser cannot see through. Guarded the way
-        // PipeWireProfilerReader guards the same shape.
+        // PipeWireProfilerProxy guards the same shape.
         uint size = *(uint*)param;
         if (size > int.MaxValue - 8) return;
 

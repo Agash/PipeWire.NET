@@ -53,7 +53,7 @@ public sealed class CrossProcessOrderingTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null) Assert.Inconclusive("no session manager, so no default store.");
 
             await using (store)
@@ -88,8 +88,8 @@ public sealed class CrossProcessOrderingTests : PipeWireTestBase
         await using (b)
         await using (rb)
         {
-            PipeWireMetadataStore? writer = ra.BindMetadataStore("default");
-            PipeWireMetadataStore? reader = rb.BindMetadataStore("default");
+            PipeWireMetadataProxy? writer = ra.BindMetadata("default");
+            PipeWireMetadataProxy? reader = rb.BindMetadata("default");
             if (writer is null || reader is null)
                 Assert.Inconclusive("no session manager, so no default store.");
 

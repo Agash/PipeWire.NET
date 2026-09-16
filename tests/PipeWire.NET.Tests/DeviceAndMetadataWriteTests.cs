@@ -50,10 +50,10 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             // A unique name: a session manager restores properties by node.name, so reusing one
             // would read back whatever a previous run left rather than what this one wrote.
             string name = $"pwnet_latency_{Environment.ProcessId}_{Random.Shared.Next():x}";
-            PipeWireNode node = await registry.CreateVirtualNode("Latency")
+            PipeWireNode node = await registry.CreateVirtualSink("Latency")
                 .WithName(name).ExecuteAsync(cts.Token);
 
-            await using PipeWireNodeControl control = registry.BindNode(node.NodeId);
+            await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
             await control.ReadyAsync(cts.Token);
 
             // A null-audio-sink has no latency offset: it is absent from PropInfo, and pw-cli cannot
@@ -85,7 +85,7 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     /// Taking the first ALSA device finds an HDMI output on most desktops, and those carry no
     /// routes - so every route test skipped without ever exercising the code it was written for.
     /// </remarks>
-    private static async Task<PipeWireDeviceControl?> BindCardWithRoutesAsync(
+    private static async Task<PipeWireDeviceProxy?> BindCardWithRoutesAsync(
         PipeWireRegistry registry, CancellationToken cancellationToken)
     {
         foreach (PipeWireDevice card in registry.Current.Devices
@@ -95,7 +95,7 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             // recreated the card can be gone before this binds it. BindDevice reports that as an
             // ArgumentException naming the id, which is indistinguishable here from being handed
             // nonsense, so the only thing to do is try the next card.
-            PipeWireDeviceControl control;
+            PipeWireDeviceProxy control;
             try { control = registry.BindDevice(card.Id); }
             catch (ArgumentException) { continue; }
 
@@ -124,11 +124,11 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireDeviceControl? found = await BindCardWithRoutesAsync(registry, cts.Token);
+            PipeWireDeviceProxy? found = await BindCardWithRoutesAsync(registry, cts.Token);
             if (found is null)
                 Assert.Inconclusive("no ALSA card on this session reports an active route.");
 
-            await using PipeWireDeviceControl control = found!;
+            await using PipeWireDeviceProxy control = found!;
             ImmutableArray<SpaObject> active = await control.GetActiveRoutesAsync(cts.Token);
 
             SpaObject route = active[0];
@@ -184,7 +184,7 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             if (card is null)
                 Assert.Inconclusive("this session has no ALSA card.");
 
-            await using PipeWireDeviceControl control = registry.BindDevice(card!.Id);
+            await using PipeWireDeviceProxy control = registry.BindDevice(card!.Id);
             await control.ReadyAsync(cts.Token);
 
             ImmutableArray<SpaObject> routes = await control.EnumerateRoutesAsync(cts.Token);
@@ -236,7 +236,7 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             if (card is null)
                 Assert.Inconclusive("this session has no ALSA card.");
 
-            await using PipeWireDeviceControl control = registry.BindDevice(card!.Id);
+            await using PipeWireDeviceProxy control = registry.BindDevice(card!.Id);
 
             ImmutableArray<SpaObject> profiles = await control.EnumerateProfilesAsync(cts.Token);
             Assert.IsTrue(profiles.Length > 0);
@@ -262,7 +262,7 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null)
                 Assert.Inconclusive("no session manager, so no default store.");
 
@@ -283,7 +283,7 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
 
                 try
                 {
-                    await store.SetAsync(key, "hello", subject: PipeWireMetadataStore.SubjectCore,
+                    await store.SetAsync(key, "hello", subject: PipeWireMetadataProxy.SubjectCore,
                         cancellationToken: cts.Token);
                 }
                 catch (PipeWireException e)
@@ -324,7 +324,7 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null)
                 Assert.Inconclusive("no session manager, so no default store.");
 
@@ -373,7 +373,7 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireMetadataStore? store = registry.BindMetadataStore("default");
+            PipeWireMetadataProxy? store = registry.BindMetadata("default");
             if (store is null)
                 Assert.Inconclusive("no session manager, so no default store.");
 
@@ -389,7 +389,7 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 try
                 {
                     await store.SetAsync(key, $$"""{ "name": "{{awkward.Replace("\\", "\\\\").Replace("\"", "\\\"")}}" }""",
-                        "Spa:String:JSON", PipeWireMetadataStore.SubjectCore, cts.Token);
+                        "Spa:String:JSON", PipeWireMetadataProxy.SubjectCore, cts.Token);
                 }
                 catch (PipeWireException e)
                 {
@@ -399,7 +399,7 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 string? raw = store.Get(key);
                 Assert.IsNotNull(raw);
 
-                var entry = new PipeWireMetadataEntry(PipeWireMetadataStore.SubjectCore, key, null, raw);
+                var entry = new PipeWireMetadataEntry(PipeWireMetadataProxy.SubjectCore, key, null, raw);
                 Assert.AreEqual(awkward, entry.NameValue, "the escaping did not survive the round trip");
 
                 await store.SetAsync(key, null, cancellationToken: cts.Token);
@@ -440,7 +440,7 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             if (card is null)
                 Assert.Inconclusive("this session has no ALSA card.");
 
-            await using PipeWireDeviceControl control = registry.BindDevice(card!.Id);
+            await using PipeWireDeviceProxy control = registry.BindDevice(card!.Id);
             await control.ReadyAsync(cts.Token);
 
             SpaObject? original = await control.GetProfileAsync(cts.Token);
@@ -616,11 +616,11 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
         await using (ctx)
         await using (registry)
         {
-            PipeWireDeviceControl? found = await BindCardWithRoutesAsync(registry, cts.Token);
+            PipeWireDeviceProxy? found = await BindCardWithRoutesAsync(registry, cts.Token);
             if (found is null)
                 Assert.Inconclusive("no ALSA card on this session reports an active route.");
 
-            await using PipeWireDeviceControl control = found!;
+            await using PipeWireDeviceProxy control = found!;
             ImmutableArray<SpaObject> active = await control.GetActiveRoutesAsync(cts.Token);
 
             SpaObject? route = active.FirstOrDefault(r =>

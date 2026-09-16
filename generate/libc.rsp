@@ -1,0 +1,152 @@
+# ClangSharpPInvokeGenerator response file for the libc types and constants this library needs.
+#
+# One of three macro passes, split by the library each one speaks for; see pipewire-constants.rsp
+# for why macros generate apart from the ABI pass at all. These are here rather than with the
+# PipeWire constants because they are not PipeWire's: an errno value, a pollfd and O_CLOEXEC come
+# from the C library, and a class named for PipeWire holding them told a reader otherwise.
+#
+# --file is deliberately absent: generate.sh supplies the composite root.
+
+# - errno -
+#
+# The values this library returns to or matches from libpipewire, and the ones the hand-written
+# libc and libdrm imports branch on. Listed one by one rather than as E*: only the values the code
+# uses, not the whole table.
+--traverse
+/usr/include/asm-generic/errno-base.h
+--traverse
+/usr/include/asm-generic/errno.h
+
+# F_DUPFD_CLOEXEC, SOL_SOCKET, SO_ACCEPTCONN, O_CLOEXEC: the flag and option values the
+# hand-written fcntl, getsockopt and eventfd imports pass. Architecture-specific in principle,
+# which is the reason to take them from the headers rather than from memory. EFD_CLOEXEC itself is
+# an anonymous-enum member behind a self-referencing #define, which ClangSharp emits nothing for;
+# the kernel defines it as O_CLOEXEC (linux/eventfd.h), so that is what is generated.
+--traverse
+/usr/include/bits/fcntl-linux.h
+--traverse
+/usr/include/asm-generic/socket.h
+
+# gnu_dev_makedev / gnu_dev_major / gnu_dev_minor: glibc exports these as real symbols behind the
+# makedev/major/minor macros, and they touch no errno, so unlike the other libc calls nothing
+# argues for writing them by hand. dev_t is how DMA-BUF device-ID negotiation names a device.
+--traverse
+/usr/include/sys/sysmacros.h
+
+# - types -
+#
+# Only the timespec and pollfd structs and the POLL* event bits. --traverse is file-granular, so
+# naming bits/types/struct_timespec.h emits exactly that one struct rather than everything time.h
+# reaches, and sys/poll.h is narrowed to pollfd by the --include list.
+--traverse
+/usr/include/bits/types/struct_timespec.h
+--traverse
+/usr/include/sys/poll.h
+--traverse
+/usr/include/bits/poll.h
+
+--include
+ENOENT
+--include
+EINTR
+--include
+EIO
+--include
+EAGAIN
+--include
+ENOMEM
+--include
+EINVAL
+--include
+ENOSPC
+--include
+EPIPE
+--include
+ENOSYS
+--include
+ETIME
+--include
+EOPNOTSUPP
+--include
+ECONNABORTED
+--include
+ECONNRESET
+--include
+ENOTCONN
+--include
+ENODEV
+--include
+EBADF
+--include
+F_DUPFD_CLOEXEC
+--include
+SOL_SOCKET
+--include
+SO_ACCEPTCONN
+--include
+O_CLOEXEC
+--include
+gnu_dev_makedev
+--include
+gnu_dev_major
+--include
+gnu_dev_minor
+--include
+timespec
+--include
+pollfd
+--include
+POLLIN
+--include
+POLLERR
+--include
+POLLHUP
+--include
+POLLNVAL
+
+# The libc entry points themselves (read, write, close, poll, eventfd, fcntl, getsockopt) are
+# deliberately NOT generated, and stay hand-written as [LibraryImport] in
+# Interop/NativeLibc.Imports.cs. This assembly sets DisableRuntimeMarshalling, and errno is
+# load-bearing - Descriptors.cs retries on EINTR by reading Marshal.GetLastPInvokeError() straight
+# after the call. ClangSharp 21.1.8 offers only two ways to spell that and both are wrong here:
+#   - SetLastError = true on a DllImport is CA1420: it requires runtime marshalling.
+#   - --generate setslastsystemerror-attribute emits ClangSharp's own internal
+#     [SetsLastSystemError], which is [Conditional("DEBUG")] - a documentation marker with no
+#     runtime effect - and it suppresses SetLastError, so errno is never captured at all.
+# It cannot emit [LibraryImport], which is the one form that both works under
+# DisableRuntimeMarshalling and captures errno. Their constants come from this pass.
+
+--include-directory
+/usr/include
+
+--namespace
+PipeWire.NET.Interop
+--method-class-name
+NativeLibc
+
+# `timespec` is all lower-case ascii, which C# reserves (CS8981). The generated PipeWire types get
+# away with their C names because they all contain an underscore.
+--remap-type
+timespec=PosixTimespec
+--remap-type
+pollfd=PosixPollFd
+--with-library-path
+gnu_dev_makedev=libc
+--with-library-path
+gnu_dev_major=libc
+--with-library-path
+gnu_dev_minor=libc
+# gnu_dev_* take and return __dev_t, which arrives as nuint: --remap-type renames records, not
+# typedefs of builtins, so it cannot say ulong. glibc's dev_t is 64 bits everywhere (__UQUAD_TYPE),
+# and so is unsigned long on the 64-bit Linux targets this library ships for; DrmDevice converts.
+
+--with-access-specifier
+*=Internal
+
+--generate
+macro-bindings
+
+--config
+file=multi
+codegen=preview
+types=unix

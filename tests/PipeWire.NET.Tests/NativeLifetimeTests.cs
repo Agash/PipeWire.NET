@@ -1,7 +1,7 @@
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
-using PipeWire.NET.Media.Streams;
+using PipeWire.NET.Media;
 
 namespace PipeWire.NET.Tests;
 
@@ -55,7 +55,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         for (int i = 0; i < 4; i++)
-            await reg.CreateVirtualNode($"Owned {i}").WithName($"pwnet_nl_owned_{i}")
+            await reg.CreateVirtualSink($"Owned {i}").WithName($"pwnet_nl_owned_{i}")
                      .ExecuteAsync(cts.Token);
 
         await ctx.DisposeAsync();     // core disconnected, proxies still owned
@@ -147,7 +147,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await registry.CreateVirtualNode("Collect")
+        PipeWireNode node = await registry.CreateVirtualSink("Collect")
             .WithName($"pwnet_collect_{Environment.ProcessId}_{Random.Shared.Next():x}")
             .ExecuteAsync(cts.Token);
 
@@ -169,7 +169,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     private static WeakReference BindAndAbandon(PipeWireRegistry registry, uint nodeId)
     {
-        PipeWireNodeControl control = registry.BindNode(nodeId);
+        PipeWireNodeProxy control = registry.BindNode(nodeId);
         return new WeakReference(control);
     }
 
@@ -261,7 +261,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         var registry = new PipeWireRegistry(context);
         await registry.WaitForInitialEnumerationAsync(ct);
 
-        PipeWireNode node = await registry.CreateVirtualNode("LingerFinalize")
+        PipeWireNode node = await registry.CreateVirtualSink("LingerFinalize")
             .WithName($"pwnet_linger_fin_{Environment.ProcessId}_{Random.Shared.Next():x}")
             .WithLinger()
             .ExecuteAsync(ct);
@@ -290,7 +290,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         await reg.WaitForInitialEnumerationAsync(ct);
 
         for (int i = 0; i < 3; i++)
-            await reg.CreateVirtualNode($"Abandoned {i}").WithName($"pwnet_nl_ab_{i}")
+            await reg.CreateVirtualSink($"Abandoned {i}").WithName($"pwnet_nl_ab_{i}")
                      .ExecuteAsync(ct);
 
         await ctx.DisposeAsync();
@@ -310,7 +310,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await reg.CreateVirtualNode("LoopRef")
+        PipeWireNode node = await reg.CreateVirtualSink("LoopRef")
                                      .WithName("pwnet_nl_loopref").ExecuteAsync(cts.Token);
         Assert.IsNotNull(reg.Current.GetNode(node.NodeId));
 
@@ -348,7 +348,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         Assert.IsNotNull(reg.Current.GetNode(foreignId));
 
         // Our own node alongside it, so disposal has both kinds to unwind.
-        await reg.CreateVirtualNode("Ours").WithName("pwnet_nl_ours").ExecuteAsync(cts.Token);
+        await reg.CreateVirtualSink("Ours").WithName("pwnet_nl_ours").ExecuteAsync(cts.Token);
 
         // Disposal releases only what we own. A second destroy of the foreign object would trip
         // the assertion in proxy.c and abort.
@@ -408,7 +408,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
             var reg = new PipeWireRegistry(ctx);
             await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-            PipeWireNode node = await reg.CreateVirtualNode("Outlive")
+            PipeWireNode node = await reg.CreateVirtualSink("Outlive")
                                          .WithName("pwnet_nl_outlive").ExecuteAsync(cts.Token);
             nodeId = node.NodeId;
             held = await WaitForAsync(reg, g => g.GetPortsForNode(nodeId).Length == 4, cts.Token);
@@ -452,7 +452,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
             if (current.Version < snapshot.Version) Interlocked.Increment(ref violations);
         };
 
-        PipeWireNode node = await reg.CreateVirtualNode("Order")
+        PipeWireNode node = await reg.CreateVirtualSink("Order")
                                      .WithName("pwnet_nl_order").ExecuteAsync(cts.Token);
         await WaitForAsync(reg, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
         await reg.DestroyGlobalAsync(node.NodeId, cts.Token);
@@ -476,7 +476,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         // application starts and immediately publishes its own node.
         await using var reg = new PipeWireRegistry(ctx);
 
-        Task<PipeWireNode> creation = reg.CreateVirtualNode("Burst")
+        Task<PipeWireNode> creation = reg.CreateVirtualSink("Burst")
                                          .WithName("pwnet_nl_burst").ExecuteAsync(cts.Token);
         Task enumeration = reg.WaitForInitialEnumerationAsync(cts.Token);
 
@@ -502,7 +502,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
 
         // Create on the line after construction, before any global can have arrived.
         await using var reg = new PipeWireRegistry(ctx);
-        PipeWireNode node = await reg.CreateVirtualNode("Immediate")
+        PipeWireNode node = await reg.CreateVirtualSink("Immediate")
                                      .WithName("pwnet_nl_immediate").ExecuteAsync(cts.Token);
 
         Assert.IsNotNull(reg.Current.GetNode(node.NodeId),

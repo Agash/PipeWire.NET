@@ -2,19 +2,6 @@ using PipeWire.NET.Interop;
 
 namespace PipeWire.NET.Media;
 
-/// <summary>What kind of timeline a sync descriptor is.</summary>
-internal enum SyncTimelineKind
-{
-    /// <summary>Neither of the two below: nothing here can wait on it or signal it.</summary>
-    Unknown,
-
-    /// <summary>A DRM syncobj timeline, which is what <c>SPA_DATA_SyncObj</c> means.</summary>
-    Syncobj,
-
-    /// <summary>An eventfd, the stand-in upstream's video-src-sync example puts there.</summary>
-    Eventfd,
-}
-
 /// <summary>
 /// Waiting on a timeline descriptor whatever kind it is, and never mistaking a failure for success.
 /// </summary>
@@ -78,27 +65,7 @@ internal static class SyncTimeline
                 return Descriptors.WaitEventfd(fd, timeout);
 
             default:
-                return new SyncWait(SyncWaitOutcome.Failed, errno != 0 ? errno : NativeConstants.EINVAL);
+                return new SyncWait(SyncWaitOutcome.Failed, errno != 0 ? errno : NativeLibc.EINVAL);
         }
     }
-}
-
-/// <summary>How a timeline wait ended.</summary>
-internal enum SyncWaitOutcome
-{
-    /// <summary>The point was reached.</summary>
-    Reached,
-
-    /// <summary>The deadline passed first (<c>ETIME</c>).</summary>
-    TimedOut,
-
-    /// <summary>The wait itself failed; <see cref="SyncWait.Errno"/> says why.</summary>
-    Failed,
-}
-
-/// <summary>The outcome of a timeline wait, and the errno when it did not succeed.</summary>
-internal readonly record struct SyncWait(SyncWaitOutcome Outcome, int Errno)
-{
-    /// <summary>Whether the point was reached.</summary>
-    public bool Reached => Outcome == SyncWaitOutcome.Reached;
 }

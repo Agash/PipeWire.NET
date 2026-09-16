@@ -82,8 +82,8 @@ internal static unsafe class DrmSyncobj
     private static bool SupportsTimelines(SafeFileHandle node)
     {
         ulong value = 0;
-        return NativeConstants.drmGetCap(
-                   (int)node.DangerousGetHandle(), NativeConstants.DRM_CAP_SYNCOBJ_TIMELINE, &value) == 0
+        return NativeLibdrm.drmGetCap(
+                   (int)node.DangerousGetHandle(), NativeLibdrm.DRM_CAP_SYNCOBJ_TIMELINE, &value) == 0
                && value != 0;
     }
 
@@ -99,18 +99,18 @@ internal static unsafe class DrmSyncobj
         errno = 0;
         if (fd < 0)
         {
-            errno = NativeConstants.EBADF;
+            errno = NativeLibc.EBADF;
             return 0;
         }
 
         if (Device < 0)
         {
-            errno = NativeConstants.ENODEV;
+            errno = NativeLibc.ENODEV;
             return 0;
         }
 
         uint handle = 0;
-        if (NativeConstants.drmSyncobjFDToHandle(Device, fd, &handle) == 0) return handle;
+        if (NativeLibdrm.drmSyncobjFDToHandle(Device, fd, &handle) == 0) return handle;
 
         errno = Marshal.GetLastPInvokeError();
         return 0;
@@ -123,12 +123,12 @@ internal static unsafe class DrmSyncobj
         if (Device < 0) return (0, -1);
 
         uint handle = 0;
-        if (NativeConstants.drmSyncobjCreate(Device, 0, &handle) != 0) return (0, -1);
+        if (NativeLibdrm.drmSyncobjCreate(Device, 0, &handle) != 0) return (0, -1);
 
         int fd = -1;
-        if (NativeConstants.drmSyncobjHandleToFD(Device, handle, &fd) != 0)
+        if (NativeLibdrm.drmSyncobjHandleToFD(Device, handle, &fd) != 0)
         {
-            _ = NativeConstants.drmSyncobjDestroy(Device, handle);
+            _ = NativeLibdrm.drmSyncobjDestroy(Device, handle);
             return (0, -1);
         }
 
@@ -138,7 +138,7 @@ internal static unsafe class DrmSyncobj
     /// <summary>Releases a handle. The descriptor it came from, if any, is closed separately.</summary>
     internal static void Destroy(uint handle)
     {
-        if (handle != 0 && Device >= 0) _ = NativeConstants.drmSyncobjDestroy(Device, handle);
+        if (handle != 0 && Device >= 0) _ = NativeLibdrm.drmSyncobjDestroy(Device, handle);
     }
 
     /// <summary>Signals a timeline point from the CPU.</summary>
@@ -146,7 +146,7 @@ internal static unsafe class DrmSyncobj
     internal static bool Signal(uint handle, ulong point)
     {
         if (handle == 0 || Device < 0) return false;
-        return NativeConstants.drmSyncobjTimelineSignal(Device, &handle, &point, 1) == 0;
+        return NativeLibdrm.drmSyncobjTimelineSignal(Device, &handle, &point, 1) == 0;
     }
 
     /// <summary>
@@ -163,13 +163,13 @@ internal static unsafe class DrmSyncobj
         if (handle == 0 || Device < 0) return new SyncWait(SyncWaitOutcome.Failed, 0);
 
         long deadline = MonotonicNowNs() + (long)(timeout.TotalMilliseconds * 1_000_000);
-        uint flags = NativeConstants.DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT;
+        uint flags = NativeLibdrm.DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT;
 
-        if (NativeConstants.drmSyncobjTimelineWait(Device, &handle, &point, 1, deadline, flags, null) == 0)
+        if (NativeLibdrm.drmSyncobjTimelineWait(Device, &handle, &point, 1, deadline, flags, null) == 0)
             return new SyncWait(SyncWaitOutcome.Reached, 0);
 
         int errno = Marshal.GetLastPInvokeError();
-        return errno == NativeConstants.ETIME
+        return errno == NativeLibc.ETIME
             ? new SyncWait(SyncWaitOutcome.TimedOut, errno)
             : new SyncWait(SyncWaitOutcome.Failed, errno);
     }

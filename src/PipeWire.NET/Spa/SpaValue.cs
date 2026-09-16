@@ -254,13 +254,13 @@ public sealed record SpaStruct(ImmutableArray<SpaValue> Fields) : SpaValue
 /// </param>
 /// <param name="Flags">Property flags, such as <see cref="SpaPodPropFlags.DontFixate"/>.</param>
 /// <param name="Value">The property's value.</param>
-public sealed record SpaProperty(SpaKey Key, SpaPodPropFlags Flags, SpaValue Value);
+public sealed record SpaPodProperty(SpaKey Key, SpaPodPropFlags Flags, SpaValue Value);
 
 /// <summary>A keyed property bag. Every parameter is one of these.</summary>
 /// <param name="ObjectType">What the object describes, such as <see cref="SpaType.ObjectProps"/>.</param>
 /// <param name="ObjectId">Which parameter it answers.</param>
 /// <param name="Properties">The properties, in wire order.</param>
-public sealed record SpaObject(SpaType ObjectType, SpaParamType ObjectId, ImmutableArray<SpaProperty> Properties) : SpaValue
+public sealed record SpaObject(SpaType ObjectType, SpaParamType ObjectId, ImmutableArray<SpaPodProperty> Properties) : SpaValue
 {
     /// <inheritdoc/>
     public override SpaType Type => SpaType.Object;
@@ -275,9 +275,9 @@ public sealed record SpaObject(SpaType ObjectType, SpaParamType ObjectId, Immuta
     /// <summary>The property with this key, or <see langword="null"/> if absent.</summary>
     /// <param name="key">The property key.</param>
     /// <remarks>A daemon may repeat a key; the first wins, as it does in SPA's own parser.</remarks>
-    public SpaProperty? Find(SpaKey key)
+    public SpaPodProperty? Find(SpaKey key)
     {
-        foreach (SpaProperty property in Properties)
+        foreach (SpaPodProperty property in Properties)
         {
             if (property.Key == key)
                 return property;

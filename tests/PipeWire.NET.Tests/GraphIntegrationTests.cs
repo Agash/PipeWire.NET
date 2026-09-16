@@ -73,7 +73,7 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNodeAsync(
+            PipeWireNode node = await registry.CreateVirtualSinkAsync(
                 "PipeWire.NET test sink", "pwnet_test_sink", cts.Token);
 
             Assert.IsNotNull(registry.Current.GetNode(node.NodeId),
@@ -95,8 +95,8 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode a = await registry.CreateVirtualNodeAsync("A", "pwnet_link_a", cts.Token);
-            PipeWireNode b = await registry.CreateVirtualNodeAsync("B", "pwnet_link_b", cts.Token);
+            PipeWireNode a = await registry.CreateVirtualSinkAsync("A", "pwnet_link_a", cts.Token);
+            PipeWireNode b = await registry.CreateVirtualSinkAsync("B", "pwnet_link_b", cts.Token);
 
             PipeWireGraphSnapshot ready = await WaitForAsync(
                 registry,
@@ -131,7 +131,7 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualNodeAsync("R", "pwnet_reject", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync("R", "pwnet_reject", cts.Token);
             PipeWireGraphSnapshot graph = await WaitForPortsAsync(registry, node.NodeId, cts.Token);
 
             PipeWirePort output = graph.GetPortsForNode(node.NodeId, PipeWirePortDirection.Out).First();
@@ -163,7 +163,7 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
                     violations.Add($"node {n.NodeId}");
             };
 
-            PipeWireNode node = await registry.CreateVirtualNodeAsync("O", "pwnet_order", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync("O", "pwnet_order", cts.Token);
             await WaitForPortsAsync(registry, node.NodeId, cts.Token);
 
             CollectionAssert.AreEqual(Array.Empty<string>(), violations,
@@ -184,7 +184,7 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
             await cancelled.CancelAsync();
 
             await Assert.ThrowsAsync<OperationCanceledException>(
-                () => registry.CreateVirtualNodeAsync("C", "pwnet_cancel", cancelled.Token));
+                () => registry.CreateVirtualSinkAsync("C", "pwnet_cancel", cancelled.Token));
         }
     }
 
@@ -200,7 +200,7 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
             PipeWireGraphSnapshot before = registry.Current;
             int nodesBefore = before.Nodes.Length;
 
-            await registry.CreateVirtualNodeAsync("I", "pwnet_immutable", cts.Token);
+            await registry.CreateVirtualSinkAsync("I", "pwnet_immutable", cts.Token);
 
             Assert.AreEqual(nodesBefore, before.Nodes.Length, "an already-published snapshot must not change");
             Assert.IsTrue(registry.Current.Version > before.Version, "a new snapshot must have been published");

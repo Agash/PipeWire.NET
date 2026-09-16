@@ -114,16 +114,16 @@ internal static unsafe partial class Native
     /// </remarks>
     internal static int pw_loop_unlock(pw_loop* loop)
     {
-        if (loop is null || loop->control is null) return -NativeConstants.EINVAL;
+        if (loop is null || loop->control is null) return -NativeLibc.EINVAL;
         GetInterface(loop->control, out spa_loop_control_methods* m, out void* data);
-        if (m is null || m->unlock is null) return -NativeConstants.EOPNOTSUPP;
+        if (m is null || m->unlock is null) return -NativeLibc.EOPNOTSUPP;
         return m->unlock(data);
     }
 
     /// <summary><c>pw_thread_loop_unlock</c>, with the result upstream's discards.</summary>
     /// <inheritdoc cref="pw_loop_unlock" path="/remarks"/>
     internal static int pw_thread_loop_unlock_checked(pw_thread_loop* loop) =>
-        loop is null ? -NativeConstants.EINVAL : pw_loop_unlock(pw_thread_loop_get_loop(loop));
+        loop is null ? -NativeLibc.EINVAL : pw_loop_unlock(pw_thread_loop_get_loop(loop));
 
     /// <summary>
     /// Runs <paramref name="func"/> with the loop's lock held, so it cannot overlap that loop's
@@ -142,9 +142,9 @@ internal static unsafe partial class Native
         delegate* unmanaged[Cdecl]<spa_loop*, bool, uint, void*, nuint, void*, int> func,
         void* userData)
     {
-        if (loop is null || loop->loop is null) return -NativeConstants.EOPNOTSUPP;
+        if (loop is null || loop->loop is null) return -NativeLibc.EOPNOTSUPP;
         GetInterface(loop->loop, out spa_loop_methods* m, out void* data);
-        if (m is null || m->locked is null) return -NativeConstants.EOPNOTSUPP;
+        if (m is null || m->locked is null) return -NativeLibc.EOPNOTSUPP;
 
         return m->locked(data, func, NativeConstants.SPA_ID_INVALID, null, 0, userData);
     }
@@ -173,7 +173,7 @@ internal static unsafe partial class Native
     {
         GetInterface(core, out pw_core_methods* methods, out void* data);
         if (methods is null || methods->get_registry is null)
-            throw new PipeWireInteropException("pw_core_get_registry", -NativeConstants.ENOSYS);
+            throw new PipeWireInteropException("pw_core_get_registry", -NativeLibc.ENOSYS);
         return methods->get_registry(data, version, userDataSize);
     }
 
@@ -215,7 +215,7 @@ internal static unsafe partial class Native
     {
         GetInterface(core, out pw_core_methods* methods, out void* data);
         if (methods is null || methods->create_object is null)
-            throw new PipeWireInteropException("pw_core_create_object", -NativeConstants.ENOSYS);
+            throw new PipeWireInteropException("pw_core_create_object", -NativeLibc.ENOSYS);
         return (pw_proxy*)methods->create_object(data, factoryName, type, version, props, userDataSize);
     }
 
@@ -643,7 +643,7 @@ internal static unsafe partial class Native
         spa_loop_utils* utils, spa_source* source, PosixTimespec* value, PosixTimespec* interval, bool absolute)
     {
         spa_loop_utils_methods* m = LoopUtilsMethods(utils);
-        if (m is null || m->update_timer is null) return -NativeConstants.EOPNOTSUPP;
+        if (m is null || m->update_timer is null) return -NativeLibc.EOPNOTSUPP;
         return m->update_timer(utils->iface.cb.data, source, value, interval, absolute);
     }
 

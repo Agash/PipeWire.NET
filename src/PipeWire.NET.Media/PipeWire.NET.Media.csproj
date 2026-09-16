@@ -43,6 +43,5 @@
     <Using Include="PipeWire.NET.Spa" />
     <Using Include="PipeWire.NET.Graph" />
     <Using Include="PipeWire.NET.Media" />
-    <Using Include="PipeWire.NET.Media.Streams" />
   </ItemGroup>
 </Project>

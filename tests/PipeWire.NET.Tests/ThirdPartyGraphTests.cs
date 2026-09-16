@@ -58,7 +58,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
         await using (ctx)
         await using (reg)
         {
-            PipeWireNode node = await reg.CreateVirtualNode("Visible")
+            PipeWireNode node = await reg.CreateVirtualSink("Visible")
                                          .WithName("pwnet_tp_visible").ExecuteAsync(cts.Token);
             PipeWireGraphSnapshot graph = await WaitForPortsAsync(reg, node.NodeId, cts.Token);
 
@@ -184,7 +184,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
         await using (ctx)
         await using (reg)
         {
-            PipeWireNode node = await reg.CreateVirtualNode("Doomed")
+            PipeWireNode node = await reg.CreateVirtualSink("Doomed")
                                          .WithName("pwnet_tp_doomed").WithLinger().ExecuteAsync(cts.Token);
             PipeWireGraphSnapshot ready = await WaitForPortsAsync(reg, node.NodeId, cts.Token);
             uint[] portIds = [.. ready.GetPortsForNode(node.NodeId).Select(p => p.PortId)];
@@ -229,7 +229,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
             PipeWireNode midi = seen.GetNode(filterNode)!;
             Assert.AreEqual("Midi/Sink", midi.MediaClass, "the filter did not publish as a MIDI node");
 
-            await using PipeWireNodeControl control = reg.BindNode(midi.NodeId);
+            await using PipeWireNodeProxy control = reg.BindNode(midi.NodeId);
             Assert.AreEqual(0, (await control.GetChannelMapAsync(cts.Token)).Length,
                 $"MIDI node {midi.NodeName} should not report audio channels");
         }
@@ -281,7 +281,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
             PipeWirePort theirInput = graph.GetPortsForNode(theirs.NodeId, PipeWirePortDirection.In)
                                            .OrderBy(p => p.PortId).First();
 
-            PipeWireNode ours = await reg.CreateVirtualNode("Feeder")
+            PipeWireNode ours = await reg.CreateVirtualSink("Feeder")
                                          .WithName("pwnet_tp_feeder").ExecuteAsync(cts.Token);
             PipeWireGraphSnapshot ready = await WaitForPortsAsync(reg, ours.NodeId, cts.Token);
             PipeWirePort ourOutput = ready.GetPortsForNode(ours.NodeId, PipeWirePortDirection.Out)
@@ -445,8 +445,8 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
     private static async Task<(PipeWireNode A, PipeWireNode B, PipeWireGraphSnapshot Ready)> TwoNodesAsync(
         PipeWireRegistry reg, string nameA, string nameB, CancellationToken ct)
     {
-        PipeWireNode a = await reg.CreateVirtualNode(nameA).WithName(nameA).ExecuteAsync(ct);
-        PipeWireNode b = await reg.CreateVirtualNode(nameB).WithName(nameB).ExecuteAsync(ct);
+        PipeWireNode a = await reg.CreateVirtualSink(nameA).WithName(nameA).ExecuteAsync(ct);
+        PipeWireNode b = await reg.CreateVirtualSink(nameB).WithName(nameB).ExecuteAsync(ct);
 
         PipeWireGraphSnapshot ready = await WaitForAsync(
             reg,

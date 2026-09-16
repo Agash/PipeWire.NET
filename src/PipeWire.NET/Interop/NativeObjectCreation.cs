@@ -197,7 +197,7 @@ internal sealed class NativeObjectCreation : IDisposable
             }
 
             if (_proxy == IntPtr.Zero)
-                throw new PipeWireInteropException("pw_core_create_object", -NativeConstants.ENOMEM);
+                throw new PipeWireInteropException("pw_core_create_object", -NativeLibc.ENOMEM);
 
             // The core reports an error against the proxy it happened on, so the id has to be
             // known before any error can arrive or an error belonging to somebody else cannot be
@@ -305,7 +305,7 @@ internal sealed class NativeObjectCreation : IDisposable
             {
                 self._bound.TrySetException(new PipeWireRequestRefusedException(
                     "create",
-                    self._lastCoreResult != 0 ? self._lastCoreResult : -NativeConstants.EINVAL,
+                    self._lastCoreResult != 0 ? self._lastCoreResult : -NativeLibc.EINVAL,
                     objectId: null,
                     self._lastCoreMessage ?? "the daemon did not create the object"));
             }

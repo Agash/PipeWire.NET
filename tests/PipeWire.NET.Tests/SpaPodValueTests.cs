@@ -13,7 +13,7 @@ namespace PipeWire.NET.Tests;
 [SupportedOSPlatform("linux")]
 public sealed class SpaPodValueTests : PipeWireTestBase
 {
-    private static SpaObject Props(params SpaProperty[] properties) =>
+    private static SpaObject Props(params SpaPodProperty[] properties) =>
         new(SpaType.ObjectProps, SpaParamType.Props, [.. properties]);
 
     [TestMethod]
@@ -50,9 +50,9 @@ public sealed class SpaPodValueTests : PipeWireTestBase
     public void AnObjectOfPropertiesRoundTrips_KeepingOrderAndFlags()
     {
         SpaObject original = Props(
-            new SpaProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.5f)),
-            new SpaProperty((uint)SpaProp.Mute, SpaPodPropFlags.Mandatory, new SpaBool(true)),
-            new SpaProperty((uint)SpaProp.ChannelVolumes, 0,
+            new SpaPodProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.5f)),
+            new SpaPodProperty((uint)SpaProp.Mute, SpaPodPropFlags.Mandatory, new SpaBool(true)),
+            new SpaPodProperty((uint)SpaProp.ChannelVolumes, 0,
                 new SpaArray(SpaType.Float, [new SpaFloat(0.25f), new SpaFloat(0.75f)])));
 
         Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(original), out SpaValue? read));
@@ -93,10 +93,10 @@ public sealed class SpaPodValueTests : PipeWireTestBase
         // nesting is not a curiosity here - it is how the hardware mixer is written.
         var route = new SpaObject(SpaType.ObjectParamRoute, SpaParamType.Route,
         [
-            new SpaProperty((uint)SpaParamRoute.Index, 0, new SpaInt(3)),
-            new SpaProperty((uint)SpaParamRoute.Device, 0, new SpaInt(1)),
-            new SpaProperty((uint)SpaParamRoute.Props, 0,
-                Props(new SpaProperty((uint)SpaProp.Mute, 0, new SpaBool(false)))),
+            new SpaPodProperty((uint)SpaParamRoute.Index, 0, new SpaInt(3)),
+            new SpaPodProperty((uint)SpaParamRoute.Device, 0, new SpaInt(1)),
+            new SpaPodProperty((uint)SpaParamRoute.Props, 0,
+                Props(new SpaPodProperty((uint)SpaProp.Mute, 0, new SpaBool(false)))),
         ]);
 
         Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(route), out SpaValue? read));
@@ -199,8 +199,8 @@ public sealed class SpaPodValueTests : PipeWireTestBase
     public void AnObjectWithARepeatedKey_ResolvesToTheFirstAsSpaDoes()
     {
         SpaObject duplicated = Props(
-            new SpaProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.1f)),
-            new SpaProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.9f)));
+            new SpaPodProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.1f)),
+            new SpaPodProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.9f)));
 
         Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(duplicated), out SpaValue? read));
         Assert.AreEqual(new SpaFloat(0.1f), ((SpaObject)read!)[(uint)SpaProp.Volume]);
@@ -209,7 +209,7 @@ public sealed class SpaPodValueTests : PipeWireTestBase
     [TestMethod]
     public void AskingForAKeyAnObjectDoesNotHave_IsNullRatherThanAnError()
     {
-        SpaObject props = Props(new SpaProperty((uint)SpaProp.Volume, 0, new SpaFloat(1f)));
+        SpaObject props = Props(new SpaPodProperty((uint)SpaProp.Volume, 0, new SpaFloat(1f)));
 
         Assert.IsNull(props[(uint)SpaProp.Mute]);
         Assert.IsNull(props.Find((uint)SpaProp.Mute));
