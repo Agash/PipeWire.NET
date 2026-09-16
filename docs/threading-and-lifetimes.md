@@ -91,9 +91,10 @@ is why writing it is the only copy in the path.
 
 ## Disposal, and what it actually does
 
-Everything that holds a daemon object implements `IAsyncDisposable`, `IDisposable`, or both. Use
-`await using` and dispose in reverse order of creation - streams and proxies before the registry,
-the registry before the context.
+Everything that holds a daemon object implements both `IDisposable` and `IAsyncDisposable`, and the
+two do the same work - none of this disposal awaits anything, so pick whichever idiom suits the
+code you are in. Dispose in reverse order of creation: streams and proxies before the registry, the
+registry before the context.
 
 ```csharp
 await using var ctx = new PipeWireContext("pwdemo");
@@ -127,6 +128,31 @@ PipeWireNode node = await registry.CreateVirtualSink("Monitor mix")
 A lingering object cannot be removed by disconnecting - not by disposing the registry or the context
 either. Destroy it explicitly with `registry.DestroyGlobalAsync`. `registry.LingeringIds` lists what
 you left behind, so nothing has to be remembered by hand.
+
+## When the object you are holding goes away
+
+A graph moves underneath you: the node you bound a moment ago can be removed by its owner, by the
+session manager, or because the device it belonged to was unplugged. Every bound proxy tells you:
+
+```csharp
+await using PipeWireNodeProxy node = registry.BindNode(nodeId);
+
+node.Removed += () => Console.WriteLine("the daemon destroyed the object behind this proxy");
+
+if (node.IsRemoved)
+{
+    // The proxy is still safe to hold and to dispose. What it points at is gone, so calls on it
+    // will not reach anything.
+}
+```
+
+`Removed` is raised once, on the loop thread, and `IsRemoved` answers the same question for code
+that was not listening at the time. Both come from `pw_proxy_events.removed`, so they fire for any
+reason the object disappeared and not only the ones you caused.
+
+This is not the same as watching the registry. A registry watcher hears about every global going
+away; `Removed` is about the one object you hold, and it is the only signal a caller who never built
+a registry snapshot gets.
 
 ## Why this library removes listeners before destroying
 

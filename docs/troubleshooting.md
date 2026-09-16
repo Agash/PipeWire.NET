@@ -32,6 +32,11 @@ that the `-dev` package provides.
 **The connection drops later: `PipeWireConnectionClosedException`.** The daemon went away, or it
 stopped reading from your client. A daemon restart is the ordinary cause.
 
+You do not have to wait for a call to throw to find out. `PipeWireContext.ConnectionLost` fires once
+when it happens, and `ConnectionFault` holds the reason afterwards - worth wiring up in any process
+that only consumes callbacks, since such a process may otherwise never make a call that fails.
+Everything built on that context is dead once it fires; reconnecting means a new context.
+
 ## Nothing routes itself
 
 **`registry.BindMetadata("default")` returns null.** There is no `default` metadata store, which
@@ -61,8 +66,11 @@ anything awaiting inside a realtime callback will do it.
 [threading-and-lifetimes.md](threading-and-lifetimes.md) has the contract.
 
 **A producer that publishes nothing, or a filter that processes nothing.** Check
-`LastProcessError` on it. A callback that throws is caught rather than allowed to take the process
-down, so a handler failing every cycle looks like one doing nothing until you read that.
+`LastProcessError` on it (and `ProcessErrorCount`, which separates "threw once" from "throws every
+cycle"). A callback that throws is caught rather than allowed to take the process down, so a handler
+failing every cycle looks like one doing nothing until you read that. Going the other way, a
+callback that cannot do what the graph asked should call `SetError` rather than return quietly,
+which is what stops the peer waiting on a cycle that will never come.
 
 **Frames arrive but are silent or black.** Check the negotiated format rather than the one you asked
 for - the peer chooses from what you offered. Frames carry what was actually agreed, and a producer
@@ -101,6 +109,18 @@ instead. [serving.md](serving.md) explains the split.
 
 **A served object answers slowly, or the graph complains about it.** It is sharing a context with
 work that blocks the loop. Give a busy served object its own `PipeWireContext`.
+
+**My exported node is in the graph but nothing comes out of it.** Two different faults look the same
+from outside, and `PipeWireNodeProvider` tells them apart. `HasBeenScheduled` false means nothing is
+driving the node: it is unlinked, or its peer is not running. `HasBeenScheduled` true with
+`HasProcessed` false means cycles are arriving and your handler is returning zero. Check
+`LastProcessError` as well - a handler that threw is recorded there rather than thrown, because an
+exception must not reach the realtime caller.
+
+**The proxy I am holding stopped working and raised nothing.** It probably did raise something.
+`Removed` fires when the daemon destroys the object behind a bound proxy, and `IsRemoved` answers
+after the fact. If you never subscribed, an object that went away is indistinguishable from one that
+is merely quiet. See [threading-and-lifetimes.md](threading-and-lifetimes.md).
 
 ## Tests and CI
 

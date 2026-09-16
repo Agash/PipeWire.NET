@@ -15,6 +15,45 @@ Every stream runs off one graph clock. Each frame carries four times, all in nan
 
 Audio and video from one producer meet on one timeline when the video is stamped in the graph's clock, which is what the outputs do unless you set `NextPresentationTimestampNs` yourself.
 
+## Driving the graph yourself
+
+A stream that is the driver decides when the graph advances. `TriggerProcess` asks for a cycle and
+returns immediately; `TriggerProcessAndWaitAsync` waits until that cycle has completed:
+
+```csharp
+await using var output = new PipeWireVideoOutput(ctx, "my-source", 1920, 1080);
+output.FillFrame += (_, pixels, stride, width, height, _) =>
+{
+    Render(pixels, stride, width, height);
+    return true;
+};
+
+output.Connect(driver: true);
+
+output.TriggerProcess();                                     // fire and forget
+await output.TriggerProcessAndWaitAsync(cancellationToken);  // pace against completion
+```
+
+The wait only completes for a stream the daemon made the driver, because `trigger_done` is reported
+to a driver and to nobody else. On a follower the request still reaches the daemon, does nothing
+useful, and the wait faults - so use the plain form unless you know you are driving, which
+`IsDriving` answers.
+
+The daemon also tells a stream when it is started, suspended or paused. `CommandReceived` carries
+those through, which is what a producer with its own capture loop uses to stop working while the
+graph is not running:
+
+```csharp
+await using var capture = new PipeWireVideoCapture(ctx, "my-consumer");
+
+capture.CommandReceived += command =>
+{
+    // SpaNodeCommand.Start, .Pause, .Suspend, and the rest of spa_node_command.
+};
+
+capture.Connect();
+```
+
 ## Zero copy
 
 On capture, `frame.Pixels` points straight into the daemon's mapped buffer, so reading is free. Capture also accepts DMA-BUF buffers, so a GPU source can hand frames over without touching the CPU; `frame.BufferType` and `frame.Fd` expose the descriptor for GPU import.

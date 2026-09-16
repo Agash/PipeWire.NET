@@ -100,6 +100,9 @@ await filter.ConnectAsync(PipeWireFilterFlags.RtProcess, cancellationToken);
 Buffers exist only once the ports are linked; until then the spans come back empty. `samples/`'s
 `filter` command is this, wired to the default sink.
 
+A filter's shape is not fixed at connect: `RemovePort` takes one port out without disturbing the
+others' links, and `UpdateProperties` retags the filter or one of its ports while it runs.
+
 ## A metadata store of your own
 
 Metadata is how session-wide state is shared. Serving one means other clients read and write it
@@ -138,6 +141,38 @@ it is yours: the plugin enumerates the hardware and creates the nodes.
 
 Reach for it when `pw_stream`'s policy is the thing in your way, and not before -
 [pipewire-roles.md](pipewire-roles.md) is honest about what it costs.
+
+If your node misses a cycle, say so. Nothing else can report it on your behalf, and a cycle that is
+simply missing leaves the daemon's own accounting wrong - `pw-top` attributes it to nobody. The two
+readings below then tell you what the graph is doing with the node, which are different questions:
+
+```csharp
+using PipeWireNodeProvider node = PipeWireNodeProvider.Create(
+    ctx, "my-source", PipeWireExportedFormat.AudioF32(48000, 2));
+
+node.ProcessCallback = (self, data) =>
+{
+    int written = WriteTone(data, 48000, 2);
+
+    // Nothing ready in time is an xrun, and only this node can report its own.
+    if (written == 0) self.ReportXrun(triggerMicroseconds: 0, delayMicroseconds: 250);
+
+    return written;
+};
+
+if (!node.HasBeenScheduled)
+{
+    // Nothing is driving it: unlinked, or its peer is not running.
+}
+else if (!node.HasProcessed)
+{
+    // Cycles are arriving and the handler is producing nothing.
+}
+```
+
+`ReportXrun` returns false when the graph installed no xrun callback, which is legal and means it
+does not want them. Call it from inside the process callback, on the realtime thread, which is where
+the graph expects its own callbacks to come from.
 
 ## Serving and consuming in one process
 

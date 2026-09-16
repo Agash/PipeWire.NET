@@ -48,7 +48,7 @@ internal static class StreamCommands
             }
             catch (OperationCanceledException)
             {
-                return 1;
+                return Program.NothingToDo;
             }
 
             long nowFrames = Interlocked.Read(ref frames);
@@ -64,7 +64,7 @@ internal static class StreamCommands
         if (totalFrames == 0)
         {
             Console.WriteLine("No audio arrived. Is a source routed to the default?");
-            return 1;
+            return Program.NothingToDo;
         }
 
         Console.WriteLine($"Negotiated: {Volatile.Read(ref rate)} Hz, " +
@@ -112,7 +112,7 @@ internal static class StreamCommands
             }
             catch (OperationCanceledException)
             {
-                return 1;
+                return Program.NothingToDo;
             }
 
             long nowFrames = Interlocked.Read(ref frames);
@@ -128,7 +128,7 @@ internal static class StreamCommands
         if (totalFrames == 0)
         {
             Console.WriteLine("No video arrived. Plug in a camera or run `pw-loopback` first.");
-            return 1;
+            return Program.NothingToDo;
         }
 
         Console.WriteLine($"Negotiated: {Volatile.Read(ref width)}x{Volatile.Read(ref height)} " +

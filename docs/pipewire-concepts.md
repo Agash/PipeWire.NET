@@ -111,6 +111,34 @@ A client sees objects the daemon has granted it permission to see. On an ordinar
 that is everything. In a sandbox, or behind a portal, it is a subset, and objects you have no read
 permission for are simply not in the registry rather than erroring when touched.
 
+If your process is the one handing out the sandbox, you can read and set another client's
+permissions through its proxy:
+
+```csharp
+using System.Collections.Immutable;
+
+await using PipeWireClientProxy client = registry.BindClient(clientId);
+await client.ReadyAsync(cancellationToken);
+
+ImmutableArray<PipeWireObjectPermission> current =
+    await client.GetPermissionsAsync(cancellationToken: cancellationToken);
+
+// Deny everything, then grant exactly one node. The default is written for you, which is what
+// makes this the safe shape: nothing is left permitted by omission.
+await client.ConfineToAsync(
+    [new PipeWireObjectPermission(nodeId, PipeWirePermissions.ReadWriteExecuteMetadataLink)],
+    cancellationToken);
+```
+
+Two things to know. Only one permissions read can be in flight per proxy, because the reply arrives
+on an event with no sequence number and a second reader has no way to tell which answer is its own;
+a second overlapping call is refused rather than given somebody else's result. And the permission
+set to grant is `ReadWriteExecuteMetadataLink`, not `All` - upstream's `PW_PERM_ALL` is `RWXM` and
+leaves `L` out, so `All` silently withholds the right to link.
+
+Withdrawing read access from a client that already has it can abort a 1.6.8 daemon; see the remarks
+on `PipeWireClientProxy`.
+
 ## Where to go next
 
 | | |

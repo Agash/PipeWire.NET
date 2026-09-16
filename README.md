@@ -157,7 +157,7 @@ PipeWireLink link = await registry.CreateLink(outputPortId, inputPortId)
 await registry.RemoveLinkAsync(link.LinkId, cancellationToken);
 ```
 
-A link can be `Passive`, so it follows the graph without forcing the nodes active. Most applications
+`WithPassive()` makes a link follow the graph without forcing the nodes active. Most applications
 never call this: routing is the session manager's job, as
 [docs/pipewire-concepts.md](docs/pipewire-concepts.md) explains.
 

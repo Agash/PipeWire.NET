@@ -20,7 +20,15 @@ internal sealed class Session : IAsyncDisposable
         Registry = registry;
     }
 
-    public static async Task<Session> ConnectAsync(string name, CancellationToken cancellationToken)
+    public static Task<Session> ConnectAsync(string name, CancellationToken cancellationToken) =>
+        ConnectAsync(name, null, cancellationToken);
+
+    /// <param name="onConnectionLost">
+    /// Cancelled when the daemon goes away, for the commands that run until Ctrl+C. Without it
+    /// `monitor` and `serve` sit waiting on a connection that is never coming back.
+    /// </param>
+    public static async Task<Session> ConnectAsync(
+        string name, CancellationTokenSource? onConnectionLost, CancellationToken cancellationToken)
     {
         var context = new PipeWireContext(name);
         try
@@ -34,6 +42,16 @@ internal sealed class Session : IAsyncDisposable
         }
 
         Console.WriteLine("  connected to daemon.");
+
+        if (onConnectionLost is not null)
+        {
+            context.ConnectionLost += fault =>
+            {
+                Console.Error.WriteLine($"  the daemon connection was lost: {fault.Message}");
+                try { onConnectionLost.Cancel(); }
+                catch (ObjectDisposedException) { /* the command already finished */ }
+            };
+        }
 
         var registry = new PipeWireRegistry(context);
         try

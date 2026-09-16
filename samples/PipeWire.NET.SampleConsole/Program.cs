@@ -9,9 +9,13 @@ namespace PipeWire.NET.SampleConsole;
 // while anything that makes sound or changes state needs an explicit command.
 internal static class Program
 {
-    private const int Ok = 0;
-    private const int NothingToDo = 1;
-    private const int UsageError = 2;
+    internal const int Ok = 0;
+
+    /// <summary>The command ran, and what it needed was not there: no default sink, no session
+    /// manager, a producer that never appeared, or a Ctrl+C before it finished.</summary>
+    internal const int NothingToDo = 1;
+
+    internal const int UsageError = 2;
 
     [SupportedOSPlatform("linux")]
     public static async Task<int> Main(string[] args)
@@ -48,7 +52,7 @@ internal static class Program
         }
         catch (OperationCanceledException)
         {
-            return 1;
+            return NothingToDo;
         }
     }
 

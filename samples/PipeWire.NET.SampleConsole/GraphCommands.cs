@@ -61,14 +61,35 @@ internal static class GraphCommands
 
     public static async Task<int> MonitorAsync(CancellationToken cancellationToken)
     {
+        // Runs until interrupted, so it wants to know if the daemon goes away rather than watching
+        // a graph that can no longer change.
+        using var lost = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
         await using var session = await Session.ConnectAsync(
-            "sample-monitor", cancellationToken).ConfigureAwait(false);
+            "sample-monitor", lost, cancellationToken).ConfigureAwait(false);
 
         Console.WriteLine("Watching the graph; Ctrl+C stops.");
+
+        // A watcher hears about every global going away. A proxy hears about its own object only,
+        // which is the signal you get when you hold one object and never built a snapshot. Bound
+        // here against whatever sink is present so the sample shows both in one run.
+        PipeWireNode? watched = session.Registry.Current.Nodes
+            .FirstOrDefault(n => n.MediaClass == "Audio/Sink");
+
+        PipeWireNodeProxy? proxy = null;
+        if (watched is not null)
+        {
+            proxy = session.Registry.BindNode(watched.NodeId);
+            proxy.Removed += () =>
+                Console.WriteLine($"  the daemon destroyed node {watched.NodeId} ('{watched.NodeName}')");
+
+            Console.WriteLine($"Also watching node {watched.NodeId} ('{watched.NodeName}') for removal.");
+        }
+
         try
         {
             await foreach (PipeWireGraphSnapshot graph in session.Registry
-                .WatchAsync(cancellationToken).ConfigureAwait(false))
+                .WatchAsync(lost.Token).ConfigureAwait(false))
             {
                 Console.WriteLine($"[{graph.Version}] nodes={graph.Nodes.Length} " +
                     $"ports={graph.Ports.Length} links={graph.Links.Length} " +
@@ -78,6 +99,14 @@ internal static class GraphCommands
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Ctrl+C is the normal exit, not an error.
+        }
+        finally
+        {
+            if (proxy is not null)
+            {
+                if (proxy.IsRemoved) Console.WriteLine("  the watched node is gone.");
+                await proxy.DisposeAsync().ConfigureAwait(false);
+            }
         }
 
         return 0;
@@ -119,7 +148,7 @@ internal static class GraphCommands
             Console.Error.WriteLine(target is null
                 ? "No default sink in this session; name a node explicitly."
                 : $"No node matches '{target}'.");
-            return 1;
+            return Program.NothingToDo;
         }
 
         Console.WriteLine($"Node [{node.NodeId}] {node.Description ?? node.NodeName}:");
@@ -157,7 +186,7 @@ internal static class GraphCommands
         if (store is null)
         {
             Console.Error.WriteLine("No 'default' metadata store; this session has no session manager.");
-            return 1;
+            return Program.NothingToDo;
         }
 
         await using (store)

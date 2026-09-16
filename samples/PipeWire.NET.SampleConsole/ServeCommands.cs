@@ -15,8 +15,12 @@ internal static class ServeCommands
 {
     public static async Task<int> ServeAsync(CancellationToken cancellationToken)
     {
+        // Runs until interrupted, so it wants to know if the daemon goes away rather than holding
+        // a node nobody can see any more.
+        using var lost = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
         await using var session = await Session.ConnectAsync(
-            "sample-serve", cancellationToken).ConfigureAwait(false);
+            "sample-serve", lost, cancellationToken).ConfigureAwait(false);
 
         PipeWireNode node = await session.Registry.CreateVirtualSink("Sample virtual source")
             .WithMediaClass("Audio/Source")
@@ -27,11 +31,18 @@ internal static class ServeCommands
 
         try
         {
-            await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+            // The linked token, so a daemon that goes away ends this as cleanly as Ctrl+C does.
+            await Task.Delay(Timeout.Infinite, lost.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
             // Ctrl+C is the normal exit, not an error.
+        }
+
+        if (session.Context.ConnectionFault is not null)
+        {
+            Console.Error.WriteLine("The node went with the connection; nothing to withdraw.");
+            return Program.NothingToDo;
         }
 
         await session.Registry.DestroyGlobalAsync(node.NodeId).ConfigureAwait(false);
@@ -74,7 +85,7 @@ internal static class ServeCommands
         if (toneId is null)
         {
             Console.Error.WriteLine("The tone never appeared; aborting before linking.");
-            return 1;
+            return Program.NothingToDo;
         }
 
         await using PipeWireFilter filter = PipeWireFilter.Create(session.Context, "sample_gain");
@@ -116,7 +127,7 @@ internal static class ServeCommands
         if (toneOut == 0 || filterIn == 0 || filterOut == 0)
         {
             Console.Error.WriteLine("Ports never appeared; aborting before linking.");
-            return 1;
+            return Program.NothingToDo;
         }
 
         PipeWireLink up = await session.Registry.CreateLink(toneOut, filterIn)
