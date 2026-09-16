@@ -27,7 +27,7 @@ namespace PipeWire.NET.Media;
 /// there is nothing left to close it from.
 /// </remarks>
 [SupportedOSPlatform("linux")]
-public sealed partial class PipeWireVideoOutput : IAsyncDisposable
+public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
 {
     /// <summary>Return <see langword="true"/> to publish the frame.</summary>
     public delegate bool FillFrameHandler(
@@ -138,8 +138,12 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     /// <summary>Invoked (dmabuf mode) when a pool buffer's dmabuf can be released.</summary>
     public event ReleaseDmaBufHandler? ReleaseDmaBuf;
 
+    /// <summary>Handles a connection state change on the loop thread.</summary>
+    public delegate void StateChangedHandler(
+        PipeWireVideoOutput sender, PipeWireStreamState oldState, PipeWireStreamState newState);
+
     /// <summary>Raised on the loop thread when the connection state changes.</summary>
-    public event Action<PipeWireVideoOutput, PipeWireStreamState, PipeWireStreamState>? StateChanged;
+    public event StateChangedHandler? StateChanged;
 
     private readonly PipeWireContext _ctx;
     private readonly string _name;
@@ -283,6 +287,30 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
 
     /// <summary>Any node - let the session manager choose where this stream is routed.</summary>
     public const uint AnyNode = NativeConstants.PW_ID_ANY;
+
+    /// <summary>Connects, publishing into a node you already hold.</summary>
+    /// <param name="target">The consumer to publish into, from a graph snapshot.</param>
+    /// <param name="autoConnect">Let the session manager route this stream.</param>
+    /// <param name="driver">
+    /// Take the driver role, so cycles happen when this stream asks for them. The daemon still
+    /// decides: <see cref="IsDriving"/> says whether it did.
+    /// </param>
+    /// <param name="cancellationToken">Abandons the wait for the loop lock.</param>
+    /// <remarks>
+    /// The same as the id overload, for a caller holding the node rather than its id - which is
+    /// what a graph snapshot hands out. Both captures have had this shape all along.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="target"/> is <see langword="null"/>.</exception>
+    public void Connect(
+        PipeWireNode target,
+        bool autoConnect = true,
+        bool driver = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        Connect(target.NodeId, autoConnect: autoConnect, driver: driver,
+            cancellationToken: cancellationToken);
+    }
 
     /// <summary>Starts publishing host-memory frames and registers the node in the graph.</summary>
     /// <param name="targetNodeId">
@@ -764,6 +792,36 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     /// </remarks>
     public bool IsDriving => _core?.IsDriving ?? false;
 
+    /// <summary>The last exception a callback of this stream threw, or null if none has.</summary>
+    /// <remarks>
+    /// A callback cannot let an exception reach its native caller, so one is recorded here rather
+    /// than thrown: a handler that throws otherwise looks exactly like a handler that did nothing.
+    /// It is not logged either, because these run on the realtime thread where logging is itself an
+    /// xrun - read it from your own non-realtime loop. <see cref="ProcessErrorCount"/> says how many
+    /// there have been, which separates "threw once" from "throws every cycle".
+    /// </remarks>
+    public Exception? LastProcessError => _core?.ProcessFaults.Last;
+
+    /// <summary>How many times a callback of this stream has thrown.</summary>
+    public long ProcessErrorCount => _core?.ProcessFaults.Count ?? 0;
+
+    /// <summary>Puts this stream into the error state and tells the daemon why.</summary>
+    /// <param name="result">A negative errno describing the failure.</param>
+    /// <param name="message">What went wrong, for logs and for the peer.</param>
+    /// <param name="cancellationToken">Abandons the wait for the loop lock.</param>
+    /// <remarks>
+    /// What to call when a callback cannot do what the graph asked - a format that cannot be
+    /// carried, a buffer that cannot be filled. A stream that fails and stays quiet leaves its peer
+    /// waiting on a cycle that will not come, and nothing in the graph says why; this library does
+    /// the same thing itself when a format handler throws.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="message"/> is null.</exception>
+    public void SetError(int result, string message, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        _core?.SetError(result, message, cancellationToken);
+    }
+
     /// <summary>
     /// This stream's own node in the graph, or <see langword="null"/> until it is connected.
     /// </summary>
@@ -844,6 +902,13 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     private Action<SpaNodeCommand>? _commandReceived;
 
     private void RaiseCommand(SpaNodeCommand command) => _commandReceived?.Invoke(command);
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Disposal here does no awaiting, so this and <see cref="DisposeAsync"/> do the same work.
+    /// Both exist so that a caller is not forced into one idiom by which type they happen to hold.
+    /// </remarks>
+    public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
 
     /// <inheritdoc/>
     public ValueTask DisposeAsync()
@@ -1583,7 +1648,8 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     /// target, smooth it, and apply it here; see PipeWire's own rtp and tunnel modules. Applying an
     /// unsmoothed correction makes the drift worse rather than better.
     /// </remarks>
-    public void SetRate(double rate) => _core?.SetRate(rate);
+    public void SetRate(double rate, CancellationToken cancellationToken = default) =>
+        _core?.SetRate(rate, cancellationToken);
 
     /// <summary>
     /// Announces the latency this stream adds, so the rest of the graph can compensate.
@@ -1594,10 +1660,13 @@ public sealed partial class PipeWireVideoOutput : IAsyncDisposable
     /// to stay in sync with. Pass the process latency too when the delay is per-cycle rather than
     /// fixed; PipeWire's own transport modules announce both.
     /// </remarks>
-    public void AnnounceLatency(PipeWireLatency latency, PipeWireProcessLatency? processLatency = null)
+    public void AnnounceLatency(
+        PipeWireLatency latency,
+        PipeWireProcessLatency? processLatency = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(latency);
-        _core?.AnnounceLatency(latency, processLatency);
+        _core?.AnnounceLatency(latency, processLatency, cancellationToken);
     }
 
     /// <summary>

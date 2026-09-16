@@ -35,7 +35,7 @@ namespace PipeWire.NET.Graph;
 /// </para>
 /// </remarks>
 [SupportedOSPlatform("linux")]
-public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
+public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncDisposable
 {
     private readonly PipeWireContext _ctx;
     private readonly string _name;
@@ -370,14 +370,6 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
     /// </remarks>
     public event Action<PipeWireDeviceProvider, SpaParamType, SpaObject?>? ParameterWritten;
 
-    private void EmitInfo()
-    {
-        if (_disposed || _listeners is null) return;
-
-        using (_ctx.Lock())
-            EmitInfoLocked();
-    }
-
     private void EmitInfoLocked()
     {
         Span<byte> scratch = stackalloc byte[4096];
@@ -645,6 +637,17 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable
             // A freed handle throws out of the lookup, and this is a native frame.
             return null;
         }
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Disposal here does no awaiting, so this and <see cref="Dispose"/> do the same work. Both
+    /// exist so that a caller is not forced into one idiom by which type they happen to hold.
+    /// </remarks>
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 
     /// <inheritdoc/>

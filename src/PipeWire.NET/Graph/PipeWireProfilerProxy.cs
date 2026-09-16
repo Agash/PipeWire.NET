@@ -19,14 +19,12 @@ namespace PipeWire.NET.Graph;
 [SupportedOSPlatform("linux")]
 public sealed partial class PipeWireProfilerProxy : IDisposable, IAsyncDisposable
 {
-    private readonly PipeWireContext _ctx;
     private readonly ILogger _logger;
     private BoundProxy? _bound;
     private volatile bool _disposed;
 
-    private PipeWireProfilerProxy(PipeWireContext ctx, uint id, ILogger logger)
+    private PipeWireProfilerProxy(uint id, ILogger logger)
     {
-        _ctx = ctx;
         Id = id;
         _logger = logger;
     }
@@ -51,7 +49,7 @@ public sealed partial class PipeWireProfilerProxy : IDisposable, IAsyncDisposabl
         // client.conf nor the daemon supplies it, which is why pw-top loads it by name too.
         EnsureProfilerModule(ctx);
 
-        var reader = new PipeWireProfilerProxy(ctx, id, logger);
+        var reader = new PipeWireProfilerProxy(id, logger);
         reader._bound = BoundProxy.Bind(
             ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Profiler, version, NativeConstants.PW_VERSION_PROFILER,
             sizeof(pw_profiler_events),
@@ -65,8 +63,32 @@ public sealed partial class PipeWireProfilerProxy : IDisposable, IAsyncDisposabl
                 (void*)proxy, (spa_hook*)hook, (pw_profiler_events*)events, (void*)data),
             reader);
 
+        reader._bound.Removed = reader.RaiseRemoved;
+
         return reader;
     }
+
+    /// <summary>Raised on the loop thread when the daemon destroys the object behind this proxy.</summary>
+    /// <remarks>
+    /// A bound object can go at any time. The proxy survives as a zombie and every call through it
+    /// fails from here on, so this is the signal to stop using it. A caller watching the whole graph
+    /// sees the same thing through the registry; one holding only this proxy has nothing else.
+    /// </remarks>
+    public event Action? Removed;
+
+    /// <summary>Whether the daemon has destroyed the object behind this proxy.</summary>
+    public bool IsRemoved => _bound?.IsRemoved ?? false;
+
+    private void RaiseRemoved()
+    {
+        Action? handler = Removed;
+        if (handler is null) return;
+
+        // A native callback frame, so nothing may escape it.
+        try { handler(); }
+        catch (Exception) { /* a subscriber that throws must not reach the daemon */ }
+    }
+
 
     /// <summary>Loads the profiler extension module into this context, once.</summary>
     /// <remarks>Loading it twice is harmless; the module refcounts.</remarks>

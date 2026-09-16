@@ -30,7 +30,7 @@ namespace PipeWire.NET.Graph;
 /// </para>
 /// </remarks>
 [SupportedOSPlatform("linux")]
-public sealed unsafe partial class PipeWireNodeProvider : IAsyncDisposable
+public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDisposable
 {
     /// <summary>Fills or consumes one buffer for a cycle.</summary>
     /// <param name="node">The node being processed.</param>
@@ -54,6 +54,10 @@ public sealed unsafe partial class PipeWireNodeProvider : IAsyncDisposable
     private GCHandle _self;
     private spa_node* _node;
     private spa_node_methods* _methods;
+    // What the graph installed for this node to call back into. `ready` and `reuse_buffer` stay
+    // unused deliberately - a null `ready` is how a node asks for synchronous operation, and the
+    // buffers to reuse go through the input port's io area - but `xrun` is how a node reports that
+    // it missed a cycle, and nothing else can report that on its behalf.
     private spa_node_callbacks* _callbacks;
     private void* _callbacksData;
     // Every listener on this node, not just the one that exported it: the audio adapter that wraps
@@ -91,6 +95,35 @@ public sealed unsafe partial class PipeWireNodeProvider : IAsyncDisposable
         _logger = ctx.LoggerFactory.CreateLogger<PipeWireNodeProvider>();
     }
 
+    /// <summary>Tells the graph this node missed a cycle.</summary>
+    /// <param name="triggerMicroseconds">When the xrun happened, on the graph's clock.</param>
+    /// <param name="delayMicroseconds">How long the node was late by.</param>
+    /// <returns>
+    /// <see langword="true"/> if the graph took the report. <see langword="false"/> when it
+    /// installed no xrun callback, which is legal and means it does not want them.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// A node that overruns or underruns and says nothing leaves the graph's own accounting wrong:
+    /// the cycle is simply missing, and tools that read the daemon's xrun counters - `pw-top` among
+    /// them - attribute nothing to this node. This is the only way a node reports one; nothing can
+    /// do it on the node's behalf.
+    /// </para>
+    /// <para>
+    /// Call it from inside the process callback, on the realtime thread, which is where the graph
+    /// expects its callbacks to come from. The library does not report automatically when a process
+    /// handler throws: a dropped cycle is not always an xrun, and only the caller knows the trigger
+    /// and delay to report.
+    /// </para>
+    /// </remarks>
+    public unsafe bool ReportXrun(ulong triggerMicroseconds, ulong delayMicroseconds)
+    {
+        spa_node_callbacks* callbacks = _callbacks;
+        if (_disposed || callbacks is null || callbacks->xrun is null) return false;
+
+        return callbacks->xrun(_callbacksData, triggerMicroseconds, delayMicroseconds, null) >= 0;
+    }
+
     /// <summary>Raised to fill (a source) or consume (a sink) one cycle's buffer.</summary>
     public ProcessHandler? ProcessCallback { get; set; }
 
@@ -101,6 +134,21 @@ public sealed unsafe partial class PipeWireNodeProvider : IAsyncDisposable
     public int BufferCount => (int)_bufferCount;
 
     /// <summary>Whether the graph has driven at least one cycle through this node.</summary>
+    /// <remarks>
+    /// True from the first cycle the graph runs, whether or not anything was produced: a node with
+    /// no <see cref="ProcessCallback"/>, or one whose handler returns zero, is still being driven.
+    /// Together with <see cref="HasProcessed"/> this separates the two reasons an exported node goes
+    /// quiet - never scheduled, or scheduled and producing nothing - which are otherwise the same
+    /// silence from outside.
+    /// </remarks>
+    public bool HasBeenScheduled { get; private set; }
+
+    /// <summary>Whether a process handler has produced data at least once.</summary>
+    /// <remarks>
+    /// Set where a handler returned bytes, so it stays false for a node the graph is driving that
+    /// has no handler or whose handler produces nothing. See <see cref="HasBeenScheduled"/> for
+    /// whether the graph is running cycles at all.
+    /// </remarks>
     public bool HasProcessed { get; private set; }
 
     /// <summary>The last exception a process cycle threw, or null if none has.</summary>
@@ -349,6 +397,13 @@ public sealed unsafe partial class PipeWireNodeProvider : IAsyncDisposable
 
     /// <summary>The format this node offers, as given to <see cref="Create"/>.</summary>
     public PipeWireExportedFormat? OfferedFormat { get; private set; }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Disposal here does no awaiting, so this and <see cref="DisposeAsync"/> do the same work.
+    /// Both exist so that a caller is not forced into one idiom by which type they happen to hold.
+    /// </remarks>
+    public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
 
     /// <inheritdoc/>
     public ValueTask DisposeAsync()
@@ -920,6 +975,11 @@ public sealed unsafe partial class PipeWireNodeProvider : IAsyncDisposable
 
     private int RunCycle()
     {
+        // Before the pool check rather than after: being called with no buffers yet is still the
+        // graph driving this node, and that is exactly the case a caller needs to tell apart from
+        // never having been scheduled at all.
+        HasBeenScheduled = true;
+
         // Cached for the cycle, as upstream's impl_node_process caches its own io pointer. The
         // count is the gate: OnPortUseBuffers publishes it last when a pool arrives and clears it
         // first when one goes away, so a count that is non-zero here describes an array that is

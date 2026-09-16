@@ -67,17 +67,31 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     private PipeWireConnectionClosedException? _fault;
 
     /// <summary>
-    /// The fault that ended this connection, or null while it is usable.
+    /// The fault that ended this connection, or <see langword="null"/> while it is usable.
     /// </summary>
     /// <remarks>
-    /// Set once, from the loop thread, and read from anywhere. A request issued after this is set
-    /// cannot be answered, so the honest outcome is to refuse it rather than let the caller wait
-    /// for a reply that is not coming.
+    /// Set once, from the loop thread, and readable from anywhere. A request issued after this is
+    /// set cannot be answered, so the library refuses it rather than let the caller wait for a
+    /// reply that is not coming - which is how an application usually finds out, by catching. Read
+    /// this to find out without making a call, or subscribe to <see cref="ConnectionLost"/>.
     /// </remarks>
-    internal PipeWireConnectionClosedException? ConnectionFault => Volatile.Read(ref _fault);
+    public PipeWireConnectionClosedException? ConnectionFault => Volatile.Read(ref _fault);
 
-    /// <summary>Raised once, on the loop thread, when the connection is lost.</summary>
-    internal event Action<PipeWireConnectionClosedException>? ConnectionLost;
+    /// <summary>Raised once, on the loop thread, when the connection to the daemon is lost.</summary>
+    /// <remarks>
+    /// <para>
+    /// A connection can die between requests: the daemon exits, restarts, or destroys this client.
+    /// Without this an application learns about it only when its next call throws
+    /// <see cref="PipeWireConnectionClosedException"/>, which may be much later, or never for one
+    /// that is only consuming callbacks. Everything built on this context is dead once it fires -
+    /// reconnecting means a new <see cref="PipeWireContext"/>.
+    /// </para>
+    /// <para>
+    /// Raised on the loop thread, so the handler follows the same rules as any other callback here:
+    /// hand off rather than block. A handler that throws is caught and logged, not rethrown.
+    /// </para>
+    /// </remarks>
+    public event Action<PipeWireConnectionClosedException>? ConnectionLost;
 
     /// <summary>
     /// The logger factory streams created against this context use for diagnostics. Defaults to
@@ -803,6 +817,51 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     internal System.Collections.Concurrent.ConcurrentDictionary<Graph.PipeWireMetadataProvider, byte> ServedStores { get; } = new();
 
     /// <inheritdoc/>
+    /// <summary>Changes this client's own properties on a live connection.</summary>
+    /// <param name="properties">The keys to set, and their new values.</param>
+    /// <returns>How many of them the daemon took.</returns>
+    /// <remarks>
+    /// <para>
+    /// The connection presents itself to the graph with properties of its own -
+    /// <c>application.name</c> and the rest - which is what every other client sees in a listing.
+    /// They are set when the context connects; this is how they change afterwards, for an
+    /// application that renames itself or learns what it is doing only once it is running.
+    /// </para>
+    /// <para>
+    /// Streams and filters carry their own properties and are retagged through their own
+    /// <c>UpdateProperties</c>; this one is the connection, not the media on it.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="properties"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">The context is not connected.</exception>
+    public unsafe int UpdateProperties(IReadOnlyDictionary<string, string> properties)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        if (properties.Count == 0) return 0;
+
+        // Sized from the input rather than a fixed scratch: a long value would otherwise lose its
+        // tail. UTF-8 is at most 4 bytes per char, plus a terminator for each key and value.
+        int bytes = 0;
+        foreach (KeyValuePair<string, string> kv in properties)
+            bytes += ((kv.Key.Length + kv.Value.Length) * 4) + 2;
+
+        byte[] scratch = new byte[bytes];
+        var items = new spa_dict_item[properties.Count];
+
+        var builder = new SpaDictBuilder(scratch, items);
+        foreach (KeyValuePair<string, string> kv in properties) builder.Add(kv.Key, kv.Value);
+
+        spa_dict native = builder.Build();
+
+        using (Lock())
+        {
+            pw_core* core = CoreHandle;
+            if (core is null) throw new InvalidOperationException("the context is not connected.");
+
+            return Native.pw_core_update_properties(core, &native);
+        }
+    }
+
     /// <summary>Tears down synchronously. Disposal here does no I/O.</summary>
     /// <remarks>
     /// Offered alongside the async form because nothing about this disposal is asynchronous -

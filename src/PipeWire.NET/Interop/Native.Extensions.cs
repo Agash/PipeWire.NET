@@ -194,13 +194,6 @@ internal static unsafe partial class Native
     }
 
     /// <summary>
-    /// Calls <c>pw_proxy_methods.destroy</c> equivalent - pw_proxy_destroy IS exported,
-    /// so this just forwards. Kept here for symmetry with the dispatch helpers above.
-    /// </summary>
-    internal static void pw_registry_destroy(pw_registry* registry) =>
-        pw_proxy_destroy((pw_proxy*)registry);
-
-    /// <summary>
     /// Calls <c>pw_core_methods.create_object</c> via SPA interface dispatch.
     /// Equivalent to the C macro <c>pw_core_create_object()</c>.
     /// </summary>

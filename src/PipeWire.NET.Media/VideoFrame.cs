@@ -8,7 +8,7 @@ namespace PipeWire.NET.Media;
 /// A single video frame delivered by <see cref="PipeWireVideoCapture.FrameReady"/>.
 /// The <see cref="Pixels"/> span is valid only for the duration of the event handler.
 /// </summary>
-public readonly ref partial struct VideoFrame
+public readonly ref struct VideoFrame
 {
     /// <param name="pixels">
     /// Raw pixel data (host-mapped). Empty for a pure <see cref="PipeWireBufferType.DmaBuf"/>

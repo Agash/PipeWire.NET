@@ -392,7 +392,6 @@ internal ref struct SpaPodBuilder
     // casting it to a number at every call.
     private void WriteU32(SpaType value)       => WriteU32((uint)value);
     private void WriteU32(SpaChoiceType value) => WriteU32((uint)value);
-    private void WriteU32(SpaParamType value)  => WriteU32((uint)value);
 
     private void WriteU32(uint value)
     {

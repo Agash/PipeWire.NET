@@ -781,19 +781,31 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
+    /// Creates a virtual audio source - a node other clients capture from - and returns it once the
+    /// graph reports it.
+    /// </summary>
+    /// <param name="description">What a mixer shows for it.</param>
+    /// <param name="name">Its <c>node.name</c>. Generated when omitted.</param>
+    /// <param name="cancellationToken">Abandons the wait and destroys the half-created node.</param>
+    /// <remarks>
+    /// The same factory as <see cref="CreateVirtualSinkAsync"/> with <c>media.class</c> set to
+    /// <c>Audio/Source</c>. A sink is something to play into; this is something to capture from,
+    /// which is how a virtual microphone is built. Whatever is written into it still arrives
+    /// through a stream this client owns: the node carries no audio on its own, it gives other
+    /// clients somewhere to read from.
+    /// </remarks>
+    public Task<PipeWireNode> CreateVirtualSourceAsync(
+        string description, string? name = null, CancellationToken cancellationToken = default) =>
+        CreateVirtualSource(description, name).ExecuteAsync(cancellationToken);
+
+    /// <summary>
     /// Describes a virtual audio source: a node other clients capture from, rather than play into.
     /// </summary>
     /// <param name="description">What a mixer shows for it.</param>
     /// <param name="name">Its <c>node.name</c>. Generated when omitted.</param>
     /// <remarks>
-    /// The same factory as <see cref="CreateVirtualSink"/> with <c>media.class</c> set to
-    /// <c>Audio/Source</c>, named because it is the second of the two shapes that factory makes and
-    /// there is nothing in "virtual node" to say which one a caller gets. A sink is something to
-    /// play into; this is something to capture from, which is how a virtual microphone is built.
-    /// <para>
-    /// Whatever is written into it still arrives through a stream this client owns: the node carries
-    /// no audio on its own, it gives other clients somewhere to read from.
-    /// </para>
+    /// The builder form. <see cref="CreateVirtualSourceAsync"/> is the one-liner for the common
+    /// case, matching <see cref="CreateVirtualSink"/> and <see cref="CreateVirtualSinkAsync"/>.
     /// </remarks>
     public PipeWireNodeBuilder CreateVirtualSource(string description, string? name = null) =>
         CreateVirtualSink(description, name).WithMediaClass("Audio/Source");
@@ -1291,7 +1303,8 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         PipeWireClient client = Current.GetClient(clientId)
             ?? throw new ArgumentException($"{clientId} is not a client in the current graph.", nameof(clientId));
 
-        return PipeWireClientProxy.Bind(_ctx, RegistryHandle, clientId, client.InterfaceVersion, _logger);
+        return PipeWireClientProxy.Bind(
+            _ctx, RegistryHandle, clientId, client.InterfaceVersion, _logger, EnrichGlobal);
     }
 
     /// <summary>

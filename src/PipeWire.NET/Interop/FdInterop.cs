@@ -19,19 +19,10 @@ namespace PipeWire.NET.Interop;
 /// <see cref="SafeHandle.SetHandleAsInvalid"/> rather than a second close path.
 /// </remarks>
 [SupportedOSPlatform("linux")]
-internal static partial class FdInterop
+internal static class FdInterop
 {
-    /// <summary><c>F_DUPFD_CLOEXEC</c> from <c>fcntl.h</c>: duplicate with close-on-exec set.</summary>
-    private const int FDupfdCloexec = 1030;
-
     /// <summary>The lowest descriptor a duplication may return, just above stdio.</summary>
     private const int LowestDuplicate = 3;
-
-    /// <summary><c>SOL_SOCKET</c> from <c>socket.h</c>: the socket-level option namespace.</summary>
-    private const int SolSocket = 1;
-
-    /// <summary><c>SO_ACCEPTCONN</c>: non-zero when the socket is listening.</summary>
-    private const int SoAcceptConn = 30;
 
     /// <summary>Whether <paramref name="fd"/> is a socket that is listening for connections.</summary>
     /// <remarks>False for a non-socket (<c>ENOTSOCK</c>) as well as for a connected socket.</remarks>

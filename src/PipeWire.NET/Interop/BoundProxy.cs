@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
@@ -38,6 +39,19 @@ internal sealed unsafe class BoundProxy : IDisposable
     private Task? _deferredTeardown;
 
     private BoundProxy(PipeWireContext ctx) => _ctx = ctx;
+
+    /// <summary>Raised on the loop thread when the daemon destroys the object behind this proxy.</summary>
+    /// <remarks>
+    /// The proxy survives, as a zombie: every call through it fails from here on. Without this a
+    /// caller holding only a proxy has no way to learn its object is gone - a graph watcher hears
+    /// about it through the registry's global_remove, but nothing else does.
+    /// </remarks>
+    internal Action? Removed { get; set; }
+
+    /// <summary>Whether the daemon has destroyed the object behind this proxy.</summary>
+    internal bool IsRemoved => Volatile.Read(ref _removed) != 0;
+
+    private int _removed;
 
     /// <summary>The proxy, for dispatching interface methods through.</summary>
     /// <remarks>
@@ -191,6 +205,19 @@ internal sealed unsafe class BoundProxy : IDisposable
 
                 if (rc < 0)
                     throw new PipeWireInteropException("add_listener", rc);
+
+                // A second listener, on pw_proxy itself rather than on the interface: `removed` is
+                // how the daemon says the object is gone, and it arrives nowhere else.
+                var proxyEvents = (pw_proxy_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_proxy_events));
+                proxyEvents->version = NativeConstants.PW_VERSION_PROXY_EVENTS;
+                proxyEvents->removed = &OnProxyRemoved;
+
+                var proxyHook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
+                GCHandle proxySelf = GCHandle.Alloc(bound, GCHandleType.Weak);
+                handle.OwnProxyListener(proxyEvents, proxyHook, proxySelf);
+
+                Native.pw_proxy_add_listener(
+                    proxy, proxyHook, proxyEvents, (void*)GCHandle.ToIntPtr(proxySelf));
             }
 
             return bound;
@@ -199,6 +226,23 @@ internal sealed unsafe class BoundProxy : IDisposable
         {
             bound.Dispose();
             throw;
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnProxyRemoved(void* data)
+    {
+        // An exception escaping a reverse P/Invoke aborts the process, so nothing here may throw.
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)data).Target is not BoundProxy self) return;
+            if (Interlocked.Exchange(ref self._removed, 1) != 0) return;
+
+            self.Removed?.Invoke();
+        }
+        catch
+        {
+            // Deliberately not logged: the instance the logger belongs to is what failed to resolve.
         }
     }
 

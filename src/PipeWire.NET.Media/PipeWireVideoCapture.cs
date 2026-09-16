@@ -35,7 +35,7 @@ namespace PipeWire.NET.Media;
 /// </para>
 /// </remarks>
 [SupportedOSPlatform("linux")]
-public sealed partial class PipeWireVideoCapture : IAsyncDisposable
+public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
 {
     /// <summary>Wildcard node id - let PipeWire auto-select a source.</summary>
     public const uint AnyNode = NativeConstants.PW_ID_ANY;
@@ -486,6 +486,51 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
         return _core.RequestFormats(pod[..len]) >= 0;
     }
 
+    /// <summary>Puts this stream into the error state and tells the daemon why.</summary>
+    /// <param name="result">A negative errno describing the failure.</param>
+    /// <param name="message">What went wrong, for logs and for the peer.</param>
+    /// <param name="cancellationToken">Abandons the wait for the loop lock.</param>
+    /// <remarks>
+    /// What to call when a callback cannot do what the graph asked - a format that cannot be
+    /// carried, a buffer that cannot be filled. A stream that fails and stays quiet leaves its peer
+    /// waiting on a cycle that will not come, and nothing in the graph says why; this library does
+    /// the same thing itself when a format handler throws. Upstream's <c>pipewiresrc</c> reports a
+    /// format it cannot handle exactly this way.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="message"/> is null.</exception>
+    public void SetError(int result, string message, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        _core?.SetError(result, message, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs one graph cycle and waits for it to complete. Only meaningful while
+    /// <see cref="IsDriving"/>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="TriggerProcess"/> starts a cycle and returns; this waits for the daemon to report
+    /// it finished, which is what a stream pacing itself needs in order to know when the next cycle
+    /// may be asked for. Upstream reports completion (<c>trigger_done</c>) only to a driving stream,
+    /// so this faults with <see cref="InvalidOperationException"/> when <see cref="IsDriving"/> is
+    /// false rather than waiting for a report that will not come.
+    /// </remarks>
+    public Task TriggerProcessAndWaitAsync(CancellationToken cancellationToken = default) =>
+        _core?.TriggerAndWaitAsync(cancellationToken) ?? Task.CompletedTask;
+
+    /// <summary>The last exception a callback of this stream threw, or null if none has.</summary>
+    /// <remarks>
+    /// A callback cannot let an exception reach its native caller, so one is recorded here rather
+    /// than thrown: a handler that throws otherwise looks exactly like a handler that did nothing.
+    /// It is not logged either, because these run on the realtime thread where logging is itself an
+    /// xrun - read it from your own non-realtime loop. <see cref="ProcessErrorCount"/> says how many
+    /// there have been, which separates "threw once" from "throws every cycle".
+    /// </remarks>
+    public Exception? LastProcessError => _core?.ProcessFaults.Last;
+
+    /// <summary>How many times a callback of this stream has thrown.</summary>
+    public long ProcessErrorCount => _core?.ProcessFaults.Count ?? 0;
+
     /// <summary>Whether the daemon has made this stream the graph's driver.</summary>
     public bool IsDriving => _core?.IsDriving ?? false;
 
@@ -550,14 +595,24 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
     private void RaiseCommand(SpaNodeCommand command) => _commandReceived?.Invoke(command);
 
     /// <inheritdoc/>
-    public async ValueTask DisposeAsync()
+    /// <remarks>
+    /// Disposal here does no awaiting, so this and <see cref="DisposeAsync"/> do the same work.
+    /// Both exist so that a caller is not forced into one idiom by which type they happen to hold.
+    /// </remarks>
+    public void Dispose()
     {
-        if (_core is not null)
-            await _core.DisposeAsync().ConfigureAwait(false);
+        _core?.Dispose();
 
         // After the loop is gone, so no cycle can install another one behind us.
         Interlocked.Exchange(ref _latest, null)?.Dispose();
         InvalidateBorrowed();
+    }
+
+    /// <inheritdoc/>
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 
     /// <summary>
@@ -1157,7 +1212,7 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
     /// target, smooth it, and apply it here; see PipeWire's own rtp and tunnel modules. Applying an
     /// unsmoothed correction makes the drift worse rather than better.
     /// </remarks>
-    public void SetRate(double rate) => _core?.SetRate(rate);
+    public void SetRate(double rate, CancellationToken cancellationToken = default) => _core?.SetRate(rate, cancellationToken);
 
     /// <summary>
     /// Announces the latency this stream adds, so the rest of the graph can compensate.
@@ -1168,9 +1223,12 @@ public sealed partial class PipeWireVideoCapture : IAsyncDisposable
     /// to stay in sync with. Pass the process latency too when the delay is per-cycle rather than
     /// fixed; PipeWire's own transport modules announce both.
     /// </remarks>
-    public void AnnounceLatency(PipeWireLatency latency, PipeWireProcessLatency? processLatency = null)
+    public void AnnounceLatency(
+        PipeWireLatency latency,
+        PipeWireProcessLatency? processLatency = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(latency);
-        _core?.AnnounceLatency(latency, processLatency);
+        _core?.AnnounceLatency(latency, processLatency, cancellationToken);
     }
 }

@@ -38,7 +38,7 @@ namespace PipeWire.NET.Graph;
 /// </para>
 /// </remarks>
 [SupportedOSPlatform("linux")]
-public sealed partial class PipeWireFilter : IAsyncDisposable
+public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
 {
     private readonly PipeWireContext _ctx;
     private readonly ILogger _logger;
@@ -309,6 +309,7 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
                 filter._events->state_changed = &OnStateChangedCallback;
                 filter._events->io_changed = &OnIoChangedCallback;
                 filter._events->param_changed = &OnParamChangedCallback;
+                filter._events->command = &OnCommandCallback;
 
                 filter._hook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
                 // Weak: a strong self-handle roots the filter for the life of the process, so one dropped
@@ -332,6 +333,61 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
         }
     }
 
+    private Exception? _lastProcessFault;
+    private long _processFaults;
+
+    /// <summary>The last exception <see cref="ProcessCallback"/> threw, or null if none has.</summary>
+    /// <remarks>
+    /// The callback cannot let an exception reach its native caller, so one is recorded here rather
+    /// than thrown: a handler that throws otherwise looks exactly like a handler that did nothing,
+    /// and the cycle it threw in is simply lost. Not logged either - this is the realtime thread,
+    /// where logging is itself an xrun - so read it from your own non-realtime loop.
+    /// <see cref="ProcessErrorCount"/> separates "threw once" from "throws every cycle".
+    /// </remarks>
+    public Exception? LastProcessError => Volatile.Read(ref _lastProcessFault);
+
+    /// <summary>How many times <see cref="ProcessCallback"/> has thrown.</summary>
+    public long ProcessErrorCount => Interlocked.Read(ref _processFaults);
+
+    /// <summary>Raised on the loop thread when the daemon sends this filter's node a command.</summary>
+    /// <remarks>
+    /// The one that matters is <see cref="SpaNodeCommand.RequestProcess"/>: a driving filter is
+    /// asked to run a cycle, which it answers with <see cref="TriggerProcess"/>. All four stream
+    /// types have carried this since they were written; a filter that drives needs it for the same
+    /// reason. A handler that throws is caught and recorded, never rethrown into the daemon.
+    /// </remarks>
+    public event Action<PipeWireFilter, SpaNodeCommand>? CommandReceived;
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void OnCommandCallback(void* data, spa_command* command)
+    {
+        // An exception escaping a reverse P/Invoke aborts the process, so nothing here may throw.
+        try
+        {
+            if (command is null) return;
+            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireFilter self) return;
+            if (self._disposed) return;
+
+            // SPA_COMMAND_ID: the id only names a node command when the body says it is one, and a
+            // command of another type reuses the same numbers for different things.
+            if (command->body.body.type != (uint)SpaType.CommandNode) return;
+
+            Action<PipeWireFilter, SpaNodeCommand>? handler = self.CommandReceived;
+            if (handler is null) return;
+
+            try { handler(self, (SpaNodeCommand)command->body.body.id); }
+            catch (Exception ex)
+            {
+                Interlocked.Increment(ref self._processFaults);
+                Volatile.Write(ref self._lastProcessFault, ex);
+            }
+        }
+        catch
+        {
+            // Deliberately not logged: the instance the logger belongs to is what failed to resolve.
+        }
+    }
+
     /// <summary>Whether this filter is driving the graph.</summary>
     /// <remarks>
     /// True only for a filter connected with the driver flag and chosen by the daemon as the driver.
@@ -347,6 +403,75 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
 
             using (_ctx.Lock())
                 return Native.pw_filter_is_driving(_handle.Filter);
+        }
+    }
+
+    /// <summary>Removes a port this filter added, and takes it out of the graph.</summary>
+    /// <param name="port">A port from <see cref="Ports"/>.</param>
+    /// <remarks>
+    /// The counterpart to <see cref="AddPort"/>, for a filter whose port set changes while it runs -
+    /// a mixer losing a channel, say. Without it the only way to drop one port is to tear the whole
+    /// filter down and rebuild it, which takes every other port's links with it.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="port"/> is null.</exception>
+    /// <exception cref="ArgumentException">The port is not one of this filter's.</exception>
+    /// <exception cref="PipeWireException">The daemon refused the removal.</exception>
+    public unsafe void RemovePort(PipeWireFilterPort port)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(port);
+
+        if (!_ports.Contains(port))
+            throw new ArgumentException("the port is not one of this filter's.", nameof(port));
+
+        using (_ctx.Lock())
+        {
+            int res = Native.pw_filter_remove_port(port.PortData);
+            if (res < 0) throw new PipeWireException("pw_filter_remove_port", res);
+        }
+
+        _ports.Remove(port);
+    }
+
+    /// <summary>Changes properties on a filter that is already connected.</summary>
+    /// <param name="properties">The keys to set, and their new values.</param>
+    /// <param name="port">
+    /// The port to set them on, or <see langword="null"/> for the filter's own properties.
+    /// </param>
+    /// <remarks>
+    /// What the stream types offer as <c>UpdateProperties</c>. Retagging (<c>media.name</c>,
+    /// <c>node.description</c>) is the usual reason; keys the daemon only reads when the connection
+    /// is made, <c>target.object</c> among them, do not take effect until the next connect.
+    /// </remarks>
+    /// <returns>How many of the keys actually changed.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="properties"/> is null.</exception>
+    /// <exception cref="PipeWireException">The daemon refused the update.</exception>
+    public unsafe int UpdateProperties(
+        IReadOnlyDictionary<string, string> properties, PipeWireFilterPort? port = null)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(properties);
+        if (properties.Count == 0 || _handle is null) return 0;
+
+        // Sized from the input rather than a fixed scratch: a long value would otherwise lose its
+        // tail. UTF-8 is at most 4 bytes per char, plus a terminator for each key and value.
+        int bytes = 0;
+        foreach (KeyValuePair<string, string> kv in properties)
+            bytes += ((kv.Key.Length + kv.Value.Length) * 4) + 2;
+
+        byte[] scratch = new byte[bytes];
+        spa_dict_item[] items = new spa_dict_item[properties.Count];
+
+        var builder = new SpaDictBuilder(scratch, items);
+        foreach (KeyValuePair<string, string> kv in properties) builder.Add(kv.Key, kv.Value);
+
+        spa_dict native = builder.Build();
+
+        using (_ctx.Lock())
+        {
+            int res = Native.pw_filter_update_properties(_handle.Filter, port?.PortData, &native);
+            if (res < 0) throw new PipeWireException("pw_filter_update_properties", res);
+            return res;
         }
     }
 
@@ -659,6 +784,14 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
             {
                 callback(self, (uint)position->clock.duration, in clock);
             }
+            catch (Exception ex)
+            {
+                // Recorded, not logged: this is the realtime thread, where logging is itself an
+                // xrun. Without it a handler that throws is indistinguishable from one that did
+                // nothing, because the catch below cannot tell the two apart.
+                Interlocked.Increment(ref self._processFaults);
+                Volatile.Write(ref self._lastProcessFault, ex);
+            }
             finally
             {
                 // Outside the cycle the geometry is not a fact about anything, and a filter that
@@ -801,6 +934,13 @@ public sealed partial class PipeWireFilter : IAsyncDisposable
         // Not the realtime path, so one throwing subscriber must not starve the rest.
         SafeCallback.Raise(StateChanged, h => h(this, old, state, error), ex => LogHandlerFaulted(Name, ex));
     }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Disposal here does no awaiting, so this and <see cref="DisposeAsync"/> do the same work.
+    /// Both exist so that a caller is not forced into one idiom by which type they happen to hold.
+    /// </remarks>
+    public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
 
     /// <inheritdoc/>
     public ValueTask DisposeAsync()

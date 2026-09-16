@@ -284,7 +284,7 @@ internal ref struct SpaPodReader
         // Peek the header non-destructively: a plain (non-choice) value must be left
         // untouched so the caller can fall back to ReadId()/ReadRectangle()/etc.
         int savedPos = _pos;
-        if (!TryReadHeader(out uint size, out SpaType type) || type != SpaType.Choice)
+        if (!TryReadHeader(out _, out SpaType type) || type != SpaType.Choice)
         {
             _pos = savedPos;
             return false;

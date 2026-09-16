@@ -340,13 +340,29 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         }
     }
 
+    /// <summary>Puts the stream into the error state and tells the daemon why.</summary>
+    internal unsafe void SetError(int result, string message, CancellationToken cancellationToken)
+    {
+        if (_disposed || _stream is null) return;
+        cancellationToken.ThrowIfCancellationRequested();
+
+        using (_ctx.Lock())
+        {
+            pw_stream* stream = _stream;
+            if (_disposed || stream is null) return;
+
+            Native.pw_stream_set_error(stream, result, message);
+        }
+    }
+
     private Exception? _lastProcessFault;
     private long _processFaults;
 
     /// <summary>How many times a process callback threw, and the most recent one.</summary>
     /// <remarks>
     /// Reported rather than logged, because the throw happens on the realtime thread where logging
-    /// would itself cause an xrun. A host should surface this from its own non-realtime loop.
+    /// would itself cause an xrun. Each stream type surfaces this as <c>LastProcessError</c> and
+    /// <c>ProcessErrorCount</c>, for a host to read from its own non-realtime loop.
     /// </remarks>
     internal (long Count, Exception? Last) ProcessFaults =>
         (Interlocked.Read(ref _processFaults), Volatile.Read(ref _lastProcessFault));
@@ -1058,9 +1074,10 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     }
 
     /// <summary>Applies a rate correction, 1.0 being none.</summary>
-    internal unsafe void SetRate(double rate)
+    internal unsafe void SetRate(double rate, CancellationToken cancellationToken)
     {
         if (_disposed || _stream is null) return;
+        cancellationToken.ThrowIfCancellationRequested();
 
         using (_ctx.Lock())
         {
@@ -1079,9 +1096,10 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// told about. PipeWire's own rtp and tunnel modules announce both of these together, which is
     /// why both are taken here rather than one.
     /// </remarks>
-    internal unsafe void AnnounceLatency(PipeWireLatency latency, PipeWireProcessLatency? process)
+    internal unsafe void AnnounceLatency(PipeWireLatency latency, PipeWireProcessLatency? process, CancellationToken cancellationToken)
     {
         if (_disposed || _stream is null) return;
+        cancellationToken.ThrowIfCancellationRequested();
 
         byte[] latencyPod = SpaPod.ToBytes(latency.ToParameter());
         byte[]? processPod = process is null ? null : SpaPod.ToBytes(process.ToParameter());

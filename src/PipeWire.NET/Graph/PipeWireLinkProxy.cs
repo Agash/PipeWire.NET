@@ -26,7 +26,6 @@ namespace PipeWire.NET.Graph;
 [SupportedOSPlatform("linux")]
 public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
 {
-    private readonly PipeWireContext _ctx;
     private readonly ILogger _logger;
     private readonly TaskCompletionSource _ready =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -37,9 +36,8 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
     // Written on the loop thread inside the info callback, read from anywhere.
     private volatile LinkSnapshot _snapshot = new(PipeWireLinkState.Init, null, 0, 0, 0, 0);
 
-    private PipeWireLinkProxy(PipeWireContext ctx, uint id, ILogger logger)
+    private PipeWireLinkProxy(uint id, ILogger logger)
     {
-        _ctx = ctx;
         LinkId = id;
         _logger = logger;
     }
@@ -122,7 +120,7 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
         // mask, so their dictionary arrives empty), and it can arrive the moment the bind is sent.
         // Assigned after Bind returned, a fast daemon's first info found no observer and the
         // properties never reached the registry.
-        var control = new PipeWireLinkProxy(ctx, id, logger) { PropertiesObserved = propertiesObserved };
+        var control = new PipeWireLinkProxy(id, logger) { PropertiesObserved = propertiesObserved };
         control._bound = BoundProxy.Bind(
             ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Link, version, NativeConstants.PW_VERSION_LINK,
             sizeof(pw_link_events),
@@ -136,8 +134,32 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
                 (pw_link*)proxy, (spa_hook*)hook, (pw_link_events*)events, (void*)data),
             control);
 
+        control._bound.Removed = control.RaiseRemoved;
+
         return control;
     }
+
+    /// <summary>Raised on the loop thread when the daemon destroys the object behind this proxy.</summary>
+    /// <remarks>
+    /// A bound object can go at any time. The proxy survives as a zombie and every call through it
+    /// fails from here on, so this is the signal to stop using it. A caller watching the whole graph
+    /// sees the same thing through the registry; one holding only this proxy has nothing else.
+    /// </remarks>
+    public event Action? Removed;
+
+    /// <summary>Whether the daemon has destroyed the object behind this proxy.</summary>
+    public bool IsRemoved => _bound?.IsRemoved ?? false;
+
+    private void RaiseRemoved()
+    {
+        Action? handler = Removed;
+        if (handler is null) return;
+
+        // A native callback frame, so nothing may escape it.
+        try { handler(); }
+        catch (Exception) { /* a subscriber that throws must not reach the daemon */ }
+    }
+
 
     /// <summary>Waits for the daemon's first report about this link.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>

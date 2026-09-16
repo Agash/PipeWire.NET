@@ -8,7 +8,7 @@ namespace PipeWire.NET;
 /// type advertises <c>RandomAccess</c> and <c>FileStream</c> operations which compile against one
 /// and then misbehave. The BCL has no descriptor-neutral handle to use instead.
 /// </remarks>
-public sealed partial class SafeDescriptorHandle : SafeHandle
+public sealed class SafeDescriptorHandle : SafeHandle
 {
     /// <summary>Wraps <paramref name="descriptor"/>, which this handle then owns.</summary>
     public SafeDescriptorHandle(int descriptor) : base(new IntPtr(-1), ownsHandle: true)

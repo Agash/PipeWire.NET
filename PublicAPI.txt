@@ -32,7 +32,12 @@ PipeWire.NET.Graph.PipeWireClientProxy.AnyObject = UInt32
 PipeWire.NET.Graph.PipeWireClientProxy.ConfineToAsync(ReadOnlySpan<PipeWireObjectPermission>, CancellationToken)
 PipeWire.NET.Graph.PipeWireClientProxy.Dispose()
 PipeWire.NET.Graph.PipeWireClientProxy.DisposeAsync()
+PipeWire.NET.Graph.PipeWireClientProxy.GetPermissionsAsync(UInt32, UInt32, CancellationToken)
 PipeWire.NET.Graph.PipeWireClientProxy.Id : UInt32
+PipeWire.NET.Graph.PipeWireClientProxy.IsRemoved : Boolean
+PipeWire.NET.Graph.PipeWireClientProxy.Properties : PipeWireProperties
+PipeWire.NET.Graph.PipeWireClientProxy.ReadyAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireClientProxy.Removed event
 PipeWire.NET.Graph.PipeWireClientProxy.UpdatePermissionsAsync(ReadOnlyMemory<PipeWireObjectPermission>, CancellationToken)
 PipeWire.NET.Graph.PipeWireClientProxy.UpdatePropertiesAsync(IReadOnlyDictionary<String, String>, CancellationToken)
 PipeWire.NET.Graph.PipeWireCore
@@ -73,6 +78,7 @@ PipeWire.NET.Graph.PipeWireDevice.ToString()
 PipeWire.NET.Graph.PipeWireDeviceProvider
 PipeWire.NET.Graph.PipeWireDeviceProvider.Create(PipeWireContext, String, String, IReadOnlyDictionary<SpaParamType, ImmutableArray<SpaObject>>, IReadOnlyDictionary<String, String>)
 PipeWire.NET.Graph.PipeWireDeviceProvider.Dispose()
+PipeWire.NET.Graph.PipeWireDeviceProvider.DisposeAsync()
 PipeWire.NET.Graph.PipeWireDeviceProvider.FromSpaFactory(PipeWireContext, String, IReadOnlyDictionary<String, String>, String)
 PipeWire.NET.Graph.PipeWireDeviceProvider.GetParameter(SpaParamType)
 PipeWire.NET.Graph.PipeWireDeviceProvider.Name : String
@@ -129,20 +135,26 @@ PipeWire.NET.Graph.PipeWireFilter.AddMidiPort(PipeWirePortDirection, String)
 PipeWire.NET.Graph.PipeWireFilter.AddPort(PipeWirePortDirection, String, PipeWireDspFormat, IReadOnlyDictionary<String, String>)
 PipeWire.NET.Graph.PipeWireFilter.AddUmpPort(PipeWirePortDirection, String)
 PipeWire.NET.Graph.PipeWireFilter.AddVideoPort(PipeWirePortDirection, String)
+PipeWire.NET.Graph.PipeWireFilter.CommandReceived event
 PipeWire.NET.Graph.PipeWireFilter.ConnectAsync(PipeWireFilterFlags, CancellationToken)
 PipeWire.NET.Graph.PipeWireFilter.Create(PipeWireContext, String, IReadOnlyDictionary<String, String>)
+PipeWire.NET.Graph.PipeWireFilter.Dispose()
 PipeWire.NET.Graph.PipeWireFilter.DisposeAsync()
 PipeWire.NET.Graph.PipeWireFilter.IsDriving : Boolean
+PipeWire.NET.Graph.PipeWireFilter.LastProcessError : Exception
 PipeWire.NET.Graph.PipeWireFilter.Name : String
 PipeWire.NET.Graph.PipeWireFilter.NodeId : Nullable<UInt32>
 PipeWire.NET.Graph.PipeWireFilter.Ports : IReadOnlyList<PipeWireFilterPort>
 PipeWire.NET.Graph.PipeWireFilter.ProcessCallback : ProcessHandler
+PipeWire.NET.Graph.PipeWireFilter.ProcessErrorCount : Int64
 PipeWire.NET.Graph.PipeWireFilter.ProcessHandler
+PipeWire.NET.Graph.PipeWireFilter.RemovePort(PipeWireFilterPort)
 PipeWire.NET.Graph.PipeWireFilter.SetActive(Boolean)
 PipeWire.NET.Graph.PipeWireFilter.SetError(Int32, String)
 PipeWire.NET.Graph.PipeWireFilter.State : PipeWireFilterState
 PipeWire.NET.Graph.PipeWireFilter.StateChanged event
 PipeWire.NET.Graph.PipeWireFilter.TriggerProcess()
+PipeWire.NET.Graph.PipeWireFilter.UpdateProperties(IReadOnlyDictionary<String, String>, PipeWireFilterPort)
 PipeWire.NET.Graph.PipeWireFilter.VideoCycle : PipeWireVideoCycle
 PipeWire.NET.Graph.PipeWireFilter.WaitForNodeIdAsync(CancellationToken)
 PipeWire.NET.Graph.PipeWireFilterFlags
@@ -573,8 +585,8 @@ PipeWire.NET.Graph.PipeWireLink.Properties : PipeWireProperties
 PipeWire.NET.Graph.PipeWireLink.ToString()
 PipeWire.NET.Graph.PipeWireLinkBuilder
 PipeWire.NET.Graph.PipeWireLinkBuilder.ExecuteAsync(CancellationToken)
-PipeWire.NET.Graph.PipeWireLinkBuilder.Passive()
 PipeWire.NET.Graph.PipeWireLinkBuilder.WithLinger()
+PipeWire.NET.Graph.PipeWireLinkBuilder.WithPassive()
 PipeWire.NET.Graph.PipeWireLinkBuilder.WithProperty(String, String)
 PipeWire.NET.Graph.PipeWireLinkProxy
 PipeWire.NET.Graph.PipeWireLinkProxy.Dispose()
@@ -583,10 +595,12 @@ PipeWire.NET.Graph.PipeWireLinkProxy.Error : String
 PipeWire.NET.Graph.PipeWireLinkProxy.InputNodeId : UInt32
 PipeWire.NET.Graph.PipeWireLinkProxy.InputPortId : UInt32
 PipeWire.NET.Graph.PipeWireLinkProxy.IsActive : Boolean
+PipeWire.NET.Graph.PipeWireLinkProxy.IsRemoved : Boolean
 PipeWire.NET.Graph.PipeWireLinkProxy.LinkId : UInt32
 PipeWire.NET.Graph.PipeWireLinkProxy.OutputNodeId : UInt32
 PipeWire.NET.Graph.PipeWireLinkProxy.OutputPortId : UInt32
 PipeWire.NET.Graph.PipeWireLinkProxy.ReadyAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireLinkProxy.Removed event
 PipeWire.NET.Graph.PipeWireLinkProxy.State : PipeWireLinkState
 PipeWire.NET.Graph.PipeWireLinkProxy.StateChanged event
 PipeWire.NET.Graph.PipeWireLinkState
@@ -652,7 +666,9 @@ PipeWire.NET.Graph.PipeWireMetadataProxy.Entries : IReadOnlyCollection<PipeWireM
 PipeWire.NET.Graph.PipeWireMetadataProxy.EntryChanged event
 PipeWire.NET.Graph.PipeWireMetadataProxy.Get(String, UInt32)
 PipeWire.NET.Graph.PipeWireMetadataProxy.Id : UInt32
+PipeWire.NET.Graph.PipeWireMetadataProxy.IsRemoved : Boolean
 PipeWire.NET.Graph.PipeWireMetadataProxy.ReadyAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireMetadataProxy.Removed event
 PipeWire.NET.Graph.PipeWireMetadataProxy.SetAsync(String, String, String, UInt32, CancellationToken)
 PipeWire.NET.Graph.PipeWireMetadataProxy.SetDefaultAudioSinkAsync(String, CancellationToken)
 PipeWire.NET.Graph.PipeWireMetadataProxy.SetDefaultAudioSourceAsync(String, CancellationToken)
@@ -717,8 +733,10 @@ PipeWire.NET.Graph.PipeWireNodeProvider+ProcessHandler.EndInvoke(IAsyncResult)
 PipeWire.NET.Graph.PipeWireNodeProvider+ProcessHandler.Invoke(PipeWireNodeProvider, Span<Byte>)
 PipeWire.NET.Graph.PipeWireNodeProvider.BufferCount : Int32
 PipeWire.NET.Graph.PipeWireNodeProvider.Create(PipeWireContext, String, PipeWireExportedFormat, SpaDirection, IReadOnlyDictionary<String, String>)
+PipeWire.NET.Graph.PipeWireNodeProvider.Dispose()
 PipeWire.NET.Graph.PipeWireNodeProvider.DisposeAsync()
 PipeWire.NET.Graph.PipeWireNodeProvider.FromSpaFactory(PipeWireContext, String, IReadOnlyDictionary<String, String>, String)
+PipeWire.NET.Graph.PipeWireNodeProvider.HasBeenScheduled : Boolean
 PipeWire.NET.Graph.PipeWireNodeProvider.HasProcessed : Boolean
 PipeWire.NET.Graph.PipeWireNodeProvider.LastCallbackError : Exception
 PipeWire.NET.Graph.PipeWireNodeProvider.LastProcessError : Exception
@@ -726,6 +744,7 @@ PipeWire.NET.Graph.PipeWireNodeProvider.NegotiatedFormat : PipeWireExportedForma
 PipeWire.NET.Graph.PipeWireNodeProvider.OfferedFormat : PipeWireExportedFormat
 PipeWire.NET.Graph.PipeWireNodeProvider.ProcessCallback : ProcessHandler
 PipeWire.NET.Graph.PipeWireNodeProvider.ProcessHandler
+PipeWire.NET.Graph.PipeWireNodeProvider.ReportXrun(UInt64, UInt64)
 PipeWire.NET.Graph.PipeWireNodeProxy
 PipeWire.NET.Graph.PipeWireNodeProxy.EnumerateFormatsAsync(CancellationToken)
 PipeWire.NET.Graph.PipeWireNodeProxy.EnumeratePortConfigsAsync(CancellationToken)
@@ -795,9 +814,11 @@ PipeWire.NET.Graph.PipeWireParameterObject.EnumerateParametersAsync(SpaParamType
 PipeWire.NET.Graph.PipeWireParameterObject.GetParameterAsync(SpaParamType, CancellationToken)
 PipeWire.NET.Graph.PipeWireParameterObject.Id : UInt32
 PipeWire.NET.Graph.PipeWireParameterObject.InfoChanged event
+PipeWire.NET.Graph.PipeWireParameterObject.IsRemoved : Boolean
 PipeWire.NET.Graph.PipeWireParameterObject.ParameterChanged event
 PipeWire.NET.Graph.PipeWireParameterObject.Parameters : ImmutableArray<PipeWireParameterInfo>
 PipeWire.NET.Graph.PipeWireParameterObject.ReadyAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireParameterObject.Removed event
 PipeWire.NET.Graph.PipeWireParameterObject.SetParameterAsync(SpaParamType, SpaObject, CancellationToken)
 PipeWire.NET.Graph.PipeWireParameterObject.SubscribeParameters(ReadOnlySpan<SpaParamType>)
 PipeWire.NET.Graph.PipeWireParameterObject.SubscribedParameters : ImmutableArray<SpaParamType>
@@ -893,7 +914,9 @@ PipeWire.NET.Graph.PipeWireProfilerProxy
 PipeWire.NET.Graph.PipeWireProfilerProxy.Dispose()
 PipeWire.NET.Graph.PipeWireProfilerProxy.DisposeAsync()
 PipeWire.NET.Graph.PipeWireProfilerProxy.Id : UInt32
+PipeWire.NET.Graph.PipeWireProfilerProxy.IsRemoved : Boolean
 PipeWire.NET.Graph.PipeWireProfilerProxy.ProfileReceived event
+PipeWire.NET.Graph.PipeWireProfilerProxy.Removed event
 PipeWire.NET.Graph.PipeWireProperties
 PipeWire.NET.Graph.PipeWireProperties.ContainsKey(String)
 PipeWire.NET.Graph.PipeWireProperties.Count : Int32
@@ -938,6 +961,7 @@ PipeWire.NET.Graph.PipeWireRegistry.CreateLinkAsync(UInt32, UInt32, Cancellation
 PipeWire.NET.Graph.PipeWireRegistry.CreateVirtualSink(String, String)
 PipeWire.NET.Graph.PipeWireRegistry.CreateVirtualSinkAsync(String, String, CancellationToken)
 PipeWire.NET.Graph.PipeWireRegistry.CreateVirtualSource(String, String)
+PipeWire.NET.Graph.PipeWireRegistry.CreateVirtualSourceAsync(String, String, CancellationToken)
 PipeWire.NET.Graph.PipeWireRegistry.Current : PipeWireGraphSnapshot
 PipeWire.NET.Graph.PipeWireRegistry.DestroyGlobalAsync(UInt32, CancellationToken)
 PipeWire.NET.Graph.PipeWireRegistry.Dispose()
@@ -973,6 +997,8 @@ PipeWire.NET.Graph.PipeWireSecurityContextProxy.CreateAsync(SafeHandle, SafeHand
 PipeWire.NET.Graph.PipeWireSecurityContextProxy.Dispose()
 PipeWire.NET.Graph.PipeWireSecurityContextProxy.DisposeAsync()
 PipeWire.NET.Graph.PipeWireSecurityContextProxy.Id : UInt32
+PipeWire.NET.Graph.PipeWireSecurityContextProxy.IsRemoved : Boolean
+PipeWire.NET.Graph.PipeWireSecurityContextProxy.Removed event
 PipeWire.NET.Graph.PipeWireStreamQueue
 PipeWire.NET.Graph.PipeWireStreamQueue..ctor(UInt64, UInt64, UInt32, UInt32)
 PipeWire.NET.Graph.PipeWireStreamQueue.AvailableBuffers : UInt32
@@ -1139,13 +1165,19 @@ PipeWire.NET.Media.PipeWireAudioCapture+FrameReadyHandler..ctor(Object, IntPtr)
 PipeWire.NET.Media.PipeWireAudioCapture+FrameReadyHandler.BeginInvoke(PipeWireAudioCapture, AudioFrame, AsyncCallback, Object)
 PipeWire.NET.Media.PipeWireAudioCapture+FrameReadyHandler.EndInvoke(IAsyncResult)
 PipeWire.NET.Media.PipeWireAudioCapture+FrameReadyHandler.Invoke(PipeWireAudioCapture, AudioFrame)
+PipeWire.NET.Media.PipeWireAudioCapture+StateChangedHandler
+PipeWire.NET.Media.PipeWireAudioCapture+StateChangedHandler..ctor(Object, IntPtr)
+PipeWire.NET.Media.PipeWireAudioCapture+StateChangedHandler.BeginInvoke(PipeWireAudioCapture, PipeWireStreamState, PipeWireStreamState, AsyncCallback, Object)
+PipeWire.NET.Media.PipeWireAudioCapture+StateChangedHandler.EndInvoke(IAsyncResult)
+PipeWire.NET.Media.PipeWireAudioCapture+StateChangedHandler.Invoke(PipeWireAudioCapture, PipeWireStreamState, PipeWireStreamState)
 PipeWire.NET.Media.PipeWireAudioCapture..ctor(PipeWireContext, String)
-PipeWire.NET.Media.PipeWireAudioCapture.AnnounceLatency(PipeWireLatency, PipeWireProcessLatency)
+PipeWire.NET.Media.PipeWireAudioCapture.AnnounceLatency(PipeWireLatency, PipeWireProcessLatency, CancellationToken)
 PipeWire.NET.Media.PipeWireAudioCapture.AnyNode = UInt32
 PipeWire.NET.Media.PipeWireAudioCapture.CommandReceived event
 PipeWire.NET.Media.PipeWireAudioCapture.Connect(PipeWireNode, Int32, Int32, AudioSampleFormat, Boolean, Boolean, CancellationToken)
 PipeWire.NET.Media.PipeWireAudioCapture.Connect(UInt32, Int32, Int32, AudioSampleFormat, String, Boolean, Boolean, Boolean, CancellationToken)
 PipeWire.NET.Media.PipeWireAudioCapture.Controls : ImmutableArray<PipeWireStreamControl>
+PipeWire.NET.Media.PipeWireAudioCapture.Dispose()
 PipeWire.NET.Media.PipeWireAudioCapture.DisposeAsync()
 PipeWire.NET.Media.PipeWireAudioCapture.ExtraProperties : IReadOnlyDictionary<String, String>
 PipeWire.NET.Media.PipeWireAudioCapture.FrameReady event
@@ -1154,14 +1186,19 @@ PipeWire.NET.Media.PipeWireAudioCapture.GetControl(UInt32)
 PipeWire.NET.Media.PipeWireAudioCapture.GraphClock : Nullable<PipeWireGraphClock>
 PipeWire.NET.Media.PipeWireAudioCapture.IsDriving : Boolean
 PipeWire.NET.Media.PipeWireAudioCapture.IsLazy : Boolean
+PipeWire.NET.Media.PipeWireAudioCapture.LastProcessError : Exception
 PipeWire.NET.Media.PipeWireAudioCapture.NodeId : Nullable<UInt32>
+PipeWire.NET.Media.PipeWireAudioCapture.ProcessErrorCount : Int64
 PipeWire.NET.Media.PipeWireAudioCapture.Queue : Nullable<PipeWireStreamQueue>
 PipeWire.NET.Media.PipeWireAudioCapture.RateMatch : Nullable<PipeWireRateMatch>
 PipeWire.NET.Media.PipeWireAudioCapture.SetControl(UInt32, ReadOnlySpan<Single>, CancellationToken)
-PipeWire.NET.Media.PipeWireAudioCapture.SetRate(Double)
+PipeWire.NET.Media.PipeWireAudioCapture.SetError(Int32, String, CancellationToken)
+PipeWire.NET.Media.PipeWireAudioCapture.SetRate(Double, CancellationToken)
 PipeWire.NET.Media.PipeWireAudioCapture.SkipCurrentFrame()
 PipeWire.NET.Media.PipeWireAudioCapture.StateChanged event
+PipeWire.NET.Media.PipeWireAudioCapture.StateChangedHandler
 PipeWire.NET.Media.PipeWireAudioCapture.TriggerProcess()
+PipeWire.NET.Media.PipeWireAudioCapture.TriggerProcessAndWaitAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireAudioCapture.UpdateProperties(IReadOnlyDictionary<String, String>)
 PipeWire.NET.Media.PipeWireAudioCapture.WaitForNodeIdAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireAudioCapture.WaitForStreamingAsync(CancellationToken)
@@ -1171,12 +1208,19 @@ PipeWire.NET.Media.PipeWireAudioOutput+FillSamplesHandler..ctor(Object, IntPtr)
 PipeWire.NET.Media.PipeWireAudioOutput+FillSamplesHandler.BeginInvoke(PipeWireAudioOutput, Span<Byte>, Int32, Int32, AudioSampleFormat, AsyncCallback, Object)
 PipeWire.NET.Media.PipeWireAudioOutput+FillSamplesHandler.EndInvoke(IAsyncResult)
 PipeWire.NET.Media.PipeWireAudioOutput+FillSamplesHandler.Invoke(PipeWireAudioOutput, Span<Byte>, Int32, Int32, AudioSampleFormat)
+PipeWire.NET.Media.PipeWireAudioOutput+StateChangedHandler
+PipeWire.NET.Media.PipeWireAudioOutput+StateChangedHandler..ctor(Object, IntPtr)
+PipeWire.NET.Media.PipeWireAudioOutput+StateChangedHandler.BeginInvoke(PipeWireAudioOutput, PipeWireStreamState, PipeWireStreamState, AsyncCallback, Object)
+PipeWire.NET.Media.PipeWireAudioOutput+StateChangedHandler.EndInvoke(IAsyncResult)
+PipeWire.NET.Media.PipeWireAudioOutput+StateChangedHandler.Invoke(PipeWireAudioOutput, PipeWireStreamState, PipeWireStreamState)
 PipeWire.NET.Media.PipeWireAudioOutput..ctor(PipeWireContext, String, Int32, Int32, AudioSampleFormat)
-PipeWire.NET.Media.PipeWireAudioOutput.AnnounceLatency(PipeWireLatency, PipeWireProcessLatency)
+PipeWire.NET.Media.PipeWireAudioOutput.AnnounceLatency(PipeWireLatency, PipeWireProcessLatency, CancellationToken)
 PipeWire.NET.Media.PipeWireAudioOutput.AnyNode = UInt32
 PipeWire.NET.Media.PipeWireAudioOutput.CommandReceived event
+PipeWire.NET.Media.PipeWireAudioOutput.Connect(PipeWireNode, Boolean, Boolean, CancellationToken)
 PipeWire.NET.Media.PipeWireAudioOutput.Connect(UInt32, String, Boolean, Boolean, CancellationToken)
 PipeWire.NET.Media.PipeWireAudioOutput.Controls : ImmutableArray<PipeWireStreamControl>
+PipeWire.NET.Media.PipeWireAudioOutput.Dispose()
 PipeWire.NET.Media.PipeWireAudioOutput.DisposeAsync()
 PipeWire.NET.Media.PipeWireAudioOutput.DrainAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireAudioOutput.DriveAt(TimeSpan)
@@ -1187,13 +1231,19 @@ PipeWire.NET.Media.PipeWireAudioOutput.GetControl(UInt32)
 PipeWire.NET.Media.PipeWireAudioOutput.GraphClock : Nullable<PipeWireGraphClock>
 PipeWire.NET.Media.PipeWireAudioOutput.IsDriving : Boolean
 PipeWire.NET.Media.PipeWireAudioOutput.IsLazy : Boolean
+PipeWire.NET.Media.PipeWireAudioOutput.LastProcessError : Exception
 PipeWire.NET.Media.PipeWireAudioOutput.NextPresentationTimestampNs : Nullable<Int64>
 PipeWire.NET.Media.PipeWireAudioOutput.NodeId : Nullable<UInt32>
+PipeWire.NET.Media.PipeWireAudioOutput.ProcessErrorCount : Int64
 PipeWire.NET.Media.PipeWireAudioOutput.Queue : Nullable<PipeWireStreamQueue>
 PipeWire.NET.Media.PipeWireAudioOutput.RateMatch : Nullable<PipeWireRateMatch>
 PipeWire.NET.Media.PipeWireAudioOutput.SetControl(UInt32, ReadOnlySpan<Single>, CancellationToken)
-PipeWire.NET.Media.PipeWireAudioOutput.SetRate(Double)
+PipeWire.NET.Media.PipeWireAudioOutput.SetError(Int32, String, CancellationToken)
+PipeWire.NET.Media.PipeWireAudioOutput.SetRate(Double, CancellationToken)
 PipeWire.NET.Media.PipeWireAudioOutput.StateChanged event
+PipeWire.NET.Media.PipeWireAudioOutput.StateChangedHandler
+PipeWire.NET.Media.PipeWireAudioOutput.TriggerProcess()
+PipeWire.NET.Media.PipeWireAudioOutput.TriggerProcessAndWaitAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireAudioOutput.UpdateProperties(IReadOnlyDictionary<String, String>)
 PipeWire.NET.Media.PipeWireAudioOutput.WaitForNodeIdAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireAudioOutput.WaitForStreamingAsync(CancellationToken)
@@ -1260,12 +1310,13 @@ PipeWire.NET.Media.PipeWireVideoCapture+StateChangedHandler.BeginInvoke(PipeWire
 PipeWire.NET.Media.PipeWireVideoCapture+StateChangedHandler.EndInvoke(IAsyncResult)
 PipeWire.NET.Media.PipeWireVideoCapture+StateChangedHandler.Invoke(PipeWireVideoCapture, PipeWireStreamState, PipeWireStreamState)
 PipeWire.NET.Media.PipeWireVideoCapture..ctor(PipeWireContext, String)
-PipeWire.NET.Media.PipeWireVideoCapture.AnnounceLatency(PipeWireLatency, PipeWireProcessLatency)
+PipeWire.NET.Media.PipeWireVideoCapture.AnnounceLatency(PipeWireLatency, PipeWireProcessLatency, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoCapture.AnyNode = UInt32
 PipeWire.NET.Media.PipeWireVideoCapture.CommandReceived event
 PipeWire.NET.Media.PipeWireVideoCapture.Connect(PipeWireNode, ReadOnlySpan<PixelFormat>, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoCapture.Connect(UInt32, ReadOnlySpan<PixelFormat>, String, ReadOnlySpan<Int64>, Boolean, Boolean, Int32, Int32, Int32, Boolean, ReadOnlySpan<DmaBufDeviceOffer>, Boolean, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoCapture.Controls : ImmutableArray<PipeWireStreamControl>
+PipeWire.NET.Media.PipeWireVideoCapture.Dispose()
 PipeWire.NET.Media.PipeWireVideoCapture.DisposeAsync()
 PipeWire.NET.Media.PipeWireVideoCapture.ExtraProperties : IReadOnlyDictionary<String, String>
 PipeWire.NET.Media.PipeWireVideoCapture.FrameReady event
@@ -1274,20 +1325,24 @@ PipeWire.NET.Media.PipeWireVideoCapture.GetControl(UInt32)
 PipeWire.NET.Media.PipeWireVideoCapture.GraphClock : Nullable<PipeWireGraphClock>
 PipeWire.NET.Media.PipeWireVideoCapture.IsDriving : Boolean
 PipeWire.NET.Media.PipeWireVideoCapture.IsLazy : Boolean
+PipeWire.NET.Media.PipeWireVideoCapture.LastProcessError : Exception
 PipeWire.NET.Media.PipeWireVideoCapture.NegotiatedDevice : Nullable<DrmDevice>
 PipeWire.NET.Media.PipeWireVideoCapture.NegotiatedModifier : UInt64
 PipeWire.NET.Media.PipeWireVideoCapture.NodeId : Nullable<UInt32>
+PipeWire.NET.Media.PipeWireVideoCapture.ProcessErrorCount : Int64
 PipeWire.NET.Media.PipeWireVideoCapture.Queue : Nullable<PipeWireStreamQueue>
 PipeWire.NET.Media.PipeWireVideoCapture.RateMatch : Nullable<PipeWireRateMatch>
 PipeWire.NET.Media.PipeWireVideoCapture.ReleaseBorrowedFrame()
 PipeWire.NET.Media.PipeWireVideoCapture.RequestFormat(ReadOnlySpan<PixelFormat>, Int32, Int32, Int32)
 PipeWire.NET.Media.PipeWireVideoCapture.Retention : FrameRetention
 PipeWire.NET.Media.PipeWireVideoCapture.SetControl(UInt32, ReadOnlySpan<Single>, CancellationToken)
-PipeWire.NET.Media.PipeWireVideoCapture.SetRate(Double)
+PipeWire.NET.Media.PipeWireVideoCapture.SetError(Int32, String, CancellationToken)
+PipeWire.NET.Media.PipeWireVideoCapture.SetRate(Double, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoCapture.SkipCurrentFrame()
 PipeWire.NET.Media.PipeWireVideoCapture.StateChanged event
 PipeWire.NET.Media.PipeWireVideoCapture.StateChangedHandler
 PipeWire.NET.Media.PipeWireVideoCapture.TriggerProcess()
+PipeWire.NET.Media.PipeWireVideoCapture.TriggerProcessAndWaitAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireVideoCapture.TryGetBorrowedFrame(BorrowedVideoFrame&)
 PipeWire.NET.Media.PipeWireVideoCapture.TryGetFrame(PulledVideoFrame&)
 PipeWire.NET.Media.PipeWireVideoCapture.UpdateProperties(IReadOnlyDictionary<String, String>)
@@ -1319,20 +1374,27 @@ PipeWire.NET.Media.PipeWireVideoOutput+ReleaseDmaBufHandler..ctor(Object, IntPtr
 PipeWire.NET.Media.PipeWireVideoOutput+ReleaseDmaBufHandler.BeginInvoke(PipeWireVideoOutput, Int32, AsyncCallback, Object)
 PipeWire.NET.Media.PipeWireVideoOutput+ReleaseDmaBufHandler.EndInvoke(IAsyncResult)
 PipeWire.NET.Media.PipeWireVideoOutput+ReleaseDmaBufHandler.Invoke(PipeWireVideoOutput, Int32)
+PipeWire.NET.Media.PipeWireVideoOutput+StateChangedHandler
+PipeWire.NET.Media.PipeWireVideoOutput+StateChangedHandler..ctor(Object, IntPtr)
+PipeWire.NET.Media.PipeWireVideoOutput+StateChangedHandler.BeginInvoke(PipeWireVideoOutput, PipeWireStreamState, PipeWireStreamState, AsyncCallback, Object)
+PipeWire.NET.Media.PipeWireVideoOutput+StateChangedHandler.EndInvoke(IAsyncResult)
+PipeWire.NET.Media.PipeWireVideoOutput+StateChangedHandler.Invoke(PipeWireVideoOutput, PipeWireStreamState, PipeWireStreamState)
 PipeWire.NET.Media.PipeWireVideoOutput..ctor(PipeWireContext, String, Int32, Int32, PixelFormat, Int32)
 PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBuf event
 PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBufHandler
 PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBufSync event
 PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBufSyncHandler
-PipeWire.NET.Media.PipeWireVideoOutput.AnnounceLatency(PipeWireLatency, PipeWireProcessLatency)
+PipeWire.NET.Media.PipeWireVideoOutput.AnnounceLatency(PipeWireLatency, PipeWireProcessLatency, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.AnyNode = UInt32
 PipeWire.NET.Media.PipeWireVideoOutput.CommandReceived event
+PipeWire.NET.Media.PipeWireVideoOutput.Connect(PipeWireNode, Boolean, Boolean, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.Connect(UInt32, String, Boolean, Boolean, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.ConnectDmaBuf(ReadOnlySpan<DmaBufDeviceOffer>, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.ConnectDmaBuf(ReadOnlySpan<Int64>, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.ConnectDmaBufSync(ReadOnlySpan<DmaBufDeviceOffer>, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.ConnectDmaBufSync(ReadOnlySpan<Int64>, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.Controls : ImmutableArray<PipeWireStreamControl>
+PipeWire.NET.Media.PipeWireVideoOutput.Dispose()
 PipeWire.NET.Media.PipeWireVideoOutput.DisposeAsync()
 PipeWire.NET.Media.PipeWireVideoOutput.DrainAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.DriveAt(TimeSpan)
@@ -1345,18 +1407,22 @@ PipeWire.NET.Media.PipeWireVideoOutput.GetControl(UInt32)
 PipeWire.NET.Media.PipeWireVideoOutput.GraphClock : Nullable<PipeWireGraphClock>
 PipeWire.NET.Media.PipeWireVideoOutput.IsDriving : Boolean
 PipeWire.NET.Media.PipeWireVideoOutput.IsLazy : Boolean
+PipeWire.NET.Media.PipeWireVideoOutput.LastProcessError : Exception
 PipeWire.NET.Media.PipeWireVideoOutput.NegotiatedDevice : Nullable<DrmDevice>
 PipeWire.NET.Media.PipeWireVideoOutput.NextPresentationTimestampNs : Nullable<Int64>
 PipeWire.NET.Media.PipeWireVideoOutput.NodeId : Nullable<UInt32>
+PipeWire.NET.Media.PipeWireVideoOutput.ProcessErrorCount : Int64
 PipeWire.NET.Media.PipeWireVideoOutput.Queue : Nullable<PipeWireStreamQueue>
 PipeWire.NET.Media.PipeWireVideoOutput.RateMatch : Nullable<PipeWireRateMatch>
 PipeWire.NET.Media.PipeWireVideoOutput.ReleaseDmaBuf event
 PipeWire.NET.Media.PipeWireVideoOutput.ReleaseDmaBufHandler
 PipeWire.NET.Media.PipeWireVideoOutput.RequestFormat(ReadOnlySpan<PixelFormat>, Int32, Int32, Int32, Boolean)
 PipeWire.NET.Media.PipeWireVideoOutput.SetControl(UInt32, ReadOnlySpan<Single>, CancellationToken)
-PipeWire.NET.Media.PipeWireVideoOutput.SetRate(Double)
+PipeWire.NET.Media.PipeWireVideoOutput.SetError(Int32, String, CancellationToken)
+PipeWire.NET.Media.PipeWireVideoOutput.SetRate(Double, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.StampSyncPoints(Int32, UInt64, UInt64)
 PipeWire.NET.Media.PipeWireVideoOutput.StateChanged event
+PipeWire.NET.Media.PipeWireVideoOutput.StateChangedHandler
 PipeWire.NET.Media.PipeWireVideoOutput.TriggerProcess()
 PipeWire.NET.Media.PipeWireVideoOutput.TriggerProcessAndWaitAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.UpdateProperties(IReadOnlyDictionary<String, String>)
@@ -1549,6 +1615,8 @@ PipeWire.NET.PipeWireContext
 PipeWire.NET.PipeWireContext+LoopLock
 PipeWire.NET.PipeWireContext+LoopLock.Dispose()
 PipeWire.NET.PipeWireContext..ctor(String, ILoggerFactory)
+PipeWire.NET.PipeWireContext.ConnectionFault : PipeWireConnectionClosedException
+PipeWire.NET.PipeWireContext.ConnectionLost event
 PipeWire.NET.PipeWireContext.Dispose()
 PipeWire.NET.PipeWireContext.DisposeAsync()
 PipeWire.NET.PipeWireContext.DriveExternally : Boolean
@@ -1564,6 +1632,7 @@ PipeWire.NET.PipeWireContext.RunInProcess : Boolean
 PipeWire.NET.PipeWireContext.StartAsync(CancellationToken)
 PipeWire.NET.PipeWireContext.StartAsync(SafeHandle, CancellationToken)
 PipeWire.NET.PipeWireContext.TryLock(LoopLock&)
+PipeWire.NET.PipeWireContext.UpdateProperties(IReadOnlyDictionary<String, String>)
 PipeWire.NET.PipeWireDiagnostics
 PipeWire.NET.PipeWireDiagnostics.Name = String
 PipeWire.NET.PipeWireDiagnostics.Source : ActivitySource

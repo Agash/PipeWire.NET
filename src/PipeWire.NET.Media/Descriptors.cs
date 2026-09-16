@@ -6,7 +6,7 @@ using PipeWire.NET.Interop;
 namespace PipeWire.NET.Media;
 
 /// <summary>Duplicating a borrowed dmabuf descriptor so it can outlive the handler that saw it.</summary>
-internal static partial class Descriptors
+internal static class Descriptors
 {
     /// <summary>Duplicates <paramref name="fd"/>, or returns -1 when it is not a descriptor.</summary>
     /// <exception cref="IOException">The kernel refused to duplicate it.</exception>

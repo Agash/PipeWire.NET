@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -48,8 +49,19 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
 
     private readonly PipeWireContext _ctx;
     private readonly ILogger _logger;
+    private readonly TaskCompletionSource _ready =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     private BoundProxy? _bound;
     private volatile bool _disposed;
+
+    // Written on the loop thread from the info event, read from anywhere.
+    private volatile PipeWireProperties _properties = PipeWireProperties.Empty;
+
+    // One read at a time: the reply arrives on the loop thread as a permissions event, and the
+    // waiter is completed from there.
+    private readonly Lock _permissionsGate = new();
+    private TaskCompletionSource<ImmutableArray<PipeWireObjectPermission>>? _permissionsWaiter;
 
     private PipeWireClientProxy(PipeWireContext ctx, uint id, ILogger logger)
     {
@@ -62,18 +74,189 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
     public uint Id { get; }
 
     internal static unsafe PipeWireClientProxy Bind(
-        PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger)
+        PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger,
+        Action<uint, PipeWireProperties>? propertiesObserved = null)
     {
-        var control = new PipeWireClientProxy(ctx, id, logger);
+        var control = new PipeWireClientProxy(ctx, id, logger) { PropertiesObserved = propertiesObserved };
         control._bound = BoundProxy.Bind(
             ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Client, version, NativeConstants.PW_VERSION_CLIENT,
             sizeof(pw_client_events),
-            events => ((pw_client_events*)events)->version = NativeConstants.PW_VERSION_CLIENT_EVENTS,
+            events =>
+            {
+                var table = (pw_client_events*)events;
+                table->version = NativeConstants.PW_VERSION_CLIENT_EVENTS;
+                table->info = &OnInfoCallback;
+                table->permissions = &OnPermissionsCallback;
+            },
             static (proxy, hook, events, data) => Native.pw_client_add_listener(
                 (pw_client*)proxy, (spa_hook*)hook, (pw_client_events*)events, (void*)data),
             control);
 
+        control._bound.Removed = control.RaiseRemoved;
+
         return control;
+    }
+
+    /// <summary>Raised on the loop thread when the daemon destroys the object behind this proxy.</summary>
+    /// <remarks>
+    /// A bound object can go at any time. The proxy survives as a zombie and every call through it
+    /// fails from here on, so this is the signal to stop using it. A caller watching the whole graph
+    /// sees the same thing through the registry; one holding only this proxy has nothing else.
+    /// </remarks>
+    public event Action? Removed;
+
+    /// <summary>Whether the daemon has destroyed the object behind this proxy.</summary>
+    public bool IsRemoved => _bound?.IsRemoved ?? false;
+
+    private void RaiseRemoved()
+    {
+        Action? handler = Removed;
+        if (handler is null) return;
+
+        // A native callback frame, so nothing may escape it.
+        try { handler(); }
+        catch (Exception) { /* a subscriber that throws must not reach the daemon */ }
+    }
+
+
+    /// <summary>This client's properties, as the daemon last reported them.</summary>
+    /// <remarks>
+    /// Empty until the first <c>info</c> event arrives; <see cref="ReadyAsync"/> waits for it. A
+    /// client's properties change while it runs - an application that retags itself through
+    /// <see cref="PipeWireContext.UpdateProperties"/> is the ordinary case - and the daemon sends a
+    /// fresh <c>info</c> to every bound resource when they do, which is what keeps this current.
+    /// </remarks>
+    public PipeWireProperties Properties => _properties;
+
+    /// <summary>Waits for the daemon to send this client's first <c>info</c> event.</summary>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <remarks>
+    /// Binding is a request; until the daemon answers it there are no properties to read. Every
+    /// other bound type in this library reports readiness the same way.
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The proxy has been disposed.</exception>
+    public Task ReadyAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _ready.Task.WaitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Where an <c>info</c> event's properties go, set by the registry that made this object.
+    /// </summary>
+    internal Action<uint, PipeWireProperties>? PropertiesObserved { get; set; }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void OnInfoCallback(void* data, pw_client_info* info)
+    {
+        // An exception escaping a reverse P/Invoke aborts the process, so nothing here may throw.
+        try
+        {
+            if (info is null) return;
+            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireClientProxy self) return;
+            if (self._disposed) return;
+
+            if (info->props is not null)
+            {
+                PipeWireProperties properties = PipeWireProperties.From(info->props);
+                self._properties = properties;
+
+                try { self.PropertiesObserved?.Invoke(self.Id, properties); }
+                catch (Exception ex) { self.LogHandlerFaulted(self.Id, ex); }
+            }
+
+            self._ready.TrySetResult();
+        }
+        catch
+        {
+            // Deliberately not logged: the instance the logger belongs to is what failed to resolve.
+        }
+    }
+
+    /// <summary>Reads what this client is currently permitted to do.</summary>
+    /// <param name="index">The first entry to read; 0 for the start of the list.</param>
+    /// <param name="count">How many entries to ask for.</param>
+    /// <param name="cancellationToken">Abandons the wait for the daemon's answer.</param>
+    /// <returns>The entries the daemon answered with, in its order.</returns>
+    /// <remarks>
+    /// <para>
+    /// The counterpart to <see cref="UpdatePermissionsAsync"/>: without it a caller can confine a
+    /// client and never see what it actually holds, which is the half that matters when checking
+    /// that a sandbox came out as intended. The daemon answers on the client's <c>permissions</c>
+    /// event, so this is a round trip rather than a read of local state.
+    /// </para>
+    /// <para>
+    /// An entry with <see cref="AnyObject"/> as its id is the default applied to everything with no
+    /// entry of its own.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The proxy has been disposed.</exception>
+    /// <exception cref="InvalidOperationException">Another read is already in flight.</exception>
+    public async Task<ImmutableArray<PipeWireObjectPermission>> GetPermissionsAsync(
+        uint index = 0, uint count = 64, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var waiter = new TaskCompletionSource<ImmutableArray<PipeWireObjectPermission>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        lock (_permissionsGate)
+        {
+            if (_permissionsWaiter is not null)
+                throw new InvalidOperationException("a permissions read is already in flight.");
+
+            _permissionsWaiter = waiter;
+        }
+
+        try
+        {
+            int res = Read(index, count);
+            if (res < 0) throw new PipeWireException("pw_client_get_permissions", res, Id);
+
+            return await waiter.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (_permissionsGate)
+            {
+                if (ReferenceEquals(_permissionsWaiter, waiter)) _permissionsWaiter = null;
+            }
+        }
+
+        unsafe int Read(uint from, uint howMany)
+        {
+            BoundProxy proxy = _bound ?? throw new ObjectDisposedException(nameof(PipeWireClientProxy));
+
+            using (_ctx.Lock())
+                return Native.pw_client_get_permissions((pw_client*)proxy.Object, from, howMany);
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void OnPermissionsCallback(
+        void* data, uint index, uint count, pw_permission* permissions)
+    {
+        // An exception escaping a reverse P/Invoke aborts the process, so nothing here may throw.
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireClientProxy self) return;
+
+            var entries = ImmutableArray.CreateBuilder<PipeWireObjectPermission>((int)count);
+            for (uint i = 0; i < count && permissions is not null; i++)
+            {
+                entries.Add(new PipeWireObjectPermission(
+                    permissions[i].id, (PipeWirePermissions)permissions[i].permissions));
+            }
+
+            TaskCompletionSource<ImmutableArray<PipeWireObjectPermission>>? waiter;
+            lock (self._permissionsGate) waiter = self._permissionsWaiter;
+
+            waiter?.TrySetResult(entries.ToImmutable());
+        }
+        catch
+        {
+            // Deliberately not logged: the instance the logger belongs to is what failed to resolve.
+        }
     }
 
     /// <summary>
@@ -116,13 +299,18 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
         // permission.h has held the same five since 0.3.77, and a stray bit is either a cast from
         // the wrong enum or arithmetic that went wrong. Forwarding it asks the daemon to interpret
         // a number this library cannot describe.
+        //
+        // The mask is RWXML, not All: upstream's PW_PERM_ALL is RWXM and leaves out L, so masking
+        // with All would refuse a link grant that the daemon accepts.
+        const PipeWirePermissions defined = PipeWirePermissions.ReadWriteExecuteMetadataLink;
+
         foreach (PipeWireObjectPermission entry in permissions.Span)
         {
-            if ((entry.Permissions & ~PipeWirePermissions.All) == 0) continue;
+            if ((entry.Permissions & ~defined) == 0) continue;
 
             throw new ArgumentException(
                 $"object {entry.ObjectId} carries permission bits this library does not define: "
-                + $"0x{(uint)(entry.Permissions & ~PipeWirePermissions.All):x}.",
+                + $"0x{(uint)(entry.Permissions & ~defined):x}.",
                 nameof(permissions));
         }
 
@@ -277,4 +465,7 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
         GC.SuppressFinalize(this);
     }
 
+    [LoggerMessage(EventId = 34700, Level = LogLevel.Warning,
+        Message = "a properties handler for client {ClientId} threw")]
+    private partial void LogHandlerFaulted(uint clientId, Exception exception);
 }

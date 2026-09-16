@@ -38,6 +38,13 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
     private spa_hook* _hook;
     private GCHandle _self;
 
+    // A proxy carries two listeners: the interface's object listener, and pw_proxy's own, which is
+    // where `removed` arrives. They are owned and torn down identically, so the second set is
+    // tracked alongside rather than through a different path.
+    private void* _proxyEvents;
+    private spa_hook* _proxyHook;
+    private GCHandle _proxySelf;
+
     internal PipeWireProxyHandle(pw_proxy* proxy, PipeWireLoopHandle loop, PipeWireCoreHandle? core = null)
         : base((IntPtr)proxy, ownsHandle: true)
     {
@@ -70,6 +77,14 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
         _events = events;
         _hook = hook;
         _self = self;
+    }
+
+    /// <summary>Takes ownership of the <c>pw_proxy</c> listener, alongside the object listener.</summary>
+    internal void OwnProxyListener(void* events, spa_hook* hook, GCHandle self)
+    {
+        _proxyEvents = events;
+        _proxyHook = hook;
+        _proxySelf = self;
     }
 
     public override bool IsInvalid => handle == IntPtr.Zero;
@@ -138,6 +153,9 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
                     if (_hook is not null)
                         Native.spa_hook_remove(_hook);
 
+                    if (_proxyHook is not null)
+                        Native.spa_hook_remove(_proxyHook);
+
                     Native.pw_proxy_destroy(proxy);
                 }
                 finally
@@ -175,6 +193,19 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
             }
             if (_self.IsAllocated)
                 _self.Free();
+
+            if (_proxyHook is not null)
+            {
+                NativeMemory.Free(_proxyHook);
+                _proxyHook = null;
+            }
+            if (_proxyEvents is not null)
+            {
+                NativeMemory.Free(_proxyEvents);
+                _proxyEvents = null;
+            }
+            if (_proxySelf.IsAllocated)
+                _proxySelf.Free();
         }
         return true;
     }

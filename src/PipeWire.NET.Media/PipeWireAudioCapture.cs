@@ -44,16 +44,18 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
     /// <summary>Raised on the loop thread when an audio chunk is available. Do not cache the frame.</summary>
     public event FrameReadyHandler? FrameReady;
 
+    /// <summary>Handles a connection state change on the loop thread.</summary>
+    public delegate void StateChangedHandler(
+        PipeWireAudioCapture sender, PipeWireStreamState oldState, PipeWireStreamState newState);
+
     /// <summary>Raised on the loop thread when the connection state changes.</summary>
-    public event Action<PipeWireAudioCapture, PipeWireStreamState, PipeWireStreamState>? StateChanged;
+    public event StateChangedHandler? StateChanged;
 
     private readonly PipeWireContext _ctx;
     private readonly string _name;
     private readonly ILogger _logger;
     private PipeWireStreamCore? _core;
     private ulong _sequence;
-    private SpaFormatPod.AudioFormatInfo _fmt = new(AudioSampleFormat.F32Le, 48000, 2);
-
     /// <param name="context">A started <see cref="PipeWireContext"/>.</param>
     /// <param name="name">node.name advertised in the graph.</param>
     public PipeWireAudioCapture(PipeWireContext context, string name = "PipeWire.NET.AudioCapture")
@@ -215,6 +217,51 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
     /// </remarks>
     public void SkipCurrentFrame() => _core?.SkipCurrentBuffer();
 
+    /// <summary>Puts this stream into the error state and tells the daemon why.</summary>
+    /// <param name="result">A negative errno describing the failure.</param>
+    /// <param name="message">What went wrong, for logs and for the peer.</param>
+    /// <param name="cancellationToken">Abandons the wait for the loop lock.</param>
+    /// <remarks>
+    /// What to call when a callback cannot do what the graph asked - a format that cannot be
+    /// carried, a buffer that cannot be filled. A stream that fails and stays quiet leaves its peer
+    /// waiting on a cycle that will not come, and nothing in the graph says why; this library does
+    /// the same thing itself when a format handler throws. Upstream's <c>pipewiresrc</c> reports a
+    /// format it cannot handle exactly this way.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="message"/> is null.</exception>
+    public void SetError(int result, string message, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        _core?.SetError(result, message, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs one graph cycle and waits for it to complete. Only meaningful while
+    /// <see cref="IsDriving"/>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="TriggerProcess"/> starts a cycle and returns; this waits for the daemon to report
+    /// it finished, which is what a stream pacing itself needs in order to know when the next cycle
+    /// may be asked for. Upstream reports completion (<c>trigger_done</c>) only to a driving stream,
+    /// so this faults with <see cref="InvalidOperationException"/> when <see cref="IsDriving"/> is
+    /// false rather than waiting for a report that will not come.
+    /// </remarks>
+    public Task TriggerProcessAndWaitAsync(CancellationToken cancellationToken = default) =>
+        _core?.TriggerAndWaitAsync(cancellationToken) ?? Task.CompletedTask;
+
+    /// <summary>The last exception a callback of this stream threw, or null if none has.</summary>
+    /// <remarks>
+    /// A callback cannot let an exception reach its native caller, so one is recorded here rather
+    /// than thrown: a handler that throws otherwise looks exactly like a handler that did nothing.
+    /// It is not logged either, because these run on the realtime thread where logging is itself an
+    /// xrun - read it from your own non-realtime loop. <see cref="ProcessErrorCount"/> says how many
+    /// there have been, which separates "threw once" from "throws every cycle".
+    /// </remarks>
+    public Exception? LastProcessError => _core?.ProcessFaults.Last;
+
+    /// <summary>How many times a callback of this stream has thrown.</summary>
+    public long ProcessErrorCount => _core?.ProcessFaults.Count ?? 0;
+
     /// <summary>Whether the daemon has made this stream the graph's driver.</summary>
     public bool IsDriving => _core?.IsDriving ?? false;
 
@@ -277,6 +324,14 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
     private Action<SpaNodeCommand>? _commandReceived;
 
     private void RaiseCommand(SpaNodeCommand command) => _commandReceived?.Invoke(command);
+
+    /// <inheritdoc/>
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Disposal here does no awaiting, so this and <see cref="DisposeAsync"/> do the same work.
+    /// Both exist so that a caller is not forced into one idiom by which type they happen to hold.
+    /// </remarks>
+    public void Dispose() => _core?.Dispose();
 
     /// <inheritdoc/>
     public ValueTask DisposeAsync() => _core?.DisposeAsync() ?? ValueTask.CompletedTask;
@@ -438,7 +493,7 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
     /// target, smooth it, and apply it here; see PipeWire's own rtp and tunnel modules. Applying an
     /// unsmoothed correction makes the drift worse rather than better.
     /// </remarks>
-    public void SetRate(double rate) => _core?.SetRate(rate);
+    public void SetRate(double rate, CancellationToken cancellationToken = default) => _core?.SetRate(rate, cancellationToken);
 
     /// <summary>
     /// Announces the latency this stream adds, so the rest of the graph can compensate.
@@ -449,9 +504,12 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
     /// to stay in sync with. Pass the process latency too when the delay is per-cycle rather than
     /// fixed; PipeWire's own transport modules announce both.
     /// </remarks>
-    public void AnnounceLatency(PipeWireLatency latency, PipeWireProcessLatency? processLatency = null)
+    public void AnnounceLatency(
+        PipeWireLatency latency,
+        PipeWireProcessLatency? processLatency = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(latency);
-        _core?.AnnounceLatency(latency, processLatency);
+        _core?.AnnounceLatency(latency, processLatency, cancellationToken);
     }
 }

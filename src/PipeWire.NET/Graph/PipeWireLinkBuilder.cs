@@ -14,7 +14,7 @@ namespace PipeWire.NET.Graph;
 /// <code>
 /// PipeWireLink link = await registry.CreateLink(output, input)
 ///                                   .WithLinger()
-///                                   .Passive()
+///                                   .WithPassive()
 ///                                   .ExecuteAsync(ct);
 /// </code>
 /// </example>
@@ -84,7 +84,7 @@ public readonly struct PipeWireLinkBuilder
     /// is created active, with no error. Read the created link's <c>link.passive</c> to know which
     /// happened.
     /// </remarks>
-    public PipeWireLinkBuilder Passive() =>
+    public PipeWireLinkBuilder WithPassive() =>
         new(_registry, _output, _input, _options with { Passive = true });
 
     /// <summary>Creates the link and returns it once the graph reports it.</summary>
