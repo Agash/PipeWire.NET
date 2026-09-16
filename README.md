@@ -4,12 +4,21 @@
 [![build](https://github.com/Agash/PipeWire.NET/actions/workflows/build.yml/badge.svg)](https://github.com/Agash/PipeWire.NET/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-.NET bindings for [PipeWire](https://pipewire.org) on Linux. `PipeWire.NET`
-for the graph (enumeration, routing, node and device control, DSP nodes, virtual devices),
-and `PipeWire.NET.Media` streams audio and video through it.
+.NET bindings for [PipeWire](https://pipewire.org), the audio and video graph on modern Linux
+desktops. Read and route the graph, control volumes and devices, capture and publish audio and
+video, run DSP inside the graph, or publish virtual devices of your own.
 
-> **Alpha.** Early and working, but largely untested in the wild and rough in places. Try it and file
-> issues; expect breaking changes before 1.0.
+> **Alpha.** Early and working, but largely untested in the wild and rough in places. Try it and
+> file issues; expect breaking changes before 1.0.
+
+## Install
+
+```sh
+dotnet add package PipeWire.NET          # graph, control, serving, SPA pods
+dotnet add package PipeWire.NET.Media    # audio and video streams
+```
+
+## Hello, graph
 
 ```csharp
 await using var ctx = new PipeWireContext();
@@ -22,17 +31,26 @@ foreach (PipeWireNode node in registry.Nodes)
     Console.WriteLine($"[{node.NodeId}] {node.Description} ({node.MediaClass})");
 ```
 
-**Reading somebody else's object, or being one?** That is the decision this API turns on, and
-picking wrong compiles and then does nothing you wanted.
-[docs/choosing-a-type.md](docs/choosing-a-type.md) is one table per case;
-[docs/pipewire-roles.md](docs/pipewire-roles.md) is why the two sides differ in kind.
+A `PipeWireContext` is one connection and one event loop thread; a `PipeWireRegistry` keeps a live
+snapshot of what the daemon has.
 
-## Packages
+**New here?** [docs/quickstart.md](docs/quickstart.md) takes you from an empty project to reading the
+graph, changing a volume, capturing audio and publishing a node, picking up the concepts on the way.
+[docs/pipewire-concepts.md](docs/pipewire-concepts.md) is the model on its own.
 
-| Package              | What it holds                                                                                                                                                                                   |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PipeWire.NET`       | Context and loop, registry and snapshots, virtual sinks and sources, links, the node/device/client/metadata proxies, the node/device/metadata providers, in-graph DSP filters, the SPA pod codec |
-| `PipeWire.NET.Media` | Audio/video capture and output, DMA-BUF and explicit sync, frame timestamps and clock alignment                                                                                                 |
+## What you can do
+
+| | Start here |
+|---|---|
+| List what exists, watch it change | `PipeWireRegistry`, below |
+| Set a volume, switch a card profile, read session defaults | [one object at a time](#acting-on-one-object) |
+| Capture or publish audio and video | [streams](#streaming), [docs/streaming.md](docs/streaming.md) |
+| Run DSP in the graph, publish a virtual device | [docs/serving.md](docs/serving.md) |
+| Work out which type you want | [docs/choosing-a-type.md](docs/choosing-a-type.md) |
+
+The rule the API turns on: are you *reading somebody else's* object, or *being* one? Those are
+different types with different suffixes, and picking wrong compiles and then does nothing you
+wanted. [docs/choosing-a-type.md](docs/choosing-a-type.md) is one table per case.
 
 ## Requirements
 
@@ -40,7 +58,7 @@ picking wrong compiles and then does nothing you wanted.
 | -------- | -------------------------------------------------------------------- |
 | OS       | Linux (x64 / arm64)                                                  |
 | Runtime  | `libpipewire-0.3.so.0` (ships with any PipeWire install)             |
-| PipeWire | Bindings generated against 1.6.8; see the version policy below       |
+| PipeWire | Bindings generated against 1.6.8; see [version policy](#pipewire-version-policy) |
 | Daemon   | A running PipeWire daemon plus a session manager such as WirePlumber |
 | .NET     | .NET 10, or .NET 11 (preview)                                        |
 
@@ -50,28 +68,12 @@ sudo dnf install pipewire wireplumber          # Fedora
 sudo pacman -S pipewire wireplumber            # Arch
 ```
 
-The library and the sample publish as NativeAOT.
+Both packages are Native AOT compatible, and CI publishes and runs the sample as AOT on every build.
 
-### PipeWire version policy
+## Reading the graph
 
-The native bindings are generated from the PipeWire headers of one specific release, recorded in`generate/HEADER-VERSION` and enforced by the generator. That release is what the committed bindings describe, and it is the version the gating test job runs against.
-
-Older daemons are not rejected and should mostly work: the library binds a small, long-stable part of the protocol. What an older daemon can lack is usually a whole interface, and binding one that is not there fails at the bind rather than silently misbehaving.
-
-If you need a specific older release supported, open an issue with the version.
-
-## Install
-
-```sh
-dotnet add package PipeWire.NET          # graph, metadata, control
-dotnet add package PipeWire.NET.Media    # audio and video streams
-```
-
-## The graph
-
-Everything starts with a `PipeWireContext`: one connection, one realtime loop. Native calls that must serialize with the loop go through `Lock()` (or `TryLock`), which hands out a scope; disposal waits out every live scope, so a callback can never outlive the loop it runs on.
-
-`PipeWireRegistry` keeps a live, immutable `Current` snapshot of the graph: nodes, ports, links, devices, clients, metadata. Read it directly for point queries, or consume `WatchAsync` for a snapshot per change.
+`registry.Current` is an immutable snapshot: nodes, ports, links, devices, clients, metadata. Read
+it for point queries, or consume `WatchAsync` for one snapshot per change.
 
 ```csharp
 await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
@@ -83,40 +85,28 @@ await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationTo
 
 ### Connecting over a portal fd
 
-A sandboxed client may not see the daemon socket itself. xdg-desktop-portal's ScreenCast
-`OpenPipeWireRemote` returns the next best thing: a socket fd already connected to the daemon,
-restricted to the access the user granted. `StartAsync` connects over that fd directly. The
-handle is only borrowed: the library duplicates the descriptor (close-on-exec, as PipeWire does
-itself), the connection owns the duplicate, and the caller's handle stays open and usable. Any
-`SafeHandle` is accepted, so a `Socket` can be passed as `socket.SafeHandle` directly.
+A sandboxed client may not see the daemon socket. xdg-desktop-portal's ScreenCast
+`OpenPipeWireRemote` returns a socket fd already connected to the daemon, restricted to what the
+user granted. The handle is borrowed: the library duplicates it close-on-exec, as PipeWire does
+itself, and yours stays open.
+
+`StartAsync` takes a `SafeHandle`, so wrap the descriptor the reply carries:
 
 ```csharp
-// fd: the handle the ScreenCast OpenPipeWireRemote reply carries
+using Microsoft.Win32.SafeHandles;
+
+// rawFd: the descriptor from the OpenPipeWireRemote reply's UnixFdList
+using var handle = new SafeFileHandle((IntPtr)rawFd, ownsHandle: true);
+
 await using var ctx = new PipeWireContext();
-await ctx.StartAsync(fd, cancellationToken);
+await ctx.StartAsync(handle, cancellationToken);
 ```
-
-### Creating nodes and links
-
-```csharp
-// A source other clients can record from; CreateVirtualSink is the other direction.
-PipeWireNode source = await registry.CreateVirtualSource("Sample tone")
-    .WithName("sample_tone")
-    .ExecuteAsync(cancellationToken);
-
-// Link two ports by id: output first, input second.
-PipeWireLink link = await registry.CreateLink(outputPortId, inputPortId)
-    .ExecuteAsync(cancellationToken);
-
-await registry.RemoveLinkAsync(link.LinkId, cancellationToken);
-await registry.DestroyGlobalAsync(source.NodeId, cancellationToken);
-```
-
-A creation can opt out of cleanup-on-dispose with `WithLinger`, in which case the daemon object survives the process and `LingeringIds` lists what was left behind for later destruction. A link can be `Passive`, so it follows the graph without forcing the nodes active.
 
 ## Acting on one object
 
-Bind a proxy to act on one object: volumes and mutes on nodes, profiles and routes on devices, permissions on clients, defaults and clock on metadata. A proxy is used with `await using` and reports readiness through `ReadyAsync`.
+Bind a proxy to act on one object: volumes and mutes on nodes, profiles and routes on devices,
+permissions on clients, defaults and clock on metadata. A proxy is used with `await using` and
+reports readiness through `ReadyAsync`.
 
 ```csharp
 await using PipeWireNodeProxy node = registry.BindNode(nodeId);
@@ -140,7 +130,8 @@ foreach (SpaObject route in await device.EnumerateRoutesAsync(cancellationToken)
     Console.WriteLine(route);
 ```
 
-The session defaults (default sink/source, graph clock rate and quantum) live in the `default` metadata store, which is absent on a session with no session manager running:
+The session defaults - default sink and source, graph clock rate and quantum - live in the `default`
+metadata store, which is absent on a session with no session manager running:
 
 ```csharp
 PipeWireMetadataProxy? store = registry.BindMetadata("default");
@@ -156,29 +147,24 @@ if (store is not null)
 }
 ```
 
-## Serving the graph
-
-`PipeWireFilter` is a DSP node of your own inside the graph: declare audio, MIDI, or control ports, handle `ProcessCallback` on the realtime thread, and link it like any other node. Buffers are only present once the ports are linked; until then the spans come back empty.
+## Linking
 
 ```csharp
-await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "sample_gain");
-PipeWireFilterPort input = filter.AddAudioPort(PipeWirePortDirection.In, "in");
-PipeWireFilterPort output = filter.AddAudioPort(PipeWirePortDirection.Out, "out");
+// Output port first, input port second.
+PipeWireLink link = await registry.CreateLink(outputPortId, inputPortId)
+    .ExecuteAsync(cancellationToken);
 
-filter.ProcessCallback = (_, sampleCount, in _) =>
-{
-    Span<float> dry = input.GetSamples(sampleCount);
-    Span<float> wet = output.GetSamples(sampleCount);
-    for (uint i = 0; i < sampleCount; i++)
-        wet[(int)i] = dry[(int)i] * 0.5f;
-};
-
-await filter.ConnectAsync(PipeWireFilterFlags.RtProcess, cancellationToken);
+await registry.RemoveLinkAsync(link.LinkId, cancellationToken);
 ```
 
-For virtual hardware there is `PipeWireDeviceProvider` (profiles, routes, parameters served to the daemon) and for session state `PipeWireMetadataProvider`. The sample project and `DeviceProviderTests` show both ends: export the object, then read it back through the ordinary client path.
+A link can be `Passive`, so it follows the graph without forcing the nodes active. Most applications
+never call this: routing is the session manager's job, as
+[docs/pipewire-concepts.md](docs/pipewire-concepts.md) explains.
 
-## Streaming audio
+## Streaming
+
+Capture reads from a node; output publishes one. Both take a target node id or name, or let the
+session manager choose.
 
 ```csharp
 await using var capture = new PipeWireAudioCapture(ctx);
@@ -191,13 +177,15 @@ capture.Connect();
 ```csharp
 await using var output = new PipeWireAudioOutput(ctx, "sample_synth");
 output.FillSamples += (_, samples, sampleRate, channels, format) =>
-    WriteTone(samples, sampleRate, channels);
+{
+    // The byte count written; 0 publishes silence.
+    return WriteTone(samples, sampleRate, channels);
+};
+
 output.Connect();
 ```
 
-`FillSamples` returns the byte count written; returning 0 publishes silence. Both capture types accept a target node id or a `targetObjectName` to bind to a specific node instead of relying on the session manager's default routing.
-
-## Streaming video
+Video is the same shape:
 
 ```csharp
 await using var camera = new PipeWireVideoCapture(ctx);
@@ -210,28 +198,44 @@ camera.Connect();   // auto-selects the default video source
 ```csharp
 await using var screen = new PipeWireVideoOutput(ctx, "sample_screen", 1280, 720);
 screen.FillFrame += (_, pixels, stride, width, height, format) =>
+{
     Render(pixels, stride, width, height);
+    return true;          // false publishes nothing this cycle
+};
+
 screen.Connect();
 ```
 
-On Linux this is how you feed a tool like OBS: publish a node here, then add a PipeWire video source in OBS and it reads the feed. It is the Linux counterpart to Spout on Windows or Syphon on macOS.
+Frames are `ref struct`s delivered on the loop thread and valid only for the handler; `Clone` what
+must outlive it. They carry the pixels or samples, the negotiated format, the backing memory and
+four timestamps. Fill callbacks write straight into the daemon's buffer, so there is no intermediate
+copy, and capture can take DMA-BUF buffers for GPU sources.
 
-## Frames
+[docs/streaming.md](docs/streaming.md) covers timestamps and A/V sync, DMA-BUF, explicit sync and
+multi-GPU device negotiation.
 
-`VideoFrame` and `AudioFrame` are `ref struct`s delivered on the loop thread; their data is valid only for the duration of the handler. Copy out (`Clone`) anything that must outlive it.
+### Screen capture on Wayland
 
-`VideoFrame` carries the pixels (`Pixels`, `Stride`, `Width`, `Height`, `Format`), the negotiated `Color` info, the backing memory (`BufferType`, `Fd`, `MapOffset`), and timing (see below). For a DMA-BUF frame it also exposes the DRM format `Modifier` and the per-plane layout (`Planes`: fd, offset, stride, size per plane, e.g. two planes for `Nv12`), so a multi-plane tiled surface can be imported correctly. `AudioFrame` carries `Samples`, `SampleRate`, `Channels`, `Format`, `FrameCount`, and timing.
+This library does not talk to Wayland. Screen capture goes through the
+`org.freedesktop.portal.ScreenCast` portal, which returns a node id after the user grants
+permission; pass it to `PipeWireVideoCapture.Connect(nodeId)` and it behaves like any other source.
 
-Frame timing, A/V sync and the zero-copy paths (DMA-BUF, explicit sync, multi-GPU device
-negotiation) are their own guide: [docs/streaming.md](docs/streaming.md).
+## Serving
 
-## Screen capture on Wayland
+Publishing something other clients use - a virtual sink, a DSP node, a device, a metadata store - is
+its own guide: [docs/serving.md](docs/serving.md). The shortest example is a sink other applications
+can play into, which needs no callbacks at all:
 
-This library does not deal with Wayland directly. Screen capture goes through the `org.freedesktop.portal.ScreenCast` (or similar) portal, which after the user grants permission returns a PipeWire node id. Pass that id to `PipeWireVideoCapture.Connect(nodeId)` and it behaves like any other source.
+```csharp
+PipeWireNode sink = await registry.CreateVirtualSinkAsync("My mix", cancellationToken: cancellationToken);
+```
 
 ## SPA pods
 
-Parameters on the wire are SPA pods. `SpaPod` parses and writes the value model (`SpaInt`, `SpaString`, `SpaObject`, `SpaChoice`, and the rest); the builder and reader types used while assembling them are currently internal.
+Everything configurable on a node, port or device is a parameter, and every parameter is a SPA pod.
+`SpaPod` parses and writes the value model (`SpaInt`, `SpaString`, `SpaObject`, `SpaChoice` and the
+rest); [docs/parameters-and-pods.md](docs/parameters-and-pods.md) covers reading a device's routes,
+what a `SpaChoice` means during negotiation, and writing one back.
 
 ```csharp
 byte[] bytes = SpaPod.ToBytes(new SpaInt(48000));
@@ -241,12 +245,12 @@ if (SpaPod.TryParse(bytes, out SpaValue? value) && value is SpaInt rate)
 
 ## Sample app
 
-`samples/PipeWire.NET.SampleConsole` is a small CLI over both packages. With no arguments it connects and lists the graph; every mutating command needs a flag or target.
+`samples/PipeWire.NET.SampleConsole` is a small CLI over both packages, and the quickest way to see
+whether your machine is set up.
 
 ```sh
 dotnet run --project samples/PipeWire.NET.SampleConsole -- list
 dotnet run --project samples/PipeWire.NET.SampleConsole -- monitor
-dotnet run --project samples/PipeWire.NET.SampleConsole -- volume
 dotnet run --project samples/PipeWire.NET.SampleConsole -- volume alsa_output.pci --set 0.5
 dotnet run --project samples/PipeWire.NET.SampleConsole -- defaults
 dotnet run --project samples/PipeWire.NET.SampleConsole -- capture-audio --seconds 5
@@ -255,30 +259,63 @@ dotnet run --project samples/PipeWire.NET.SampleConsole -- filter --seconds 8
 dotnet run --project samples/PipeWire.NET.SampleConsole -- serve
 ```
 
-`serve` publishes a virtual source until Ctrl+C. `filter` plays a quiet generated tone through a gain node into the default sink, if there is one; otherwise it runs the node unlinked.
+`filter` plays a quiet generated tone through a gain node into the default sink; `serve` publishes a
+virtual source until Ctrl+C.
+
+## Documentation
+
+**Start here**
+
+| | |
+|---|---|
+| [quickstart.md](docs/quickstart.md) | empty project to working program, with the concepts as you need them |
+| [pipewire-concepts.md](docs/pipewire-concepts.md) | the graph model in ten minutes, if PipeWire is new to you |
+| [choosing-a-type.md](docs/choosing-a-type.md) | which type to reach for, per task, with upstream's name for each |
+| [troubleshooting.md](docs/troubleshooting.md) | symptoms and what they usually mean |
+
+**Going further**
+
+| | |
+|---|---|
+| [threading-and-lifetimes.md](docs/threading-and-lifetimes.md) | callback threading, the realtime contract, disposal, lingering objects |
+| [parameters-and-pods.md](docs/parameters-and-pods.md) | reading and writing parameters: routes, profiles, formats |
+| [streaming.md](docs/streaming.md) | frame timing, A/V sync, DMA-BUF, explicit sync |
+| [serving.md](docs/serving.md) | publishing nodes, devices, filters and metadata |
+| [pipewire-roles.md](docs/pipewire-roles.md) | consuming versus being an object, and what serving costs |
+| [running-tests.md](docs/running-tests.md) | the test categories and what each one needs |
+
+Upstream's own [Overview](https://docs.pipewire.org/page_overview.html) and
+[API tutorial](https://docs.pipewire.org/page_tutorial.html) are the reference for the C API these
+bindings cover.
 
 ## How it is built
 
-The low-level bindings in `src/PipeWire.NET/generated/` are produced by [ClangSharpPInvokeGenerator](https://github.com/dotnet/ClangSharp) from the installed PipeWire headers and committed to the repo, so consumers never run the generator. Four passes produce them: the ABI (`pipewire.rsp`) and one per library whose macros are needed (`pipewire-constants.rsp`, `libc.rsp`, `libdrm.rsp`). The hand-written high-level types (`PipeWireContext`, `PipeWireRegistry`, the node/device/client proxies, the stream classes, `PipeWireFilter`, the providers) and the SPA pod helpers sit on top.
+The low-level bindings in `src/PipeWire.NET/generated/` are produced by
+[ClangSharpPInvokeGenerator](https://github.com/dotnet/ClangSharp) from the installed PipeWire
+headers and committed, so consumers never run the generator. Four passes produce them: the ABI
+(`pipewire.rsp`) and one per library whose macros are needed (`pipewire-constants.rsp`, `libc.rsp`,
+`libdrm.rsp`). The hand-written types on top - context, registry, proxies, providers, streams,
+filters, the SPA pod codec - are ordinary C#.
 
-To regenerate after a PipeWire version bump (on Linux, with `libpipewire-0.3-dev` and
-`libclang-dev`):
+To regenerate after a PipeWire version bump, on Linux with `libpipewire-0.3-dev` and `libclang-dev`:
 
 ```sh
 dotnet tool install --global ClangSharpPInvokeGenerator --version 21.1.8.3
 bash generate/generate.sh
 ```
 
-CI runs the generator on every build and fails if the committed output drifts.
+CI regenerates on every build and fails if the committed output drifts.
 
-## Documentation
+### PipeWire version policy
 
-| | |
-|---|---|
-| [choosing-a-type.md](docs/choosing-a-type.md) | which type to reach for, per case, with the upstream name for each |
-| [pipewire-roles.md](docs/pipewire-roles.md) | consuming an object versus being one, and what the second role costs |
-| [streaming.md](docs/streaming.md) | frame timing, A/V sync, DMA-BUF and explicit sync |
-| [running-tests.md](docs/running-tests.md) | the test categories, and which need a daemon, a GPU or a patched one |
+The bindings are generated from the headers of one specific release, recorded in
+`generate/HEADER-VERSION` and enforced by the generator. That release is what the committed bindings
+describe and what the gating test job runs against.
+
+Older daemons are not rejected and should mostly work: the library binds a small, long-stable part
+of the protocol. What an older daemon can lack is usually a whole interface, and binding one that is
+not there fails at the bind rather than silently misbehaving. If you need a specific older release
+supported, open an issue with the version.
 
 ## Testing
 
@@ -287,7 +324,8 @@ dotnet test --filter "TestCategory!=Integration"     # pure logic, runs anywhere
 dotnet test --filter "TestCategory=Integration"      # needs a running daemon
 ```
 
-Integration tests run against a live daemon. Some start real producers through GStreamer (`videotestsrc`, `audiotestsrc`) and check capture across formats, registry discovery, real frame content, alpha preservation, timestamps, and audio/video sharing one clock. Tests tagged `RequiresGpu` cover DMA-BUF capture and run on a host with a GPU; everything else runs on CI against a headless PipeWire.
+Integration tests run against a live daemon, some of them driving real producers through GStreamer.
+[docs/running-tests.md](docs/running-tests.md) lists every category and what it needs.
 
 ## License
 

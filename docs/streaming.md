@@ -21,9 +21,27 @@ On capture, `frame.Pixels` points straight into the daemon's mapped buffer, so r
 
 On publish, `FillFrame` and `FillSamples` give you a span over the daemon's buffer, so you write the frame once with no intermediate copy.
 
-For a fully GPU-resident publish, `PipeWireVideoOutput.ConnectDmaBuf(modifiers)` advertises a set of DRM format modifiers, negotiates one with the consumer, and backs the stream with DMA-BUF buffers you own. Allocate your GPU surfaces in the `AllocateDmaBuf` callback (export each once, e.g. via `vkGetMemoryFdKHR`) and write the chosen buffer in `FillDmaBuf`; `ReleaseDmaBuf` tears them down. The producer can self-pace with `TriggerProcess`, and `NodeId` lets a consumer target the node directly.
+For a fully GPU-resident publish, `PipeWireVideoOutput.ConnectDmaBuf(modifiers)` advertises a set of DRM format modifiers, negotiates one with the consumer, and backs the stream with DMA-BUF buffers you own. Allocate your GPU surfaces in the `AllocateDmaBuf` callback (export each once, e.g. via `vkGetMemoryFdKHR`) and write the chosen buffer in `FillDmaBuf`; `ReleaseDmaBuf` tears them down. The producer can self-pace with `TriggerProcess`.
+
+Every stream type exposes `NodeId` once the daemon has assigned one, which is how a consumer targets
+a producer in the same process directly instead of going through the session manager.
 
 On a machine with more than one GPU, pass `DmaBufDeviceOffer`s (a `DrmDevice` and the modifiers it can use) to `ConnectDmaBuf` or to the capture's `Connect(deviceOffers:)` instead of bare modifiers. Both ends then negotiate which device the buffers live on, as PipeWire's device-ID negotiation does; `NegotiatedDevice` reports the result and `AllocateDmaBuf` is handed it. A peer that does not negotiate still streams, with the device left undefined.
+
+## Explicit sync
+
+DMA-BUF says where the pixels are, not whether the GPU has finished writing them. Explicit sync is
+the answer: a DRM syncobj timeline carries an *acquire* point the consumer waits on before reading,
+and a *release* point it signals when finished.
+
+`ConnectDmaBufSync` is `ConnectDmaBuf` with that timeline attached. The allocation callback becomes
+`AllocateDmaBufSync`, which also hands back the acquire and release points for the buffer, and
+`StampSyncPoints` sets the pair for a frame you are about to publish. On the consuming side a frame
+carries `SyncTimeline` when the producer negotiated one.
+
+Needs a kernel and driver with DRM syncobj timeline support, and `libdrm`. A peer that does not
+negotiate explicit sync still streams - the buffers are then implicitly synchronised, which is the
+older behaviour and is what you get with plain `ConnectDmaBuf`.
 
 ## Renegotiating against a GStreamer producer
 

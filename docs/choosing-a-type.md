@@ -1,5 +1,8 @@
 # Which type do I want?
 
+New to PipeWire? Read [pipewire-concepts.md](pipewire-concepts.md) first; this page assumes you know
+what a node, a port and a link are.
+
 Every object in a PipeWire graph can be approached three ways, and this library has a type for each.
 Picking the wrong one is the single most common way to get stuck, because the wrong one usually
 compiles and then does nothing you wanted: `PipeWireMetadataProvider` *serves* a metadata store, so
@@ -15,8 +18,9 @@ The rule is the suffix, and it is the same for every kind:
 | `Provider` (`PipeWireNodeProvider`) | the object; the daemon publishes it for you and forwards every request to your process | `pw_core_export`, `pw_impl_node` |
 | `Builder` (`PipeWireNodeBuilder`) | describing an object for the daemon to create, not yet created | factory arguments |
 
-`docs/pipewire-roles.md` is the long version of why the third row is different in kind from the
-other two, and what it costs to take that role and not perform it.
+[pipewire-roles.md](pipewire-roles.md) is the long version of why the third row is different in kind
+from the other two, and what it costs to take that role and not perform it;
+[serving.md](serving.md) is the practical side of it.
 
 ## Consume, or serve
 
@@ -31,6 +35,7 @@ other two, and what it costs to take that role and not perform it.
 | watch a link's state | `PipeWireLinkProxy` | `registry.BindLink(id)` |
 | read a port's params | `PipeWirePortProxy` | `registry.BindPort(id)` |
 | read the daemon's profiler output | `PipeWireProfilerProxy` | `registry.BindProfiler()` |
+| sandbox a child process's access | `PipeWireSecurityContextProxy` | `registry.BindSecurityContext(id)` |
 | create a sink other apps can play into | `PipeWireNodeBuilder` | `registry.CreateVirtualSink(description)` |
 | create a source other apps can record from | `PipeWireNodeBuilder` | `registry.CreateVirtualSource(description)` |
 | link two ports | `PipeWireLinkBuilder` | `registry.CreateLink(outputPortId, inputPortId)` |
@@ -76,7 +81,8 @@ misdescribes.
 - `PipeWireStreamControl` is a knob on a stream (name, value, range), which is upstream's
   `pw_stream_control`. It is not a proxy; the proxies all end in `Proxy`.
 - `SpaProp` is the generated enum of `SPA_PROP_*` ids. `SpaPodProperty` is one property inside a POD
-  object. They are two letters apart and unrelated.
+  object. They are two letters apart and unrelated - see
+  [parameters-and-pods.md](parameters-and-pods.md).
 - `PipeWireMetadata` is the registry's record of a metadata store. `PipeWireMetadataProxy` binds one
   somebody else serves. `PipeWireMetadataProvider` serves one of your own.
 - `PipeWireExportedFormat` is the format an exported node offers, not an object kind.

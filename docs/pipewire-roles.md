@@ -1,5 +1,9 @@
 # The two roles, and which one this library plays
 
+Background rather than instructions: what it means that a PipeWire client can be on either side of
+an object, and what the serving side costs. If you only need to know which type to use,
+[choosing-a-type.md](choosing-a-type.md) and [serving.md](serving.md) answer that without this.
+
 Written after reading PipeWire 1.6.8 and WirePlumber 0.5.16 rather than inferring from the headers.
 Everything here is checked against source or a running daemon; where it is not, it says so.
 
@@ -111,49 +115,34 @@ the same context is fine. It is a documented consequence, not a rule.
 
 ## Where PipeWire.NET stands against this
 
-**Consuming: complete.** Ten of the thirteen interfaces are bound with a control type. The three
-that are not are `Core` and `Registry`, which are the connection itself, and `ClientNode`, which is
-the transport underneath node export rather than something a caller binds.
+**Consuming: complete.** Nine of the thirteen interfaces have a proxy - eight public
+(`PipeWireNodeProxy`, `PipeWireDeviceProxy`, `PipeWireClientProxy`, `PipeWireLinkProxy`,
+`PipeWirePortProxy`, `PipeWireMetadataProxy`, `PipeWireProfilerProxy`,
+`PipeWireSecurityContextProxy`) and an internal module reader. The four without are not omissions:
+`Core` and `Registry` are the connection itself, `Factory` carries only the info the registry
+already has, and `ClientNode` is the transport underneath node serving rather than something a
+caller binds.
 
-**Exporting: nodes and metadata, not devices.**
+**Serving: all four kinds** - media nodes through the stream types, multi-port DSP through
+`PipeWireFilter`, a node or device you answer for through the providers, and metadata stores.
+[serving.md](serving.md) is the table of which to reach for; this page is about what taking that role
+means. Endpoint and Session are deliberately not served: nothing uses them.
 
-| Role | Status |
-|---|---|
-| Export a node as a media source or sink | Through `PipeWireAudioCapture`, `PipeWireVideoCapture`, `PipeWireAudioOutput`, `PipeWireVideoOutput`. |
-| Export a multi-port processing node | Through `PipeWireFilter`. |
-| Export a metadata store | `PipeWireMetadataProvider`, exported by default. |
-| Export a device with profiles and routes | Not implemented. |
-| Export Endpoint or Session | Deliberately not: nothing uses them. |
+Device serving has the caveat it always had, and it is a property of the interface rather than of
+this implementation: a device announces its child nodes through `object_info`, and each of those is
+a node implementation of its own. A device that announces none is legal and selectable in a mixer
+and carries no audio. [serving.md](serving.md) says which type to reach for.
 
-The one real gap is device export. It matters for a specific shape of application: one that provides
-hardware to the graph from outside the daemon, the way a Bluetooth or ALSA monitor does. A .NET
-application wanting to publish a virtual sound card with selectable profiles and routes cannot do it
-today; one wanting to publish audio or video can, through the stream types.
+## What is left
 
-## What "full-fledged" would mean from here
-
-In order of what a real application would miss first:
-
-1. **Device export** (`SPA_TYPE_INTERFACE_Device`), so a .NET process can provide a device with
-   profiles and routes rather than only nodes. The wiring is identical to metadata, read from
-   `module-client-device/protocol-native.c`: create through the `client-device` factory, route the
-   daemon's requests into the implementation with `pw_proxy_add_object_listener`, and route the
-   implementation's events out with `spa_device_add_listener`.
-
-   What makes it bigger than metadata is the interface behind it. The object is a raw `spa_device`,
-   so a caller has to answer four methods (`add_listener`, `sync`, `enum_params`, `set_param`) and
-   emit four events (`info`, `result`, `event`, `object_info`). `enum_params` and `set_param` carry
-   SPA pods, which the existing builder and parser already cover.
-
-   `object_info` is the part with no equivalent in the metadata work: it is how a device announces
-   the child objects it provides, which is how a sound card publishes its PCM nodes. A device that
-   announces none is legal and selectable in a mixer but carries no audio, so a useful
-   implementation needs the child nodes too, and each of those is a node export of its own.
-
-   That is the honest size of it: not a wrapper over one call like the metadata provider, but a
-   second serving surface with its own vtable and a dependency on node serving underneath.
-2. **A served node that is not a stream**, if a caller ever needs port shapes `pw_filter` cannot
-   express. Worth deferring until something actually needs it, because `pw_filter` covers the cases
-   that exist.
+1. **Child nodes from a served device**, so a `PipeWireDeviceProvider` can publish the PCM nodes a
+   real card would rather than only its profiles and routes. Each child is a node implementation, so
+   this builds on `PipeWireNodeProvider` rather than on the device code.
+2. **Raw filter ports** (`pw_filter_dequeue_buffer`), for formats outside the DSP set. The DSP
+   convenience covers mono float audio, RGBA 32-bit float video, control, MIDI and UMP, which is
+   what `PipeWireFilter.AddAudioPort` and friends give you; anything else - planar or compressed
+   video, interleaved multichannel - needs the general path, as do
+   `PW_FILTER_PORT_FLAG_ALLOC_BUFFERS` and `pw_filter_remove_port`. Worth deferring until something
+   needs it.
 3. Nothing else. The consuming side is complete, and the interfaces not covered are either the
    connection itself or dead.
