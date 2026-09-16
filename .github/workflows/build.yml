@@ -172,7 +172,7 @@ jobs:
 
       - name: Run Linux integration tests (against installed runtime, no daemon required)
         run: dotnet test PipeWire.NET.slnx --no-build -c Release
-             --filter "TestCategory=Integration&TestCategory!=RequiresDaemon&TestCategory!=PenTest&TestCategory!=KillsTheDaemon" --max-parallel-test-modules 1
+             --filter "TestCategory=Integration&TestCategory!=RequiresDaemon&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon" --max-parallel-test-modules 1
 
       - name: Graph tests against a real daemon
         # Gating. Registry enumeration, object creation and linking need only the daemon and the
@@ -185,7 +185,7 @@ jobs:
           source build/session.sh
           pwnet_session_start
           pwnet_session_run dotnet test PipeWire.NET.slnx --no-build -c Release \
-            --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon" --max-parallel-test-modules 1
+            --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon" --max-parallel-test-modules 1
           exit $PWNET_LAST_RC
 
       - name: Session diagnostics
@@ -421,7 +421,7 @@ jobs:
         run: |
           source build/session.sh
           pwnet_session_start
-          pwnet_session_run dotnet test PipeWire.NET.slnx -c Release             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon"             --max-parallel-test-modules 1
+          pwnet_session_run dotnet test PipeWire.NET.slnx -c Release             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon"             --max-parallel-test-modules 1
 
           if [ $PWNET_LAST_RC -eq 0 ]; then
             echo "- result: passed" >> "$GITHUB_STEP_SUMMARY"

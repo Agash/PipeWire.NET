@@ -41,11 +41,16 @@ the next run starts from whatever the last one left.
 | `TestCategory=RequiresGpu` | a GPU that can import DMA-BUF |
 | `TestCategory=PenTest` | a session of its own; `PWNET_PEN_SECONDS` to soak |
 | `TestCategory=KillsTheDaemon` | a session you are willing to lose |
+| `TestCategory=RequiresPatchedDaemon` | a daemon carrying `repro/module-metadata.patch` |
 
 Stateful modules run with `--max-parallel-test-modules 1`. They share one graph, so running them
 concurrently makes them fail on each other's changes instead of on defects.
 
-Two categories are excluded from every ordinary leg and have to be asked for by name.
+Three categories are excluded from every ordinary leg and have to be asked for by name.
+
+**`RequiresPatchedDaemon`** pins an upstream bug that is still open: the test fails on a stock 1.6.8
+daemon because that is what it is about. `build/verify-linux.sh` runs it against daemons loading the
+patches in `repro/`; CI, whose sessions are stock, excludes it.
 
 **`PenTest`** churns one session hard for seconds at a time - twelve contexts opening at once,
 metadata written in a loop - so anything sharing that session fails on this traffic rather than on
