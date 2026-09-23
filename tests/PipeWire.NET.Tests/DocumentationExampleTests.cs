@@ -192,9 +192,13 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
 
         string root = PublicSurfaceTests.RepoRoot();
 
+        // The test host runs from bin/<config>/<tfm>/, so this is the framework under test.
+        string tfm = new DirectoryInfo(AppContext.BaseDirectory).Name;
+
         // Inside the repository, so the generated project resolves the same SDK through global.json
-        // as everything else; obj/ is ignored.
-        string dir = Path.Combine(root, "obj", "doc-examples");
+        // as everything else; obj/ is ignored. One directory per framework: the test hosts for each
+        // target run concurrently and would otherwise write the same files.
+        string dir = Path.Combine(root, "obj", "doc-examples", tfm);
         Directory.CreateDirectory(dir);
 
         // An example that opens with its own usings is a complete program as a reader would write
@@ -248,8 +252,6 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
             code.ToString(),
             new UTF8Encoding(false)
         );
-
-        string tfm = new DirectoryInfo(AppContext.BaseDirectory).Name;
 
         var paths = new List<string>();
         foreach (string dll in new[] { "PipeWire.NET.dll", "PipeWire.NET.Media.dll" })
