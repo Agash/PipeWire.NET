@@ -44,7 +44,11 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     public delegate void FrameReadyHandler(PipeWireVideoCapture sender, VideoFrame frame);
 
     /// <summary>Handles a connection state change on the loop thread.</summary>
-    public delegate void StateChangedHandler(PipeWireVideoCapture sender, PipeWireStreamState oldState, PipeWireStreamState newState);
+    public delegate void StateChangedHandler(
+        PipeWireVideoCapture sender,
+        PipeWireStreamState oldState,
+        PipeWireStreamState newState
+    );
 
     /// <summary>Raised on the loop thread when a frame is ready. Do not cache the frame.</summary>
     public event FrameReadyHandler? FrameReady;
@@ -80,8 +84,9 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         public SpaFormatPod.VideoFormatInfo Info { get; } = info;
     }
 
-    private NegotiatedFormat _fmtCell =
-        new(new SpaFormatPod.VideoFormatInfo(PixelFormat.Bgra, 0, 0, VideoColorInfo.Unknown));
+    private NegotiatedFormat _fmtCell = new(
+        new SpaFormatPod.VideoFormatInfo(PixelFormat.Bgra, 0, 0, VideoColorInfo.Unknown)
+    );
 
     private SpaFormatPod.VideoFormatInfo Format => Volatile.Read(ref _fmtCell).Info;
 
@@ -116,7 +121,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// the producer does not take part in device-ID negotiation, which is upstream's "device
     /// undefined" - import on the device you would have used without it.
     /// </remarks>
-    public DrmDevice? NegotiatedDevice => DeviceIdNegotiation.Resolve(Format.DeviceId, _deviceOffers);
+    public DrmDevice? NegotiatedDevice =>
+        DeviceIdNegotiation.Resolve(Format.DeviceId, _deviceOffers);
 
     /// <param name="context">A started <see cref="PipeWireContext"/>.</param>
     /// <param name="name">node.name advertised in the graph.</param>
@@ -139,7 +145,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     public void Connect(
         PipeWireNode source,
         ReadOnlySpan<PixelFormat> preferredFormats = default,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(source);
         Connect(source.NodeId, preferredFormats, cancellationToken: cancellationToken);
@@ -202,7 +209,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// Abandons the wait for the loop lock. The connect request itself is issued
     /// synchronously once that is held, so there is nothing to recall after it.
     /// </param>
-    public unsafe void Connect(uint targetNodeId = AnyNode,
+    public unsafe void Connect(
+        uint targetNodeId = AnyNode,
         ReadOnlySpan<PixelFormat> preferredFormats = default,
         string? targetObjectName = null,
         ReadOnlySpan<long> modifiers = default,
@@ -214,9 +222,11 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         bool requestExplicitSync = false,
         ReadOnlySpan<DmaBufDeviceOffer> deviceOffers = default,
         bool autoConnect = true,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
-        if (_core is not null) throw new InvalidOperationException("Already connected.");
+        if (_core is not null)
+            throw new InvalidOperationException("Already connected.");
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(preferredWidth);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(preferredHeight);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(preferredFrameRate);
@@ -225,7 +235,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
             if (!modifiers.IsEmpty)
                 throw new ArgumentException(
                     "Offer modifiers either alone or per device, not both: each device offer carries its own.",
-                    nameof(modifiers));
+                    nameof(modifiers)
+                );
             DeviceIdNegotiation.Validate(deviceOffers, nameof(deviceOffers));
         }
 
@@ -233,7 +244,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         if (dmaBuf && preferredFormats.Length != 1)
             throw new ArgumentException(
                 "Exactly one pixel format must be specified when offering DRM modifiers (modifiers are per-format).",
-                nameof(preferredFormats));
+                nameof(preferredFormats)
+            );
 
         _modifiersOffered = dmaBuf;
         _explicitSyncRequested = requestExplicitSync && dmaBuf;
@@ -241,7 +253,11 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         _modifierFixated = false;
         _deviceOffers = deviceOffers.ToArray();
         _announcedToAPeer = false;
-        _preferredGeometry = ((uint)preferredWidth, (uint)preferredHeight, (uint)preferredFrameRate);
+        _preferredGeometry = (
+            (uint)preferredWidth,
+            (uint)preferredHeight,
+            (uint)preferredFrameRate
+        );
 
         var props = new StreamProperties(StreamMediaType.Video, StreamCategory.Capture)
             .WithRole("Camera")
@@ -256,21 +272,36 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
                 props.With(kv.Key, kv.Value);
         }
 
-        if (targetObjectName is not null) props.WithTargetObject(targetObjectName);
+        if (targetObjectName is not null)
+            props.WithTargetObject(targetObjectName);
         // Built locally and only published once the connect succeeded. Assigning the field first
         // leaves a failed connect behind a stream that reports itself already connected and can
         // never be retried.
 
         bool negotiateDevices = !deviceOffers.IsEmpty;
-        var core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState, OnFormat, OnPostFormat,
-            onPeerConnected: negotiateDevices ? OnPeerConnected : null);
+        var core = new PipeWireStreamCore(
+            _ctx,
+            props,
+            _name,
+            OnBuffer,
+            OnState,
+            OnFormat,
+            OnPostFormat,
+            onPeerConnected: negotiateDevices ? OnPeerConnected : null
+        );
 
         // With device offers the first pod is video-play-fixate's bare format - no modifiers, so a
         // host-memory shape - and the real offers go out once the producer's capabilities are known.
         Span<byte> pod = stackalloc byte[1024];
-        int len = SpaFormatPod.WriteVideoFormat(pod, preferredFormats,
-            (uint)preferredWidth, (uint)preferredHeight, (uint)preferredFrameRate, fixedSize: false,
-            modifiers: modifiers);
+        int len = SpaFormatPod.WriteVideoFormat(
+            pod,
+            preferredFormats,
+            (uint)preferredWidth,
+            (uint)preferredHeight,
+            (uint)preferredFrameRate,
+            fixedSize: false,
+            modifiers: modifiers
+        );
 
         // A second offer with no modifiers, so a producer that cannot provide DMA-BUF has a
         // host-memory shape to agree to. Only when modifiers were asked for: without them the
@@ -278,8 +309,14 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         Span<byte> fallback = stackalloc byte[1024];
         int fallbackLen = modifiers.IsEmpty
             ? 0
-            : SpaFormatPod.WriteVideoFormat(fallback, preferredFormats,
-                (uint)preferredWidth, (uint)preferredHeight, (uint)preferredFrameRate, fixedSize: false);
+            : SpaFormatPod.WriteVideoFormat(
+                fallback,
+                preferredFormats,
+                (uint)preferredWidth,
+                (uint)preferredHeight,
+                (uint)preferredFrameRate,
+                fixedSize: false
+            );
 
         // A consumer names no devices in its Capability, as video-play-fixate does not: it filters
         // the producer's list instead.
@@ -287,16 +324,19 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
 
         try
         {
-            core.Connect(SpaDirection.Input, targetNodeId,
-            PipeWireStreamFlags.MapBuffers
-                | (autoConnect ? PipeWireStreamFlags.Autoconnect : 0)
-                | (stayWithTheSource ? PipeWireStreamFlags.DontReconnect : 0)
-                | (pullMode ? PipeWireStreamFlags.Driver : 0)
-                | (negotiateDevices ? PipeWireStreamFlags.Inactive : 0),
-            pod[..len],
-            fallback[..fallbackLen],
-            capabilityPod: capability,
-            cancellationToken: cancellationToken);
+            core.Connect(
+                SpaDirection.Input,
+                targetNodeId,
+                PipeWireStreamFlags.MapBuffers
+                    | (autoConnect ? PipeWireStreamFlags.Autoconnect : 0)
+                    | (stayWithTheSource ? PipeWireStreamFlags.DontReconnect : 0)
+                    | (pullMode ? PipeWireStreamFlags.Driver : 0)
+                    | (negotiateDevices ? PipeWireStreamFlags.Inactive : 0),
+                pod[..len],
+                fallback[..fallbackLen],
+                capabilityPod: capability,
+                cancellationToken: cancellationToken
+            );
             _core = core;
 
             // Set here, not when a handler subscribes: a caller that subscribed before connecting
@@ -308,7 +348,6 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
             core.Dispose();
             throw;
         }
-
     }
 
     /// <summary>
@@ -445,7 +484,6 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         SignalRelease(held);
     }
 
-
     /// <summary>
     /// From inside a <c>FrameReady</c> handler: drop this frame instead of consuming it.
     /// </summary>
@@ -471,9 +509,14 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// went out, not that it was accepted.
     /// </remarks>
     public bool RequestFormat(
-        ReadOnlySpan<PixelFormat> formats, int width, int height, int frameRate = 30)
+        ReadOnlySpan<PixelFormat> formats,
+        int width,
+        int height,
+        int frameRate = 30
+    )
     {
-        if (_core is null || formats.IsEmpty) return false;
+        if (_core is null || formats.IsEmpty)
+            return false;
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
@@ -481,7 +524,13 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
 
         Span<byte> pod = stackalloc byte[1024];
         int len = SpaFormatPod.WriteVideoFormat(
-            pod, formats, (uint)width, (uint)height, (uint)frameRate, fixedSize: false);
+            pod,
+            formats,
+            (uint)width,
+            (uint)height,
+            (uint)frameRate,
+            fixedSize: false
+        );
 
         return _core.RequestFormats(pod[..len]) >= 0;
     }
@@ -658,7 +707,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// </remarks>
     private void StoreBorrowed(in VideoFrame frame, SyncRelease release)
     {
-        Span<BorrowedVideoPlane> planes = stackalloc BorrowedVideoPlane[BorrowedPlaneArray.MaxPlanes];
+        Span<BorrowedVideoPlane> planes =
+            stackalloc BorrowedVideoPlane[BorrowedPlaneArray.MaxPlanes];
         int count = 0;
 
         if (frame.IsFdBacked)
@@ -669,7 +719,11 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
                     break;
 
                 planes[count++] = new BorrowedVideoPlane(
-                    plane.Fd, plane.Offset, (uint)plane.Stride, plane.Size);
+                    plane.Fd,
+                    plane.Offset,
+                    (uint)plane.Stride,
+                    plane.Size
+                );
             }
         }
 
@@ -688,7 +742,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
             frame.StreamPositionNs,
             frame.DelayNs,
             frame.Crop,
-            frame.Transform);
+            frame.Transform
+        );
 
         // A frame replaced before anyone pulled it was never read, so its release is owed now.
         SyncRelease superseded;
@@ -709,7 +764,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// </summary>
     private void InvalidateBorrowed()
     {
-        SyncRelease waiting, held;
+        SyncRelease waiting,
+            held;
         lock (_borrowGate)
         {
             _borrowed = default;
@@ -738,8 +794,14 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
             {
                 foreach (VideoPlane plane in frame.Planes)
                 {
-                    builder.Add(new PulledVideoPlane(
-                        plane.DuplicateFd(), plane.Offset, plane.Stride, plane.Size));
+                    builder.Add(
+                        new PulledVideoPlane(
+                            plane.DuplicateFd(),
+                            plane.Offset,
+                            plane.Stride,
+                            plane.Size
+                        )
+                    );
                 }
             }
             catch
@@ -772,22 +834,31 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
             streamPositionNs: frame.StreamPositionNs,
             delayNs: frame.DelayNs,
             crop: frame.Crop,
-            transform: frame.Transform);
+            transform: frame.Transform
+        );
     }
 
-    private unsafe void OnBuffer(spa_data* d, pw_buffer* buf, in PipeWireStreamCore.StreamClock clock)
+    private unsafe void OnBuffer(
+        spa_data* d,
+        pw_buffer* buf,
+        in PipeWireStreamCore.StreamClock clock
+    )
     {
-        if (d->chunk is null) return;
+        if (d->chunk is null)
+            return;
 
         uint offset = d->chunk->offset;
-        uint size   = d->chunk->size;
-        if (size == 0) return;
+        uint size = d->chunk->size;
+        if (size == 0)
+            return;
 
         // The chunk header lives in memory the producer owns, so its offset and size are inputs,
         // not facts. A span built from an out-of-range pair reads straight past the mapping, and a
         // size above int.MaxValue casts to a negative length.
-        if ((ulong)offset + size > d->maxsize) return;
-        if (size > int.MaxValue) return;
+        if ((ulong)offset + size > d->maxsize)
+            return;
+        if (size > int.MaxValue)
+            return;
 
         // data may be null for a pure DMA-BUF buffer that wasn't host-mapped.
         var pixels = d->data is null
@@ -810,15 +881,21 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
             for (uint i = 0; i < n; i++)
             {
                 spa_data* p = &spaBuf->datas[i];
-                if (p->chunk is null) continue;
+                if (p->chunk is null)
+                    continue;
 
                 // A plane the producer did not back has fd -1, and handing that to an importer
                 // fails as EINVAL somewhere deep in the driver rather than here where it can be named.
-                if ((long)p->fd < 0) continue;
+                if ((long)p->fd < 0)
+                    continue;
                 // For dmabuf the plane's offset within its fd is chunk->offset; mapoffset is an mmap
                 // concept (0 for dmabuf). stride is signed in SPA but always >= 0 for video here.
                 planes[planeCount++] = new VideoPlane(
-                    (long)p->fd, p->chunk->offset, p->chunk->stride, p->maxsize);
+                    (long)p->fd,
+                    p->chunk->offset,
+                    p->chunk->stride,
+                    p->maxsize
+                );
             }
         }
 
@@ -826,7 +903,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
 
         // Nothing is negotiated, so nothing describes this buffer. Emitting it anyway hands the
         // handler a frame whose geometry is zero or, worse, the previous negotiation's.
-        if (fmt.Width <= 0 || fmt.Height <= 0) return;
+        if (fmt.Width <= 0 || fmt.Height <= 0)
+            return;
 
         // Read on the loop thread while the buffer is still ours; the spans die with it.
         Span<VideoRegion> damage = stackalloc VideoRegion[DamageRegions];
@@ -834,7 +912,12 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         bool hasCursor = SpaFormatPod.TryFindCursor(spaBuf, out VideoCursor cursor);
 
         var frame = new VideoFrame(
-            pixels, d->chunk->stride, fmt.Width, fmt.Height, fmt.Format, ++_sequence,
+            pixels,
+            d->chunk->stride,
+            fmt.Width,
+            fmt.Height,
+            fmt.Format,
+            ++_sequence,
             bufferType: bufferType,
             fd: fd,
             mapOffset: d->mapoffset,
@@ -853,7 +936,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
             transform: SpaFormatPod.FindTransform(spaBuf),
             damage: damage[..damageCount],
             cursor: hasCursor ? cursor : default,
-            hasCursor: hasCursor);
+            hasCursor: hasCursor
+        );
 
         // Explicit sync, when the producer negotiated it: wait for the acquire point before anything
         // reads a byte, and promise the release point. Present-driven, not flag-driven: no timeline
@@ -865,11 +949,17 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         // is upstream video-play-sync's order: it signals after it has rendered, not when the
         // buffer arrived.
         SyncRelease release = default;
-        if (frame.SyncTimeline is { } timeline
+        if (
+            frame.SyncTimeline is { } timeline
             && SpaFormatPod.TryFindSyncDataFds(spaBuf, out int acquireFd, out int releaseFd)
-            && acquireFd >= 0 && releaseFd >= 0)
+            && acquireFd >= 0
+            && releaseFd >= 0
+        )
         {
-            if (timeline.AcquirePoint != 0 && WaitAcquire(acquireFd, timeline.AcquirePoint) is { Reached: false } missed)
+            if (
+                timeline.AcquirePoint != 0
+                && WaitAcquire(acquireFd, timeline.AcquirePoint) is { Reached: false } missed
+            )
             {
                 // Never ready. Handing it on would mean reading pixels still being written; no
                 // promise has been made yet, so the producer is not left waiting on this buffer.
@@ -881,7 +971,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
             }
 
             release = SyncRelease.For(releaseFd, timeline.ReleasePoint);
-            if (release.IsPending) ClearSyncUnscheduled(spaBuf);
+            if (release.IsPending)
+                ClearSyncUnscheduled(spaBuf);
         }
 
         switch (Retention)
@@ -915,15 +1006,19 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// <summary>Clears the unscheduled-release flag in a buffer's timeline meta, if present.</summary>
     private static unsafe void ClearSyncUnscheduled(spa_buffer* sb)
     {
-        if (sb is null || sb->metas is null) return;
+        if (sb is null || sb->metas is null)
+            return;
 
         uint count = Math.Min(sb->n_metas, 64u);
         for (uint i = 0; i < count; i++)
         {
             spa_meta* m = &sb->metas[i];
-            if (m->type != (uint)SpaMetaType.SyncTimeline || m->data is null) continue;
-            if (m->size < (uint)sizeof(spa_meta_sync_timeline)) continue;
-            ((spa_meta_sync_timeline*)m->data)->flags &= ~(uint)SpaMetaSyncTimelineFlags.UnscheduledRelease;
+            if (m->type != (uint)SpaMetaType.SyncTimeline || m->data is null)
+                continue;
+            if (m->size < (uint)sizeof(spa_meta_sync_timeline))
+                continue;
+            ((spa_meta_sync_timeline*)m->data)->flags &= ~(uint)
+                SpaMetaSyncTimelineFlags.UnscheduledRelease;
         }
     }
 
@@ -943,18 +1038,34 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     // otherwise restart negotiation under a running stream. Loop lock held.
     private unsafe void OnPeerConnected(PipeWireStreamCore core, spa_pod* param)
     {
-        if (_announcedToAPeer) return;
+        if (_announcedToAPeer)
+            return;
         _announcedToAPeer = true;
 
         PeerCapabilities peer = DeviceIdNegotiation.Parse(param);
         (uint width, uint height, uint frameRate) = _preferredGeometry;
-        byte[] pods = DeviceIdNegotiation.WriteDeviceFormats(peer, _deviceOffers,
-            _modifierFormat, width, height, frameRate, fixedSize: false,
-            hostMemoryFallback: true, out int count, out int deviceFormats);
-        LogDeviceOffers(peer.NegotiatesDeviceIds, deviceFormats, _deviceOffers.Length, peer.AvailableDevices.Length);
+        byte[] pods = DeviceIdNegotiation.WriteDeviceFormats(
+            peer,
+            _deviceOffers,
+            _modifierFormat,
+            width,
+            height,
+            frameRate,
+            fixedSize: false,
+            hostMemoryFallback: true,
+            out int count,
+            out int deviceFormats
+        );
+        LogDeviceOffers(
+            peer.NegotiatesDeviceIds,
+            deviceFormats,
+            _deviceOffers.Length,
+            peer.AvailableDevices.Length
+        );
 
         int rc = core.RequestParamsFromCallback(pods, count);
-        if (rc < 0) LogAnnounceRefused(rc);
+        if (rc < 0)
+            LogAnnounceRefused(rc);
         core.SetActiveFromCallback(true);
     }
 
@@ -964,9 +1075,17 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         {
             // Withdrawn: the stream is unconfigured until a new format arrives, and OnBuffer stops
             // emitting because the geometry is gone.
-            Volatile.Write(ref _fmtCell,
+            Volatile.Write(
+                ref _fmtCell,
                 new NegotiatedFormat(
-                    new SpaFormatPod.VideoFormatInfo(PixelFormat.Unknown, 0, 0, VideoColorInfo.Unknown)));
+                    new SpaFormatPod.VideoFormatInfo(
+                        PixelFormat.Unknown,
+                        0,
+                        0,
+                        VideoColorInfo.Unknown
+                    )
+                )
+            );
             _modifierFixated = false;
             LogFormatWithdrawn();
             return;
@@ -974,7 +1093,13 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
 
         SpaFormatPod.VideoFormatInfo parsed = SpaFormatPod.ParseVideoFormat(param, Format);
         Volatile.Write(ref _fmtCell, new NegotiatedFormat(parsed));
-        LogNegotiatedFormat(parsed.Format, parsed.Width, parsed.Height, parsed.Modifier, parsed.ModifierNeedsFixation);
+        LogNegotiatedFormat(
+            parsed.Format,
+            parsed.Width,
+            parsed.Height,
+            parsed.Modifier,
+            parsed.ModifierNeedsFixation
+        );
     }
 
     // After the format is negotiated we know the geometry, so declare our buffer needs:
@@ -982,7 +1107,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     private void OnPostFormat(PipeWireStreamCore core)
     {
         SpaFormatPod.VideoFormatInfo fmt = Format;
-        if (fmt.Format == PixelFormat.Unknown || fmt.Width <= 0 || fmt.Height <= 0) return;
+        if (fmt.Format == PixelFormat.Unknown || fmt.Width <= 0 || fmt.Height <= 0)
+            return;
 
         // Two-step modifier fixation: when we offered a modifier choice with DONT_FIXATE the producer
         // returns the subset it supports without collapsing it (ModifierNeedsFixation). Because we only
@@ -995,9 +1121,17 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
             ReadOnlySpan<PixelFormat> chosenFormat = [_modifierFormat];
             ReadOnlySpan<long> chosen = [(long)fmt.Modifier];
             // With the negotiated device: the producer's offers each name one, mandatory.
-            int fl = SpaFormatPod.WriteVideoFormat(fixate, chosenFormat,
-                (uint)fmt.Width, (uint)fmt.Height, 30, fixedSize: false,
-                modifiers: chosen, fixateModifier: true, deviceId: fmt.DeviceId);
+            int fl = SpaFormatPod.WriteVideoFormat(
+                fixate,
+                chosenFormat,
+                (uint)fmt.Width,
+                (uint)fmt.Height,
+                30,
+                fixedSize: false,
+                modifiers: chosen,
+                fixateModifier: true,
+                deviceId: fmt.DeviceId
+            );
 
             // Marked done only if the daemon took it. A refused fixation has to be retried, or the
             // negotiation stays unfixated, no buffers are ever allocated, and the stream delivers
@@ -1016,11 +1150,13 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         // fixed-arity overload takes. Each pod starts 8-byte aligned, as SPA requires, and carries
         // its own size so the other side can walk them.
         Span<byte> pods = stackalloc byte[8192];
-        int used = 0, podCount = 0;
+        int used = 0,
+            podCount = 0;
 
         static int Align(int n) => (n + 7) & ~7;
 
-        used += Align(SpaFormatPod.WriteHeaderMetaParam(pods[used..])); podCount++;
+        used += Align(SpaFormatPod.WriteHeaderMetaParam(pods[used..]));
+        podCount++;
 
         // Each ParamMeta names one meta type, so asking for several is several objects.
         if (_explicitSyncRequested)
@@ -1032,10 +1168,14 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         // Crop, damage, orientation and the pointer. All advisory - a producer may attach none of
         // them - but a consumer that never asks is guaranteed to get none, and then has to treat
         // every frame as fully changed, upright, and with the cursor already painted in.
-        used += Align(SpaFormatPod.WriteCropMetaParam(pods[used..])); podCount++;
-        used += Align(SpaFormatPod.WriteDamageMetaParam(pods[used..], DamageRegions)); podCount++;
-        used += Align(SpaFormatPod.WriteTransformMetaParam(pods[used..])); podCount++;
-        used += Align(SpaFormatPod.WriteCursorMetaParam(pods[used..])); podCount++;
+        used += Align(SpaFormatPod.WriteCropMetaParam(pods[used..]));
+        podCount++;
+        used += Align(SpaFormatPod.WriteDamageMetaParam(pods[used..], DamageRegions));
+        podCount++;
+        used += Align(SpaFormatPod.WriteTransformMetaParam(pods[used..]));
+        podCount++;
+        used += Align(SpaFormatPod.WriteCursorMetaParam(pods[used..]));
+        podCount++;
 
         int stride = SpaFormatPod.VideoStride(fmt.Format, fmt.Width);
         int size = SpaFormatPod.VideoImageSize(fmt.Format, fmt.Width, fmt.Height);
@@ -1062,9 +1202,14 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         int blockSize = SpaFormatPod.VideoBlockSize(fmt.Format, fmt.Width, fmt.Height);
         Span<byte> buffers = stackalloc byte[256];
         int bl = SpaFormatPod.WriteVideoBuffersParam(
-            buffers, blockSize, stride, SpaFormatPod.VideoCaptureDataTypeMask, blocks,
+            buffers,
+            blockSize,
+            stride,
+            SpaFormatPod.VideoCaptureDataTypeMask,
+            blocks,
             sizeIsAnyOf: true,
-            syncDataBlocks: _explicitSyncRequested ? SpaFormatPod.SyncTimelineDataBlocks : 0);
+            syncDataBlocks: _explicitSyncRequested ? SpaFormatPod.SyncTimelineDataBlocks : 0
+        );
 
         LogRequestedBuffers(blocks, blockSize, stride, SpaFormatPod.VideoCaptureDataTypeMask);
 
@@ -1079,39 +1224,79 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// <summary>Signals a release this capture held, and reports a refused signal.</summary>
     private void SignalRelease(SyncRelease release)
     {
-        if (!release.Signal()) LogReleaseSignalFailed();
+        if (!release.Signal())
+            LogReleaseSignalFailed();
     }
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "signalling a frame's release point was refused; the producer waits until its release timeout for that buffer")]
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "signalling a frame's release point was refused; the producer waits until its release timeout for that buffer"
+    )]
     private partial void LogReleaseSignalFailed();
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "negotiated format {Format} {Width}x{Height} modifier=0x{Modifier:x} needsFixation={NeedsFixation}")]
-    private partial void LogNegotiatedFormat(PixelFormat format, int width, int height, ulong modifier, bool needsFixation);
+    [LoggerMessage(
+        Level = LogLevel.Debug,
+        Message = "negotiated format {Format} {Width}x{Height} modifier=0x{Modifier:x} needsFixation={NeedsFixation}"
+    )]
+    private partial void LogNegotiatedFormat(
+        PixelFormat format,
+        int width,
+        int height,
+        ulong modifier,
+        bool needsFixation
+    );
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "requesting buffers blocks={Blocks} size={Size} stride={Stride} dataTypeMask=0x{DataTypeMask:x}")]
+    [LoggerMessage(
+        Level = LogLevel.Debug,
+        Message = "requesting buffers blocks={Blocks} size={Size} stride={Stride} dataTypeMask=0x{DataTypeMask:x}"
+    )]
     private partial void LogRequestedBuffers(int blocks, int size, int stride, int dataTypeMask);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "a frame's acquire point {Point} was not reached within {TimeoutMs}ms; the frame was dropped rather than read while still being written")]
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "a frame's acquire point {Point} was not reached within {TimeoutMs}ms; the frame was dropped rather than read while still being written"
+    )]
     private partial void LogAcquireTimedOut(ulong point, double timeoutMs);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "waiting for a frame's acquire point {Point} failed with errno {Errno}; the frame was dropped")]
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "waiting for a frame's acquire point {Point} failed with errno {Errno}; the frame was dropped"
+    )]
     private partial void LogAcquireFailed(ulong point, int errno);
 
-    [LoggerMessage(Level = LogLevel.Debug,
-        Message = "peer capabilities: negotiates device ids={Negotiates}, names {PeerDevices} devices; announcing {DeviceFormats} of {Offers} device formats")]
-    private partial void LogDeviceOffers(bool negotiates, int deviceFormats, int offers, int peerDevices);
+    [LoggerMessage(
+        Level = LogLevel.Debug,
+        Message = "peer capabilities: negotiates device ids={Negotiates}, names {PeerDevices} devices; announcing {DeviceFormats} of {Offers} device formats"
+    )]
+    private partial void LogDeviceOffers(
+        bool negotiates,
+        int deviceFormats,
+        int offers,
+        int peerDevices
+    );
 
-    [LoggerMessage(Level = LogLevel.Warning,
-        Message = "the daemon refused the announced formats ({Result}); the stream is activated anyway and will not negotiate")]
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "the daemon refused the announced formats ({Result}); the stream is activated anyway and will not negotiate"
+    )]
     private partial void LogAnnounceRefused(int result);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "the daemon withdrew the format; the stream is unconfigured")]
+    [LoggerMessage(
+        Level = LogLevel.Debug,
+        Message = "the daemon withdrew the format; the stream is unconfigured"
+    )]
     private partial void LogFormatWithdrawn();
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "the daemon refused the modifier fixation ({Result}); it will be retried on the next negotiation")]
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "the daemon refused the modifier fixation ({Result}); it will be retried on the next negotiation"
+    )]
     private partial void LogFixationRefused(int result);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "could not take a copy of the frame for TryGetFrame; the puller will not see this one")]
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "could not take a copy of the frame for TryGetFrame; the puller will not see this one"
+    )]
     private partial void LogFrameCaptureFailed(Exception exception);
 
     /// <summary>Waits until the stream is negotiated and running.</summary>
@@ -1129,8 +1314,11 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// <exception cref="PipeWireException">The stream reached its error state instead.</exception>
     public Task WaitForStreamingAsync(CancellationToken cancellationToken = default)
     {
-        PipeWireStreamCore core = _core
-            ?? throw new InvalidOperationException("Connect before waiting for the stream to start.");
+        PipeWireStreamCore core =
+            _core
+            ?? throw new InvalidOperationException(
+                "Connect before waiting for the stream to start."
+            );
 
         return core.WaitForStreamingAsync(cancellationToken);
     }
@@ -1150,8 +1338,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// <exception cref="PipeWireException">The stream reached its error state instead.</exception>
     public Task<uint> WaitForNodeIdAsync(CancellationToken cancellationToken = default)
     {
-        PipeWireStreamCore core = _core
-            ?? throw new InvalidOperationException("Connect before waiting for the node id.");
+        PipeWireStreamCore core =
+            _core ?? throw new InvalidOperationException("Connect before waiting for the node id.");
 
         return core.WaitForNodeIdAsync(cancellationToken);
     }
@@ -1161,8 +1349,7 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// Empty until the stream is connected and the daemon has reported them, which happens during
     /// negotiation. A snapshot: the daemon re-reports a control whenever one of its values changes.
     /// </remarks>
-    public ImmutableArray<PipeWireStreamControl> Controls =>
-        _core?.Controls ?? [];
+    public ImmutableArray<PipeWireStreamControl> Controls => _core?.Controls ?? [];
 
     /// <summary>One control by SPA property id, or null when the stream has not reported it.</summary>
     public PipeWireStreamControl? GetControl(uint id) => _core?.GetControl(id);
@@ -1182,13 +1369,17 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// </remarks>
     /// <exception cref="InvalidOperationException">Not connected yet.</exception>
     /// <exception cref="ArgumentException"><paramref name="values"/> is empty.</exception>
-    public void SetControl(uint id, ReadOnlySpan<float> values, CancellationToken cancellationToken = default)
+    public void SetControl(
+        uint id,
+        ReadOnlySpan<float> values,
+        CancellationToken cancellationToken = default
+    )
     {
         if (values.IsEmpty)
             throw new ArgumentException("a control needs at least one value.", nameof(values));
 
-        PipeWireStreamCore core = _core
-            ?? throw new InvalidOperationException("Connect before setting a control.");
+        PipeWireStreamCore core =
+            _core ?? throw new InvalidOperationException("Connect before setting a control.");
 
         core.SetControl(id, values, cancellationToken);
     }
@@ -1212,7 +1403,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// target, smooth it, and apply it here; see PipeWire's own rtp and tunnel modules. Applying an
     /// unsmoothed correction makes the drift worse rather than better.
     /// </remarks>
-    public void SetRate(double rate, CancellationToken cancellationToken = default) => _core?.SetRate(rate, cancellationToken);
+    public void SetRate(double rate, CancellationToken cancellationToken = default) =>
+        _core?.SetRate(rate, cancellationToken);
 
     /// <summary>
     /// Announces the latency this stream adds, so the rest of the graph can compensate.
@@ -1226,7 +1418,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     public void AnnounceLatency(
         PipeWireLatency latency,
         PipeWireProcessLatency? processLatency = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(latency);
         _core?.AnnounceLatency(latency, processLatency, cancellationToken);

@@ -11,7 +11,9 @@ namespace PipeWire.NET.Tests;
 [TestClass]
 public sealed class PipeWireRateControllerTests
 {
-    private static PipeWireRateController Tuned(double bandwidth = PipeWireRateController.MinBandwidth)
+    private static PipeWireRateController Tuned(
+        double bandwidth = PipeWireRateController.MinBandwidth
+    )
     {
         var dll = new PipeWireRateController();
         dll.SetBandwidth(bandwidth, period: 1024, rate: 48000);
@@ -30,7 +32,12 @@ public sealed class PipeWireRateControllerTests
     {
         PipeWireRateController dll = Tuned();
         for (int i = 0; i < 1000; i++)
-            Assert.AreEqual(1.0, dll.Update(0.0), 1e-12, $"drifted at cycle {i} with nothing to correct");
+            Assert.AreEqual(
+                1.0,
+                dll.Update(0.0),
+                1e-12,
+                $"drifted at cycle {i} with nothing to correct"
+            );
     }
 
     /// <summary>
@@ -46,7 +53,7 @@ public sealed class PipeWireRateControllerTests
 
         const double target = 4800.0;
         const double period = 480.0;
-        double avail = 4000.0;      // starts short by more than a period
+        double avail = 4000.0; // starts short by more than a period
         double correction = 1.0;
 
         for (int i = 0; i < 20000; i++)
@@ -115,7 +122,8 @@ public sealed class PipeWireRateControllerTests
         PipeWireRateController tooFull = Tuned();
         PipeWireRateController tooEmpty = Tuned();
 
-        double full = 1.0, empty = 1.0;
+        double full = 1.0,
+            empty = 1.0;
         for (int i = 0; i < 500; i++)
         {
             full = tooFull.Update(64.0);
@@ -125,7 +133,8 @@ public sealed class PipeWireRateControllerTests
         Assert.AreNotEqual(1.0, full, 1e-9, "a queue that is too long must produce a correction");
         Assert.IsTrue(
             (full < 1.0 && empty > 1.0) || (full > 1.0 && empty < 1.0),
-            $"opposite errors must correct in opposite directions, got {full} and {empty}");
+            $"opposite errors must correct in opposite directions, got {full} and {empty}"
+        );
     }
 
     [TestMethod]
@@ -135,27 +144,36 @@ public sealed class PipeWireRateControllerTests
         PipeWireRateController narrow = Tuned(PipeWireRateController.MinBandwidth);
         PipeWireRateController wide = Tuned(PipeWireRateController.MaxBandwidth);
 
-        double narrowMoved = 0.0, wideMoved = 0.0;
+        double narrowMoved = 0.0,
+            wideMoved = 0.0;
         for (int i = 0; i < 50; i++)
         {
             narrowMoved = Math.Abs(1.0 - narrow.Update(64.0));
             wideMoved = Math.Abs(1.0 - wide.Update(64.0));
         }
 
-        Assert.IsTrue(wideMoved > narrowMoved,
-            $"the wider bandwidth should have moved further after 50 cycles: {wideMoved} vs {narrowMoved}");
+        Assert.IsTrue(
+            wideMoved > narrowMoved,
+            $"the wider bandwidth should have moved further after 50 cycles: {wideMoved} vs {narrowMoved}"
+        );
     }
 
     [TestMethod]
     public void Reset_ForgetsWhatItLearned()
     {
         PipeWireRateController dll = Tuned();
-        for (int i = 0; i < 200; i++) dll.Update(64.0);
+        for (int i = 0; i < 200; i++)
+            dll.Update(64.0);
 
         Assert.AreNotEqual(1.0, dll.Update(64.0), 1e-9);
 
         dll.Reset();
-        Assert.AreEqual(1.0, dll.Update(0.0), 1e-12, "a reset controller must start from nothing again");
+        Assert.AreEqual(
+            1.0,
+            dll.Update(0.0),
+            1e-12,
+            "a reset controller must start from nothing again"
+        );
     }
 
     [TestMethod]

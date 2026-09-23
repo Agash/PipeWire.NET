@@ -104,7 +104,11 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
     /// A struct rather than an object, and a single delegate rather than an event, for the same
     /// reason: neither may allocate on this thread.
     /// </remarks>
-    public delegate void ProcessHandler(PipeWireFilter filter, uint sampleCount, in PipeWireGraphClock clock);
+    public delegate void ProcessHandler(
+        PipeWireFilter filter,
+        uint sampleCount,
+        in PipeWireGraphClock clock
+    );
 
     private PipeWireVideoCycle _videoCycle;
 
@@ -120,9 +124,13 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
     /// </remarks>
     public PipeWireVideoCycle VideoCycle => _videoCycle;
 
-
     /// <summary>Raised when the filter changes state, on the loop thread.</summary>
-    public event Action<PipeWireFilter, PipeWireFilterState, PipeWireFilterState, string?>? StateChanged;
+    public event Action<
+        PipeWireFilter,
+        PipeWireFilterState,
+        PipeWireFilterState,
+        string?
+    >? StateChanged;
 
     /// <summary>The node id the filter was given, or <see langword="null"/> before it has one.</summary>
     /// <remarks>
@@ -141,7 +149,8 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
     {
         get
         {
-            if (_disposed || _handle is null || !_connected) return null;
+            if (_disposed || _handle is null || !_connected)
+                return null;
 
             // Under the loop lock, like the stream's equivalent: pw_filter_* is called with the
             // loop held, and without it this reads a field the loop thread is free to be writing
@@ -149,7 +158,8 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
             uint id;
             using (_ctx.Lock())
             {
-                if (_disposed || _handle is null) return null;
+                if (_disposed || _handle is null)
+                    return null;
                 id = Native.pw_filter_get_node_id(_handle.Filter);
             }
 
@@ -177,23 +187,29 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
             throw new InvalidOperationException("the filter is not connected.");
 
         // Fast path: the id is often already there.
-        if (NodeId is { } ready) return Task.FromResult(ready);
+        if (NodeId is { } ready)
+            return Task.FromResult(ready);
         cancellationToken.ThrowIfCancellationRequested();
 
         // Event-driven, not polled. The id arrives with the node's binding while state changes
         // mark the progress around it, so every transition re-reads the live id rather than
         // trusting any one event to carry it. Continuations run off the loop thread: completing
         // inline would run a stranger's continuation with the native lock held.
-        var waiter = new TaskCompletionSource<uint>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var waiter = new TaskCompletionSource<uint>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
 
         Action<PipeWireFilter, PipeWireFilterState, PipeWireFilterState, string?>? handler = null;
         handler = (_, _, _, _) =>
         {
-            if (NodeId is { } id) waiter.TrySetResult(id);
+            if (NodeId is { } id)
+                waiter.TrySetResult(id);
         };
 
         CancellationTokenRegistration registration = cancellationToken.Register(
-            static s => ((TaskCompletionSource<uint>)s!).TrySetCanceled(), waiter);
+            static s => ((TaskCompletionSource<uint>)s!).TrySetCanceled(),
+            waiter
+        );
 
         StateChanged += handler;
         _ = waiter.Task.ContinueWith(
@@ -204,7 +220,8 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
             },
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
+            TaskScheduler.Default
+        );
 
         // Re-check under subscription: the id may have arrived between the fast path and here.
         if (NodeId is { } arrived)
@@ -217,18 +234,25 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         // including assigning the id with no further state change to announce it - has been
         // dispatched by the time this answers. The recheck then either finishes or waits for the
         // next real transition; the caller's token is what ends a wait for an id that never comes.
-        _ = CoreSync.RoundTripAsync(_ctx, cancellationToken).ContinueWith(
-            t =>
-            {
-                if (t.IsFaulted)
-                    waiter.TrySetException(t.Exception?.InnerException
-                        ?? new InvalidOperationException("the node-id wait ended with its barrier."));
-                else if (NodeId is { } id)
-                    waiter.TrySetResult(id);
-            },
-            CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
+        _ = CoreSync
+            .RoundTripAsync(_ctx, cancellationToken)
+            .ContinueWith(
+                t =>
+                {
+                    if (t.IsFaulted)
+                        waiter.TrySetException(
+                            t.Exception?.InnerException
+                                ?? new InvalidOperationException(
+                                    "the node-id wait ended with its barrier."
+                                )
+                        );
+                    else if (NodeId is { } id)
+                        waiter.TrySetResult(id);
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default
+            );
 
         return waiter.Task;
     }
@@ -240,9 +264,11 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         {
             // Under the loop lock, like every other call into the filter: the state is read from
             // structures the loop thread mutates as the filter transitions.
-            if (_disposed || _handle is null || _handle.IsInvalid) return PipeWireFilterState.Unconnected;
+            if (_disposed || _handle is null || _handle.IsInvalid)
+                return PipeWireFilterState.Unconnected;
 
-            if (!_ctx.TryLock(out PipeWireContext.LoopLock scope)) return PipeWireFilterState.Unconnected;
+            if (!_ctx.TryLock(out PipeWireContext.LoopLock scope))
+                return PipeWireFilterState.Unconnected;
 
             using (scope)
             {
@@ -264,12 +290,17 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
     public static unsafe PipeWireFilter Create(
         PipeWireContext context,
         string name,
-        IReadOnlyDictionary<string, string>? properties = null)
+        IReadOnlyDictionary<string, string>? properties = null
+    )
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        var filter = new PipeWireFilter(context, name, context.LoggerFactory.CreateLogger<PipeWireFilter>());
+        var filter = new PipeWireFilter(
+            context,
+            name,
+            context.LoggerFactory.CreateLogger<PipeWireFilter>()
+        );
         try
         {
             using (context.Lock())
@@ -278,7 +309,8 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
                 if (core is null)
                 {
                     throw new InvalidOperationException(
-                        "the context is not connected; call StartAsync before creating a filter.");
+                        "the context is not connected; call StartAsync before creating a filter."
+                    );
                 }
 
                 pw_filter* native;
@@ -292,7 +324,11 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
 
                 try
                 {
-                    filter._handle = new PipeWireFilterHandle(native, context.LoopOwner, context.CoreOwner);
+                    filter._handle = new PipeWireFilterHandle(
+                        native,
+                        context.LoopOwner,
+                        context.CoreOwner
+                    );
                 }
                 catch
                 {
@@ -303,7 +339,8 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
                     throw;
                 }
 
-                filter._events = (pw_filter_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_filter_events));
+                filter._events = (pw_filter_events*)
+                    NativeMemory.AllocZeroed((nuint)sizeof(pw_filter_events));
                 filter._events->version = NativeConstants.PW_VERSION_FILTER_EVENTS;
                 filter._events->process = &OnProcessCallback;
                 filter._events->state_changed = &OnStateChangedCallback;
@@ -313,15 +350,19 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
 
                 filter._hook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
                 // Weak: a strong self-handle roots the filter for the life of the process, so one dropped
-        // without disposal leaks the native filter too.
-        filter._self = GCHandle.Alloc(filter, GCHandleType.Weak);
+                // without disposal leaks the native filter too.
+                filter._self = GCHandle.Alloc(filter, GCHandleType.Weak);
 
                 // Handed over before the listener is attached, so a failure below still frees it and
                 // the free happens after pw_filter_destroy rather than racing it.
                 filter._handle!.OwnListener(filter._events, filter._hook, filter._self);
 
                 Native.pw_filter_add_listener(
-                    native, filter._hook, filter._events, (void*)GCHandle.ToIntPtr(filter._self));
+                    native,
+                    filter._hook,
+                    filter._events,
+                    (void*)GCHandle.ToIntPtr(filter._self)
+                );
             }
 
             return filter;
@@ -364,18 +405,26 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         // An exception escaping a reverse P/Invoke aborts the process, so nothing here may throw.
         try
         {
-            if (command is null) return;
-            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireFilter self) return;
-            if (self._disposed) return;
+            if (command is null)
+                return;
+            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireFilter self)
+                return;
+            if (self._disposed)
+                return;
 
             // SPA_COMMAND_ID: the id only names a node command when the body says it is one, and a
             // command of another type reuses the same numbers for different things.
-            if (command->body.body.type != (uint)SpaType.CommandNode) return;
+            if (command->body.body.type != (uint)SpaType.CommandNode)
+                return;
 
             Action<PipeWireFilter, SpaNodeCommand>? handler = self.CommandReceived;
-            if (handler is null) return;
+            if (handler is null)
+                return;
 
-            try { handler(self, (SpaNodeCommand)command->body.body.id); }
+            try
+            {
+                handler(self, (SpaNodeCommand)command->body.body.id);
+            }
             catch (Exception ex)
             {
                 Interlocked.Increment(ref self._processFaults);
@@ -399,7 +448,8 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         get
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_handle is null || !_connected) return false;
+            if (_handle is null || !_connected)
+                return false;
 
             using (_ctx.Lock())
                 return Native.pw_filter_is_driving(_handle.Filter);
@@ -427,7 +477,8 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         using (_ctx.Lock())
         {
             int res = Native.pw_filter_remove_port(port.PortData);
-            if (res < 0) throw new PipeWireException("pw_filter_remove_port", res);
+            if (res < 0)
+                throw new PipeWireException("pw_filter_remove_port", res);
         }
 
         _ports.Remove(port);
@@ -447,11 +498,14 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
     /// <exception cref="ArgumentNullException"><paramref name="properties"/> is null.</exception>
     /// <exception cref="PipeWireException">The daemon refused the update.</exception>
     public unsafe int UpdateProperties(
-        IReadOnlyDictionary<string, string> properties, PipeWireFilterPort? port = null)
+        IReadOnlyDictionary<string, string> properties,
+        PipeWireFilterPort? port = null
+    )
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(properties);
-        if (properties.Count == 0 || _handle is null) return 0;
+        if (properties.Count == 0 || _handle is null)
+            return 0;
 
         // Sized from the input rather than a fixed scratch: a long value would otherwise lose its
         // tail. UTF-8 is at most 4 bytes per char, plus a terminator for each key and value.
@@ -463,14 +517,16 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         spa_dict_item[] items = new spa_dict_item[properties.Count];
 
         var builder = new SpaDictBuilder(scratch, items);
-        foreach (KeyValuePair<string, string> kv in properties) builder.Add(kv.Key, kv.Value);
+        foreach (KeyValuePair<string, string> kv in properties)
+            builder.Add(kv.Key, kv.Value);
 
         spa_dict native = builder.Build();
 
         using (_ctx.Lock())
         {
             int res = Native.pw_filter_update_properties(_handle.Filter, port?.PortData, &native);
-            if (res < 0) throw new PipeWireException("pw_filter_update_properties", res);
+            if (res < 0)
+                throw new PipeWireException("pw_filter_update_properties", res);
             return res;
         }
     }
@@ -491,7 +547,9 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(message);
         if (_handle is null || !_connected)
-            throw new InvalidOperationException("connect the filter before reporting an error on it.");
+            throw new InvalidOperationException(
+                "connect the filter before reporting an error on it."
+            );
 
         using (_ctx.Lock())
         {
@@ -519,10 +577,12 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
             // whichever node actually drives, and a node that does not implement RequestProcess
             // answers ENOTSUP and the daemon logs it - once per call, so a caller triggering at
             // frame rate fills the log and changes nothing.
-            if (!Native.pw_filter_is_driving(_handle.Filter)) return;
+            if (!Native.pw_filter_is_driving(_handle.Filter))
+                return;
 
             int rc = Native.pw_filter_trigger_process(_handle.Filter);
-            if (rc < 0) throw new PipeWireInteropException("pw_filter_trigger_process", rc);
+            if (rc < 0)
+                throw new PipeWireInteropException("pw_filter_trigger_process", rc);
         }
     }
 
@@ -544,7 +604,8 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         using (_ctx.Lock())
         {
             int rc = Native.pw_filter_set_active(_handle.Filter, active);
-            if (rc < 0) throw new PipeWireInteropException("pw_filter_set_active", rc);
+            if (rc < 0)
+                throw new PipeWireInteropException("pw_filter_set_active", rc);
         }
     }
 
@@ -636,20 +697,25 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         PipeWirePortDirection direction,
         string name,
         PipeWireDspFormat format,
-        IReadOnlyDictionary<string, string>? properties = null)
+        IReadOnlyDictionary<string, string>? properties = null
+    )
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         if (_connected)
-            throw new InvalidOperationException("ports must be added before the filter is connected.");
+            throw new InvalidOperationException(
+                "ports must be added before the filter is connected."
+            );
 
         SpaDirection spaDirection = direction switch
         {
             PipeWirePortDirection.In => SpaDirection.Input,
             PipeWirePortDirection.Out => SpaDirection.Output,
             _ => throw new ArgumentException(
-                "a filter port is an input or an output.", nameof(direction)),
+                "a filter port is an input or an output.",
+                nameof(direction)
+            ),
         };
 
         string dsp = format switch
@@ -678,8 +744,14 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         using (_ctx.Lock())
         {
             portData = Native.pw_filter_add_port(
-                _handle!.Filter, spaDirection, PipeWireFilterPortFlags.MapBuffers,
-                0, BuildProperties(properties2), null, 0);
+                _handle!.Filter,
+                spaDirection,
+                PipeWireFilterPortFlags.MapBuffers,
+                0,
+                BuildProperties(properties2),
+                null,
+                0
+            );
         }
 
         if (portData is null)
@@ -698,7 +770,8 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
     /// <exception cref="InvalidOperationException">PipeWire refused the connection.</exception>
     public async Task ConnectAsync(
         PipeWireFilterFlags flags = PipeWireFilterFlags.RtProcess,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
@@ -708,7 +781,8 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         // also keeps a refusal from being answered before anything is listening for it.
         // Marked connected only once the round-trip has actually succeeded: setting it first leaves
         // a filter that refused to connect claiming it did.
-        await CoreSync.RoundTripAsync(_ctx, () => ConnectNative(flags), cancellationToken)
+        await CoreSync
+            .RoundTripAsync(_ctx, () => ConnectNative(flags), cancellationToken)
             .ConfigureAwait(false);
         _connected = true;
 
@@ -721,7 +795,9 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
             return Native.pw_filter_connect(_handle!.Filter, flags, null, 0);
     }
 
-    private static unsafe pw_properties* BuildProperties(IReadOnlyDictionary<string, string>? properties)
+    private static unsafe pw_properties* BuildProperties(
+        IReadOnlyDictionary<string, string>? properties
+    )
     {
         if (properties is null || properties.Count == 0)
             return null;
@@ -732,12 +808,14 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
 
         // pw_properties_new_dict copies what it is given, so these buffers only have to survive the
         // call - but they must not move during it, which is why the heap fallback is pinned.
-        Span<byte> scratch = bytes <= 512
-            ? stackalloc byte[bytes]
-            : GC.AllocateUninitializedArray<byte>(bytes, pinned: true);
-        Span<spa_dict_item> items = properties.Count <= 16
-            ? stackalloc spa_dict_item[properties.Count]
-            : GC.AllocateArray<spa_dict_item>(properties.Count, pinned: true);
+        Span<byte> scratch =
+            bytes <= 512
+                ? stackalloc byte[bytes]
+                : GC.AllocateUninitializedArray<byte>(bytes, pinned: true);
+        Span<spa_dict_item> items =
+            properties.Count <= 16
+                ? stackalloc spa_dict_item[properties.Count]
+                : GC.AllocateArray<spa_dict_item>(properties.Count, pinned: true);
 
         var builder = new SpaDictBuilder(scratch, items);
         foreach ((string key, string value) in properties)
@@ -755,10 +833,12 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         try
         {
             var self = (PipeWireFilter?)GCHandle.FromIntPtr((nint)data).Target;
-            if (self is null || self._disposed) return;
+            if (self is null || self._disposed)
+                return;
 
             ProcessHandler? callback = self.ProcessCallback;
-            if (callback is null || position is null) return;
+            if (callback is null || position is null)
+                return;
 
             // The whole clock, not just the duration. The position area is the only timing a filter
             // is supposed to read - pw_filter_get_time is deprecated in favour of exactly this - so
@@ -766,8 +846,15 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
             // work or line it up against anything else on the graph.
             spa_io_clock* c = &position->clock;
             PipeWireGraphClock clock = new(
-                c->nsec, c->position, c->duration,
-                c->rate.num, c->rate.denom, c->delay, c->rate_diff, c->next_nsec);
+                c->nsec,
+                c->position,
+                c->duration,
+                c->rate.num,
+                c->rate.denom,
+                c->delay,
+                c->rate_diff,
+                c->next_nsec
+            );
 
             // The graph's frame geometry for this cycle. A video port has no size of its own, so
             // this is the only place a filter can learn how many pixels its buffer holds - and it
@@ -775,8 +862,12 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
             spa_io_video_size* v = &position->video;
             self._videoCycle = new PipeWireVideoCycle(
                 (v->flags & (uint)SpaIoVideoSizeFlags.Valid) != 0,
-                v->size.width, v->size.height, v->stride,
-                v->framerate.num, v->framerate.denom);
+                v->size.width,
+                v->size.height,
+                v->stride,
+                v->framerate.num,
+                v->framerate.denom
+            );
 
             // Invoked directly rather than through GetInvocationList: walking one allocates, which
             // is why this is a single delegate and not an event.
@@ -807,16 +898,26 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe void OnIoChangedCallback(void* data, void* portData, uint id, void* area, uint size)
+    private static unsafe void OnIoChangedCallback(
+        void* data,
+        void* portData,
+        uint id,
+        void* area,
+        uint size
+    )
     {
         try
         {
             var self = (PipeWireFilter?)GCHandle.FromIntPtr((nint)data).Target;
-            if (self is null || self._disposed) return;
+            if (self is null || self._disposed)
+                return;
 
             // The node's position area; port io areas are pw_filter's own business.
             if (portData is null && id == (uint)SpaIoType.Position)
-                self._position = area is not null && size >= (uint)sizeof(spa_io_position) ? (spa_io_position*)area : null;
+                self._position =
+                    area is not null && size >= (uint)sizeof(spa_io_position)
+                        ? (spa_io_position*)area
+                        : null;
         }
         catch
         {
@@ -825,13 +926,20 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe void OnParamChangedCallback(void* data, void* portData, uint id, spa_pod* param)
+    private static unsafe void OnParamChangedCallback(
+        void* data,
+        void* portData,
+        uint id,
+        spa_pod* param
+    )
     {
         try
         {
             var self = (PipeWireFilter?)GCHandle.FromIntPtr((nint)data).Target;
-            if (self is null || self._disposed || portData is null || param is null) return;
-            if (id != (uint)SpaParamType.Format) return;
+            if (self is null || self._disposed || portData is null || param is null)
+                return;
+            if (id != (uint)SpaParamType.Format)
+                return;
 
             PipeWireFilterPort? port = self._ports.Find(p => p.PortData == portData);
             if (port is { Format: PipeWireDspFormat.Rgba32FloatVideo })
@@ -841,7 +949,8 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         {
             // A native frame on the loop thread: contained, and the port keeps whatever pool the
             // graph gives it, which the pixel accessor refuses rather than overruns.
-            if (GCHandle.FromIntPtr((nint)data).Target is PipeWireFilter self) self.LogVideoBuffersFailed(ex);
+            if (GCHandle.FromIntPtr((nint)data).Target is PipeWireFilter self)
+                self.LogVideoBuffersFailed(ex);
         }
     }
 
@@ -865,11 +974,15 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
     /// </remarks>
     private unsafe void DeclareVideoBuffers(PipeWireFilterPort port)
     {
-        uint width = DefaultVideoWidth, height = DefaultVideoHeight;
+        uint width = DefaultVideoWidth,
+            height = DefaultVideoHeight;
         spa_io_position* position = _position;
-        if (position is not null
+        if (
+            position is not null
             && (position->video.flags & (uint)SpaIoVideoSizeFlags.Valid) != 0
-            && position->video.size.width > 0 && position->video.size.height > 0)
+            && position->video.size.width > 0
+            && position->video.size.height > 0
+        )
         {
             width = position->video.size.width;
             height = position->video.size.height;
@@ -896,8 +1009,10 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
             rc = Native.pw_filter_update_params(_handle!.Filter, port.PortData, &param, 1);
         }
 
-        if (rc < 0) LogVideoBuffersRefused(port.Name, rc);
-        else LogVideoBuffersDeclared(port.Name, width, height, size);
+        if (rc < 0)
+            LogVideoBuffersRefused(port.Name, rc);
+        else
+            LogVideoBuffersDeclared(port.Name, width, height, size);
     }
 
     // Upstream's default.video.width and height (settings.c), what the graph publishes when nothing
@@ -907,17 +1022,21 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnStateChangedCallback(
-        void* data, PipeWireFilterState old, PipeWireFilterState state, sbyte* error)
+        void* data,
+        PipeWireFilterState old,
+        PipeWireFilterState state,
+        sbyte* error
+    )
     {
         try
         {
             var self = (PipeWireFilter?)GCHandle.FromIntPtr((nint)data).Target;
-            if (self is null || self._disposed) return;
+            if (self is null || self._disposed)
+                return;
 
             string? message = error is null
                 ? null
-                : Encoding.UTF8.GetString(
-                    DaemonText.Bytes((sbyte*)error));
+                : Encoding.UTF8.GetString(DaemonText.Bytes((sbyte*)error));
 
             self.RaiseStateChanged(old, state, message);
         }
@@ -927,12 +1046,20 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         }
     }
 
-    private void RaiseStateChanged(PipeWireFilterState old, PipeWireFilterState state, string? error)
+    private void RaiseStateChanged(
+        PipeWireFilterState old,
+        PipeWireFilterState state,
+        string? error
+    )
     {
         LogStateChanged(Name, old, state, error);
 
         // Not the realtime path, so one throwing subscriber must not starve the rest.
-        SafeCallback.Raise(StateChanged, h => h(this, old, state, error), ex => LogHandlerFaulted(Name, ex));
+        SafeCallback.Raise(
+            StateChanged,
+            h => h(this, old, state, error),
+            ex => LogHandlerFaulted(Name, ex)
+        );
     }
 
     /// <inheritdoc/>
@@ -945,7 +1072,8 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
     /// <inheritdoc/>
     public ValueTask DisposeAsync()
     {
-        if (_disposed) return ValueTask.CompletedTask;
+        if (_disposed)
+            return ValueTask.CompletedTask;
         _disposed = true;
         Release();
         GC.SuppressFinalize(this);
@@ -965,9 +1093,12 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         // over, so a throw in between leaves blocks and a GCHandle that nothing else will free.
         if (!ownedByHandle)
         {
-            if (_hook is not null) NativeMemory.Free(_hook);
-            if (_events is not null) NativeMemory.Free(_events);
-            if (_self.IsAllocated) _self.Free();
+            if (_hook is not null)
+                NativeMemory.Free(_hook);
+            if (_events is not null)
+                NativeMemory.Free(_events);
+            if (_self.IsAllocated)
+                _self.Free();
         }
 
         _hook = null;
@@ -976,28 +1107,50 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
         _ports.Clear();
     }
 
-    [LoggerMessage(EventId = 33310, Level = LogLevel.Debug,
-        Message = "video port '{Port}' asks for {Width}x{Height} frames: buffers of {Size} bytes")]
+    [LoggerMessage(
+        EventId = 33310,
+        Level = LogLevel.Debug,
+        Message = "video port '{Port}' asks for {Width}x{Height} frames: buffers of {Size} bytes"
+    )]
     private partial void LogVideoBuffersDeclared(string port, uint width, uint height, int size);
 
-    [LoggerMessage(EventId = 33311, Level = LogLevel.Warning,
-        Message = "the graph refused video port '{Port}''s buffer size ({Result}); frames larger than its default pool will not be handed out")]
+    [LoggerMessage(
+        EventId = 33311,
+        Level = LogLevel.Warning,
+        Message = "the graph refused video port '{Port}''s buffer size ({Result}); frames larger than its default pool will not be handed out"
+    )]
     private partial void LogVideoBuffersRefused(string port, int result);
 
-    [LoggerMessage(EventId = 33312, Level = LogLevel.Error,
-        Message = "declaring a video port's buffers threw")]
+    [LoggerMessage(
+        EventId = 33312,
+        Level = LogLevel.Error,
+        Message = "declaring a video port's buffers threw"
+    )]
     private partial void LogVideoBuffersFailed(Exception exception);
 
-    [LoggerMessage(EventId = 33300, Level = LogLevel.Debug,
-                   Message = "filter '{Name}' connected with {PortCount} port(s)")]
+    [LoggerMessage(
+        EventId = 33300,
+        Level = LogLevel.Debug,
+        Message = "filter '{Name}' connected with {PortCount} port(s)"
+    )]
     private partial void LogConnected(string name, int portCount);
 
-    [LoggerMessage(EventId = 33301, Level = LogLevel.Debug,
-                   Message = "filter '{Name}' state {Old} -> {State} {Error}")]
+    [LoggerMessage(
+        EventId = 33301,
+        Level = LogLevel.Debug,
+        Message = "filter '{Name}' state {Old} -> {State} {Error}"
+    )]
     private partial void LogStateChanged(
-        string name, PipeWireFilterState old, PipeWireFilterState state, string? error);
+        string name,
+        PipeWireFilterState old,
+        PipeWireFilterState state,
+        string? error
+    );
 
-    [LoggerMessage(EventId = 33302, Level = LogLevel.Error,
-                   Message = "a StateChanged handler for filter '{Name}' threw")]
+    [LoggerMessage(
+        EventId = 33302,
+        Level = LogLevel.Error,
+        Message = "a StateChanged handler for filter '{Name}' threw"
+    )]
     private partial void LogHandlerFaulted(string name, Exception exception);
 }

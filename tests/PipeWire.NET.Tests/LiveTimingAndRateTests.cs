@@ -42,14 +42,22 @@ public sealed class LiveTimingAndRateTests
     }
 
     /// <summary>Starts a silent output and a capture bound to it, both streaming.</summary>
-    private static async Task<(PipeWireContext Ctx, PipeWireAudioOutput Out, PipeWireAudioCapture Cap)>
-        RunningPairAsync(string name, CancellationToken ct, int rate = Rate)
+    private static async Task<(
+        PipeWireContext Ctx,
+        PipeWireAudioOutput Out,
+        PipeWireAudioCapture Cap
+    )> RunningPairAsync(string name, CancellationToken ct, int rate = Rate)
     {
         var ctx = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(ct);
 
         var output = new PipeWireAudioOutput(
-            ctx, $"{name}-{Environment.ProcessId}", rate, Channels, AudioSampleFormat.F32Le);
+            ctx,
+            $"{name}-{Environment.ProcessId}",
+            rate,
+            Channels,
+            AudioSampleFormat.F32Le
+        );
 
         output.FillSamples += (_, samples, _, _, _) =>
         {
@@ -100,28 +108,45 @@ public sealed class LiveTimingAndRateTests
             var samples = new List<PipeWireStreamQueue>();
             for (var i = 0; i < 40 && samples.Count < 10; i++)
             {
-                if (output.Queue is { } q) samples.Add(q);
+                if (output.Queue is { } q)
+                    samples.Add(q);
                 await Task.Delay(50, cts.Token);
             }
 
-            Assert.IsTrue(samples.Count >= 10, $"the stream reported its queue only {samples.Count} times");
+            Assert.IsTrue(
+                samples.Count >= 10,
+                $"the stream reported its queue only {samples.Count} times"
+            );
 
             // AvailableBuffers is the pool the stream draws from. Zero forever means the reader is
             // looking at the wrong field, because a running stream always has a pool.
             Assert.IsTrue(
                 samples.Any(s => s.AvailableBuffers > 0 || s.QueuedBuffers > 0),
-                "no reading reported any buffer at all, queued or available");
+                "no reading reported any buffer at all, queued or available"
+            );
 
-            string seen = string.Join(", ", samples.Select(s => $"q={s.Queued} b={s.Buffered} qb={s.QueuedBuffers} ab={s.AvailableBuffers}"));
+            string seen = string.Join(
+                ", ",
+                samples.Select(s =>
+                    $"q={s.Queued} b={s.Buffered} qb={s.QueuedBuffers} ab={s.AvailableBuffers}"
+                )
+            );
 
             Assert.IsTrue(
                 samples.Any(s => s.Buffered > 0),
-                $"the resampler's held frames read as zero on every sample with a resampler in the path [{seen}]");
+                $"the resampler's held frames read as zero on every sample with a resampler in the path [{seen}]"
+            );
 
             // A depth pinned to one value is indistinguishable from a field that is never updated,
             // and a controller cannot converge on a constant.
-            var distinct = samples.Select(s => (s.Queued, s.Buffered, s.QueuedBuffers, s.AvailableBuffers)).Distinct().Count();
-            Assert.IsTrue(distinct > 1, $"the queue reported an identical depth on every sample [{seen}]");
+            var distinct = samples
+                .Select(s => (s.Queued, s.Buffered, s.QueuedBuffers, s.AvailableBuffers))
+                .Distinct()
+                .Count();
+            Assert.IsTrue(
+                distinct > 1,
+                $"the queue reported an identical depth on every sample [{seen}]"
+            );
         }
     }
 
@@ -172,7 +197,8 @@ public sealed class LiveTimingAndRateTests
 
                     // The first reading sets the target the loop then holds against, which is how a
                     // receiver picks one: there is no absolute correct depth, only a stable one.
-                    if (observations == 0) target = avail;
+                    if (observations == 0)
+                        target = avail;
 
                     corrections.Add(dll.Update(target - avail));
                     observations++;
@@ -181,25 +207,32 @@ public sealed class LiveTimingAndRateTests
                 await Task.Delay(20, cts.Token);
             }
 
-            Assert.IsTrue(observations >= 25, $"only {observations} live queue readings were taken");
+            Assert.IsTrue(
+                observations >= 25,
+                $"only {observations} live queue readings were taken"
+            );
 
             foreach (double c in corrections)
             {
                 Assert.IsTrue(
                     double.IsFinite(c),
-                    "the controller produced a non-finite correction from a live queue reading");
+                    "the controller produced a non-finite correction from a live queue reading"
+                );
 
                 Assert.IsTrue(
                     c is > 0.9 and < 1.1,
                     $"the controller ran away to {c:F6} on live data; a real queue must not drive "
-                    + "the rate more than a few percent");
+                        + "the rate more than a few percent"
+                );
             }
 
             // And it is actually responding, rather than returning the neutral 1.0 because the
             // measurement never changes.
             Assert.IsTrue(
-                corrections.Distinct().Count() > 1 || corrections.All(c => Math.Abs(c - 1.0) < 1e-9),
-                "the controller neither moved nor sat at neutral, which is not a coherent state");
+                corrections.Distinct().Count() > 1
+                    || corrections.All(c => Math.Abs(c - 1.0) < 1e-9),
+                "the controller neither moved nor sat at neutral, which is not a coherent state"
+            );
         }
     }
 
@@ -218,13 +251,21 @@ public sealed class LiveTimingAndRateTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-commands", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-commands",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         var commands = new ConcurrentBag<SpaNodeCommand>();
 
         await using var output = new PipeWireAudioOutput(
-            ctx, $"pwnet-commands-{Environment.ProcessId}", Rate, Channels, AudioSampleFormat.F32Le);
+            ctx,
+            $"pwnet-commands-{Environment.ProcessId}",
+            Rate,
+            Channels,
+            AudioSampleFormat.F32Le
+        );
 
         // Subscribed before connecting: the hook has to be installed at core creation, not on
         // subscription, or the commands raised while going live are missed entirely.
@@ -238,7 +279,10 @@ public sealed class LiveTimingAndRateTests
 
         output.Connect(autoConnect: false);
 
-        await using var capture = new PipeWireAudioCapture(ctx, $"pwnet-commands-sink-{Environment.ProcessId}");
+        await using var capture = new PipeWireAudioCapture(
+            ctx,
+            $"pwnet-commands-sink-{Environment.ProcessId}"
+        );
         capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
@@ -247,14 +291,16 @@ public sealed class LiveTimingAndRateTests
 
         Assert.IsFalse(
             commands.IsEmpty,
-            "a stream that went live delivered no node command, so the dispatch is not wired");
+            "a stream that went live delivered no node command, so the dispatch is not wired"
+        );
 
         SpaNodeCommand[] seen = [.. commands];
 
         Assert.IsTrue(
             seen.Contains(SpaNodeCommand.Start),
             $"a stream that reached Streaming never reported Start; got: "
-            + $"{string.Join(", ", seen.Select(c => c.ToString()).Distinct())}");
+                + $"{string.Join(", ", seen.Select(c => c.ToString()).Distinct())}"
+        );
     }
 
     /// <summary>
@@ -274,11 +320,19 @@ public sealed class LiveTimingAndRateTests
         string marker = $"marker-{Guid.NewGuid():N}";
         string sinkName = $"pwnet-extraprops-sink-{Environment.ProcessId}";
 
-        await using var ctx = new PipeWireContext("pwnet-extraprops", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-extraprops",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var output = new PipeWireAudioOutput(
-            ctx, $"pwnet-extraprops-{Environment.ProcessId}", Rate, Channels, AudioSampleFormat.F32Le);
+            ctx,
+            $"pwnet-extraprops-{Environment.ProcessId}",
+            Rate,
+            Channels,
+            AudioSampleFormat.F32Le
+        );
 
         output.FillSamples += (_, samples, _, _, _) =>
         {
@@ -306,8 +360,9 @@ public sealed class LiveTimingAndRateTests
         PipeWireNode? node = null;
         for (var i = 0; i < 60 && node is null; i++)
         {
-            node = reg.Current.Nodes.FirstOrDefault(
-                n => string.Equals(n.NodeName, sinkName, StringComparison.Ordinal));
+            node = reg.Current.Nodes.FirstOrDefault(n =>
+                string.Equals(n.NodeName, sinkName, StringComparison.Ordinal)
+            );
 
             if (node?.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_NODE_DESCRIPTION) is null)
             {
@@ -316,22 +371,28 @@ public sealed class LiveTimingAndRateTests
             }
         }
 
-        Assert.IsNotNull(node, $"the capture node {sinkName} never appeared with its extra properties");
+        Assert.IsNotNull(
+            node,
+            $"the capture node {sinkName} never appeared with its extra properties"
+        );
 
         Assert.AreEqual(
             marker,
             node!.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_NODE_DESCRIPTION),
-            "a property set through ExtraProperties never reached the daemon's node");
+            "a property set through ExtraProperties never reached the daemon's node"
+        );
 
         Assert.AreEqual(
             "Production",
             node.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_MEDIA_ROLE),
-            "a property set through ExtraProperties never reached the daemon's node");
+            "a property set through ExtraProperties never reached the daemon's node"
+        );
 
         // Both ends of one link cannot both be the graph's driver.
         Assert.IsFalse(
             output.IsDriving && capture.IsDriving,
-            "both ends of one link claimed the driver role");
+            "both ends of one link claimed the driver role"
+        );
 
         // Asking about lazy scheduling is safe on a running stream and stays coherent with it.
         if (capture.IsLazy)

@@ -72,7 +72,10 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
 
         output.Dispose();
 
-        Assert.IsNull(output.LastProcessError, "a disposed stream threw rather than reporting no fault");
+        Assert.IsNull(
+            output.LastProcessError,
+            "a disposed stream threw rather than reporting no fault"
+        );
         Assert.AreEqual(0, output.ProcessErrorCount);
     }
 
@@ -108,8 +111,10 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         Assert.ThrowsExactly<ArgumentNullException>(() => ctx.UpdateProperties(null!));
 
         Assert.AreEqual(
-            0, ctx.UpdateProperties(new Dictionary<string, string>()),
-            "an empty set reported a change");
+            0,
+            ctx.UpdateProperties(new Dictionary<string, string>()),
+            "an empty set reported a change"
+        );
     }
 
     /// <summary>An exported node can raise an xrun, and stops being able to once disposed.</summary>
@@ -129,17 +134,22 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         await ctx.StartAsync(TestContext.CancellationTokenSource.Token).ConfigureAwait(false);
 
         PipeWireNodeProvider node = PipeWireNodeProvider.Create(
-            ctx, "pwnet_guard_xrun", PipeWireExportedFormat.AudioF32(48000, 1));
+            ctx,
+            "pwnet_guard_xrun",
+            PipeWireExportedFormat.AudioF32(48000, 1)
+        );
 
         Assert.IsTrue(
             node.ReportXrun(1000, 100),
-            "an exported node could not report an xrun to the graph that scheduled it");
+            "an exported node could not report an xrun to the graph that scheduled it"
+        );
 
         node.Dispose();
 
         Assert.IsFalse(
             node.ReportXrun(1000, 100),
-            "a disposed node called through a callback table it no longer owns");
+            "a disposed node called through a callback table it no longer owns"
+        );
     }
 
     /// <summary>Every member of every stream answers on an instance that was never connected.</summary>
@@ -167,9 +177,18 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         var retag = new Dictionary<string, string> { ["media.name"] = "guarded" };
 
         await using var audioIn = new PipeWireAudioCapture(ctx, "pwnet_guard_sai");
-        Shared(audioIn.NodeId, audioIn.LastProcessError, audioIn.ProcessErrorCount,
-            audioIn.IsDriving, audioIn.Queue, audioIn.IsLazy, audioIn.GraphClock,
-            audioIn.RateMatch, audioIn.Controls, audioIn.GetControl(0));
+        Shared(
+            audioIn.NodeId,
+            audioIn.LastProcessError,
+            audioIn.ProcessErrorCount,
+            audioIn.IsDriving,
+            audioIn.Queue,
+            audioIn.IsLazy,
+            audioIn.GraphClock,
+            audioIn.RateMatch,
+            audioIn.Controls,
+            audioIn.GetControl(0)
+        );
         audioIn.SkipCurrentFrame();
         audioIn.TriggerProcess();
         audioIn.SetError(-5, "no stream");
@@ -182,9 +201,18 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         Assert.ThrowsExactly<InvalidOperationException>(() => audioIn.SetControl(0, [1f]));
 
         await using var audioOut = new PipeWireAudioOutput(ctx, "pwnet_guard_sao");
-        Shared(audioOut.NodeId, audioOut.LastProcessError, audioOut.ProcessErrorCount,
-            audioOut.IsDriving, audioOut.Queue, audioOut.IsLazy, audioOut.GraphClock,
-            audioOut.RateMatch, audioOut.Controls, audioOut.GetControl(0));
+        Shared(
+            audioOut.NodeId,
+            audioOut.LastProcessError,
+            audioOut.ProcessErrorCount,
+            audioOut.IsDriving,
+            audioOut.Queue,
+            audioOut.IsLazy,
+            audioOut.GraphClock,
+            audioOut.RateMatch,
+            audioOut.Controls,
+            audioOut.GetControl(0)
+        );
         audioOut.TriggerProcess();
         audioOut.SetError(-5, "no stream");
         audioOut.SetRate(1.0);
@@ -198,9 +226,18 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         Assert.ThrowsExactly<InvalidOperationException>(() => audioOut.SetControl(0, [1f]));
 
         await using var videoIn = new PipeWireVideoCapture(ctx, "pwnet_guard_svi");
-        Shared(videoIn.NodeId, videoIn.LastProcessError, videoIn.ProcessErrorCount,
-            videoIn.IsDriving, videoIn.Queue, videoIn.IsLazy, videoIn.GraphClock,
-            videoIn.RateMatch, videoIn.Controls, videoIn.GetControl(0));
+        Shared(
+            videoIn.NodeId,
+            videoIn.LastProcessError,
+            videoIn.ProcessErrorCount,
+            videoIn.IsDriving,
+            videoIn.Queue,
+            videoIn.IsLazy,
+            videoIn.GraphClock,
+            videoIn.RateMatch,
+            videoIn.Controls,
+            videoIn.GetControl(0)
+        );
         videoIn.SkipCurrentFrame();
         videoIn.TriggerProcess();
         videoIn.SetError(-5, "no stream");
@@ -214,9 +251,18 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         Assert.ThrowsExactly<InvalidOperationException>(() => videoIn.SetControl(0, [1f]));
 
         await using var videoOut = new PipeWireVideoOutput(ctx, "pwnet_guard_svo", 64, 64);
-        Shared(videoOut.NodeId, videoOut.LastProcessError, videoOut.ProcessErrorCount,
-            videoOut.IsDriving, videoOut.Queue, videoOut.IsLazy, videoOut.GraphClock,
-            videoOut.RateMatch, videoOut.Controls, videoOut.GetControl(0));
+        Shared(
+            videoOut.NodeId,
+            videoOut.LastProcessError,
+            videoOut.ProcessErrorCount,
+            videoOut.IsDriving,
+            videoOut.Queue,
+            videoOut.IsLazy,
+            videoOut.GraphClock,
+            videoOut.RateMatch,
+            videoOut.Controls,
+            videoOut.GetControl(0)
+        );
         videoOut.TriggerProcess();
         videoOut.SetError(-5, "no stream");
         videoOut.SetRate(1.0);
@@ -231,10 +277,17 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         Assert.ThrowsExactly<InvalidOperationException>(() => videoOut.SetControl(0, [1f]));
 
         static void Shared(
-            uint? nodeId, Exception? lastError, long errorCount, bool driving,
-            PipeWireStreamQueue? queue, bool lazy, PipeWireGraphClock? clock,
-            PipeWireRateMatch? rateMatch, ImmutableArray<PipeWireStreamControl> controls,
-            PipeWireStreamControl? control)
+            uint? nodeId,
+            Exception? lastError,
+            long errorCount,
+            bool driving,
+            PipeWireStreamQueue? queue,
+            bool lazy,
+            PipeWireGraphClock? clock,
+            PipeWireRateMatch? rateMatch,
+            ImmutableArray<PipeWireStreamControl> controls,
+            PipeWireStreamControl? control
+        )
         {
             Assert.IsNull(nodeId, "an unconnected stream claimed a node id");
             Assert.IsNull(lastError);
@@ -266,8 +319,9 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         await using PipeWireContext ctx = Unstarted();
 
         // A filter is built on the context's loop, so an unstarted context has nothing to build on.
-        Assert.ThrowsExactly<InvalidOperationException>(
-            () => PipeWireFilter.Create(ctx, "pwnet_guard_too_early"));
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            PipeWireFilter.Create(ctx, "pwnet_guard_too_early")
+        );
 
         await ctx.StartAsync(TestContext.CancellationTokenSource.Token).ConfigureAwait(false);
 
@@ -332,15 +386,18 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         Assert.IsFalse(ctx.IsOnLoopThread, "an unstarted context claimed to be on its own loop");
 
         Assert.ThrowsExactly<InvalidOperationException>(
-            () => ctx.UpdateProperties(new Dictionary<string, string> { ["application.name"] = "x" }),
-            "an unconnected context sent properties nowhere and said nothing");
+            () =>
+                ctx.UpdateProperties(new Dictionary<string, string> { ["application.name"] = "x" }),
+            "an unconnected context sent properties nowhere and said nothing"
+        );
 
         await ctx.DisposeAsync();
         await ctx.DisposeAsync();
 
         await Assert.ThrowsExactlyAsync<ObjectDisposedException>(
             async () => await ctx.StartAsync(TestContext.CancellationTokenSource.Token),
-            "a disposed context was started again");
+            "a disposed context was started again"
+        );
     }
 
     /// <summary>The dmabuf entry points refuse what they cannot negotiate, and leave no residue.</summary>
@@ -366,10 +423,12 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
 
         Assert.ThrowsExactly<ArgumentException>(
             () => output.ConnectDmaBuf(ReadOnlySpan<long>.Empty),
-            "a dmabuf connect with no modifiers was allowed to negotiate");
+            "a dmabuf connect with no modifiers was allowed to negotiate"
+        );
 
-        Assert.ThrowsExactly<ArgumentException>(
-            () => output.ConnectDmaBuf(ReadOnlySpan<DmaBufDeviceOffer>.Empty));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            output.ConnectDmaBuf(ReadOnlySpan<DmaBufDeviceOffer>.Empty)
+        );
 
         // The same refusal reached through the sync form, which has state to unwind on the way out.
         //
@@ -379,19 +438,23 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         // would fail on every runner that has no GPU.
         if (DrmSyncobj.IsAvailable)
         {
-            Assert.ThrowsExactly<ArgumentException>(
-                () => output.ConnectDmaBufSync(ReadOnlySpan<long>.Empty));
+            Assert.ThrowsExactly<ArgumentException>(() =>
+                output.ConnectDmaBufSync(ReadOnlySpan<long>.Empty)
+            );
 
-            Assert.ThrowsExactly<ArgumentException>(
-                () => output.ConnectDmaBufSync(ReadOnlySpan<DmaBufDeviceOffer>.Empty));
+            Assert.ThrowsExactly<ArgumentException>(() =>
+                output.ConnectDmaBufSync(ReadOnlySpan<DmaBufDeviceOffer>.Empty)
+            );
         }
         else
         {
-            Assert.ThrowsExactly<InvalidOperationException>(
-                () => output.ConnectDmaBufSync(ReadOnlySpan<long>.Empty));
+            Assert.ThrowsExactly<InvalidOperationException>(() =>
+                output.ConnectDmaBufSync(ReadOnlySpan<long>.Empty)
+            );
 
-            Assert.ThrowsExactly<InvalidOperationException>(
-                () => output.ConnectDmaBufSync(ReadOnlySpan<DmaBufDeviceOffer>.Empty));
+            Assert.ThrowsExactly<InvalidOperationException>(() =>
+                output.ConnectDmaBufSync(ReadOnlySpan<DmaBufDeviceOffer>.Empty)
+            );
         }
 
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => output.StampSyncPoints(-1, 1, 2));
@@ -417,14 +480,22 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         await ctx.StartAsync(TestContext.CancellationTokenSource.Token).ConfigureAwait(false);
 
         await using var videoOut = new PipeWireVideoOutput(ctx, "pwnet_guard_twice_vo", 64, 64);
-        videoOut.FillFrame += (_, pixels, _, _, _, _) => { pixels.Clear(); return true; };
+        videoOut.FillFrame += (_, pixels, _, _, _, _) =>
+        {
+            pixels.Clear();
+            return true;
+        };
         videoOut.Connect(autoConnect: false);
 
         Assert.ThrowsExactly<InvalidOperationException>(() => videoOut.Connect(autoConnect: false));
         Assert.ThrowsExactly<InvalidOperationException>(() => videoOut.ConnectDmaBuf([0L]));
 
         await using var audioOut = new PipeWireAudioOutput(ctx, "pwnet_guard_twice_ao");
-        audioOut.FillSamples += (_, samples, _, _, _) => { samples.Clear(); return samples.Length; };
+        audioOut.FillSamples += (_, samples, _, _, _) =>
+        {
+            samples.Clear();
+            return samples.Length;
+        };
         audioOut.Connect(autoConnect: false);
 
         Assert.ThrowsExactly<InvalidOperationException>(() => audioOut.Connect(autoConnect: false));
@@ -459,14 +530,18 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         PipeWireFilterPort video = filter.AddVideoPort(PipeWirePortDirection.Out, "frames");
         PipeWireFilterPort midi = filter.AddMidiPort(PipeWirePortDirection.Out, "events");
 
-        await filter.ConnectAsync(PipeWireFilterFlags.RtProcess, TestContext.CancellationTokenSource.Token);
+        await filter.ConnectAsync(
+            PipeWireFilterFlags.RtProcess,
+            TestContext.CancellationTokenSource.Token
+        );
 
         // Outside a cycle there is no buffer to dequeue at all, which is the same answer by a
         // different route and is what a caller reading the geometry too early actually hits.
         Assert.IsTrue(video.GetPixels(16, 16).IsEmpty);
         Assert.IsTrue(
             video.GetPixels(16384, 16384).IsEmpty,
-            "a port handed back a span for a frame far larger than any buffer it has");
+            "a port handed back a span for a frame far larger than any buffer it has"
+        );
 
         Assert.IsNull(midi.ReadEvents());
         Assert.IsFalse(midi.WriteEvents([]));
@@ -498,7 +573,10 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         await using PipeWireContext serverCtx = Unstarted();
         await serverCtx.StartAsync(cts.Token).ConfigureAwait(false);
 
-        await using var readerCtx = new PipeWireContext("pwnet-guards-reader", ConsoleTestLoggerFactory.Instance);
+        await using var readerCtx = new PipeWireContext(
+            "pwnet-guards-reader",
+            ConsoleTestLoggerFactory.Instance
+        );
         await readerCtx.StartAsync(cts.Token).ConfigureAwait(false);
 
         await using var reg = new PipeWireRegistry(readerCtx);
@@ -506,8 +584,11 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
 
         string storeName = $"pwnet-guard-store-{Environment.ProcessId}-{Random.Shared.Next():x}";
 
-        await using PipeWireMetadataProvider provider =
-            PipeWireMetadataProvider.Create(serverCtx, storeName, export: true);
+        await using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(
+            serverCtx,
+            storeName,
+            export: true
+        );
 
         await provider.ReadyAsync(cts.Token);
 
@@ -516,23 +597,28 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         {
             await reg.WaitForInitialEnumerationAsync(cts.Token);
             store = reg.BindMetadata(storeName);
-            if (store is null) await Task.Delay(50, cts.Token);
+            if (store is null)
+                await Task.Delay(50, cts.Token);
         }
 
-        if (store is null) Assert.Inconclusive("the exported store never came back through the registry.");
+        if (store is null)
+            Assert.Inconclusive("the exported store never came back through the registry.");
 
         await using (store)
         {
             await store!.ReadyAsync(cts.Token);
 
-            await Assert.ThrowsExactlyAsync<ArgumentException>(
-                async () => await store.SetAsync("pwnet\0key", "v", null, cancellationToken: cts.Token));
+            await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+                await store.SetAsync("pwnet\0key", "v", null, cancellationToken: cts.Token)
+            );
 
-            await Assert.ThrowsExactlyAsync<ArgumentException>(
-                async () => await store.SetAsync("pwnet.key", "v\0v", null, cancellationToken: cts.Token));
+            await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+                await store.SetAsync("pwnet.key", "v\0v", null, cancellationToken: cts.Token)
+            );
 
-            await Assert.ThrowsExactlyAsync<ArgumentException>(
-                async () => await store.SetAsync("pwnet.key", "v", "t\0t", cancellationToken: cts.Token));
+            await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+                await store.SetAsync("pwnet.key", "v", "t\0t", cancellationToken: cts.Token)
+            );
 
             // A key the store does not have reads as absent rather than as a default.
             Assert.IsNull(store.Get("pwnet.no.such.key"));

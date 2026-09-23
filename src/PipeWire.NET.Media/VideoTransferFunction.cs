@@ -5,12 +5,16 @@ public enum VideoTransferFunction
 {
     /// <summary>Unspecified.</summary>
     Unknown = 0,
+
     /// <summary>Pure gamma 2.2.</summary>
     Gamma22 = 1,
+
     /// <summary>ITU-R BT.709.</summary>
     Bt709 = 2,
+
     /// <summary>sRGB.</summary>
     Srgb = 3,
+
     /// <summary>BT.2020 12-bit.</summary>
     Bt2020_12 = 4,
 }

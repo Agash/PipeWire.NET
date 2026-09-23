@@ -41,7 +41,10 @@ public sealed class SpaPodValueTests : PipeWireTestBase
         foreach (SpaValue value in values)
         {
             byte[] bytes = SpaPod.ToBytes(value);
-            Assert.IsTrue(SpaPod.TryParse(bytes, out SpaValue? read), $"{value} did not parse back");
+            Assert.IsTrue(
+                SpaPod.TryParse(bytes, out SpaValue? read),
+                $"{value} did not parse back"
+            );
             Assert.AreEqual(value, read, $"{value} changed on the way through");
         }
     }
@@ -52,8 +55,12 @@ public sealed class SpaPodValueTests : PipeWireTestBase
         SpaObject original = Props(
             new SpaPodProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.5f)),
             new SpaPodProperty((uint)SpaProp.Mute, SpaPodPropFlags.Mandatory, new SpaBool(true)),
-            new SpaPodProperty((uint)SpaProp.ChannelVolumes, 0,
-                new SpaArray(SpaType.Float, [new SpaFloat(0.25f), new SpaFloat(0.75f)])));
+            new SpaPodProperty(
+                (uint)SpaProp.ChannelVolumes,
+                0,
+                new SpaArray(SpaType.Float, [new SpaFloat(0.25f), new SpaFloat(0.75f)])
+            )
+        );
 
         Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(original), out SpaValue? read));
         var parsed = (SpaObject)read!;
@@ -68,21 +75,28 @@ public sealed class SpaPodValueTests : PipeWireTestBase
         Assert.AreEqual(SpaType.Float, channels.ChildType);
         CollectionAssert.AreEqual(
             new[] { 0.25f, 0.75f },
-            channels.Items.Cast<SpaFloat>().Select(f => f.Value).ToArray());
+            channels.Items.Cast<SpaFloat>().Select(f => f.Value).ToArray()
+        );
     }
 
     [TestMethod]
     public void AChoiceRoundTrips_AndItsFirstAlternativeIsTheDefault()
     {
-        var choice = new SpaChoice(SpaChoiceType.Range, SpaType.Int,
-            [new SpaInt(48000), new SpaInt(8000), new SpaInt(192000)]);
+        var choice = new SpaChoice(
+            SpaChoiceType.Range,
+            SpaType.Int,
+            [new SpaInt(48000), new SpaInt(8000), new SpaInt(192000)]
+        );
 
         Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(choice), out SpaValue? read));
         var parsed = (SpaChoice)read!;
 
         Assert.AreEqual(SpaChoiceType.Range, parsed.Kind);
-        Assert.AreEqual(new SpaInt(48000), parsed.Default,
-            "whatever the kind, the first alternative is the default or current value");
+        Assert.AreEqual(
+            new SpaInt(48000),
+            parsed.Default,
+            "whatever the kind, the first alternative is the default or current value"
+        );
         Assert.AreEqual(3, parsed.Alternatives.Length);
     }
 
@@ -91,13 +105,19 @@ public sealed class SpaPodValueTests : PipeWireTestBase
     {
         // A device route carries its volume as a Props object nested inside the Route object, so
         // nesting is not a curiosity here - it is how the hardware mixer is written.
-        var route = new SpaObject(SpaType.ObjectParamRoute, SpaParamType.Route,
-        [
-            new SpaPodProperty((uint)SpaParamRoute.Index, 0, new SpaInt(3)),
-            new SpaPodProperty((uint)SpaParamRoute.Device, 0, new SpaInt(1)),
-            new SpaPodProperty((uint)SpaParamRoute.Props, 0,
-                Props(new SpaPodProperty((uint)SpaProp.Mute, 0, new SpaBool(false)))),
-        ]);
+        var route = new SpaObject(
+            SpaType.ObjectParamRoute,
+            SpaParamType.Route,
+            [
+                new SpaPodProperty((uint)SpaParamRoute.Index, 0, new SpaInt(3)),
+                new SpaPodProperty((uint)SpaParamRoute.Device, 0, new SpaInt(1)),
+                new SpaPodProperty(
+                    (uint)SpaParamRoute.Props,
+                    0,
+                    Props(new SpaPodProperty((uint)SpaProp.Mute, 0, new SpaBool(false)))
+                ),
+            ]
+        );
 
         Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(route), out SpaValue? read));
         var parsed = (SpaObject)read!;
@@ -147,7 +167,10 @@ public sealed class SpaPodValueTests : PipeWireTestBase
     public void ATruncatedHeader_IsRefusedRatherThanRead()
     {
         foreach (int length in (int[])[0, 1, 7])
-            Assert.IsFalse(SpaPod.TryParse(new byte[length], out _), $"{length} bytes is not a pod");
+            Assert.IsFalse(
+                SpaPod.TryParse(new byte[length], out _),
+                $"{length} bytes is not a pod"
+            );
     }
 
     [TestMethod]
@@ -158,8 +181,8 @@ public sealed class SpaPodValueTests : PipeWireTestBase
         byte[] pod = new byte[8 + 8 + 8];
         BitConverter.TryWriteBytes(pod.AsSpan(0, 4), 16u);
         BitConverter.TryWriteBytes(pod.AsSpan(4, 4), (uint)SpaType.Array);
-        BitConverter.TryWriteBytes(pod.AsSpan(8, 4), 0u);                    // child size
-        BitConverter.TryWriteBytes(pod.AsSpan(12, 4), (uint)SpaType.Int);    // child type
+        BitConverter.TryWriteBytes(pod.AsSpan(8, 4), 0u); // child size
+        BitConverter.TryWriteBytes(pod.AsSpan(12, 4), (uint)SpaType.Int); // child type
 
         Assert.IsFalse(SpaPod.TryParse(pod, out _));
     }
@@ -189,8 +212,11 @@ public sealed class SpaPodValueTests : PipeWireTestBase
         Assert.IsTrue(SpaPod.TryParse(pod, out SpaValue? value));
         var unknown = (SpaUnknown)value!;
         Assert.AreEqual((SpaType)0xDEAD, unknown.UnknownType);
-        CollectionAssert.AreEqual(new byte[] { 0x34, 0x12, 0, 0 }, unknown.Body.ToArray(),
-            "the bytes are kept so the value can be written back unchanged");
+        CollectionAssert.AreEqual(
+            new byte[] { 0x34, 0x12, 0, 0 },
+            unknown.Body.ToArray(),
+            "the bytes are kept so the value can be written back unchanged"
+        );
 
         CollectionAssert.AreEqual(pod, SpaPod.ToBytes(unknown));
     }
@@ -200,7 +226,8 @@ public sealed class SpaPodValueTests : PipeWireTestBase
     {
         SpaObject duplicated = Props(
             new SpaPodProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.1f)),
-            new SpaPodProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.9f)));
+            new SpaPodProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.9f))
+        );
 
         Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(duplicated), out SpaValue? read));
         Assert.AreEqual(new SpaFloat(0.1f), ((SpaObject)read!)[(uint)SpaProp.Volume]);

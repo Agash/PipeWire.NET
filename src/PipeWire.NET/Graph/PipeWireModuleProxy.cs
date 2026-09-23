@@ -17,8 +17,9 @@ namespace PipeWire.NET.Graph;
 [SupportedOSPlatform("linux")]
 internal sealed class PipeWireModuleProxy : IDisposable
 {
-    private readonly TaskCompletionSource<PipeWireProperties> _info =
-        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<PipeWireProperties> _info = new(
+        TaskCreationOptions.RunContinuationsAsynchronously
+    );
 
     private BoundProxy? _bound;
 
@@ -26,11 +27,20 @@ internal sealed class PipeWireModuleProxy : IDisposable
     internal Task<PipeWireProperties> Properties => _info.Task;
 
     internal static unsafe PipeWireModuleProxy Bind(
-        PipeWireContext ctx, pw_registry* registry, uint id, uint version)
+        PipeWireContext ctx,
+        pw_registry* registry,
+        uint id,
+        uint version
+    )
     {
         var reader = new PipeWireModuleProxy();
         reader._bound = BoundProxy.Bind(
-            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Module, version, NativeConstants.PW_VERSION_MODULE,
+            ctx,
+            registry,
+            id,
+            PipeWireKeys.PW_TYPE_INTERFACE_Module,
+            version,
+            NativeConstants.PW_VERSION_MODULE,
             sizeof(pw_module_events),
             events =>
             {
@@ -38,9 +48,15 @@ internal sealed class PipeWireModuleProxy : IDisposable
                 table->version = NativeConstants.PW_VERSION_MODULE_EVENTS;
                 table->info = &OnInfoCallback;
             },
-            static (proxy, hook, events, data) => Native.pw_module_add_listener(
-                (pw_module*)proxy, (spa_hook*)hook, (pw_module_events*)events, (void*)data),
-            reader);
+            static (proxy, hook, events, data) =>
+                Native.pw_module_add_listener(
+                    (pw_module*)proxy,
+                    (spa_hook*)hook,
+                    (pw_module_events*)events,
+                    (void*)data
+                ),
+            reader
+        );
 
         reader._bound.Removed = reader.RaiseRemoved;
 
@@ -61,13 +77,18 @@ internal sealed class PipeWireModuleProxy : IDisposable
     private void RaiseRemoved()
     {
         Action? handler = Removed;
-        if (handler is null) return;
+        if (handler is null)
+            return;
 
         // A native callback frame, so nothing may escape it.
-        try { handler(); }
-        catch (Exception) { /* a subscriber that throws must not reach the daemon */ }
+        try
+        {
+            handler();
+        }
+        catch (Exception)
+        { /* a subscriber that throws must not reach the daemon */
+        }
     }
-
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnInfoCallback(void* data, pw_module_info* info)
@@ -75,17 +96,22 @@ internal sealed class PipeWireModuleProxy : IDisposable
         // A native callback frame: an escaping exception aborts the process.
         try
         {
-            if (data is null || info is null) return;
-            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireModuleProxy self) return;
+            if (data is null || info is null)
+                return;
+            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireModuleProxy self)
+                return;
 
             // filename and args are not properties, but they are the two facts a reader of a module
             // most often wants and they arrive nowhere else, so they travel as properties here.
             var extra = new Dictionary<string, string>(StringComparer.Ordinal);
-            if (info->filename is not null) extra[PipeWireKeys.MODULE_FILENAME] = DaemonText.String(info->filename)!;
-            if (info->args is not null) extra[PipeWireKeys.MODULE_ARGS] = DaemonText.String(info->args)!;
+            if (info->filename is not null)
+                extra[PipeWireKeys.MODULE_FILENAME] = DaemonText.String(info->filename)!;
+            if (info->args is not null)
+                extra[PipeWireKeys.MODULE_ARGS] = DaemonText.String(info->args)!;
 
             self._info.TrySetResult(
-                PipeWireProperties.From(info->props).MergedWith(PipeWireProperties.FromItems(extra)));
+                PipeWireProperties.From(info->props).MergedWith(PipeWireProperties.FromItems(extra))
+            );
         }
         catch (Exception)
         {

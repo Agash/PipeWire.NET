@@ -46,10 +46,22 @@ internal static unsafe partial class NativeLibdrm
 
     /// <summary><c>drmSyncobjTimelineSignal</c>: signals points on timelines from the CPU.</summary>
     [LibraryImport("libdrm", EntryPoint = "drmSyncobjTimelineSignal", SetLastError = true)]
-    internal static partial int drmSyncobjTimelineSignal(int fd, uint* handles, ulong* points, uint handleCount);
+    internal static partial int drmSyncobjTimelineSignal(
+        int fd,
+        uint* handles,
+        ulong* points,
+        uint handleCount
+    );
 
     /// <summary><c>drmSyncobjTimelineWait</c>: waits for points, up to an absolute deadline.</summary>
     [LibraryImport("libdrm", EntryPoint = "drmSyncobjTimelineWait", SetLastError = true)]
     internal static partial int drmSyncobjTimelineWait(
-        int fd, uint* handles, ulong* points, uint numHandles, long timeoutNsec, uint flags, uint* firstSignaled);
+        int fd,
+        uint* handles,
+        ulong* points,
+        uint numHandles,
+        long timeoutNsec,
+        uint flags,
+        uint* firstSignaled
+    );
 }

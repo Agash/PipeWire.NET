@@ -35,16 +35,22 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-target", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-target",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
         string sinkName = Unique("pwnet_target_sink");
-        PipeWireNode sink = await registry.CreateVirtualSink("Target sink")
-            .WithName(sinkName).ExecuteAsync(cts.Token);
+        PipeWireNode sink = await registry
+            .CreateVirtualSink("Target sink")
+            .WithName(sinkName)
+            .ExecuteAsync(cts.Token);
 
-        PipeWireNode source = await registry.CreateVirtualSource("Targeting source")
+        PipeWireNode source = await registry
+            .CreateVirtualSource("Targeting source")
             .WithName(Unique("pwnet_target_src"))
             .WithTarget(sink)
             .WithAutoConnect(false)
@@ -56,22 +62,29 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
             // the daemon received, and PipeWireNode carries a fixed set of properties rather than
             // the whole dictionary, so it cannot answer it.
             PwDump dump = await PwDump.CaptureAsync(cts.Token);
-            PwDump.Entry? seen = dump.OfKind("Node")
-                .FirstOrDefault(e => e.Id == source.NodeId);
+            PwDump.Entry? seen = dump.OfKind("Node").FirstOrDefault(e => e.Id == source.NodeId);
 
             Assert.IsNotNull(seen, "the node this test made is not in pw-dump's graph");
-            Assert.AreEqual(sinkName, seen!.Prop("target.object"),
-                "target.object did not reach the daemon");
+            Assert.AreEqual(
+                sinkName,
+                seen!.Prop("target.object"),
+                "target.object did not reach the daemon"
+            );
             // Compared case-insensitively because the daemon stores this one as a JSON boolean
             // rather than a string, and the pw-dump oracle renders that through
             // JsonElement.ToString(), which spells it "False". What is under test is that the key
             // arrived and means false, not how the oracle prints it.
-            Assert.AreEqual("false", seen.Prop("node.autoconnect")?.ToLowerInvariant(),
-                "node.autoconnect did not reach the daemon");
+            Assert.AreEqual(
+                "false",
+                seen.Prop("node.autoconnect")?.ToLowerInvariant(),
+                "node.autoconnect did not reach the daemon"
+            );
 
             // Deprecated since 0.3.64. Sending both leaves which one wins to the session manager.
-            Assert.IsNull(seen.Prop("node.target"),
-                "the deprecated node.target key was sent as well");
+            Assert.IsNull(
+                seen.Prop("node.target"),
+                "the deprecated node.target key was sent as well"
+            );
         }
         finally
         {
@@ -85,13 +98,18 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-vsource", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-vsource",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await registry.CreateVirtualSource("A virtual microphone")
-            .WithName(Unique("pwnet_vsource")).ExecuteAsync(cts.Token);
+        PipeWireNode node = await registry
+            .CreateVirtualSource("A virtual microphone")
+            .WithName(Unique("pwnet_vsource"))
+            .ExecuteAsync(cts.Token);
 
         try
         {
@@ -114,7 +132,10 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-settings", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-settings",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -137,8 +158,10 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
 
             Assert.IsNotNull(settings.ClockMinQuantum);
             Assert.IsNotNull(settings.ClockMaxQuantum);
-            Assert.IsTrue(settings.ClockMinQuantum <= settings.ClockMaxQuantum,
-                "the quantum range is inverted");
+            Assert.IsTrue(
+                settings.ClockMinQuantum <= settings.ClockMaxQuantum,
+                "the quantum range is inverted"
+            );
 
             // Present and readable even when nothing is pinned, where they read 0 rather than being
             // absent - which is why they are int? for absence and 0 for "not pinned".
@@ -147,10 +170,12 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
 
             // Negative is not a value the daemon has a meaning for, and atoi would take it and
             // store it, so it is refused here rather than written.
-            Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-                () => _ = settings.SetForcedQuantumAsync(-1, cts.Token));
-            Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-                () => _ = settings.SetForcedRateAsync(-1, cts.Token));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+                _ = settings.SetForcedQuantumAsync(-1, cts.Token)
+            );
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+                _ = settings.SetForcedRateAsync(-1, cts.Token)
+            );
         }
     }
 
@@ -159,7 +184,10 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-quantum", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-quantum",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -242,7 +270,10 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-badquantum", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-badquantum",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -265,18 +296,24 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
             // settings.check-quantum is on, and it is off by default. Either way the write reports
             // success, so reading it back is the only way to know what happened - which is the
             // point being pinned here.
-            bool checks = string.Equals(settings.Get("settings.check-quantum"), "true",
-                StringComparison.OrdinalIgnoreCase);
+            bool checks = string.Equals(
+                settings.Get("settings.check-quantum"),
+                "true",
+                StringComparison.OrdinalIgnoreCase
+            );
             int absurd = max * 100;
 
             try
             {
                 await settings.SetForcedQuantumAsync(absurd, cts.Token);
 
-                Assert.AreEqual(checks ? 0 : absurd, settings.ClockForcedQuantum,
+                Assert.AreEqual(
+                    checks ? 0 : absurd,
+                    settings.ClockForcedQuantum,
                     checks
                         ? "check-quantum is on, so an out-of-range quantum should have been dropped"
-                        : "check-quantum is off, so the value should have been applied as written");
+                        : "check-quantum is off, so the value should have been applied as written"
+                );
             }
             finally
             {
@@ -286,5 +323,4 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
             Assert.AreEqual(0, settings.ClockForcedQuantum, "the quantum was left pinned");
         }
     }
-
 }

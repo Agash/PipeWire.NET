@@ -41,7 +41,13 @@ internal static unsafe class SpaHookList
     /// <c>spa_hook_list_isolate</c>: moves every hook to <paramref name="save"/> and leaves
     /// <paramref name="hook"/> alone on the list, so what is emitted next reaches only the new listener.
     /// </summary>
-    internal static void Isolate(spa_hook_list* list, spa_hook_list* save, spa_hook* hook, void* funcs, void* data)
+    internal static void Isolate(
+        spa_hook_list* list,
+        spa_hook_list* save,
+        spa_hook* hook,
+        void* funcs,
+        void* data
+    )
     {
         Init(save);
         ListInsertList(&save->list, &list->list);
@@ -72,7 +78,8 @@ internal static unsafe class SpaHookList
     // spa_list_insert_list
     private static void ListInsertList(spa_list* list, spa_list* other)
     {
-        if (other->next == other) return;
+        if (other->next == other)
+            return;
 
         other->next->prev = list;
         other->prev->next = list->next;

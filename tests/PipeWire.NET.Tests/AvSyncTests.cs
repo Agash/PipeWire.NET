@@ -37,7 +37,9 @@ namespace PipeWire.NET.Tests;
 [SupportedOSPlatform("linux")]
 public sealed class AvSyncTests
 {
-    private const int Width = 160, Height = 120, FrameRate = 30;
+    private const int Width = 160,
+        Height = 120,
+        FrameRate = 30;
     private const int Rate = 48000;
     private const int Cap = 128;
 
@@ -69,24 +71,43 @@ public sealed class AvSyncTests
     /// crosses the daemon: no audio converter or mixer copies <c>spa_meta_header.pts</c>, so an audio
     /// consumer is handed the graph's cycle time whatever the producer stamped.
     /// </param>
-    private static async Task<Capture> CaptureBothLegsAsync(string name, long? videoOffsetNs, CancellationToken ct)
+    private static async Task<Capture> CaptureBothLegsAsync(
+        string name,
+        long? videoOffsetNs,
+        CancellationToken ct
+    )
     {
         await using var ctx = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(ct);
 
-        await using var video = new PipeWireVideoOutput(ctx, $"{name}-v", Width, Height, PixelFormat.Bgra, FrameRate);
+        await using var video = new PipeWireVideoOutput(
+            ctx,
+            $"{name}-v",
+            Width,
+            Height,
+            PixelFormat.Bgra,
+            FrameRate
+        );
         video.FillFrame += (sender, pixels, _, _, _, _) =>
         {
             pixels.Fill(0x40);
-            if (videoOffsetNs is { } offset) sender.NextPresentationTimestampNs = NowNs() + offset;
+            if (videoOffsetNs is { } offset)
+                sender.NextPresentationTimestampNs = NowNs() + offset;
             return true;
         };
 
-        await using var audio = new PipeWireAudioOutput(ctx, $"{name}-a", Rate, 2, AudioSampleFormat.F32Le);
+        await using var audio = new PipeWireAudioOutput(
+            ctx,
+            $"{name}-a",
+            Rate,
+            2,
+            AudioSampleFormat.F32Le
+        );
         audio.FillSamples += (sender, samples, _, _, _) =>
         {
             MemoryMarshal.Cast<byte, float>(samples).Fill(0.25f);
-            if (videoOffsetNs is not null) sender.NextPresentationTimestampNs = NowNs();
+            if (videoOffsetNs is not null)
+                sender.NextPresentationTimestampNs = NowNs();
             return samples.Length;
         };
 
@@ -131,10 +152,14 @@ public sealed class AvSyncTests
         DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
         while (DateTime.UtcNow < deadline)
         {
-            bool vReady, aReady;
-            lock (v) vReady = v.Count >= 24 && v[^1].Time > v[0].Time;
-            lock (a) aReady = a.Count >= 24 && a[^1].Time > a[0].Time;
-            if (vReady && aReady) break;
+            bool vReady,
+                aReady;
+            lock (v)
+                vReady = v.Count >= 24 && v[^1].Time > v[0].Time;
+            lock (a)
+                aReady = a.Count >= 24 && a[^1].Time > a[0].Time;
+            if (vReady && aReady)
+                break;
             await Task.Delay(100, ct);
         }
 
@@ -145,17 +170,27 @@ public sealed class AvSyncTests
             lock (xs)
             {
                 return new Leg(
-                    [.. xs.Select(x => x.Time)], [.. xs.Select(x => x.Rx)],
-                    [.. xs.Select(x => x.Delay)], [.. xs.Select(x => x.Clock)]);
+                    [.. xs.Select(x => x.Time)],
+                    [.. xs.Select(x => x.Rx)],
+                    [.. xs.Select(x => x.Delay)],
+                    [.. xs.Select(x => x.Clock)]
+                );
             }
         }
 
-        Leg videoLeg = Snapshot(v), audioLeg = Snapshot(a);
+        Leg videoLeg = Snapshot(v),
+            audioLeg = Snapshot(a);
 
         // Buffers without their leg's time are not collected at all, so a producer that stopped
         // stamping shows up here as a leg that never filled rather than as a wrong number later.
-        Assert.IsTrue(videoLeg.Time.Length >= 24, $"only {videoLeg.Time.Length} video frames carried a presentation timestamp");
-        Assert.IsTrue(audioLeg.Time.Length >= 24, $"only {audioLeg.Time.Length} audio buffers carried a queued time");
+        Assert.IsTrue(
+            videoLeg.Time.Length >= 24,
+            $"only {videoLeg.Time.Length} video frames carried a presentation timestamp"
+        );
+        Assert.IsTrue(
+            audioLeg.Time.Length >= 24,
+            $"only {audioLeg.Time.Length} audio buffers carried a queued time"
+        );
 
         return new Capture(videoLeg, audioLeg, drove);
     }
@@ -182,7 +217,7 @@ public sealed class AvSyncTests
         leg.Time.Length == 0
             ? $"{name}: nothing"
             : $"{name}: n={leg.Time.Length} pts {leg.Time[0]}..{leg.Time[^1]} "
-              + $"(span {(leg.Time[^1] - leg.Time[0]) / 1e6:F1}ms) lead {LeadNs(leg) / 1e6:F1}ms";
+                + $"(span {(leg.Time[^1] - leg.Time[0]) / 1e6:F1}ms) lead {LeadNs(leg) / 1e6:F1}ms";
 
     /// <summary>
     /// Audio and video published together, stamped by the outputs themselves, arrive on one timeline.
@@ -200,8 +235,10 @@ public sealed class AvSyncTests
 
         Capture c = await CaptureBothLegsAsync("pwnet-avsync", videoOffsetNs: null, cts.Token);
 
-        long videoFrom = c.Video.Time.Min(), videoTo = c.Video.Time.Max();
-        long audioFrom = c.Audio.Time.Min(), audioTo = c.Audio.Time.Max();
+        long videoFrom = c.Video.Time.Min(),
+            videoTo = c.Video.Time.Max();
+        long audioFrom = c.Audio.Time.Min(),
+            audioTo = c.Audio.Time.Max();
 
         Assert.IsTrue(videoTo > videoFrom, "the video timestamps never advanced");
         Assert.IsTrue(audioTo > audioFrom, "the audio timestamps never advanced");
@@ -209,14 +246,16 @@ public sealed class AvSyncTests
         long overlap = Math.Min(videoTo, audioTo) - Math.Max(videoFrom, audioFrom);
         Assert.IsTrue(
             overlap > 0,
-            $"the legs' timestamp windows do not meet (video {videoFrom}..{videoTo}, audio {audioFrom}..{audioTo})");
+            $"the legs' timestamp windows do not meet (video {videoFrom}..{videoTo}, audio {audioFrom}..{audioTo})"
+        );
 
         // Both were stamped from one clock at production, so what separates them is latency the
         // legs do not share - a quantum or a frame, not hundreds of milliseconds.
         long skew = LeadNs(c.Audio) - LeadNs(c.Video);
         Assert.IsTrue(
             Math.Abs(skew) < 100_000_000,
-            $"audio and video stamped by the same process sit {skew / 1e6:F1}ms apart");
+            $"audio and video stamped by the same process sit {skew / 1e6:F1}ms apart"
+        );
 
         // The graph clock the video capture reports must advance as well when this library drove
         // the graph: a driving stream has to publish the clock itself, and before that was done
@@ -224,8 +263,10 @@ public sealed class AvSyncTests
         if (c.VideoDrove)
         {
             long[] clock = [.. c.Video.Clock.Where(x => x >= 0)];
-            Assert.IsTrue(clock.Length > 1 && clock.Max() > clock.Min(),
-                "this library drove the video graph, but the graph clock its consumer saw never advanced");
+            Assert.IsTrue(
+                clock.Length > 1 && clock.Max() > clock.Min(),
+                "this library drove the video graph, but the graph clock its consumer saw never advanced"
+            );
         }
     }
 
@@ -262,7 +303,11 @@ public sealed class AvSyncTests
 
         foreach (long injected in new[] { 250_000_000L, -100_000_000L })
         {
-            Capture c = await CaptureBothLegsAsync($"pwnet-avoff{(injected > 0 ? "p" : "n")}", injected, cts.Token);
+            Capture c = await CaptureBothLegsAsync(
+                $"pwnet-avoff{(injected > 0 ? "p" : "n")}",
+                injected,
+                cts.Token
+            );
             long recovered = LeadNs(c.Video) - LeadNs(c.Audio) - baseSkew;
 
             Assert.AreEqual(
@@ -270,8 +315,9 @@ public sealed class AvSyncTests
                 recovered / 1e6,
                 15.0,
                 $"a {injected / 1e6:F0}ms offset published into the video came back as {recovered / 1e6:F1}ms; "
-                + $"baseline [{Describe("audio", baseline.Audio)}; {Describe("video", baseline.Video)}], "
-                + $"offset run [{Describe("audio", c.Audio)}; {Describe("video", c.Video)}]");
+                    + $"baseline [{Describe("audio", baseline.Audio)}; {Describe("video", baseline.Video)}], "
+                    + $"offset run [{Describe("audio", c.Audio)}; {Describe("video", c.Video)}]"
+            );
         }
     }
 
@@ -303,10 +349,14 @@ public sealed class AvSyncTests
         for (var i = 1; i < c.Audio.Time.Length; i++)
         {
             double d = (c.Audio.Time[i] - c.Audio.Time[i - 1]) / 1e9 * Rate;
-            if (d is > 0 and < 1e6) periods.Add(d);
+            if (d is > 0 and < 1e6)
+                periods.Add(d);
         }
 
-        Assert.IsTrue(periods.Count > 5, "the audio leg produced no usable cadence to drive against");
+        Assert.IsTrue(
+            periods.Count > 5,
+            "the audio leg produced no usable cadence to drive against"
+        );
         double period = periods.Sum() / periods.Count;
 
         var dll = new PipeWireRateController();
@@ -320,7 +370,10 @@ public sealed class AvSyncTests
         {
             double correction = dll.Update(offset);
 
-            Assert.IsTrue(double.IsFinite(correction), $"the controller produced a non-finite correction at cycle {i}");
+            Assert.IsTrue(
+                double.IsFinite(correction),
+                $"the controller produced a non-finite correction at cycle {i}"
+            );
 
             // Consumed at the corrected rate against a nominal arrival, which is what applying the
             // correction to the stream would do.
@@ -330,9 +383,15 @@ public sealed class AvSyncTests
         Assert.IsTrue(
             Math.Abs(offset) < Math.Abs(startingOffset),
             $"the correction made the desync worse: {startingOffset / Rate * 1000:F1}ms became "
-            + $"{offset / Rate * 1000:F1}ms - the sign is inverted");
+                + $"{offset / Rate * 1000:F1}ms - the sign is inverted"
+        );
 
-        Assert.AreEqual(0.0, offset / Rate, 0.005, $"a 250ms desync did not close; {offset / Rate * 1000:F1}ms remains");
+        Assert.AreEqual(
+            0.0,
+            offset / Rate,
+            0.005,
+            $"a 250ms desync did not close; {offset / Rate * 1000:F1}ms remains"
+        );
     }
 
     /// <summary>
@@ -361,7 +420,10 @@ public sealed class AvSyncTests
                 Assert.IsTrue(leg.Delay[i] >= 0, $"{name}: a negative delay at buffer {i}");
 
                 // A delay larger than a second is not a latency, it is a misread field.
-                Assert.IsTrue(leg.Delay[i] < 1_000_000_000, $"{name}: a delay of {leg.Delay[i] / 1e6:F1}ms is not a plausible latency");
+                Assert.IsTrue(
+                    leg.Delay[i] < 1_000_000_000,
+                    $"{name}: a delay of {leg.Delay[i] / 1e6:F1}ms is not a plausible latency"
+                );
 
                 presentation[i] = leg.Time[i] + leg.Delay[i];
             }
@@ -370,7 +432,8 @@ public sealed class AvSyncTests
             {
                 Assert.IsTrue(
                     presentation[i] >= presentation[i - 1],
-                    $"{name}: applying the reported delay reordered buffers {i - 1} and {i}");
+                    $"{name}: applying the reported delay reordered buffers {i - 1} and {i}"
+                );
             }
         }
     }
@@ -414,10 +477,18 @@ public sealed class AvSyncTests
         await using var ctx = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
 
-        (GstTestSource source, uint videoNode, uint audioNode) = await GstTestSource.StartOnePipelineAsync(
-            ctx,
-            ($"videotestsrc is-live=true ! video/x-raw,format=BGRx,width={Width},height={Height},framerate={FrameRate}/1", $"{name}-v"),
-            ($"audiotestsrc is-live=true ! audio/x-raw,format=F32LE,rate={Rate},channels=2", $"{name}-a"));
+        (GstTestSource source, uint videoNode, uint audioNode) =
+            await GstTestSource.StartOnePipelineAsync(
+                ctx,
+                (
+                    $"videotestsrc is-live=true ! video/x-raw,format=BGRx,width={Width},height={Height},framerate={FrameRate}/1",
+                    $"{name}-v"
+                ),
+                (
+                    $"audiotestsrc is-live=true ! audio/x-raw,format=F32LE,rate={Rate},channels=2",
+                    $"{name}-a"
+                )
+            );
         await using (source)
         {
             var v = new List<(long Time, long Rx)>();
@@ -427,7 +498,11 @@ public sealed class AvSyncTests
             vCap.FrameReady += (_, f) =>
             {
                 long rx = NowNs();
-                lock (v) { if (v.Count < Cap && f.PresentationTimestampNs is { } pts) v.Add((pts, rx)); }
+                lock (v)
+                {
+                    if (v.Count < Cap && f.PresentationTimestampNs is { } pts)
+                        v.Add((pts, rx));
+                }
             };
             vCap.Connect(videoNode, stackalloc[] { PixelFormat.Bgrx });
 
@@ -435,43 +510,65 @@ public sealed class AvSyncTests
             aCap.FrameReady += (_, f) =>
             {
                 long rx = NowNs();
-                lock (a) { if (a.Count < Cap && f.QueuedTimeNs is { } pts) a.Add((pts, rx)); }
+                lock (a)
+                {
+                    if (a.Count < Cap && f.QueuedTimeNs is { } pts)
+                        a.Add((pts, rx));
+                }
             };
             aCap.Connect(audioNode, sampleRate: Rate, channels: 2, format: AudioSampleFormat.F32Le);
 
             DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
             while (DateTime.UtcNow < deadline)
             {
-                bool vReady, aReady;
-                lock (v) vReady = v.Count >= 24 && v[^1].Time > v[0].Time;
-                lock (a) aReady = a.Count >= 24 && a[^1].Time > a[0].Time;
-                if (vReady && aReady) break;
+                bool vReady,
+                    aReady;
+                lock (v)
+                    vReady = v.Count >= 24 && v[^1].Time > v[0].Time;
+                lock (a)
+                    aReady = a.Count >= 24 && a[^1].Time > a[0].Time;
+                if (vReady && aReady)
+                    break;
                 await Task.Delay(100, cts.Token);
             }
 
             Leg Snapshot(List<(long Time, long Rx)> xs)
             {
-                lock (xs) return new Leg([.. xs.Select(x => x.Time)], [.. xs.Select(x => x.Rx)], [], []);
+                lock (xs)
+                    return new Leg([.. xs.Select(x => x.Time)], [.. xs.Select(x => x.Rx)], [], []);
             }
 
-            Leg video = Snapshot(v), audio = Snapshot(a);
+            Leg video = Snapshot(v),
+                audio = Snapshot(a);
             string seen = $"[{Describe("audio", audio)}; {Describe("video", video)}]";
 
-            Assert.IsTrue(video.Time.Length >= 24, $"the pipeline's video leg delivered only {video.Time.Length} stamped frames {seen}");
-            Assert.IsTrue(audio.Time.Length >= 24, $"the pipeline's audio leg delivered only {audio.Time.Length} stamped buffers {seen}");
+            Assert.IsTrue(
+                video.Time.Length >= 24,
+                $"the pipeline's video leg delivered only {video.Time.Length} stamped frames {seen}"
+            );
+            Assert.IsTrue(
+                audio.Time.Length >= 24,
+                $"the pipeline's audio leg delivered only {audio.Time.Length} stamped buffers {seen}"
+            );
 
             // Video: GStreamer's running time, carried through intact. It starts when the pipeline
             // started, so it is small, and it advances with the wall clock.
             long videoSpan = video.Time[^1] - video.Time[0];
             long videoWall = video.ReceivedNs[^1] - video.ReceivedNs[0];
-            Assert.IsTrue(video.Time[0] < 60_000_000_000L,
-                $"the video times are not GStreamer's running time - a pipeline seconds old reports {video.Time[0] / 1e9:F1}s {seen}");
-            Assert.IsTrue(Math.Abs(videoSpan - videoWall) < 100_000_000,
-                $"the video times advanced {videoSpan / 1e6:F0}ms over {videoWall / 1e6:F0}ms of arrivals {seen}");
+            Assert.IsTrue(
+                video.Time[0] < 60_000_000_000L,
+                $"the video times are not GStreamer's running time - a pipeline seconds old reports {video.Time[0] / 1e9:F1}s {seen}"
+            );
+            Assert.IsTrue(
+                Math.Abs(videoSpan - videoWall) < 100_000_000,
+                $"the video times advanced {videoSpan / 1e6:F0}ms over {videoWall / 1e6:F0}ms of arrivals {seen}"
+            );
 
             // Audio: the graph's time, so within a cycle or two of when this process got the buffer.
-            Assert.IsTrue(Math.Abs(LeadNs(audio)) < 100_000_000,
-                $"the audio times are not the graph's cycle time: they sit {LeadNs(audio) / 1e6:F1}ms from arrival {seen}");
+            Assert.IsTrue(
+                Math.Abs(LeadNs(audio)) < 100_000_000,
+                $"the audio times are not the graph's cycle time: they sit {LeadNs(audio) / 1e6:F1}ms from arrival {seen}"
+            );
         }
     }
 }

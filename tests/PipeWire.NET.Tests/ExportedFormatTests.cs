@@ -18,7 +18,8 @@ namespace PipeWire.NET.Tests;
 [SupportedOSPlatform("linux")]
 public sealed class ExportedFormatTests
 {
-    private static SpaPodProperty Prop(SpaKey key, SpaValue value) => new(key, SpaPodPropFlags.None, value);
+    private static SpaPodProperty Prop(SpaKey key, SpaValue value) =>
+        new(key, SpaPodPropFlags.None, value);
 
     /// <summary>The format audioadapter's configure_format sets on a mono F32 follower, as it logged it.</summary>
     private static byte[] AdapterFormat(params SpaPodProperty[] extra)
@@ -30,7 +31,10 @@ public sealed class ExportedFormatTests
             Prop(SpaFormat.AudioFormat, new SpaId((uint)SpaAudioFormat.F32Le)),
             Prop(SpaFormat.AudioRate, new SpaInt(48000)),
             Prop(SpaFormat.AudioChannels, new SpaInt(1)),
-            Prop(SpaFormat.AudioPosition, new SpaArray(SpaType.Id, [new SpaId((uint)SpaAudioChannel.Mono)])),
+            Prop(
+                SpaFormat.AudioPosition,
+                new SpaArray(SpaType.Id, [new SpaId((uint)SpaAudioChannel.Mono)])
+            ),
         };
         props.AddRange(extra);
         return SpaPod.ToBytes(new SpaObject(SpaType.ObjectFormat, SpaParamType.Format, [.. props]));
@@ -52,14 +56,46 @@ public sealed class ExportedFormatTests
     {
         // The daemon sends settled formats with each value in a None choice, which spa_pod_parser
         // unwraps; a parser that did not would refuse every format the graph settles.
-        byte[] pod = SpaPod.ToBytes(new SpaObject(SpaType.ObjectFormat, SpaParamType.Format,
-        [
-            Prop(SpaFormat.MediaType, new SpaChoice(SpaChoiceType.None, SpaType.Id, [new SpaId((uint)SpaMediaType.Audio)])),
-            Prop(SpaFormat.MediaSubtype, new SpaChoice(SpaChoiceType.None, SpaType.Id, [new SpaId((uint)SpaMediaSubtype.Raw)])),
-            Prop(SpaFormat.AudioFormat, new SpaChoice(SpaChoiceType.None, SpaType.Id, [new SpaId((uint)SpaAudioFormat.S16Le)])),
-            Prop(SpaFormat.AudioRate, new SpaChoice(SpaChoiceType.None, SpaType.Int, [new SpaInt(44100)])),
-            Prop(SpaFormat.AudioChannels, new SpaChoice(SpaChoiceType.None, SpaType.Int, [new SpaInt(2)])),
-        ]));
+        byte[] pod = SpaPod.ToBytes(
+            new SpaObject(
+                SpaType.ObjectFormat,
+                SpaParamType.Format,
+                [
+                    Prop(
+                        SpaFormat.MediaType,
+                        new SpaChoice(
+                            SpaChoiceType.None,
+                            SpaType.Id,
+                            [new SpaId((uint)SpaMediaType.Audio)]
+                        )
+                    ),
+                    Prop(
+                        SpaFormat.MediaSubtype,
+                        new SpaChoice(
+                            SpaChoiceType.None,
+                            SpaType.Id,
+                            [new SpaId((uint)SpaMediaSubtype.Raw)]
+                        )
+                    ),
+                    Prop(
+                        SpaFormat.AudioFormat,
+                        new SpaChoice(
+                            SpaChoiceType.None,
+                            SpaType.Id,
+                            [new SpaId((uint)SpaAudioFormat.S16Le)]
+                        )
+                    ),
+                    Prop(
+                        SpaFormat.AudioRate,
+                        new SpaChoice(SpaChoiceType.None, SpaType.Int, [new SpaInt(44100)])
+                    ),
+                    Prop(
+                        SpaFormat.AudioChannels,
+                        new SpaChoice(SpaChoiceType.None, SpaType.Int, [new SpaInt(2)])
+                    ),
+                ]
+            )
+        );
 
         PipeWireExportedFormat? settled = PipeWireExportedFormat.FromPod(pod);
 
@@ -81,15 +117,44 @@ public sealed class ExportedFormatTests
     [TestMethod]
     public void AFormatFixatedTheWayUpstreamDoesIt_IsAccepted()
     {
-        byte[] pod = SpaPod.ToBytes(new SpaObject(SpaType.ObjectFormat, SpaParamType.Format,
-        [
-            Prop(SpaFormat.MediaType, new SpaId((uint)SpaMediaType.Audio)),
-            Prop(SpaFormat.MediaSubtype, new SpaId((uint)SpaMediaSubtype.Raw)),
-            Prop(SpaFormat.AudioFormat, new SpaChoice(SpaChoiceType.Enum, SpaType.Id,
-                [new SpaId((uint)SpaAudioFormat.F32Le), new SpaId((uint)SpaAudioFormat.F32Le), new SpaId((uint)SpaAudioFormat.S16Le)])),
-            Prop(SpaFormat.AudioRate, new SpaChoice(SpaChoiceType.Range, SpaType.Int, [new SpaInt(48000), new SpaInt(1), new SpaInt(384000)])),
-            Prop(SpaFormat.AudioChannels, new SpaChoice(SpaChoiceType.Range, SpaType.Int, [new SpaInt(1), new SpaInt(1), new SpaInt(64)])),
-        ]));
+        byte[] pod = SpaPod.ToBytes(
+            new SpaObject(
+                SpaType.ObjectFormat,
+                SpaParamType.Format,
+                [
+                    Prop(SpaFormat.MediaType, new SpaId((uint)SpaMediaType.Audio)),
+                    Prop(SpaFormat.MediaSubtype, new SpaId((uint)SpaMediaSubtype.Raw)),
+                    Prop(
+                        SpaFormat.AudioFormat,
+                        new SpaChoice(
+                            SpaChoiceType.Enum,
+                            SpaType.Id,
+                            [
+                                new SpaId((uint)SpaAudioFormat.F32Le),
+                                new SpaId((uint)SpaAudioFormat.F32Le),
+                                new SpaId((uint)SpaAudioFormat.S16Le),
+                            ]
+                        )
+                    ),
+                    Prop(
+                        SpaFormat.AudioRate,
+                        new SpaChoice(
+                            SpaChoiceType.Range,
+                            SpaType.Int,
+                            [new SpaInt(48000), new SpaInt(1), new SpaInt(384000)]
+                        )
+                    ),
+                    Prop(
+                        SpaFormat.AudioChannels,
+                        new SpaChoice(
+                            SpaChoiceType.Range,
+                            SpaType.Int,
+                            [new SpaInt(1), new SpaInt(1), new SpaInt(64)]
+                        )
+                    ),
+                ]
+            )
+        );
 
         FixateInPlace(pod);
 
@@ -127,15 +192,23 @@ public sealed class ExportedFormatTests
     [TestMethod]
     public void AFormatThisNodeNeverOffered_IsRefused()
     {
-        byte[] pod = SpaPod.ToBytes(new SpaObject(SpaType.ObjectFormat, SpaParamType.Format,
-        [
-            Prop(SpaFormat.MediaType, new SpaId((uint)SpaMediaType.Audio)),
-            Prop(SpaFormat.MediaSubtype, new SpaId((uint)SpaMediaSubtype.Raw)),
-            Prop(SpaFormat.AudioFormat, new SpaId((uint)SpaAudioFormat.F32P)),
-            Prop(SpaFormat.AudioRate, new SpaInt(48000)),
-            Prop(SpaFormat.AudioChannels, new SpaInt(1)),
-        ]));
+        byte[] pod = SpaPod.ToBytes(
+            new SpaObject(
+                SpaType.ObjectFormat,
+                SpaParamType.Format,
+                [
+                    Prop(SpaFormat.MediaType, new SpaId((uint)SpaMediaType.Audio)),
+                    Prop(SpaFormat.MediaSubtype, new SpaId((uint)SpaMediaSubtype.Raw)),
+                    Prop(SpaFormat.AudioFormat, new SpaId((uint)SpaAudioFormat.F32P)),
+                    Prop(SpaFormat.AudioRate, new SpaInt(48000)),
+                    Prop(SpaFormat.AudioChannels, new SpaInt(1)),
+                ]
+            )
+        );
 
-        Assert.IsNull(PipeWireExportedFormat.FromPod(pod), "a planar format this node never offered was accepted");
+        Assert.IsNull(
+            PipeWireExportedFormat.FromPod(pod),
+            "a planar format this node never offered was accepted"
+        );
     }
 }

@@ -14,10 +14,15 @@ namespace PipeWire.NET.Media;
 /// </summary>
 internal static class StreamSignal
 {
-    internal static async Task AwaitAsync(TaskCompletionSource done, CancellationToken cancellationToken)
+    internal static async Task AwaitAsync(
+        TaskCompletionSource done,
+        CancellationToken cancellationToken
+    )
     {
         using CancellationTokenRegistration reg = cancellationToken.Register(
-            static s => ((TaskCompletionSource)s!).TrySetCanceled(), done);
+            static s => ((TaskCompletionSource)s!).TrySetCanceled(),
+            done
+        );
         await done.Task.ConfigureAwait(false);
     }
 }

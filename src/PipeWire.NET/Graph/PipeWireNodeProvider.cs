@@ -54,12 +54,14 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     private GCHandle _self;
     private spa_node* _node;
     private spa_node_methods* _methods;
+
     // What the graph installed for this node to call back into. `ready` and `reuse_buffer` stay
     // unused deliberately - a null `ready` is how a node asks for synchronous operation, and the
     // buffers to reuse go through the input port's io area - but `xrun` is how a node reports that
     // it missed a cycle, and nothing else can report that on its behalf.
     private spa_node_callbacks* _callbacks;
     private void* _callbacksData;
+
     // Every listener on this node, not just the one that exported it: the audio adapter that wraps
     // it keeps one for good, and synchronous queries add and remove their own (see SpaHookList).
     private spa_hook_list* _hooks;
@@ -119,7 +121,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     public unsafe bool ReportXrun(ulong triggerMicroseconds, ulong delayMicroseconds)
     {
         spa_node_callbacks* callbacks = _callbacks;
-        if (_disposed || callbacks is null || callbacks->xrun is null) return false;
+        if (_disposed || callbacks is null || callbacks->xrun is null)
+            return false;
 
         return callbacks->xrun(_callbacksData, triggerMicroseconds, delayMicroseconds, null) >= 0;
     }
@@ -211,7 +214,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
         string name,
         PipeWireExportedFormat format,
         SpaDirection direction = SpaDirection.Output,
-        IReadOnlyDictionary<string, string>? properties = null)
+        IReadOnlyDictionary<string, string>? properties = null
+    )
     {
         ArgumentNullException.ThrowIfNull(ctx);
         ArgumentNullException.ThrowIfNull(format);
@@ -254,7 +258,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
         PipeWireContext ctx,
         string factoryName,
         IReadOnlyDictionary<string, string>? properties = null,
-        string? libraryName = null)
+        string? libraryName = null
+    )
     {
         ArgumentNullException.ThrowIfNull(ctx);
         ArgumentException.ThrowIfNullOrEmpty(factoryName);
@@ -267,11 +272,15 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
             "node",
             properties,
             libraryName,
-            out node._spaHandle);
+            out node._spaHandle
+        );
         return node;
     }
 
-    private void Initialize(PipeWireExportedFormat format, IReadOnlyDictionary<string, string>? properties)
+    private void Initialize(
+        PipeWireExportedFormat format,
+        IReadOnlyDictionary<string, string>? properties
+    )
     {
         OfferedFormat = format;
 
@@ -323,7 +332,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
 
         if (properties is not null)
         {
-            foreach (KeyValuePair<string, string> pair in properties) props[pair.Key] = pair.Value;
+            foreach (KeyValuePair<string, string> pair in properties)
+                props[pair.Key] = pair.Value;
         }
 
         // Wrapped in the adapter, the way pw_stream wraps its own node for audio and video
@@ -354,13 +364,15 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
                 Cleanup();
                 throw new InvalidOperationException(
                     "the context has no adapter factory (libpipewire-module-adapter), which every "
-                    + "stream needs too; the client configuration does not load it.");
+                        + "stream needs too; the client configuration does not load it."
+                );
             }
 
             Span<byte> scratch = stackalloc byte[2048];
             Span<spa_dict_item> items = stackalloc spa_dict_item[24];
             var dict = new SpaDictBuilder(scratch, items);
-            foreach (KeyValuePair<string, string> pair in props) dict.Add(pair.Key, pair.Value);
+            foreach (KeyValuePair<string, string> pair in props)
+                dict.Add(pair.Key, pair.Value);
             spa_dict built = dict.Build();
 
             // The factory takes ownership of the properties, as stream.c's does.
@@ -368,8 +380,15 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
 
             fixed (byte* type = NativeConstants.PW_TYPE_INTERFACE_Node)
             {
-                _adapter = (pw_impl_node*)Native.pw_impl_factory_create_object(
-                    factory, null, (sbyte*)type, NativeConstants.PW_VERSION_NODE, owned, 0);
+                _adapter = (pw_impl_node*)
+                    Native.pw_impl_factory_create_object(
+                        factory,
+                        null,
+                        (sbyte*)type,
+                        NativeConstants.PW_VERSION_NODE,
+                        owned,
+                        0
+                    );
             }
 
             if (_adapter is null)
@@ -377,7 +396,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
                 int errno = Marshal.GetLastSystemError();
                 Cleanup();
                 throw new InvalidOperationException(
-                    $"the adapter factory refused the node '{_name}' (errno {errno}).");
+                    $"the adapter factory refused the node '{_name}' (errno {errno})."
+                );
             }
 
             _ = Native.pw_impl_node_set_active(_adapter, true);
@@ -408,7 +428,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     /// <inheritdoc/>
     public ValueTask DisposeAsync()
     {
-        if (_disposed) return ValueTask.CompletedTask;
+        if (_disposed)
+            return ValueTask.CompletedTask;
         _disposed = true;
 
         using (_ctx.Lock())
@@ -450,7 +471,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     /// </remarks>
     private void DestroyAdapter()
     {
-        if (_adapter is null) return;
+        if (_adapter is null)
+            return;
 
         Native.pw_impl_node_destroy(_adapter);
         _adapter = null;
@@ -462,21 +484,36 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
         // adapter was never created or has just been; taking the lock again is harmless (recursive).
         if (_adapter is not null)
         {
-            using (_ctx.Lock()) DestroyAdapter();
+            using (_ctx.Lock())
+                DestroyAdapter();
         }
 
         // The factory's node lives in the handle, so clearing it is what actually releases the
         // plugin's resources; the proxy only removed it from the graph.
         if (_spaHandle is not null)
         {
-            if (_spaHandle->clear is not null) _ = _spaHandle->clear(_spaHandle);
+            if (_spaHandle->clear is not null)
+                _ = _spaHandle->clear(_spaHandle);
             _spaHandle = null;
         }
 
-        if (_node is not null) { NativeMemory.Free(_node); _node = null; }
-        if (_hooks is not null) { NativeMemory.Free(_hooks); _hooks = null; }
-        if (_methods is not null) { NativeMemory.Free(_methods); _methods = null; }
-        if (_self.IsAllocated) _self.Free();
+        if (_node is not null)
+        {
+            NativeMemory.Free(_node);
+            _node = null;
+        }
+        if (_hooks is not null)
+        {
+            NativeMemory.Free(_hooks);
+            _hooks = null;
+        }
+        if (_methods is not null)
+        {
+            NativeMemory.Free(_methods);
+            _methods = null;
+        }
+        if (_self.IsAllocated)
+            _self.Free();
     }
 
     private static PipeWireNodeProvider? From(void* data) =>
@@ -493,7 +530,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
         try
         {
             PipeWireNodeProvider? self = From(obj);
-            if (self is null) return -NativeLibc.EINVAL;
+            if (self is null)
+                return -NativeLibc.EINVAL;
 
             if (self._hooks is null || hook is null)
             {
@@ -550,14 +588,16 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     /// </remarks>
     private void EmitNodeInfo()
     {
-        if (_hooks is null) return;
+        if (_hooks is null)
+            return;
 
         Span<byte> scratch = stackalloc byte[4096];
         Span<spa_dict_item> items = stackalloc spa_dict_item[32];
         var dict = new SpaDictBuilder(scratch, items);
         foreach (KeyValuePair<string, string> pair in _nodeProperties)
         {
-            if (dict.Count == items.Length) break;
+            if (dict.Count == items.Length)
+                break;
             dict.Add(pair.Key, pair.Value);
         }
 
@@ -579,7 +619,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
             next = l->next;
             var h = (spa_hook*)l;
             var ev = (spa_node_events*)h->cb.funcs;
-            if (ev is not null && ev->info is not null) ev->info(h->cb.data, &info);
+            if (ev is not null && ev->info is not null)
+                ev->info(h->cb.data, &info);
         }
     }
 
@@ -593,14 +634,27 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     /// </remarks>
     private void EmitPortInfo()
     {
-        if (_hooks is null) return;
+        if (_hooks is null)
+            return;
 
         bool formatSet = NegotiatedFormat is not null;
 
         spa_param_info* paramInfo = stackalloc spa_param_info[5];
-        paramInfo[0] = new spa_param_info { id = (uint)SpaParamType.EnumFormat, flags = (uint)SpaParamInfoFlags.Read };
-        paramInfo[1] = new spa_param_info { id = (uint)SpaParamType.Meta, flags = (uint)SpaParamInfoFlags.Read };
-        paramInfo[2] = new spa_param_info { id = (uint)SpaParamType.Io, flags = (uint)SpaParamInfoFlags.Read };
+        paramInfo[0] = new spa_param_info
+        {
+            id = (uint)SpaParamType.EnumFormat,
+            flags = (uint)SpaParamInfoFlags.Read,
+        };
+        paramInfo[1] = new spa_param_info
+        {
+            id = (uint)SpaParamType.Meta,
+            flags = (uint)SpaParamInfoFlags.Read,
+        };
+        paramInfo[2] = new spa_param_info
+        {
+            id = (uint)SpaParamType.Io,
+            flags = (uint)SpaParamInfoFlags.Read,
+        };
         paramInfo[3] = new spa_param_info
         {
             id = (uint)SpaParamType.Format,
@@ -626,7 +680,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
             next = l->next;
             var h = (spa_hook*)l;
             var ev = (spa_node_events*)h->cb.funcs;
-            if (ev is not null && ev->port_info is not null) ev->port_info(h->cb.data, _direction, PortId, &port);
+            if (ev is not null && ev->port_info is not null)
+                ev->port_info(h->cb.data, _direction, PortId, &port);
         }
     }
 
@@ -636,7 +691,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
         try
         {
             PipeWireNodeProvider? self = From(obj);
-            if (self is null) return -NativeLibc.EINVAL;
+            if (self is null)
+                return -NativeLibc.EINVAL;
 
             self._callbacks = callbacks;
             self._callbacksData = data;
@@ -649,11 +705,23 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static int OnEnumParams(void* obj, int seq, uint id, uint start, uint num, spa_pod* filter)
+    private static int OnEnumParams(
+        void* obj,
+        int seq,
+        uint id,
+        uint start,
+        uint num,
+        spa_pod* filter
+    )
     {
         try
         {
-            _ = obj; _ = seq; _ = id; _ = start; _ = num; _ = filter;
+            _ = obj;
+            _ = seq;
+            _ = id;
+            _ = start;
+            _ = num;
+            _ = filter;
             return 0;
         }
         catch (Exception ex)
@@ -667,7 +735,10 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     {
         try
         {
-            _ = obj; _ = id; _ = flags; _ = param;
+            _ = obj;
+            _ = id;
+            _ = flags;
+            _ = param;
             return 0;
         }
         catch (Exception ex)
@@ -682,7 +753,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
         try
         {
             PipeWireNodeProvider? self = From(obj);
-            if (self is null) return -NativeLibc.EINVAL;
+            if (self is null)
+                return -NativeLibc.EINVAL;
 
             // Return codes are spa/node/node.h's contract for set_io, and audioconvert's behaviour:
             // -ENOSPC for an area too small to be the struct, -ENOENT for an id this node does not use.
@@ -722,7 +794,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     {
         try
         {
-            _ = obj; _ = command;
+            _ = obj;
+            _ = command;
             return 0;
         }
         catch (Exception ex)
@@ -732,12 +805,20 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static int OnPortSetIo(void* obj, SpaDirection direction, uint port, uint id, void* area, nuint size)
+    private static int OnPortSetIo(
+        void* obj,
+        SpaDirection direction,
+        uint port,
+        uint id,
+        void* area,
+        nuint size
+    )
     {
         try
         {
             PipeWireNodeProvider? self = From(obj);
-            if (self is null) return -NativeLibc.EINVAL;
+            if (self is null)
+                return -NativeLibc.EINVAL;
 
             // SPA_IO_Buffers: where the graph says which buffer is current and reads back what this
             // node produced. Without it a source has nowhere to publish and simply never emits.
@@ -764,12 +845,21 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int OnPortEnumParams(
-        void* obj, int seq, SpaDirection direction, uint port, uint id, uint start, uint num, spa_pod* filter)
+        void* obj,
+        int seq,
+        SpaDirection direction,
+        uint port,
+        uint id,
+        uint start,
+        uint num,
+        spa_pod* filter
+    )
     {
         try
         {
             PipeWireNodeProvider? self = From(obj);
-            if (self is null) return -NativeLibc.EINVAL;
+            if (self is null)
+                return -NativeLibc.EINVAL;
 
             return self.EnumeratePortParams(seq, id, start, filter);
         }
@@ -780,12 +870,20 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static int OnPortSetParam(void* obj, SpaDirection direction, uint port, uint id, uint flags, spa_pod* param)
+    private static int OnPortSetParam(
+        void* obj,
+        SpaDirection direction,
+        uint port,
+        uint id,
+        uint flags,
+        spa_pod* param
+    )
     {
         try
         {
             PipeWireNodeProvider? self = From(obj);
-            if (self is null) return -NativeLibc.EINVAL;
+            if (self is null)
+                return -NativeLibc.EINVAL;
 
             // A null param clears the format, which is how the peer disconnects. The id comes from the
             // generated enum rather than a literal: SPA_PARAM_ starts at Invalid = 0, so the values are
@@ -814,7 +912,9 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
             // derived from them - a cycle sized off the offered format would then write the wrong
             // number of bytes into a buffer the graph owns.
             var settled = new ReadOnlySpan<byte>(
-                param, checked((int)(param->size + (uint)sizeof(spa_pod))));
+                param,
+                checked((int)(param->size + (uint)sizeof(spa_pod)))
+            );
 
             PipeWireExportedFormat? agreed = PipeWireExportedFormat.FromPod(settled);
             if (agreed is null)
@@ -862,13 +962,21 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static int DoSetBuffersIo(spa_loop* loop, bool async, uint seq, void* data, nuint size, void* userData)
+    private static int DoSetBuffersIo(
+        spa_loop* loop,
+        bool async,
+        uint seq,
+        void* data,
+        nuint size,
+        void* userData
+    )
     {
         // Runs under the data loop's lock, called from C: nothing may escape.
         try
         {
             var update = (IoUpdate*)userData;
-            if (From(update->Node) is { } self) self._io = update->Area;
+            if (From(update->Node) is { } self)
+                self._io = update->Area;
             return 0;
         }
         catch (Exception ex)
@@ -879,12 +987,19 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int OnPortUseBuffers(
-        void* obj, SpaDirection direction, uint port, uint flags, spa_buffer** buffers, uint count)
+        void* obj,
+        SpaDirection direction,
+        uint port,
+        uint flags,
+        spa_buffer** buffers,
+        uint count
+    )
     {
         try
         {
             PipeWireNodeProvider? self = From(obj);
-            if (self is null) return -NativeLibc.EINVAL;
+            if (self is null)
+                return -NativeLibc.EINVAL;
 
             // The count is what the data loop gates on, so it is published last when a pool arrives and
             // first when one goes away. Assigning it before the array it describes leaves a window in
@@ -923,7 +1038,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
         try
         {
             PipeWireNodeProvider? self = From(obj);
-            if (self is null) return -NativeLibc.EINVAL;
+            if (self is null)
+                return -NativeLibc.EINVAL;
 
             // Upstream's export-source: reuse_buffer puts the buffer back on its free list. Same
             // snapshot as RunCycle, and the same gate: a count that is set describes an array that
@@ -951,7 +1067,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     private static int OnProcess(void* obj)
     {
         PipeWireNodeProvider? self = From(obj);
-        if (self is null) return -NativeLibc.EINVAL;
+        if (self is null)
+            return -NativeLibc.EINVAL;
 
         // This runs on the realtime data-loop thread, called from C. A managed exception cannot
         // unwind through the native frames above it, so the runtime aborts the whole process
@@ -967,7 +1084,8 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
             // Logged once per kind of failure, not per cycle: this is the realtime thread, and a handler
             // that throws on every cycle would otherwise log at the graph's rate. Every occurrence is
             // still in LastProcessError.
-            if (self.LastProcessError?.GetType() != ex.GetType()) self.LogProcessFaulted(self._name, ex);
+            if (self.LastProcessError?.GetType() != ex.GetType())
+                self.LogProcessFaulted(self._name, ex);
             self.LastProcessError = ex;
             return -NativeLibc.EIO;
         }
@@ -994,23 +1112,38 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
         if (io is null || buffers is null || bufferCount == 0)
             return consuming ? (int)SpaStatus.NeedData : (int)SpaStatus.Ok;
 
-        if (consuming) return ConsumeCycle(io, buffers, bufferCount);
-        if (ProduceTrace is not { } trace) return ProduceCycle(io, buffers, free, bufferCount);
+        if (consuming)
+            return ConsumeCycle(io, buffers, bufferCount);
+        if (ProduceTrace is not { } trace)
+            return ProduceCycle(io, buffers, free, bufferCount);
 
         int entryStatus = io->status;
         uint entryBuffer = io->buffer_id;
         int result = ProduceCycle(io, buffers, free, bufferCount);
         uint freeCount = 0;
-        foreach (bool f in free) if (f) freeCount++;
+        foreach (bool f in free)
+            if (f)
+                freeCount++;
         trace[ProduceTraceCount++ % trace.Length] = new ProduceCycleRecord(
-            entryStatus, entryBuffer, result == (int)SpaStatus.HaveData ? io->buffer_id : uint.MaxValue,
-            result, freeCount, bufferCount);
+            entryStatus,
+            entryBuffer,
+            result == (int)SpaStatus.HaveData ? io->buffer_id : uint.MaxValue,
+            result,
+            freeCount,
+            bufferCount
+        );
         return result;
     }
 
     /// <summary>One source cycle as the io area saw it, for a test diagnosing lost or reused buffers.</summary>
     internal readonly record struct ProduceCycleRecord(
-        int EntryStatus, uint EntryBuffer, uint Published, int Result, uint FreeAfter, uint Pool);
+        int EntryStatus,
+        uint EntryBuffer,
+        uint Published,
+        int Result,
+        uint FreeAfter,
+        uint Pool
+    );
 
     /// <summary>
     /// Set by a test before the node runs to record every source cycle, round-robin. Written only by
@@ -1031,20 +1164,24 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     /// </remarks>
     private int ConsumeCycle(spa_io_buffers* io, spa_buffer** buffers, uint bufferCount)
     {
-        if (io->status != (int)SpaStatus.HaveData) return (int)SpaStatus.NeedData;
+        if (io->status != (int)SpaStatus.HaveData)
+            return (int)SpaStatus.NeedData;
 
         uint index = io->buffer_id;
-        if (index >= bufferCount) return (int)SpaStatus.NeedData;
+        if (index >= bufferCount)
+            return (int)SpaStatus.NeedData;
 
         try
         {
             HasProcessed = true;
 
             spa_buffer* buffer = buffers[index];
-            if (buffer is null || buffer->n_datas == 0 || buffer->datas is null) return (int)SpaStatus.NeedData;
+            if (buffer is null || buffer->n_datas == 0 || buffer->datas is null)
+                return (int)SpaStatus.NeedData;
 
             spa_data* d = &buffer->datas[0];
-            if (d->data is null || d->chunk is null || ProcessCallback is not { } handler) return (int)SpaStatus.NeedData;
+            if (d->data is null || d->chunk is null || ProcessCallback is not { } handler)
+                return (int)SpaStatus.NeedData;
 
             // Only what the producer wrote, bounded by the mapping: the offset is clamped to the
             // block and the size to what remains after it, as every upstream reader of a chunk
@@ -1087,9 +1224,15 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     /// <c>-EPIPE</c> for good.
     /// </para>
     /// </remarks>
-    private int ProduceCycle(spa_io_buffers* io, spa_buffer** buffers, bool[] free, uint bufferCount)
+    private int ProduceCycle(
+        spa_io_buffers* io,
+        spa_buffer** buffers,
+        bool[] free,
+        uint bufferCount
+    )
     {
-        if (io->status == (int)SpaStatus.HaveData) return (int)SpaStatus.HaveData;
+        if (io->status == (int)SpaStatus.HaveData)
+            return (int)SpaStatus.HaveData;
 
         if (io->buffer_id < bufferCount)
         {
@@ -1101,19 +1244,23 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
         for (uint i = 0; i < bufferCount; i++)
         {
             uint candidate = (_nextBuffer + i) % bufferCount;
-            if (!free[candidate]) continue;
+            if (!free[candidate])
+                continue;
 
             index = candidate;
             break;
         }
 
-        if (index == uint.MaxValue) return -NativeLibc.EPIPE;
+        if (index == uint.MaxValue)
+            return -NativeLibc.EPIPE;
 
         spa_buffer* buffer = buffers[index];
-        if (buffer is null || buffer->n_datas == 0 || buffer->datas is null) return (int)SpaStatus.Ok;
+        if (buffer is null || buffer->n_datas == 0 || buffer->datas is null)
+            return (int)SpaStatus.Ok;
 
         spa_data* d = &buffer->datas[0];
-        if (d->data is null || d->chunk is null || ProcessCallback is not { } handler) return (int)SpaStatus.Ok;
+        if (d->data is null || d->chunk is null || ProcessCallback is not { } handler)
+            return (int)SpaStatus.Ok;
 
         PipeWireExportedFormat? format = NegotiatedFormat ?? OfferedFormat;
 
@@ -1126,12 +1273,14 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
             if (quantum > 0)
             {
                 ulong wanted = quantum * (ulong)format.BytesPerFrame;
-                if (wanted > 0 && wanted < cycleBytes) cycleBytes = (uint)wanted;
+                if (wanted > 0 && wanted < cycleBytes)
+                    cycleBytes = (uint)wanted;
             }
         }
 
         int written = handler(this, new Span<byte>(d->data, checked((int)cycleBytes)));
-        if (written <= 0) return (int)SpaStatus.Ok;
+        if (written <= 0)
+            return (int)SpaStatus.Ok;
 
         free[index] = false;
         _nextBuffer = (index + 1) % bufferCount;
@@ -1159,31 +1308,48 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     /// means rather than having two notions of it. An unreadable filter is treated as no constraint,
     /// as upstream does: refusing would drop the parameter on the strength of a pod we failed to parse.
     /// </remarks>
-    private static int ProjectParam(ReadOnlySpan<byte> candidate, spa_pod* filter, Span<byte> destination)
+    private static int ProjectParam(
+        ReadOnlySpan<byte> candidate,
+        spa_pod* filter,
+        Span<byte> destination
+    )
     {
-        if (!SpaPod.TryParse(candidate, out SpaValue? candidateValue) || candidateValue is not SpaObject offered)
+        if (
+            !SpaPod.TryParse(candidate, out SpaValue? candidateValue)
+            || candidateValue is not SpaObject offered
+        )
             return 0;
 
         var filterBytes = new ReadOnlySpan<byte>(
-            filter, checked((int)(filter->size + (uint)sizeof(spa_pod))));
+            filter,
+            checked((int)(filter->size + (uint)sizeof(spa_pod)))
+        );
 
-        if (!SpaPod.TryParse(filterBytes, out SpaValue? filterValue) || filterValue is not SpaObject wanted)
+        if (
+            !SpaPod.TryParse(filterBytes, out SpaValue? filterValue)
+            || filterValue is not SpaObject wanted
+        )
         {
-            if (candidate.Length > destination.Length) return 0;
+            if (candidate.Length > destination.Length)
+                return 0;
             candidate.CopyTo(destination);
             return candidate.Length;
         }
 
         SpaObject? narrowed = SpaPodProjection.Project(offered, wanted);
-        if (narrowed is null) return 0;
+        if (narrowed is null)
+            return 0;
 
-        return SpaPod.TryWrite(narrowed, destination, out int projectedLength) ? projectedLength : 0;
+        return SpaPod.TryWrite(narrowed, destination, out int projectedLength)
+            ? projectedLength
+            : 0;
     }
 
     /// <summary>Delivers one enumerated parameter to every listener, as spa_node_emit_result does.</summary>
     private int EmitParam(int seq, uint id, uint start, ReadOnlySpan<byte> pod)
     {
-        if (_hooks is null) return 0;
+        if (_hooks is null)
+            return 0;
 
         fixed (byte* p = pod)
         {
@@ -1201,7 +1367,13 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
                 var h = (spa_hook*)l;
                 var ev = (spa_node_events*)h->cb.funcs;
                 if (ev is not null && ev->result is not null)
-                    ev->result(h->cb.data, seq, 0, (uint)NativeConstants.SPA_RESULT_TYPE_NODE_PARAMS, &result);
+                    ev->result(
+                        h->cb.data,
+                        seq,
+                        0,
+                        (uint)NativeConstants.SPA_RESULT_TYPE_NODE_PARAMS,
+                        &result
+                    );
             }
         }
 
@@ -1224,70 +1396,114 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     /// </remarks>
     private int EnumeratePortParams(int seq, uint id, uint start, spa_pod* filter)
     {
-        if (start > 0) return 0;
+        if (start > 0)
+            return 0;
 
         Span<byte> candidate = stackalloc byte[2048];
         int length = (SpaParamType)id switch
         {
             SpaParamType.EnumFormat => OfferedFormat!.WriteFormat(candidate, asEnum: true),
-            SpaParamType.Format => NegotiatedFormat is { } settled ? settled.WriteFormat(candidate, asEnum: false) : 0,
+            SpaParamType.Format => NegotiatedFormat is { } settled
+                ? settled.WriteFormat(candidate, asEnum: false)
+                : 0,
             SpaParamType.Buffers => (NegotiatedFormat ?? OfferedFormat)!.WriteBuffers(candidate),
             SpaParamType.Meta => PipeWireExportedFormat.WriteMetaHeader(candidate),
             SpaParamType.Io => PipeWireExportedFormat.WriteIoBuffers(candidate),
             _ => -1,
         };
 
-        if (length < 0) return -NativeLibc.ENOENT;
-        if (length == 0) return 0;
+        if (length < 0)
+            return -NativeLibc.ENOENT;
+        if (length == 0)
+            return 0;
 
-        if (filter is null) return EmitParam(seq, id, start, candidate[..length]);
+        if (filter is null)
+            return EmitParam(seq, id, start, candidate[..length]);
 
         Span<byte> narrowed = stackalloc byte[2048];
         int projected = ProjectParam(candidate[..length], filter, narrowed);
         return projected > 0 ? EmitParam(seq, id, start, narrowed[..projected]) : 0;
     }
 
-    [LoggerMessage(EventId = 34600, Level = LogLevel.Error,
-        Message = "exported node '{Name}': its {Callback} callback threw; the graph was answered -EIO")]
+    [LoggerMessage(
+        EventId = 34600,
+        Level = LogLevel.Error,
+        Message = "exported node '{Name}': its {Callback} callback threw; the graph was answered -EIO"
+    )]
     private partial void LogCallbackFaulted(string name, string callback, Exception exception);
 
-    [LoggerMessage(EventId = 34601, Level = LogLevel.Error,
-        Message = "exported node '{Name}': the process handler threw; the cycle was dropped (later failures of the same kind are only recorded in LastProcessError)")]
+    [LoggerMessage(
+        EventId = 34601,
+        Level = LogLevel.Error,
+        Message = "exported node '{Name}': the process handler threw; the cycle was dropped (later failures of the same kind are only recorded in LastProcessError)"
+    )]
     private partial void LogProcessFaulted(string name, Exception exception);
 
-    [LoggerMessage(EventId = 34602, Level = LogLevel.Warning,
-        Message = "exported node '{Name}': refused a listener (no hook list, or a null hook)")]
+    [LoggerMessage(
+        EventId = 34602,
+        Level = LogLevel.Warning,
+        Message = "exported node '{Name}': refused a listener (no hook list, or a null hook)"
+    )]
     private partial void LogListenerRefused(string name);
 
-    [LoggerMessage(EventId = 34603, Level = LogLevel.Debug,
-        Message = "exported node '{Name}': io area {Io} is not one it uses")]
+    [LoggerMessage(
+        EventId = 34603,
+        Level = LogLevel.Debug,
+        Message = "exported node '{Name}': io area {Io} is not one it uses"
+    )]
     private partial void LogIoRefused(string name, SpaIoType io);
 
-    [LoggerMessage(EventId = 34604, Level = LogLevel.Warning,
-        Message = "exported node '{Name}': io area {Io} is {Size} bytes, too small for the struct")]
+    [LoggerMessage(
+        EventId = 34604,
+        Level = LogLevel.Warning,
+        Message = "exported node '{Name}': io area {Io} is {Size} bytes, too small for the struct"
+    )]
     private partial void LogIoAreaTooSmall(string name, SpaIoType io, nuint size);
 
-    [LoggerMessage(EventId = 34605, Level = LogLevel.Debug,
-        Message = "exported node '{Name}': parameter {Param} cannot be set on its port")]
+    [LoggerMessage(
+        EventId = 34605,
+        Level = LogLevel.Debug,
+        Message = "exported node '{Name}': parameter {Param} cannot be set on its port"
+    )]
     private partial void LogParamRefused(string name, SpaParamType param);
 
-    [LoggerMessage(EventId = 34606, Level = LogLevel.Warning,
-        Message = "exported node '{Name}': refused a format it cannot carry")]
+    [LoggerMessage(
+        EventId = 34606,
+        Level = LogLevel.Warning,
+        Message = "exported node '{Name}': refused a format it cannot carry"
+    )]
     private partial void LogFormatRefused(string name);
 
-    [LoggerMessage(EventId = 34607, Level = LogLevel.Debug,
-        Message = "exported node '{Name}': format settled on {SampleFormat} {Rate} Hz x{Channels}")]
-    private partial void LogFormatSettled(string name, SpaAudioFormat sampleFormat, int rate, int channels);
+    [LoggerMessage(
+        EventId = 34607,
+        Level = LogLevel.Debug,
+        Message = "exported node '{Name}': format settled on {SampleFormat} {Rate} Hz x{Channels}"
+    )]
+    private partial void LogFormatSettled(
+        string name,
+        SpaAudioFormat sampleFormat,
+        int rate,
+        int channels
+    );
 
-    [LoggerMessage(EventId = 34608, Level = LogLevel.Debug,
-        Message = "exported node '{Name}': format cleared")]
+    [LoggerMessage(
+        EventId = 34608,
+        Level = LogLevel.Debug,
+        Message = "exported node '{Name}': format cleared"
+    )]
     private partial void LogFormatCleared(string name);
 
-    [LoggerMessage(EventId = 34609, Level = LogLevel.Debug,
-        Message = "exported node '{Name}': the peer allocated {Count} buffers")]
+    [LoggerMessage(
+        EventId = 34609,
+        Level = LogLevel.Debug,
+        Message = "exported node '{Name}': the peer allocated {Count} buffers"
+    )]
     private partial void LogBuffersArrived(string name, uint count);
 
-    [LoggerMessage(EventId = 34610, Level = LogLevel.Warning,
-        Message = "exported node '{Name}': the peer returned buffer {BufferId}, outside its pool of {Count}")]
+    [LoggerMessage(
+        EventId = 34610,
+        Level = LogLevel.Warning,
+        Message = "exported node '{Name}': the peer returned buffer {BufferId}, outside its pool of {Count}"
+    )]
     private partial void LogReuseRefused(string name, uint bufferId, uint count);
 }

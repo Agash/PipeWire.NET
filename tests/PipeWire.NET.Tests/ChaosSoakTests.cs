@@ -55,7 +55,9 @@ public sealed class ChaosSoakTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken cancellationToken)
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -64,7 +66,8 @@ public sealed class ChaosSoakTests : PipeWireTestBase
         return (context, registry);
     }
 
-    private static string Unique(string p) => $"{p}_{Environment.ProcessId}_{Random.Shared.Next():x}";
+    private static string Unique(string p) =>
+        $"{p}_{Environment.ProcessId}_{Random.Shared.Next():x}";
 
     /// <summary>Descriptors that could represent something this library failed to release.</summary>
     /// <remarks>
@@ -83,9 +86,7 @@ public sealed class ChaosSoakTests : PipeWireTestBase
     /// </para>
     /// </remarks>
     private static int LeakableDescriptors(Dictionary<string, int> targets) =>
-        targets
-            .Where(kv => kv.Key is "unix-socket" or "eventfd")
-            .Sum(kv => kv.Value);
+        targets.Where(kv => kv.Key is "unix-socket" or "eventfd").Sum(kv => kv.Value);
 
     /// <summary>What each open descriptor points at, counted by target.</summary>
     /// <remarks>
@@ -101,9 +102,19 @@ public sealed class ChaosSoakTests : PipeWireTestBase
         foreach (string entry in Directory.GetFiles("/proc/self/fd"))
         {
             string target;
-            try { target = File.ResolveLinkTarget(entry, returnFinalTarget: false)?.Name ?? "(unresolved)"; }
-            catch (IOException) { continue; }
-            catch (UnauthorizedAccessException) { continue; }
+            try
+            {
+                target =
+                    File.ResolveLinkTarget(entry, returnFinalTarget: false)?.Name ?? "(unresolved)";
+            }
+            catch (IOException)
+            {
+                continue;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                continue;
+            }
 
             // A PipeWire connection is a unix socket, so those are separated from the rest. The
             // runtime opens sockets of its own for name resolution and the like, and one of those
@@ -117,7 +128,8 @@ public sealed class ChaosSoakTests : PipeWireTestBase
                 // Anonymous inodes carry a number that differs every time; the kind is the useful
                 // part.
                 int colon = target.IndexOf(':', StringComparison.Ordinal);
-                if (colon > 0) target = target[..colon];
+                if (colon > 0)
+                    target = target[..colon];
             }
 
             targets[target] = targets.GetValueOrDefault(target) + 1;
@@ -141,7 +153,8 @@ public sealed class ChaosSoakTests : PipeWireTestBase
             {
                 foreach (string field in line.Split(' ', StringSplitOptions.RemoveEmptyEntries))
                 {
-                    if (field == inode) return true;
+                    if (field == inode)
+                        return true;
                 }
             }
         }
@@ -167,11 +180,21 @@ public sealed class ChaosSoakTests : PipeWireTestBase
         foreach (string entry in Directory.GetFiles("/proc/self/fd"))
         {
             string target;
-            try { target = File.ResolveLinkTarget(entry, returnFinalTarget: false)?.Name ?? ""; }
-            catch (IOException) { continue; }
-            catch (UnauthorizedAccessException) { continue; }
+            try
+            {
+                target = File.ResolveLinkTarget(entry, returnFinalTarget: false)?.Name ?? "";
+            }
+            catch (IOException)
+            {
+                continue;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                continue;
+            }
 
-            if (target.StartsWith("socket:", StringComparison.Ordinal)) inodes.Add(target);
+            if (target.StartsWith("socket:", StringComparison.Ordinal))
+                inodes.Add(target);
         }
 
         return inodes;
@@ -180,26 +203,32 @@ public sealed class ChaosSoakTests : PipeWireTestBase
     private static string DescribeSockets(HashSet<string> before, HashSet<string> after)
     {
         string[] added = [.. after.Except(before)];
-        if (added.Length == 0) return "no new sockets";
+        if (added.Length == 0)
+            return "no new sockets";
 
         var described = new List<string>();
-        string[] unix = File.Exists("/proc/net/unix")
-            ? File.ReadAllLines("/proc/net/unix")
-            : [];
+        string[] unix = File.Exists("/proc/net/unix") ? File.ReadAllLines("/proc/net/unix") : [];
 
         foreach (string socket in added)
         {
             string inode = socket["socket:[".Length..].TrimEnd(']');
-            string? line = Array.Find(unix, l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                                                  .Any(f => f == inode));
+            string? line = Array.Find(
+                unix,
+                l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(f => f == inode)
+            );
 
-            described.Add(line is null ? $"{socket} (not a unix socket)" : $"{socket} -> {line.Trim()}");
+            described.Add(
+                line is null ? $"{socket} (not a unix socket)" : $"{socket} -> {line.Trim()}"
+            );
         }
 
         return string.Join("; ", described);
     }
 
-    private static string DescribeGrowth(Dictionary<string, int> before, Dictionary<string, int> after)
+    private static string DescribeGrowth(
+        Dictionary<string, int> before,
+        Dictionary<string, int> after
+    )
     {
         IEnumerable<string> grown = after
             .Where(kv => kv.Value > before.GetValueOrDefault(kv.Key))
@@ -223,13 +252,24 @@ public sealed class ChaosSoakTests : PipeWireTestBase
         foreach (string task in Directory.GetDirectories("/proc/self/task"))
         {
             string name;
-            try { name = File.ReadAllText(Path.Combine(task, "comm")).Trim(); }
-            catch (IOException) { continue; }          // exited between the listing and the read
-            catch (UnauthorizedAccessException) { continue; }
+            try
+            {
+                name = File.ReadAllText(Path.Combine(task, "comm")).Trim();
+            }
+            catch (IOException)
+            {
+                continue;
+            } // exited between the listing and the read
+            catch (UnauthorizedAccessException)
+            {
+                continue;
+            }
 
-            if (name.StartsWith("pw-", StringComparison.Ordinal)
+            if (
+                name.StartsWith("pw-", StringComparison.Ordinal)
                 || name.Contains("pipewire", StringComparison.OrdinalIgnoreCase)
-                || name.StartsWith("pwnet-", StringComparison.Ordinal))
+                || name.StartsWith("pwnet-", StringComparison.Ordinal)
+            )
             {
                 count++;
             }
@@ -239,7 +279,14 @@ public sealed class ChaosSoakTests : PipeWireTestBase
     }
 
     private readonly record struct Census(
-        int Fds, int Threads, long Heap, int Nodes, int Links, int Clients, Dictionary<string, int> FdTargets)
+        int Fds,
+        int Threads,
+        long Heap,
+        int Nodes,
+        int Links,
+        int Clients,
+        Dictionary<string, int> FdTargets
+    )
     {
         public override string ToString() =>
             $"leakable-fds={Fds} loop-threads={Threads} heap={Heap / 1024}KB nodes={Nodes} links={Links} clients={Clients}";
@@ -284,11 +331,14 @@ public sealed class ChaosSoakTests : PipeWireTestBase
             LoopThreads(),
             GC.GetTotalMemory(forceFullCollection: true),
             ourNodes.Count,
-            dump.OfKind("Link").Count(e =>
-                (e.Prop("link.output.node") is { } o && ourNodes.Contains(o))
-                || (e.Prop("link.input.node") is { } i && ourNodes.Contains(i))),
+            dump.OfKind("Link")
+                .Count(e =>
+                    (e.Prop("link.output.node") is { } o && ourNodes.Contains(o))
+                    || (e.Prop("link.input.node") is { } i && ourNodes.Contains(i))
+                ),
             dump.OfKind("Client").Count(e => IsOurs(e, "application.name", SoakClientPrefix)),
-            targets);
+            targets
+        );
     }
 
     /// <summary>Takes a census once this process's own descriptor count has stopped moving.</summary>
@@ -308,7 +358,8 @@ public sealed class ChaosSoakTests : PipeWireTestBase
             await Task.Delay(TimeSpan.FromMilliseconds(250), ct);
 
             Census next = await TakeCensusAsync(ct);
-            if (next.Fds == census.Fds && next.Threads == census.Threads) return next;
+            if (next.Fds == census.Fds && next.Threads == census.Threads)
+                return next;
 
             census = next;
         }
@@ -329,7 +380,10 @@ public sealed class ChaosSoakTests : PipeWireTestBase
         // and reaped whatever a client of ours costs it. Counting from a cold session would charge
         // the soak for the first connection's permanent structures.
         {
-            (PipeWireContext warmCtx, PipeWireRegistry warmReg) = await ConnectAsync("pwnet-soak-warm", cts.Token);
+            (PipeWireContext warmCtx, PipeWireRegistry warmReg) = await ConnectAsync(
+                "pwnet-soak-warm",
+                cts.Token
+            );
             await using (warmCtx)
             await using (warmReg)
             {
@@ -338,8 +392,10 @@ public sealed class ChaosSoakTests : PipeWireTestBase
                 // drop some creates mid-run, which the soak then (correctly) reports as faults.
                 await SessionGates.RequireAudioRouteAsync(warmReg, cts.Token).ConfigureAwait(false);
 
-                PipeWireNode warm = await warmReg.CreateVirtualSink("Warm")
-                    .WithName(Unique("pwnet_soak_warm")).ExecuteAsync(cts.Token);
+                PipeWireNode warm = await warmReg
+                    .CreateVirtualSink("Warm")
+                    .WithName(Unique("pwnet_soak_warm"))
+                    .ExecuteAsync(cts.Token);
                 await warmReg.DestroyGlobalAsync(warm.NodeId, cts.Token);
             }
         }
@@ -362,15 +418,29 @@ public sealed class ChaosSoakTests : PipeWireTestBase
             using var stop = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
             stop.CancelAfter(TimeSpan.FromSeconds(45));
 
-            Task maker = Task.Run(() => MakeAndBreakAsync(a, created, faults, stop.Token), CancellationToken.None);
-            Task inspector = Task.Run(() => InspectAsync(b, faults, stop.Token), CancellationToken.None);
-            Task linker = Task.Run(() => LinkAndUnlinkAsync(a, faults, stop.Token), CancellationToken.None);
-            Task external = Task.Run(() => ExternalToolsAsync(b, faults, stop.Token), CancellationToken.None);
+            Task maker = Task.Run(
+                () => MakeAndBreakAsync(a, created, faults, stop.Token),
+                CancellationToken.None
+            );
+            Task inspector = Task.Run(
+                () => InspectAsync(b, faults, stop.Token),
+                CancellationToken.None
+            );
+            Task linker = Task.Run(
+                () => LinkAndUnlinkAsync(a, faults, stop.Token),
+                CancellationToken.None
+            );
+            Task external = Task.Run(
+                () => ExternalToolsAsync(b, faults, stop.Token),
+                CancellationToken.None
+            );
 
             await Task.WhenAll(maker, inspector, linker, external);
 
-            Assert.IsTrue(faults.IsEmpty,
-                $"{faults.Count} actor faults, first: {(faults.TryPeek(out string? f) ? f : string.Empty)}");
+            Assert.IsTrue(
+                faults.IsEmpty,
+                $"{faults.Count} actor faults, first: {(faults.TryPeek(out string? f) ? f : string.Empty)}"
+            );
 
             // Everything this test made, gone, so the census compares like with like. One barrier
             // for the batch - and only for what is still alive: the maker destroys as it goes, so
@@ -392,7 +462,10 @@ public sealed class ChaosSoakTests : PipeWireTestBase
             await a.DestroyGlobalsAsync(live, cts.Token);
 
             await a.WaitForInitialEnumerationAsync(cts.Token);
-            Assert.IsTrue(a.Current.Nodes.Length > 0, "the graph is empty, so the session did not survive");
+            Assert.IsTrue(
+                a.Current.Nodes.Length > 0,
+                "the graph is empty, so the session did not survive"
+            );
             await b.WaitForInitialEnumerationAsync(cts.Token);
         }
 
@@ -409,24 +482,35 @@ public sealed class ChaosSoakTests : PipeWireTestBase
 
         // Our side. Descriptors and threads must come back; the managed heap is allowed to grow,
         // because the allocator keeps what it has taken and a fixed ceiling would be a flake.
-        Assert.IsTrue(after.Fds <= before.Fds,
+        Assert.IsTrue(
+            after.Fds <= before.Fds,
             $"sockets, pipes and event descriptors grew {before.Fds} -> {after.Fds} and stayed up: "
-            + DescribeGrowth(before.FdTargets, after.FdTargets)
-            + ". New sockets: " + DescribeSockets(socketsBefore, SocketInodes()));
-        Assert.IsTrue(after.Threads <= before.Threads,
-            $"PipeWire loop threads grew {before.Threads} -> {after.Threads}, so a loop was left running");
+                + DescribeGrowth(before.FdTargets, after.FdTargets)
+                + ". New sockets: "
+                + DescribeSockets(socketsBefore, SocketInodes())
+        );
+        Assert.IsTrue(
+            after.Threads <= before.Threads,
+            $"PipeWire loop threads grew {before.Threads} -> {after.Threads}, so a loop was left running"
+        );
 
         // The daemon's side, which nothing inside this process can see. Both contexts are gone, so
         // every object and client we accounted for should have gone with them. Counted by name, so
         // this is about what the soak left behind rather than about what the rest of the suite
         // happened to be doing at the same moment.
-        Assert.IsTrue(after.Clients <= before.Clients,
+        Assert.IsTrue(
+            after.Clients <= before.Clients,
             $"the daemon still holds {SoakClientPrefix} clients from this run: "
-            + $"{before.Clients} -> {after.Clients}");
-        Assert.IsTrue(after.Nodes <= before.Nodes,
-            $"the daemon still holds {SoakPrefix} nodes from this run: {before.Nodes} -> {after.Nodes}");
-        Assert.IsTrue(after.Links <= before.Links,
-            $"the daemon still holds {SoakPrefix} links from this run: {before.Links} -> {after.Links}");
+                + $"{before.Clients} -> {after.Clients}"
+        );
+        Assert.IsTrue(
+            after.Nodes <= before.Nodes,
+            $"the daemon still holds {SoakPrefix} nodes from this run: {before.Nodes} -> {after.Nodes}"
+        );
+        Assert.IsTrue(
+            after.Links <= before.Links,
+            $"the daemon still holds {SoakPrefix} links from this run: {before.Links} -> {after.Links}"
+        );
     }
 
     /// <summary>Waits until the daemon's own object counts stop moving.</summary>
@@ -442,10 +526,14 @@ public sealed class ChaosSoakTests : PipeWireTestBase
         for (int attempt = 0; attempt < 40; attempt++)
         {
             PwDump dump = await PwDump.CaptureAsync(ct);
-            (int, int, int) now = (dump.OfKind("Node").Count(), dump.OfKind("Link").Count(),
-                                   dump.OfKind("Client").Count());
+            (int, int, int) now = (
+                dump.OfKind("Node").Count(),
+                dump.OfKind("Link").Count(),
+                dump.OfKind("Client").Count()
+            );
 
-            if (now == previous) return;
+            if (now == previous)
+                return;
 
             previous = now;
             await Task.Delay(TimeSpan.FromMilliseconds(250), ct);
@@ -453,7 +541,11 @@ public sealed class ChaosSoakTests : PipeWireTestBase
     }
 
     private static async Task MakeAndBreakAsync(
-        PipeWireRegistry registry, ConcurrentBag<ulong> created, ConcurrentQueue<string> faults, CancellationToken ct)
+        PipeWireRegistry registry,
+        ConcurrentBag<ulong> created,
+        ConcurrentQueue<string> faults,
+        CancellationToken ct
+    )
     {
         try
         {
@@ -464,9 +556,13 @@ public sealed class ChaosSoakTests : PipeWireTestBase
                 // No media.class: these are made and unmade continuously, and presenting each one
                 // to the session manager as a routable sink is what fills its event queue with
                 // activations it can never finish.
-                PipeWireNode node = await registry.CreateVirtualSink("Soak")
-                    .WithName(Unique("pwnet_soak")).WithMediaClass("").ExecuteAsync(ct);
-                if (node.ObjectSerial is { } serial) created.Add(serial);
+                PipeWireNode node = await registry
+                    .CreateVirtualSink("Soak")
+                    .WithName(Unique("pwnet_soak"))
+                    .WithMediaClass("")
+                    .ExecuteAsync(ct);
+                if (node.ObjectSerial is { } serial)
+                    created.Add(serial);
 
                 // ENOENT anywhere in here is the object having gone already, and under a soak
                 // against a live session manager that is legitimate: WirePlumber destroys nodes
@@ -497,16 +593,27 @@ public sealed class ChaosSoakTests : PipeWireTestBase
                 // ENOENT is the object having gone already (see above); the destroy below keeps
                 // its own tolerance rather than sharing the block's, because a create that never
                 // finished binding must still be withdrawn.
-                try { await registry.DestroyGlobalAsync(node.NodeId, ct); }
+                try
+                {
+                    await registry.DestroyGlobalAsync(node.NodeId, ct);
+                }
                 catch (PipeWireException e) when (e.IsObjectGone) { }
             }
         }
-        catch (OperationCanceledException) { /* the soak's own clock */ }
-        catch (Exception ex) { faults.Enqueue($"maker: {ex.GetType().Name}: {ex.Message}"); }
+        catch (OperationCanceledException)
+        { /* the soak's own clock */
+        }
+        catch (Exception ex)
+        {
+            faults.Enqueue($"maker: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private static async Task InspectAsync(
-        PipeWireRegistry registry, ConcurrentQueue<string> faults, CancellationToken ct)
+        PipeWireRegistry registry,
+        ConcurrentQueue<string> faults,
+        CancellationToken ct
+    )
     {
         try
         {
@@ -518,7 +625,8 @@ public sealed class ChaosSoakTests : PipeWireTestBase
 
                 foreach (PipeWireNode node in graph.Nodes.Take(6))
                 {
-                    if (ct.IsCancellationRequested) break;
+                    if (ct.IsCancellationRequested)
+                        break;
 
                     try
                     {
@@ -526,19 +634,29 @@ public sealed class ChaosSoakTests : PipeWireTestBase
                         await control.ReadyAsync(ct);
                         _ = await control.GetVolumeAsync(ct);
                     }
-                    catch (ArgumentException) { /* it went away between the snapshot and the bind */ }
-                    catch (PipeWireException) { /* or the daemon refused, which is its right */ }
+                    catch (ArgumentException)
+                    { /* it went away between the snapshot and the bind */
+                    }
+                    catch (PipeWireException)
+                    { /* or the daemon refused, which is its right */
+                    }
                 }
 
                 await registry.WaitForInitialEnumerationAsync(ct);
             }
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { faults.Enqueue($"inspector: {ex.GetType().Name}: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            faults.Enqueue($"inspector: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private static async Task LinkAndUnlinkAsync(
-        PipeWireRegistry registry, ConcurrentQueue<string> faults, CancellationToken ct)
+        PipeWireRegistry registry,
+        ConcurrentQueue<string> faults,
+        CancellationToken ct
+    )
     {
         try
         {
@@ -552,19 +670,26 @@ public sealed class ChaosSoakTests : PipeWireTestBase
                 // from the whole graph mostly cannot (on a desktop the first pair was MIDI into
                 // audio), so each attempt was a refusal the daemon logs as an error: hundreds per
                 // run, burying any real one, and reaching into the machine's own devices.
-                HashSet<uint> ours = graph.Nodes
-                    .Where(n => n.NodeName?.StartsWith(SoakPrefix, StringComparison.Ordinal) == true)
+                HashSet<uint> ours = graph
+                    .Nodes.Where(n =>
+                        n.NodeName?.StartsWith(SoakPrefix, StringComparison.Ordinal) == true
+                    )
                     .Select(n => n.NodeId)
                     .ToHashSet();
 
                 PipeWirePort? output = graph.Ports.FirstOrDefault(p =>
-                    p.PortDirection == PipeWirePortDirection.Out && ours.Contains(p.NodeId) && p.DspFormat is not null);
+                    p.PortDirection == PipeWirePortDirection.Out
+                    && ours.Contains(p.NodeId)
+                    && p.DspFormat is not null
+                );
                 PipeWirePort? input = output is null
                     ? null
                     : graph.Ports.FirstOrDefault(p =>
-                        p.PortDirection == PipeWirePortDirection.In && ours.Contains(p.NodeId)
+                        p.PortDirection == PipeWirePortDirection.In
+                        && ours.Contains(p.NodeId)
                         && p.NodeId != output.NodeId
-                        && string.Equals(p.DspFormat, output.DspFormat, StringComparison.Ordinal));
+                        && string.Equals(p.DspFormat, output.DspFormat, StringComparison.Ordinal)
+                    );
 
                 if (output is null || input is null)
                 {
@@ -577,7 +702,9 @@ public sealed class ChaosSoakTests : PipeWireTestBase
                     PipeWireLink link = await registry.CreateLinkAsync(output, input, ct);
                     await registry.DestroyGlobalAsync(link.LinkId, ct);
                 }
-                catch (ArgumentException) { /* one of the ports just left with its node */ }
+                catch (ArgumentException)
+                { /* one of the ports just left with its node */
+                }
                 catch (PipeWireException)
                 {
                     // One end destroyed between the snapshot and the link: the maker is unmaking
@@ -586,11 +713,17 @@ public sealed class ChaosSoakTests : PipeWireTestBase
             }
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { faults.Enqueue($"linker: {ex.GetType().Name}: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            faults.Enqueue($"linker: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private static async Task ExternalToolsAsync(
-        PipeWireRegistry registry, ConcurrentQueue<string> faults, CancellationToken ct)
+        PipeWireRegistry registry,
+        ConcurrentQueue<string> faults,
+        CancellationToken ct
+    )
     {
         try
         {
@@ -600,7 +733,12 @@ public sealed class ChaosSoakTests : PipeWireTestBase
             {
                 // Processes that are not us, changing the same graph. This is what makes the soak
                 // more than four threads sharing one library.
-                await using (PwTools.Loopback loop = await PwTools.StartLoopbackAsync(Unique("pwnet_soak_lb"), ct))
+                await using (
+                    PwTools.Loopback loop = await PwTools.StartLoopbackAsync(
+                        Unique("pwnet_soak_lb"),
+                        ct
+                    )
+                )
                 {
                     await registry.WaitForInitialEnumerationAsync(ct);
                 }
@@ -612,7 +750,12 @@ public sealed class ChaosSoakTests : PipeWireTestBase
             }
         }
         catch (OperationCanceledException) { }
-        catch (AssertInconclusiveException) { /* a tool is missing; the other actors carry the soak */ }
-        catch (Exception ex) { faults.Enqueue($"external: {ex.GetType().Name}: {ex.Message}"); }
+        catch (AssertInconclusiveException)
+        { /* a tool is missing; the other actors carry the soak */
+        }
+        catch (Exception ex)
+        {
+            faults.Enqueue($"external: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 }

@@ -37,11 +37,16 @@ internal static class PwTop
         if (Environment.GetEnvironmentVariable("PWNET_TEST_PW_TOP") is { Length: > 0 } overridden)
             return File.Exists(overridden) ? overridden : null;
 
-        foreach (string dir in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
-                     .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        foreach (
+            string dir in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(
+                Path.PathSeparator,
+                StringSplitOptions.RemoveEmptyEntries
+            )
+        )
         {
             string candidate = Path.Combine(dir, "pw-top");
-            if (File.Exists(candidate)) return candidate;
+            if (File.Exists(candidate))
+                return candidate;
         }
 
         return null;
@@ -55,8 +60,10 @@ internal static class PwTop
     /// <summary>Skips the calling test when <c>pw-top</c> is not installed.</summary>
     public static void Require()
     {
-        if (!OperatingSystem.IsLinux()) Assert.Inconclusive("PipeWire is a Linux daemon.");
-        if (!IsAvailable) Assert.Inconclusive("pw-top not present.");
+        if (!OperatingSystem.IsLinux())
+            Assert.Inconclusive("PipeWire is a Linux daemon.");
+        if (!IsAvailable)
+            Assert.Inconclusive("pw-top not present.");
     }
 
     /// <summary>
@@ -81,8 +88,8 @@ internal static class PwTop
         psi.ArgumentList.Add("-n");
         psi.ArgumentList.Add(Math.Max(2, batches).ToString(CultureInfo.InvariantCulture));
 
-        using Process proc = Process.Start(psi)
-            ?? throw new InvalidOperationException("could not start pw-top.");
+        using Process proc =
+            Process.Start(psi) ?? throw new InvalidOperationException("could not start pw-top.");
 
         string stdout = await proc.StandardOutput.ReadToEndAsync(ct);
         await proc.WaitForExitAsync(ct);
@@ -93,18 +100,24 @@ internal static class PwTop
         foreach (string raw in stdout.Split('\n'))
         {
             string line = raw.TrimEnd();
-            if (line.Length == 0) continue;
+            if (line.Length == 0)
+                continue;
 
             // A header row starts a new batch. Recognised by its QUANT column only: its leading "S"
             // is also the state letter of every suspended node's row, and on a desktop session full
             // of idle devices that split each batch and dropped the rows before every one of them.
             if (line.Contains("QUANT", StringComparison.Ordinal))
             {
-                if (current.Count > 0) { last = current; current = []; }
+                if (current.Count > 0)
+                {
+                    last = current;
+                    current = [];
+                }
                 continue;
             }
 
-            if (Parse(line) is { } row) current.Add(row);
+            if (Parse(line) is { } row)
+                current.Add(row);
         }
 
         return current.Count > 0 ? current : last;
@@ -115,13 +128,22 @@ internal static class PwTop
         // S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT  NAME
         // 0   1   2       3       4       5      6     7    8   9...    rest
         string[] f = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (f.Length < 9) return null;
-        if (!uint.TryParse(f[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out uint id)) return null;
+        if (f.Length < 9)
+            return null;
+        if (!uint.TryParse(f[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out uint id))
+            return null;
 
         _ = int.TryParse(f[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out int quantum);
         _ = int.TryParse(f[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out int rate);
 
-        if (!long.TryParse(f[8], NumberStyles.Integer, CultureInfo.InvariantCulture, out long errors))
+        if (
+            !long.TryParse(
+                f[8],
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out long errors
+            )
+        )
             return null;
 
         // The name is the last field; FORMAT may be blank, so counting from the end is safer than

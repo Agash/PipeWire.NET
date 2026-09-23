@@ -4,23 +4,23 @@ namespace PipeWire.NET;
 public sealed class PipeWireConnectionClosedException : PipeWireConnectionException
 {
     /// <inheritdoc cref="PipeWireException(string, int, uint?, string?)"/>
-    public PipeWireConnectionClosedException(string operation, int result, uint? objectId = null, string? daemonMessage = null)
-        : base(operation, result, objectId, daemonMessage)
-    {
-    }
+    public PipeWireConnectionClosedException(
+        string operation,
+        int result,
+        uint? objectId = null,
+        string? daemonMessage = null
+    )
+        : base(operation, result, objectId, daemonMessage) { }
 
     /// <inheritdoc/>
-    public PipeWireConnectionClosedException() : base()
-    {
-    }
+    public PipeWireConnectionClosedException()
+        : base() { }
 
     /// <inheritdoc/>
-    public PipeWireConnectionClosedException(string message) : base(message)
-    {
-    }
+    public PipeWireConnectionClosedException(string message)
+        : base(message) { }
 
     /// <inheritdoc/>
-    public PipeWireConnectionClosedException(string message, Exception innerException) : base(message, innerException)
-    {
-    }
+    public PipeWireConnectionClosedException(string message, Exception innerException)
+        : base(message, innerException) { }
 }

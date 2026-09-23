@@ -16,23 +16,39 @@ namespace PipeWire.NET.Tests;
 public sealed class GraphModelTests : PipeWireTestBase
 {
     private static PipeWireGraphSnapshot Build(
-        PipeWireNode[]? nodes = null, PipeWirePort[]? ports = null, PipeWireLink[]? links = null) =>
-        new(1, nodes ?? [], ports ?? [], links ?? []);
+        PipeWireNode[]? nodes = null,
+        PipeWirePort[]? ports = null,
+        PipeWireLink[]? links = null
+    ) => new(1, nodes ?? [], ports ?? [], links ?? []);
 
     private static PipeWirePort Port(
-        uint id, uint nodeId, PipeWirePortDirection dir, bool control = false) =>
-        new(id, nodeId, $"p{id}", dir, Monitor: false, IsControl: control);
+        uint id,
+        uint nodeId,
+        PipeWirePortDirection dir,
+        bool control = false
+    ) => new(id, nodeId, $"p{id}", dir, Monitor: false, IsControl: control);
 
     [TestMethod]
     public void GetPortsForNode_ReturnsOnlyThatNodesPorts()
     {
         var graph = Build(
             nodes: [new(1, "a", null, null), new(2, "b", null, null)],
-            ports: [Port(10, 1, PipeWirePortDirection.Out), Port(11, 1, PipeWirePortDirection.In),
-                    Port(20, 2, PipeWirePortDirection.In)]);
+            ports:
+            [
+                Port(10, 1, PipeWirePortDirection.Out),
+                Port(11, 1, PipeWirePortDirection.In),
+                Port(20, 2, PipeWirePortDirection.In),
+            ]
+        );
 
-        CollectionAssert.AreEquivalent(new uint[] { 10, 11 }, graph.GetPortsForNode(1).Select(p => p.PortId).ToArray());
-        CollectionAssert.AreEquivalent(new uint[] { 20 }, graph.GetPortsForNode(2).Select(p => p.PortId).ToArray());
+        CollectionAssert.AreEquivalent(
+            new uint[] { 10, 11 },
+            graph.GetPortsForNode(1).Select(p => p.PortId).ToArray()
+        );
+        CollectionAssert.AreEquivalent(
+            new uint[] { 20 },
+            graph.GetPortsForNode(2).Select(p => p.PortId).ToArray()
+        );
         Assert.AreEqual(0, graph.GetPortsForNode(99).Length);
     }
 
@@ -42,7 +58,8 @@ public sealed class GraphModelTests : PipeWireTestBase
         // OutputLinks must filter on the output port, so both sides are checked separately.
         var graph = Build(
             ports: [Port(10, 1, PipeWirePortDirection.Out), Port(20, 2, PipeWirePortDirection.In)],
-            links: [new(100, InputNodeId: 2, InputPortId: 20, OutputNodeId: 1, OutputPortId: 10)]);
+            links: [new(100, InputNodeId: 2, InputPortId: 20, OutputNodeId: 1, OutputPortId: 10)]
+        );
 
         Assert.AreEqual(1, graph.GetOutputLinksForPort(10).Length);
         Assert.AreEqual(0, graph.GetInputLinksForPort(10).Length);
@@ -65,10 +82,13 @@ public sealed class GraphModelTests : PipeWireTestBase
     {
         var graph = Build(
             ports: [Port(10, 1, PipeWirePortDirection.Out), Port(11, 1, PipeWirePortDirection.In)],
-            links: [new(100, 2, 20, 1, 10), new(101, 1, 11, 3, 30)]);
+            links: [new(100, 2, 20, 1, 10), new(101, 1, 11, 3, 30)]
+        );
 
-        CollectionAssert.AreEquivalent(new uint[] { 100, 101 },
-            graph.GetLinksForNode(1).Select(l => l.LinkId).ToArray());
+        CollectionAssert.AreEquivalent(
+            new uint[] { 100, 101 },
+            graph.GetLinksForNode(1).Select(l => l.LinkId).ToArray()
+        );
     }
 
     [TestMethod]
@@ -80,12 +100,16 @@ public sealed class GraphModelTests : PipeWireTestBase
         var graph = Build(
             nodes: [new(1, "loopback", null, null)],
             ports: [Port(10, 1, PipeWirePortDirection.Out), Port(11, 1, PipeWirePortDirection.In)],
-            links: [new(100, InputNodeId: 1, InputPortId: 11, OutputNodeId: 1, OutputPortId: 10)]);
+            links: [new(100, InputNodeId: 1, InputPortId: 11, OutputNodeId: 1, OutputPortId: 10)]
+        );
 
         PipeWireLink[] links = [.. graph.GetLinksForNode(1)];
 
-        Assert.AreEqual(1, links.Length,
-            $"one link reported {links.Length} times; intra-node links are reachable from both ends");
+        Assert.AreEqual(
+            1,
+            links.Length,
+            $"one link reported {links.Length} times; intra-node links are reachable from both ends"
+        );
         Assert.AreEqual(100u, links[0].LinkId);
     }
 
@@ -99,10 +123,13 @@ public sealed class GraphModelTests : PipeWireTestBase
             [
                 new(100, InputNodeId: 2, InputPortId: 20, OutputNodeId: 1, OutputPortId: 10),
                 new(101, InputNodeId: 1, InputPortId: 11, OutputNodeId: 3, OutputPortId: 30),
-            ]);
+            ]
+        );
 
-        CollectionAssert.AreEquivalent(new uint[] { 100, 101 },
-            graph.GetLinksForNode(1).Select(l => l.LinkId).ToArray());
+        CollectionAssert.AreEquivalent(
+            new uint[] { 100, 101 },
+            graph.GetLinksForNode(1).Select(l => l.LinkId).ToArray()
+        );
     }
 
     [TestMethod]
@@ -111,7 +138,8 @@ public sealed class GraphModelTests : PipeWireTestBase
         var graph = Build(
             nodes: [new(1, "a", null, null)],
             ports: [Port(10, 1, PipeWirePortDirection.Out)],
-            links: [new(100, 2, 20, 1, 10)]);
+            links: [new(100, 2, 20, 1, 10)]
+        );
 
         Assert.IsTrue(graph.TryGetObject(1, out var node));
         Assert.AreEqual(PipeWireObjectKind.Node, node!.Kind);
@@ -126,7 +154,14 @@ public sealed class GraphModelTests : PipeWireTestBase
     public void Permissions_DecodeFromTheOctalBitsPipeWireReports()
     {
         // 0710 octal is what the daemon reported for a node we created.
-        var node = new PipeWireNode(1, "a", null, null, null, (PipeWirePermissions)Convert.ToUInt32("710", 8));
+        var node = new PipeWireNode(
+            1,
+            "a",
+            null,
+            null,
+            null,
+            (PipeWirePermissions)Convert.ToUInt32("710", 8)
+        );
         Assert.IsTrue(node.Permissions.HasFlag(PipeWirePermissions.Read));
         Assert.IsTrue(node.Permissions.HasFlag(PipeWirePermissions.Write));
         Assert.IsTrue(node.Permissions.HasFlag(PipeWirePermissions.Execute));
@@ -140,7 +175,8 @@ public sealed class GraphModelTests : PipeWireTestBase
         var graph = Build(
             nodes: [new(1, "a", null, null)],
             ports: [Port(10, 1, PipeWirePortDirection.Out)],
-            links: [new(100, 2, 20, 1, 10)]);
+            links: [new(100, 2, 20, 1, 10)]
+        );
 
         Assert.IsTrue(graph.TryGetNode(1, out PipeWireNode? node));
         Assert.AreSame(graph.GetNode(1), node);
@@ -189,12 +225,16 @@ public sealed class GraphModelTests : PipeWireTestBase
         Assert.IsTrue(control.IsControl);
 
         PipeWireGraphSnapshot graph = Build(
-            nodes: [new(1, "a", null, null)], ports: [control, audio]);
+            nodes: [new(1, "a", null, null)],
+            ports: [control, audio]
+        );
 
         Assert.IsTrue(graph.CanSendTo(graph.Nodes[0]));
         Assert.IsFalse(
-            Build(nodes: [new(1, "a", null, null)], ports: [control]).CanSendTo(new(1, "a", null, null)),
-            "a node whose only input is a control port cannot be sent media");
+            Build(nodes: [new(1, "a", null, null)], ports: [control])
+                .CanSendTo(new(1, "a", null, null)),
+            "a node whose only input is a control port cannot be sent media"
+        );
     }
 
     [TestMethod]
@@ -231,7 +271,9 @@ public sealed class GraphModelTests : PipeWireTestBase
                     PipeWireNode? node = graph.GetNode(n + 1);
                     if (node is null || node.NodeId != n + 1)
                     {
-                        failures.Enqueue($"thread {t} read {node?.NodeId.ToString() ?? "null"} for node {n + 1}");
+                        failures.Enqueue(
+                            $"thread {t} read {node?.NodeId.ToString() ?? "null"} for node {n + 1}"
+                        );
                         return;
                     }
                 }
@@ -246,7 +288,10 @@ public sealed class GraphModelTests : PipeWireTestBase
 
                 builds[t] = ImmutableCollectionsMarshal.AsArray(bucket)!;
             })
-            { IsBackground = true, Name = $"lazy-index-{t}" };
+            {
+                IsBackground = true,
+                Name = $"lazy-index-{t}",
+            };
 
             workers[t].Start();
         }
@@ -255,8 +300,10 @@ public sealed class GraphModelTests : PipeWireTestBase
             worker.Join();
 
         Assert.IsTrue(failures.IsEmpty, string.Join("; ", failures));
-        Assert.AreEqual(1, builds.Distinct(ReferenceEqualityComparer.Instance).Count(),
-            "every racing reader must share one index, not build its own");
+        Assert.AreEqual(
+            1,
+            builds.Distinct(ReferenceEqualityComparer.Instance).Count(),
+            "every racing reader must share one index, not build its own"
+        );
     }
-
 }

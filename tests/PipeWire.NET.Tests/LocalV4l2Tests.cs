@@ -63,20 +63,29 @@ public sealed class LocalV4l2Tests
         PipeWireNode? cam = null;
         for (var i = 0; i < 150 && cam is null; i++)
         {
-            cam = reg.Current.Nodes.FirstOrDefault(
-                n => n.Media == PipeWireMediaKind.Video
-                     && n.Flow == PipeWireMediaFlow.Source
-                     && ((n.Description?.Contains(VirtualCamera.CardLabel, StringComparison.OrdinalIgnoreCase) ?? false)
-                         || (n.NodeName?.Contains("v4l2", StringComparison.OrdinalIgnoreCase) ?? false)));
+            cam = reg.Current.Nodes.FirstOrDefault(n =>
+                n.Media == PipeWireMediaKind.Video
+                && n.Flow == PipeWireMediaFlow.Source
+                && (
+                    (
+                        n.Description?.Contains(
+                            VirtualCamera.CardLabel,
+                            StringComparison.OrdinalIgnoreCase
+                        ) ?? false
+                    ) || (n.NodeName?.Contains("v4l2", StringComparison.OrdinalIgnoreCase) ?? false)
+                )
+            );
 
-            if (cam is null) await Task.Delay(100, cts.Token);
+            if (cam is null)
+                await Task.Delay(100, cts.Token);
         }
 
         if (cam is null)
         {
             Assert.Inconclusive(
                 $"no v4l2 video source appeared for {camera.DevicePath}; the session manager's "
-                + "v4l2 monitor may not be running.");
+                    + "v4l2 monitor may not be running."
+            );
         }
 
         var frames = 0;
@@ -89,11 +98,16 @@ public sealed class LocalV4l2Tests
             Interlocked.Increment(ref frames);
             geometry = (f.Width, f.Height);
 
-            if (f.Pixels.IsEmpty) return;
+            if (f.Pixels.IsEmpty)
+                return;
 
             foreach (byte b in f.Pixels)
             {
-                if (b != 0) { Interlocked.Increment(ref nonBlank); return; }
+                if (b != 0)
+                {
+                    Interlocked.Increment(ref nonBlank);
+                    return;
+                }
             }
         };
 
@@ -103,16 +117,19 @@ public sealed class LocalV4l2Tests
 
         Assert.IsTrue(
             Volatile.Read(ref frames) > 0,
-            "the camera node was linked but delivered no frames");
+            "the camera node was linked but delivered no frames"
+        );
 
         Assert.IsTrue(
             geometry.W > 0 && geometry.H > 0,
-            $"frames arrived with a degenerate geometry {geometry.W}x{geometry.H}");
+            $"frames arrived with a degenerate geometry {geometry.W}x{geometry.H}"
+        );
 
         Assert.IsTrue(
             Volatile.Read(ref nonBlank) > 0,
             "every frame from the camera was entirely zero, so the capture negotiated a format and "
-            + "then received nothing");
+                + "then received nothing"
+        );
     }
 
     /// <summary>
@@ -129,7 +146,10 @@ public sealed class LocalV4l2Tests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-v4l2-export", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-v4l2-export",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         PipeWireDeviceProvider device;
@@ -138,7 +158,10 @@ public sealed class LocalV4l2Tests
             // The library is named outright: a client's context.spa-libs map has no api.v4l2.* entry,
             // so resolving by factory name alone fails even though libspa-v4l2 is installed.
             device = PipeWireDeviceProvider.FromSpaFactory(
-                ctx, "api.v4l2.enum.udev", libraryName: "v4l2/libspa-v4l2");
+                ctx,
+                "api.v4l2.enum.udev",
+                libraryName: "v4l2/libspa-v4l2"
+            );
         }
         catch (InvalidOperationException ex)
         {

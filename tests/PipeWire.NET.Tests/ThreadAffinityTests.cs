@@ -38,7 +38,10 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
             Assert.Inconclusive("PipeWire is a Linux daemon.");
     }
 
-    private static async Task<PipeWireContext> ConnectAsync(string name, CancellationToken cancellationToken)
+    private static async Task<PipeWireContext> ConnectAsync(
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var ctx = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cancellationToken);
@@ -63,7 +66,9 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         var loopThreads = new ConcurrentBag<int>();
-        var loopThreadSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var loopThreadSeen = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
         reg.GraphChanged += (_, _) =>
         {
             loopThreads.Add(Environment.CurrentManagedThreadId);
@@ -75,7 +80,9 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
 
         int processThread = 0;
         bool onLoopThreadInsideProcess = true;
-        var processed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var processed = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
 
         filter.ProcessCallback = (PipeWireFilter f, uint _, in PipeWireGraphClock _) =>
         {
@@ -91,9 +98,16 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
         // A filter with no peer is not scheduled, so give it one: the graph runs once something
         // drives it, and a virtual sink is the cheapest driver this suite already knows how to make.
         PipeWireNode sink = await reg.CreateVirtualSinkAsync(
-            "pwnet rt affinity sink", cancellationToken: cts.Token);
+            "pwnet rt affinity sink",
+            cancellationToken: cts.Token
+        );
 
-        uint filterPort = await PortOfAsync(reg, filter.NodeId!.Value, PipeWirePortDirection.Out, cts.Token);
+        uint filterPort = await PortOfAsync(
+            reg,
+            filter.NodeId!.Value,
+            PipeWirePortDirection.Out,
+            cts.Token
+        );
         uint sinkPort = await PortOfAsync(reg, sink.NodeId, PipeWirePortDirection.In, cts.Token);
 
         await reg.CreateLinkAsync(filterPort, sinkPort, cts.Token);
@@ -104,12 +118,14 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
         Assert.AreNotEqual(0, processThread, "the process callback never ran");
         Assert.IsFalse(
             loopThreads.Contains(processThread),
-            "an RtProcess filter was processed on the same thread the graph events arrive on");
+            "an RtProcess filter was processed on the same thread the graph events arrive on"
+        );
 
         Assert.IsFalse(
             onLoopThreadInsideProcess,
             "the context claimed the data loop was its own loop thread, which would let a filter "
-            + "take the loop lock from inside a realtime callback");
+                + "take the loop lock from inside a realtime callback"
+        );
 
         await reg.DestroyGlobalAsync(sink.NodeId, cts.Token);
     }
@@ -143,14 +159,17 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
 
         // Something both registries must report, so both bags are certain to fill.
         PipeWireNode sink = await firstReg.CreateVirtualSinkAsync(
-            "pwnet affinity shared sink", cancellationToken: cts.Token);
+            "pwnet affinity shared sink",
+            cancellationToken: cts.Token
+        );
 
         for (var i = 0; i < 200 && !secondReg.Current.Nodes.Any(n => n.NodeId == sink.NodeId); i++)
             await Task.Delay(50, cts.Token);
 
         Assert.IsTrue(
             secondReg.Current.Nodes.Any(n => n.NodeId == sink.NodeId),
-            "the second context never saw a node the first one made");
+            "the second context never saw a node the first one made"
+        );
 
         Assert.IsFalse(firstThreads.IsEmpty, "the first context reported nothing");
         Assert.IsFalse(secondThreads.IsEmpty, "the second context reported nothing");
@@ -159,8 +178,10 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
         shared.IntersectWith(secondThreads);
 
         Assert.AreEqual(
-            0, shared.Count,
-            "two contexts delivered callbacks on the same thread, so they are not two loops");
+            0,
+            shared.Count,
+            "two contexts delivered callbacks on the same thread, so they are not two loops"
+        );
 
         await firstReg.DestroyGlobalAsync(sink.NodeId, cts.Token);
     }
@@ -177,7 +198,10 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using PipeWireContext blocked = await ConnectAsync("pwnet-affinity-blocked", cts.Token);
+        await using PipeWireContext blocked = await ConnectAsync(
+            "pwnet-affinity-blocked",
+            cts.Token
+        );
         await using PipeWireContext free = await ConnectAsync("pwnet-affinity-free", cts.Token);
 
         await using var blockedReg = new PipeWireRegistry(blocked);
@@ -200,18 +224,24 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
         try
         {
             PipeWireNode sink = await freeReg.CreateVirtualSinkAsync(
-                "pwnet affinity block sink", cancellationToken: cts.Token);
+                "pwnet affinity block sink",
+                cancellationToken: cts.Token
+            );
 
             // The blocked context is now sitting in its handler. The free one has to finish its own
             // round trip anyway, which is the whole assertion.
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(15), cts.Token);
 
             PipeWireNode other = await freeReg.CreateVirtualSinkAsync(
-                "pwnet affinity free sink", cancellationToken: cts.Token);
+                "pwnet affinity free sink",
+                cancellationToken: cts.Token
+            );
 
             Assert.AreNotEqual(
-                0u, other.NodeId,
-                "a context could not finish its own work while another sat in a handler");
+                0u,
+                other.NodeId,
+                "a context could not finish its own work while another sat in a handler"
+            );
 
             release.Set();
 
@@ -230,15 +260,20 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
 
     /// <summary>The id of one port of a node, once the daemon has published it.</summary>
     private static async Task<uint> PortOfAsync(
-        PipeWireRegistry registry, uint nodeId, PipeWirePortDirection direction,
-        CancellationToken cancellationToken)
+        PipeWireRegistry registry,
+        uint nodeId,
+        PipeWirePortDirection direction,
+        CancellationToken cancellationToken
+    )
     {
         for (var i = 0; i < 200; i++)
         {
-            PipeWirePort? port = registry.Current.Ports
-                .FirstOrDefault(p => p.NodeId == nodeId && p.PortDirection == direction);
+            PipeWirePort? port = registry.Current.Ports.FirstOrDefault(p =>
+                p.NodeId == nodeId && p.PortDirection == direction
+            );
 
-            if (port is not null) return port.PortId;
+            if (port is not null)
+                return port.PortId;
 
             await Task.Delay(50, cancellationToken);
         }

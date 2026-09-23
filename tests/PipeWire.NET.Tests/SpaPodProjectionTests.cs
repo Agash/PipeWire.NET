@@ -27,10 +27,15 @@ public sealed class SpaPodProjectionTests
         new(
             SpaType.ObjectFormat,
             SpaParamType.EnumFormat,
-            [.. properties.Select(p => new SpaPodProperty(p.Key, 0, p.Value))]);
+            [.. properties.Select(p => new SpaPodProperty(p.Key, 0, p.Value))]
+        );
 
     private static SpaChoice Enum(params int[] values) =>
-        new(SpaChoiceType.Enum, SpaType.Int, [new SpaInt(values[0]), .. values.Select(v => (SpaValue)new SpaInt(v))]);
+        new(
+            SpaChoiceType.Enum,
+            SpaType.Int,
+            [new SpaInt(values[0]), .. values.Select(v => (SpaValue)new SpaInt(v))]
+        );
 
     private static SpaChoice Range(int def, int min, int max) =>
         new(SpaChoiceType.Range, SpaType.Int, [new SpaInt(def), new SpaInt(min), new SpaInt(max)]);
@@ -60,7 +65,11 @@ public sealed class SpaPodProjectionTests
         var choice = ValueOf(got, SpaFormat.AudioRate) as SpaChoice;
         Assert.IsNotNull(choice, "the narrowed rate is not a choice");
 
-        CollectionAssert.AreEquivalent(new[] { 48000, 96000 }, Members(choice!), "the intersection kept the wrong members");
+        CollectionAssert.AreEquivalent(
+            new[] { 48000, 96000 },
+            Members(choice!),
+            "the intersection kept the wrong members"
+        );
     }
 
     /// <summary>When several values survive, the peer's preference leads.</summary>
@@ -76,10 +85,15 @@ public sealed class SpaPodProjectionTests
         SpaObject mine = Format((SpaFormat.AudioRate, Enum(96000, 48000, 96000)));
         SpaObject theirs = Format((SpaFormat.AudioRate, Enum(48000, 48000, 96000)));
 
-        var choice = ValueOf(SpaPodProjection.Project(mine, theirs), SpaFormat.AudioRate) as SpaChoice;
+        var choice =
+            ValueOf(SpaPodProjection.Project(mine, theirs), SpaFormat.AudioRate) as SpaChoice;
 
         Assert.IsNotNull(choice);
-        Assert.AreEqual(new SpaInt(48000), choice!.Alternatives[0], "the candidate's preference led instead of the filter's");
+        Assert.AreEqual(
+            new SpaInt(48000),
+            choice!.Alternatives[0],
+            "the candidate's preference led instead of the filter's"
+        );
     }
 
     /// <summary>A value copied exactly once collapses to a fixed value; one copied twice does not.</summary>
@@ -98,14 +112,23 @@ public sealed class SpaPodProjectionTests
         Assert.AreEqual(
             new SpaInt(48000),
             ValueOf(SpaPodProjection.Project(fixedMine, theirs), SpaFormat.AudioRate),
-            "one survivor copied once should be a fixed value");
+            "one survivor copied once should be a fixed value"
+        );
 
         SpaObject mine = Format((SpaFormat.AudioRate, Enum(48000, 44100, 48000)));
         SpaObject theirsToo = Format((SpaFormat.AudioRate, Enum(48000, 48000, 192000)));
 
-        var choice = ValueOf(SpaPodProjection.Project(mine, theirsToo), SpaFormat.AudioRate) as SpaChoice;
-        Assert.IsNotNull(choice, "a survivor copied more than once stays an enumeration, as upstream leaves it");
-        CollectionAssert.AreEquivalent(new[] { 48000 }, Members(choice!), "the only surviving value should be 48000");
+        var choice =
+            ValueOf(SpaPodProjection.Project(mine, theirsToo), SpaFormat.AudioRate) as SpaChoice;
+        Assert.IsNotNull(
+            choice,
+            "a survivor copied more than once stays an enumeration, as upstream leaves it"
+        );
+        CollectionAssert.AreEquivalent(
+            new[] { 48000 },
+            Members(choice!),
+            "the only surviving value should be 48000"
+        );
     }
 
     /// <summary>An enumeration against a range keeps only the members inside it.</summary>
@@ -140,8 +163,16 @@ public sealed class SpaPodProjectionTests
         var choice = ValueOf(got, SpaFormat.AudioRate) as SpaChoice;
         Assert.IsNotNull(choice, "two ranges should narrow to a range");
 
-        Assert.AreEqual(new SpaInt(44100), choice!.Alternatives[1], "the low end should be the higher minimum");
-        Assert.AreEqual(new SpaInt(48000), choice.Alternatives[2], "the high end should be the lower maximum");
+        Assert.AreEqual(
+            new SpaInt(44100),
+            choice!.Alternatives[1],
+            "the low end should be the higher minimum"
+        );
+        Assert.AreEqual(
+            new SpaInt(48000),
+            choice.Alternatives[2],
+            "the high end should be the lower maximum"
+        );
     }
 
     /// <summary>Disjoint values produce nothing, which is a refusal rather than an empty answer.</summary>
@@ -157,7 +188,8 @@ public sealed class SpaPodProjectionTests
 
         Assert.IsNull(
             SpaPodProjection.Project(mine, theirs),
-            "disjoint enumerations must not produce a format");
+            "disjoint enumerations must not produce a format"
+        );
     }
 
     /// <summary>A property the filter never mentions survives untouched.</summary>
@@ -166,7 +198,8 @@ public sealed class SpaPodProjectionTests
     {
         SpaObject mine = Format(
             (SpaFormat.AudioRate, Enum(44100, 48000)),
-            (SpaFormat.AudioChannels, new SpaInt(2)));
+            (SpaFormat.AudioChannels, new SpaInt(2))
+        );
 
         SpaObject theirs = Format((SpaFormat.AudioRate, Enum(48000)));
 
@@ -176,7 +209,8 @@ public sealed class SpaPodProjectionTests
         Assert.AreEqual(
             new SpaInt(2),
             ValueOf(got, SpaFormat.AudioChannels),
-            "a property the filter does not mention should be carried through as it was");
+            "a property the filter does not mention should be carried through as it was"
+        );
     }
 
     /// <summary>The projection never contradicts the matcher.</summary>
@@ -210,7 +244,8 @@ public sealed class SpaPodProjectionTests
                 Assert.AreEqual(
                     matches,
                     projects,
-                    $"matcher said {matches} and projection said {projects} for {a.Kind} vs {b.Kind}");
+                    $"matcher said {matches} and projection said {projects} for {a.Kind} vs {b.Kind}"
+                );
             }
         }
     }
@@ -221,27 +256,55 @@ public sealed class SpaPodProjectionTests
     public void TwoRanges_DefaultToTheFiltersValue_ThenTheCandidates_ThenTheMinimum()
     {
         SpaChoice Overlap(SpaChoice mine, SpaChoice theirs) =>
-            (SpaChoice)ValueOf(SpaPodProjection.Project(Format((SpaFormat.AudioRate, mine)), Format((SpaFormat.AudioRate, theirs))), SpaFormat.AudioRate)!;
+            (SpaChoice)
+                ValueOf(
+                    SpaPodProjection.Project(
+                        Format((SpaFormat.AudioRate, mine)),
+                        Format((SpaFormat.AudioRate, theirs))
+                    ),
+                    SpaFormat.AudioRate
+                )!;
 
-        Assert.AreEqual(new SpaInt(48000), Overlap(Range(44100, 8000, 96000), Range(48000, 22050, 192000)).Alternatives[0],
-            "the filter's default is in the overlap and should lead");
-        Assert.AreEqual(new SpaInt(44100), Overlap(Range(44100, 8000, 96000), Range(4000, 22050, 192000)).Alternatives[0],
-            "the filter's default is outside the overlap, so the candidate's should lead");
-        Assert.AreEqual(new SpaInt(22050), Overlap(Range(8000, 8000, 96000), Range(4000, 22050, 192000)).Alternatives[0],
-            "neither default is in the overlap, so its minimum should lead");
+        Assert.AreEqual(
+            new SpaInt(48000),
+            Overlap(Range(44100, 8000, 96000), Range(48000, 22050, 192000)).Alternatives[0],
+            "the filter's default is in the overlap and should lead"
+        );
+        Assert.AreEqual(
+            new SpaInt(44100),
+            Overlap(Range(44100, 8000, 96000), Range(4000, 22050, 192000)).Alternatives[0],
+            "the filter's default is outside the overlap, so the candidate's should lead"
+        );
+        Assert.AreEqual(
+            new SpaInt(22050),
+            Overlap(Range(8000, 8000, 96000), Range(4000, 22050, 192000)).Alternatives[0],
+            "neither default is in the overlap, so its minimum should lead"
+        );
     }
 
     /// <summary>Range against a stepped range yields a plain range, as upstream writes it.</summary>
     [TestMethod]
     public void ARangeAgainstAStep_YieldsAPlainRange()
     {
-        var step = new SpaChoice(SpaChoiceType.Step, SpaType.Int, [new SpaInt(64), new SpaInt(16), new SpaInt(1024), new SpaInt(16)]);
+        var step = new SpaChoice(
+            SpaChoiceType.Step,
+            SpaType.Int,
+            [new SpaInt(64), new SpaInt(16), new SpaInt(1024), new SpaInt(16)]
+        );
         var got = (SpaChoice?)ValueOf(
-            SpaPodProjection.Project(Format((SpaFormat.AudioRate, Range(256, 32, 512))), Format((SpaFormat.AudioRate, step))),
-            SpaFormat.AudioRate);
+            SpaPodProjection.Project(
+                Format((SpaFormat.AudioRate, Range(256, 32, 512))),
+                Format((SpaFormat.AudioRate, step))
+            ),
+            SpaFormat.AudioRate
+        );
 
         Assert.IsNotNull(got);
-        Assert.AreEqual(SpaChoiceType.Range, got!.Kind, "upstream marks the overlap of range and step as a plain range (filter.h 223)");
+        Assert.AreEqual(
+            SpaChoiceType.Range,
+            got!.Kind,
+            "upstream marks the overlap of range and step as a plain range (filter.h 223)"
+        );
         Assert.AreEqual(new SpaInt(32), got.Alternatives[1]);
         Assert.AreEqual(new SpaInt(512), got.Alternatives[2]);
     }
@@ -252,11 +315,21 @@ public sealed class SpaPodProjectionTests
     public void FlagsAgainstAnEnumeration_IsRefused()
     {
         var flags = new SpaChoice(SpaChoiceType.Flags, SpaType.Int, [new SpaInt(0b0110)]);
-        Assert.IsNull(SpaPodProjection.Project(Format((SpaFormat.AudioRate, flags)), Format((SpaFormat.AudioRate, Enum(2, 4)))));
+        Assert.IsNull(
+            SpaPodProjection.Project(
+                Format((SpaFormat.AudioRate, flags)),
+                Format((SpaFormat.AudioRate, Enum(2, 4)))
+            )
+        );
 
         var theirs = new SpaChoice(SpaChoiceType.Flags, SpaType.Int, [new SpaInt(0b0011)]);
         var and = (SpaChoice?)ValueOf(
-            SpaPodProjection.Project(Format((SpaFormat.AudioRate, flags)), Format((SpaFormat.AudioRate, theirs))), SpaFormat.AudioRate);
+            SpaPodProjection.Project(
+                Format((SpaFormat.AudioRate, flags)),
+                Format((SpaFormat.AudioRate, theirs))
+            ),
+            SpaFormat.AudioRate
+        );
         Assert.IsNotNull(and, "flags against flags is the supported pairing");
         Assert.AreEqual(new SpaInt(0b0010), and!.Alternatives[0], "flags intersect by AND");
     }
@@ -267,31 +340,56 @@ public sealed class SpaPodProjectionTests
     public void AFilterOnlyProperty_IsCarriedIntoTheAnswer_UnlessMarkedDrop()
     {
         SpaObject mine = Format((SpaFormat.AudioRate, new SpaInt(48000)));
-        SpaObject theirs = new(SpaType.ObjectFormat, SpaParamType.EnumFormat,
-        [
-            new SpaPodProperty(SpaFormat.AudioRate, SpaPodPropFlags.None, new SpaInt(48000)),
-            new SpaPodProperty(SpaFormat.AudioChannels, SpaPodPropFlags.None, new SpaInt(2)),
-            new SpaPodProperty(SpaFormat.AudioFormat, SpaPodPropFlags.Drop, new SpaId(283)),
-        ]);
+        SpaObject theirs = new(
+            SpaType.ObjectFormat,
+            SpaParamType.EnumFormat,
+            [
+                new SpaPodProperty(SpaFormat.AudioRate, SpaPodPropFlags.None, new SpaInt(48000)),
+                new SpaPodProperty(SpaFormat.AudioChannels, SpaPodPropFlags.None, new SpaInt(2)),
+                new SpaPodProperty(SpaFormat.AudioFormat, SpaPodPropFlags.Drop, new SpaId(283)),
+            ]
+        );
 
         SpaObject? got = SpaPodProjection.Project(mine, theirs);
 
         Assert.IsNotNull(got);
-        Assert.AreEqual(new SpaInt(2), ValueOf(got, SpaFormat.AudioChannels), "the filter-only property should be carried in");
-        Assert.IsNull(got!.Find(SpaFormat.AudioFormat), "a filter-only property marked drop should be left out");
+        Assert.AreEqual(
+            new SpaInt(2),
+            ValueOf(got, SpaFormat.AudioChannels),
+            "the filter-only property should be carried in"
+        );
+        Assert.IsNull(
+            got!.Find(SpaFormat.AudioFormat),
+            "a filter-only property marked drop should be left out"
+        );
     }
 
     /// <summary>The answer's property flags are the AND of both sides'.</summary>
     [TestMethod]
     public void ThePropertyFlags_AreTheAndOfBothSides()
     {
-        SpaObject mine = new(SpaType.ObjectFormat, SpaParamType.EnumFormat,
-            [new SpaPodProperty(SpaFormat.AudioRate, SpaPodPropFlags.Mandatory | SpaPodPropFlags.DontFixate, new SpaInt(48000))]);
-        SpaObject theirs = new(SpaType.ObjectFormat, SpaParamType.EnumFormat,
-            [new SpaPodProperty(SpaFormat.AudioRate, SpaPodPropFlags.Mandatory, new SpaInt(48000))]);
+        SpaObject mine = new(
+            SpaType.ObjectFormat,
+            SpaParamType.EnumFormat,
+            [
+                new SpaPodProperty(
+                    SpaFormat.AudioRate,
+                    SpaPodPropFlags.Mandatory | SpaPodPropFlags.DontFixate,
+                    new SpaInt(48000)
+                ),
+            ]
+        );
+        SpaObject theirs = new(
+            SpaType.ObjectFormat,
+            SpaParamType.EnumFormat,
+            [new SpaPodProperty(SpaFormat.AudioRate, SpaPodPropFlags.Mandatory, new SpaInt(48000))]
+        );
 
-        Assert.AreEqual(SpaPodPropFlags.Mandatory, SpaPodProjection.Project(mine, theirs)!.Find(SpaFormat.AudioRate)!.Flags,
-            "filter.h 98: flags are p1->flags & p2->flags");
+        Assert.AreEqual(
+            SpaPodPropFlags.Mandatory,
+            SpaPodProjection.Project(mine, theirs)!.Find(SpaFormat.AudioRate)!.Flags,
+            "filter.h 98: flags are p1->flags & p2->flags"
+        );
     }
 
     /// <summary>When the filter's own default is not valid for its own choice, the candidate leads.</summary>
@@ -302,14 +400,34 @@ public sealed class SpaPodProjectionTests
         // An enumeration whose default is not among its own members is not a valid choice
         // (compare.h checks members from index 1). Without the swap the filter's order would lead
         // and 44100 would win; with it, the candidate's order leads and 96000 wins.
-        SpaObject mine = Format((SpaFormat.AudioRate, new SpaChoice(SpaChoiceType.Enum, SpaType.Int,
-            [new SpaInt(96000), new SpaInt(96000), new SpaInt(44100), new SpaInt(48000)])));
-        SpaObject theirs = Format((SpaFormat.AudioRate, new SpaChoice(SpaChoiceType.Enum, SpaType.Int,
-            [new SpaInt(44100), new SpaInt(48000), new SpaInt(96000)])));
+        SpaObject mine = Format(
+            (
+                SpaFormat.AudioRate,
+                new SpaChoice(
+                    SpaChoiceType.Enum,
+                    SpaType.Int,
+                    [new SpaInt(96000), new SpaInt(96000), new SpaInt(44100), new SpaInt(48000)]
+                )
+            )
+        );
+        SpaObject theirs = Format(
+            (
+                SpaFormat.AudioRate,
+                new SpaChoice(
+                    SpaChoiceType.Enum,
+                    SpaType.Int,
+                    [new SpaInt(44100), new SpaInt(48000), new SpaInt(96000)]
+                )
+            )
+        );
 
         var got = ValueOf(SpaPodProjection.Project(mine, theirs), SpaFormat.AudioRate);
         Assert.IsNotNull(got, "the swap still intersects; it only changes which side leads");
         SpaValue lead = got is SpaChoice c ? c.Alternatives[0] : got!;
-        Assert.AreEqual(new SpaInt(96000), lead, "with the filter's default invalid, the candidate's order should lead");
+        Assert.AreEqual(
+            new SpaInt(96000),
+            lead,
+            "with the filter's default invalid, the candidate's order should lead"
+        );
     }
 }

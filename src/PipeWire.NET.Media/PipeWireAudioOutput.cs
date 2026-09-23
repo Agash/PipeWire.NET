@@ -28,21 +28,30 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
     /// previous cycle left in it.
     /// </remarks>
     public delegate int FillSamplesHandler(
-        PipeWireAudioOutput sender, Span<byte> samples, int sampleRate, int channels, AudioSampleFormat format);
+        PipeWireAudioOutput sender,
+        Span<byte> samples,
+        int sampleRate,
+        int channels,
+        AudioSampleFormat format
+    );
 
     /// <summary>Invoked on the loop thread when a buffer is ready to fill.</summary>
     public event FillSamplesHandler? FillSamples;
 
     /// <summary>Handles a connection state change on the loop thread.</summary>
     public delegate void StateChangedHandler(
-        PipeWireAudioOutput sender, PipeWireStreamState oldState, PipeWireStreamState newState);
+        PipeWireAudioOutput sender,
+        PipeWireStreamState oldState,
+        PipeWireStreamState newState
+    );
 
     /// <summary>Raised on the loop thread when the connection state changes.</summary>
     public event StateChangedHandler? StateChanged;
 
     private readonly PipeWireContext _ctx;
     private readonly string _name;
-    private readonly int _sampleRate, _channels;
+    private readonly int _sampleRate,
+        _channels;
     private readonly AudioSampleFormat _format;
     private PipeWireStreamCore? _core;
 
@@ -55,7 +64,9 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
         public SpaFormatPod.AudioFormatInfo Info { get; } = info;
     }
 
-    private NegotiatedFormat _fmtCell = new(new SpaFormatPod.AudioFormatInfo(AudioSampleFormat.F32Le, 48000, 2));
+    private NegotiatedFormat _fmtCell = new(
+        new SpaFormatPod.AudioFormatInfo(AudioSampleFormat.F32Le, 48000, 2)
+    );
 
     private SpaFormatPod.AudioFormatInfo Negotiated => Volatile.Read(ref _fmtCell).Info;
 
@@ -64,16 +75,26 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
     /// <param name="sampleRate">Sample rate to publish (Hz).</param>
     /// <param name="channels">Channel count.</param>
     /// <param name="format">Sample format.</param>
-    public PipeWireAudioOutput(PipeWireContext context, string nodeName,
-        int sampleRate = 48000, int channels = 2, AudioSampleFormat format = AudioSampleFormat.F32Le)
+    public PipeWireAudioOutput(
+        PipeWireContext context,
+        string nodeName,
+        int sampleRate = 48000,
+        int channels = 2,
+        AudioSampleFormat format = AudioSampleFormat.F32Le
+    )
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentException.ThrowIfNullOrEmpty(nodeName);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleRate);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(channels);
-        _ctx = context; _name = nodeName;
-        _sampleRate = sampleRate; _channels = channels; _format = format;
-        _fmtCell = new NegotiatedFormat(new SpaFormatPod.AudioFormatInfo(format, sampleRate, channels));
+        _ctx = context;
+        _name = nodeName;
+        _sampleRate = sampleRate;
+        _channels = channels;
+        _format = format;
+        _fmtCell = new NegotiatedFormat(
+            new SpaFormatPod.AudioFormatInfo(format, sampleRate, channels)
+        );
     }
 
     /// <summary>Any node - let the session manager choose where this stream is routed.</summary>
@@ -96,11 +117,16 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
         PipeWireNode target,
         bool autoConnect = true,
         bool driver = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(target);
-        Connect(target.NodeId, autoConnect: autoConnect, driver: driver,
-            cancellationToken: cancellationToken);
+        Connect(
+            target.NodeId,
+            autoConnect: autoConnect,
+            driver: driver,
+            cancellationToken: cancellationToken
+        );
     }
 
     /// <summary>Starts publishing.</summary>
@@ -132,9 +158,11 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
         string? targetObjectName = null,
         bool autoConnect = true,
         bool driver = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
-        if (_core is not null) throw new InvalidOperationException("Already connected.");
+        if (_core is not null)
+            throw new InvalidOperationException("Already connected.");
 
         var props = new StreamProperties(StreamMediaType.Audio, StreamCategory.Playback)
             .WithRole("Music")
@@ -149,7 +177,8 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
                 props.With(kv.Key, kv.Value);
         }
 
-        if (targetObjectName is not null) props.WithTargetObject(targetObjectName);
+        if (targetObjectName is not null)
+            props.WithTargetObject(targetObjectName);
         // Built locally and only published once the connect succeeded. Assigning the field first
         // leaves a failed connect behind a stream that reports itself already connected and can
         // never be retried.
@@ -157,15 +186,22 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
         var core = new PipeWireStreamCore(_ctx, props, _name, OnBuffer, OnState, OnFormat);
 
         PipeWireStreamFlags flags = PipeWireStreamFlags.MapBuffers;
-        if (autoConnect) flags |= PipeWireStreamFlags.Autoconnect;
-        if (driver) flags |= PipeWireStreamFlags.Driver;
+        if (autoConnect)
+            flags |= PipeWireStreamFlags.Autoconnect;
+        if (driver)
+            flags |= PipeWireStreamFlags.Driver;
 
         Span<byte> pod = stackalloc byte[256];
         int len = SpaFormatPod.WriteAudioFormat(pod, _format, _sampleRate, _channels);
         try
         {
-            core.Connect(SpaDirection.Output, targetNodeId, flags, pod[..len],
-                cancellationToken: cancellationToken);
+            core.Connect(
+                SpaDirection.Output,
+                targetNodeId,
+                flags,
+                pod[..len],
+                cancellationToken: cancellationToken
+            );
             _core = core;
 
             // Set here, not when a handler subscribes: a caller that subscribed before connecting
@@ -177,7 +213,6 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
             core.Dispose();
             throw;
         }
-
     }
 
     /// <summary>
@@ -197,7 +232,6 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
             return id == NativeConstants.PW_ID_ANY ? null : id;
         }
     }
-
 
     /// <summary>Asks for one cycle now. Only meaningful on a stream that is driving.</summary>
     /// <remarks>
@@ -327,14 +361,20 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
     /// <inheritdoc/>
     public ValueTask DisposeAsync() => _core?.DisposeAsync() ?? ValueTask.CompletedTask;
 
-    private unsafe void OnBuffer(spa_data* d, pw_buffer* buf, in PipeWireStreamCore.StreamClock clock)
+    private unsafe void OnBuffer(
+        spa_data* d,
+        pw_buffer* buf,
+        in PipeWireStreamCore.StreamClock clock
+    )
     {
-        if (d->data is null || d->chunk is null) return;
+        if (d->data is null || d->chunk is null)
+            return;
 
         // maxsize is the producer's word, and it is unsigned. Casting first turns a value above
         // int.MaxValue into a negative length, which the span constructor is the wrong place to
         // find out about.
-        if (d->maxsize > int.MaxValue) return;
+        if (d->maxsize > int.MaxValue)
+            return;
 
         // The negotiated snapshot, not the offered values: a renegotiation the handler has not
         // seen yet fills the wrong shape, and a withdrawn format (nothing negotiated) fills
@@ -354,7 +394,8 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
         if (buf->requested != 0 && frameBytes > 0)
         {
             long wanted = (long)buf->requested * frameBytes;
-            if (wanted < max) max = (int)wanted;
+            if (wanted < max)
+                max = (int)wanted;
         }
 
         // Written before the handler runs, not after. The core queues the buffer in a finally even
@@ -362,17 +403,19 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
         // that many bytes of whatever is in the buffer now - stale audio, presented as current.
         d->chunk->offset = 0;
         d->chunk->stride = frameBytes;
-        d->chunk->size   = 0;
+        d->chunk->size = 0;
 
         var samples = new Span<byte>(d->data, max);
-        int written = FillSamples?.Invoke(this, samples, fmt.SampleRate, fmt.Channels, fmt.Format) ?? 0;
+        int written =
+            FillSamples?.Invoke(this, samples, fmt.SampleRate, fmt.Channels, fmt.Format) ?? 0;
         written = Math.Clamp(written, 0, max);
 
         // Down to a whole number of frames. A producer that returns a byte count mid-frame would
         // otherwise publish a partial one, and since chunk.size is read in units of chunk.stride
         // the consumer takes the remainder as the start of the next frame: every channel after it
         // is offset by the shortfall for the rest of the buffer.
-        if (frameBytes > 0) written -= written % frameBytes;
+        if (frameBytes > 0)
+            written -= written % frameBytes;
 
         d->chunk->size = (uint)written;
 
@@ -385,7 +428,8 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
         // After the handler, so a time it set for this buffer is the one stamped. Taken, not read:
         // a supplied time belongs to one buffer.
         long? supplied = NextPresentationTimestampNs;
-        if (supplied is not null) NextPresentationTimestampNs = null;
+        if (supplied is not null)
+            NextPresentationTimestampNs = null;
 
         if (written > 0)
             PipeWireStreamCore.StampPresentationTime(buf, supplied ?? _core?.NowNs() ?? -1);
@@ -421,8 +465,12 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
     {
         if (param is null)
         {
-            Volatile.Write(ref _fmtCell,
-                new NegotiatedFormat(new SpaFormatPod.AudioFormatInfo(AudioSampleFormat.Unknown, 0, 0)));
+            Volatile.Write(
+                ref _fmtCell,
+                new NegotiatedFormat(
+                    new SpaFormatPod.AudioFormatInfo(AudioSampleFormat.Unknown, 0, 0)
+                )
+            );
             return;
         }
 
@@ -448,8 +496,11 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
     /// <exception cref="PipeWireException">The stream reached its error state instead.</exception>
     public Task WaitForStreamingAsync(CancellationToken cancellationToken = default)
     {
-        PipeWireStreamCore core = _core
-            ?? throw new InvalidOperationException("Connect before waiting for the stream to start.");
+        PipeWireStreamCore core =
+            _core
+            ?? throw new InvalidOperationException(
+                "Connect before waiting for the stream to start."
+            );
 
         return core.WaitForStreamingAsync(cancellationToken);
     }
@@ -469,8 +520,8 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
     /// <exception cref="PipeWireException">The stream reached its error state instead.</exception>
     public Task<uint> WaitForNodeIdAsync(CancellationToken cancellationToken = default)
     {
-        PipeWireStreamCore core = _core
-            ?? throw new InvalidOperationException("Connect before waiting for the node id.");
+        PipeWireStreamCore core =
+            _core ?? throw new InvalidOperationException("Connect before waiting for the node id.");
 
         return core.WaitForNodeIdAsync(cancellationToken);
     }
@@ -480,8 +531,7 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
     /// Empty until the stream is connected and the daemon has reported them, which happens during
     /// negotiation. A snapshot: the daemon re-reports a control whenever one of its values changes.
     /// </remarks>
-    public ImmutableArray<PipeWireStreamControl> Controls =>
-        _core?.Controls ?? [];
+    public ImmutableArray<PipeWireStreamControl> Controls => _core?.Controls ?? [];
 
     /// <summary>One control by SPA property id, or null when the stream has not reported it.</summary>
     public PipeWireStreamControl? GetControl(uint id) => _core?.GetControl(id);
@@ -501,13 +551,17 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
     /// </remarks>
     /// <exception cref="InvalidOperationException">Not connected yet.</exception>
     /// <exception cref="ArgumentException"><paramref name="values"/> is empty.</exception>
-    public void SetControl(uint id, ReadOnlySpan<float> values, CancellationToken cancellationToken = default)
+    public void SetControl(
+        uint id,
+        ReadOnlySpan<float> values,
+        CancellationToken cancellationToken = default
+    )
     {
         if (values.IsEmpty)
             throw new ArgumentException("a control needs at least one value.", nameof(values));
 
-        PipeWireStreamCore core = _core
-            ?? throw new InvalidOperationException("Connect before setting a control.");
+        PipeWireStreamCore core =
+            _core ?? throw new InvalidOperationException("Connect before setting a control.");
 
         core.SetControl(id, values, cancellationToken);
     }
@@ -546,7 +600,8 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
     public void AnnounceLatency(
         PipeWireLatency latency,
         PipeWireProcessLatency? processLatency = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(latency);
         _core?.AnnounceLatency(latency, processLatency, cancellationToken);

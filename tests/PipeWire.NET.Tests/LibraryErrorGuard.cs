@@ -38,8 +38,9 @@ public abstract class PipeWireTestBase
     /// mentioning, so there is otherwise no way to say what ran immediately before a failure - which
     /// is the whole question when one test leaves the session unfit for the next.
     /// </remarks>
-    private static readonly string? TracePath =
-        Environment.GetEnvironmentVariable("PWNET_TEST_TRACE");
+    private static readonly string? TracePath = Environment.GetEnvironmentVariable(
+        "PWNET_TEST_TRACE"
+    );
 
     private static readonly Lock TraceGate = new();
 
@@ -58,7 +59,8 @@ public abstract class PipeWireTestBase
 
     private void Trace(string outcome)
     {
-        if (TracePath is null) return;
+        if (TracePath is null)
+            return;
 
         // Best effort by design: a trace that throws would fail tests that are otherwise fine, and
         // this exists to explain failures rather than to cause them.
@@ -66,9 +68,11 @@ public abstract class PipeWireTestBase
         {
             lock (TraceGate)
             {
-                File.AppendAllText(TracePath,
-                    $"{DateTime.Now:HH:mm:ss.fff} {Environment.TickCount64 - _startedTicks,6}ms "
-                    + $"{outcome,-7} {TestContext?.TestName}{Environment.NewLine}");
+                File.AppendAllText(
+                    TracePath,
+                    $"{DateTime.Now:HH:mm:ss.fff} {Environment.TickCount64 - _startedTicks, 6}ms "
+                        + $"{outcome, -7} {TestContext?.TestName}{Environment.NewLine}"
+                );
             }
         }
         catch (IOException) { }
@@ -80,27 +84,36 @@ public abstract class PipeWireTestBase
     {
         IReadOnlyList<string> seen = ConsoleTestLoggerFactory.StopCollectingErrors();
         Trace(TestContext?.CurrentTestOutcome.ToString() ?? "?");
-        if (seen.Count == 0) return;
+        if (seen.Count == 0)
+            return;
 
         string[] allowed = [.. Expected()];
         List<string> unexpected =
-            [.. seen.Where(line => !allowed.Any(a => line.Contains(a, StringComparison.Ordinal)))];
+        [
+            .. seen.Where(line => !allowed.Any(a => line.Contains(a, StringComparison.Ordinal))),
+        ];
 
         if (unexpected.Count > 0)
         {
             throw new AssertFailedException(
                 $"the library logged {unexpected.Count} error(s) this test did not declare. "
-                + $"Add [ExpectsLibraryError(\"...\")] if they are the point of the test:"
-                + Environment.NewLine + string.Join(Environment.NewLine, unexpected.Distinct()));
+                    + $"Add [ExpectsLibraryError(\"...\")] if they are the point of the test:"
+                    + Environment.NewLine
+                    + string.Join(Environment.NewLine, unexpected.Distinct())
+            );
         }
     }
 
     private IEnumerable<string> Expected()
     {
         Type type = GetType();
-        foreach (ExpectsLibraryErrorAttribute a in
-                 type.GetCustomAttributes(typeof(ExpectsLibraryErrorAttribute), inherit: true)
-                     .Cast<ExpectsLibraryErrorAttribute>())
+        foreach (
+            ExpectsLibraryErrorAttribute a in type.GetCustomAttributes(
+                    typeof(ExpectsLibraryErrorAttribute),
+                    inherit: true
+                )
+                .Cast<ExpectsLibraryErrorAttribute>()
+        )
         {
             yield return a.Substring;
         }
@@ -109,14 +122,20 @@ public abstract class PipeWireTestBase
         // method is matched on the part before it.
         string name = TestContext?.TestName ?? string.Empty;
         int paren = name.IndexOf('(', StringComparison.Ordinal);
-        if (paren > 0) name = name[..paren];
+        if (paren > 0)
+            name = name[..paren];
 
         foreach (System.Reflection.MethodInfo m in type.GetMethods())
         {
-            if (!string.Equals(m.Name, name, StringComparison.Ordinal)) continue;
-            foreach (ExpectsLibraryErrorAttribute a in
-                     m.GetCustomAttributes(typeof(ExpectsLibraryErrorAttribute), inherit: true)
-                      .Cast<ExpectsLibraryErrorAttribute>())
+            if (!string.Equals(m.Name, name, StringComparison.Ordinal))
+                continue;
+            foreach (
+                ExpectsLibraryErrorAttribute a in m.GetCustomAttributes(
+                        typeof(ExpectsLibraryErrorAttribute),
+                        inherit: true
+                    )
+                    .Cast<ExpectsLibraryErrorAttribute>()
+            )
             {
                 yield return a.Substring;
             }

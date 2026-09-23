@@ -13,4 +13,8 @@ namespace PipeWire.NET.Graph;
 /// enumerating the second is an error rather than an empty answer, which is what makes this worth
 /// checking rather than guessing.
 /// </remarks>
-public readonly record struct PipeWireParameterInfo(SpaParamType Parameter, bool CanRead, bool CanWrite);
+public readonly record struct PipeWireParameterInfo(
+    SpaParamType Parameter,
+    bool CanRead,
+    bool CanWrite
+);

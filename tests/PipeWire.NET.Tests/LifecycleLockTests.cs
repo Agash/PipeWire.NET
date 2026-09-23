@@ -24,7 +24,6 @@ public sealed class LifecycleLockTests : PipeWireTestBase
     [TestMethod]
     public async Task HoldingAScopeAcrossAnotherThreadsStart_CompletesBoth()
     {
-
         using var ctx = new PipeWireContext("PipeWire.NET.Test.LifecycleStart");
         using var starterEntered = new ManualResetEventSlim(false);
 
@@ -36,9 +35,7 @@ public sealed class LifecycleLockTests : PipeWireTestBase
             {
                 starterEntered.Set();
                 Thread.Sleep(500);
-                using (ctx.Lock())
-                {
-                }
+                using (ctx.Lock()) { }
             }
         });
 
@@ -102,9 +99,7 @@ public sealed class LifecycleLockTests : PipeWireTestBase
         copy.Dispose();
         original.Dispose();
 
-        using (ctx.Lock())
-        {
-        }
+        using (ctx.Lock()) { }
 
         ctx.Dispose();
         Assert.IsTrue(ctx.IsDisposed);
@@ -127,7 +122,10 @@ public sealed class LifecycleLockTests : PipeWireTestBase
         bool done = finalize.Wait(TimeSpan.FromSeconds(30));
         scope.Dispose();
 
-        Assert.IsTrue(done, "finalizers never finished; abandoned handles are waiting on the held loop");
+        Assert.IsTrue(
+            done,
+            "finalizers never finished; abandoned handles are waiting on the held loop"
+        );
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
@@ -142,8 +140,13 @@ public sealed class LifecycleLockTests : PipeWireTestBase
     {
         var abandoned = new System.Collections.Generic.List<WeakReference>();
 
-        var output = new PipeWireAudioOutput(ctx, "PipeWire.NET.Test.Abandoned",
-            sampleRate: 48000, channels: 2, format: PipeWire.NET.Media.AudioSampleFormat.F32Le);
+        var output = new PipeWireAudioOutput(
+            ctx,
+            "PipeWire.NET.Test.Abandoned",
+            sampleRate: 48000,
+            channels: 2,
+            format: PipeWire.NET.Media.AudioSampleFormat.F32Le
+        );
         output.Connect(autoConnect: false);
         abandoned.Add(new WeakReference(output));
 
@@ -163,7 +166,9 @@ public sealed class LifecycleLockTests : PipeWireTestBase
 
         Assert.IsFalse(ctx.TryLock(out _));
         Assert.ThrowsExactly<ObjectDisposedException>(() => ctx.Lock());
-        Assert.ThrowsExactly<ObjectDisposedException>(() => ctx.StartAsync().GetAwaiter().GetResult());
+        Assert.ThrowsExactly<ObjectDisposedException>(() =>
+            ctx.StartAsync().GetAwaiter().GetResult()
+        );
     }
 
     [TestMethod]
@@ -179,14 +184,29 @@ public sealed class LifecycleLockTests : PipeWireTestBase
         Assert.IsTrue(ctx.IsDisposed);
         Assert.IsFalse(ctx.TryLock(out _));
         Assert.ThrowsExactly<ObjectDisposedException>(() => ctx.Lock());
-        Assert.ThrowsExactly<ObjectDisposedException>(() => { _ = ctx.LoopOwner; });
+        Assert.ThrowsExactly<ObjectDisposedException>(() =>
+        {
+            _ = ctx.LoopOwner;
+        });
         Assert.IsFalse(ctx.IsOnLoopThread);
 
-        try { _ = (nint)ctx.CoreHandle; Assert.Fail("CoreHandle must refuse"); }
+        try
+        {
+            _ = (nint)ctx.CoreHandle;
+            Assert.Fail("CoreHandle must refuse");
+        }
         catch (ObjectDisposedException) { }
-        try { _ = (nint)ctx.ContextHandle; Assert.Fail("ContextHandle must refuse"); }
+        try
+        {
+            _ = (nint)ctx.ContextHandle;
+            Assert.Fail("ContextHandle must refuse");
+        }
         catch (ObjectDisposedException) { }
-        try { _ = (nint)ctx.LoopHandle; Assert.Fail("LoopHandle must refuse"); }
+        try
+        {
+            _ = (nint)ctx.LoopHandle;
+            Assert.Fail("LoopHandle must refuse");
+        }
         catch (ObjectDisposedException) { }
     }
 
@@ -202,13 +222,18 @@ public sealed class LifecycleLockTests : PipeWireTestBase
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
         PipeWireNode node = await registry.CreateVirtualSinkAsync(
-            "ReaperSrc", "pwnet_reaper_src", cts.Token);
+            "ReaperSrc",
+            "pwnet_reaper_src",
+            cts.Token
+        );
 
         // Abandoned in a separate frame: values created inside this async method can stay rooted
         // by its state machine, which would make the collection below vacuous. Nothing here
         // outlives the call, so everything it made is collectable when it returns.
-        System.Collections.Generic.List<WeakReference> abandoned =
-            AbandonBindings(registry, node.NodeId);
+        System.Collections.Generic.List<WeakReference> abandoned = AbandonBindings(
+            registry,
+            node.NodeId
+        );
 
         // Queue the finalizers without running them: allocated but unreachable after this.
         GC.Collect();
@@ -224,9 +249,14 @@ public sealed class LifecycleLockTests : PipeWireTestBase
 
         scope.Dispose();
 
-        Assert.IsTrue(done, "finalizers never finished; abandoned handles are waiting on the held loop");
-        Assert.IsTrue(sw.Elapsed < TimeSpan.FromSeconds(4),
-            $"finalizers took {sw.Elapsed} with the loop held; abandoned handles must not block on it");
+        Assert.IsTrue(
+            done,
+            "finalizers never finished; abandoned handles are waiting on the held loop"
+        );
+        Assert.IsTrue(
+            sw.Elapsed < TimeSpan.FromSeconds(4),
+            $"finalizers took {sw.Elapsed} with the loop held; abandoned handles must not block on it"
+        );
 
         // And they really did run: still-alive references mean the measurement above was vacuous.
         GC.Collect();
@@ -241,7 +271,9 @@ public sealed class LifecycleLockTests : PipeWireTestBase
     }
 
     private static System.Collections.Generic.List<WeakReference> AbandonBindings(
-        PipeWireRegistry registry, uint nodeId)
+        PipeWireRegistry registry,
+        uint nodeId
+    )
     {
         var abandoned = new System.Collections.Generic.List<WeakReference>();
         for (int i = 0; i < 8; i++)

@@ -84,15 +84,26 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
         var found = new List<Example>();
 
         var files = new List<string> { Path.Combine(root, "README.md") };
-        files.AddRange(Directory.EnumerateFiles(Path.Combine(root, "docs"), "*.md").Order(StringComparer.Ordinal));
+        files.AddRange(
+            Directory
+                .EnumerateFiles(Path.Combine(root, "docs"), "*.md")
+                .Order(StringComparer.Ordinal)
+        );
 
         foreach (string path in files)
         {
             string text = File.ReadAllText(path).ReplaceLineEndings("\n");
 
-            foreach (Match m in Regex.Matches(text, @"(?<opt><!--\s*no-compile:[^>]*-->\s*\n)?```csharp\n(?<code>.*?)```", RegexOptions.Singleline))
+            foreach (
+                Match m in Regex.Matches(
+                    text,
+                    @"(?<opt><!--\s*no-compile:[^>]*-->\s*\n)?```csharp\n(?<code>.*?)```",
+                    RegexOptions.Singleline
+                )
+            )
             {
-                if (m.Groups["opt"].Success) continue;
+                if (m.Groups["opt"].Success)
+                    continue;
 
                 int line = text[..m.Index].Count(c => c == '\n') + 1;
                 found.Add(new Example(Path.GetFileName(path), line, m.Groups["code"].Value));
@@ -123,37 +134,50 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
             string name = Path.GetFileName(path);
             string dir = Path.GetDirectoryName(path)!;
 
-            HashSet<string> anchors = [.. text
-                .Split('\n')
-                .Where(line => line.StartsWith('#'))
-                .Select(line => Slug(line.TrimStart('#')))];
+            HashSet<string> anchors =
+            [
+                .. text.Split('\n')
+                    .Where(line => line.StartsWith('#'))
+                    .Select(line => Slug(line.TrimStart('#'))),
+            ];
 
             foreach (Match m in Regex.Matches(text, @"\[[^\]]*\]\((?<target>[^)]+)\)"))
             {
                 string target = m.Groups["target"].Value;
 
-                if (target.StartsWith("http", StringComparison.Ordinal)) continue;
+                if (target.StartsWith("http", StringComparison.Ordinal))
+                    continue;
 
                 if (target.StartsWith('#'))
                 {
-                    if (!anchors.Contains(target[1..])) broken.Add($"{name}: {target}");
+                    if (!anchors.Contains(target[1..]))
+                        broken.Add($"{name}: {target}");
                     continue;
                 }
 
-                if (!File.Exists(Path.Combine(dir, target.Split('#')[0]))) broken.Add($"{name}: {target}");
+                if (!File.Exists(Path.Combine(dir, target.Split('#')[0])))
+                    broken.Add($"{name}: {target}");
             }
         }
 
-        Assert.IsTrue(broken.Count == 0,
-            $"the documentation links to things that do not exist: {string.Join(", ", broken)}");
+        Assert.IsTrue(
+            broken.Count == 0,
+            $"the documentation links to things that do not exist: {string.Join(", ", broken)}"
+        );
     }
 
     /// <summary>A heading as the anchor a link to it has to use.</summary>
     /// <remarks>Lowercased, punctuation dropped, spaces to hyphens, which is what GitHub does.</remarks>
-    private static string Slug(string heading) => string.Join(
-        '-',
-        new string([.. heading.Trim().ToLowerInvariant().Where(c => char.IsLetterOrDigit(c) || c is ' ' or '-')])
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    private static string Slug(string heading) =>
+        string.Join(
+            '-',
+            new string([
+                .. heading
+                    .Trim()
+                    .ToLowerInvariant()
+                    .Where(c => char.IsLetterOrDigit(c) || c is ' ' or '-'),
+            ]).Split(' ', StringSplitOptions.RemoveEmptyEntries)
+        );
 
     [TestMethod]
     public void EveryExampleInTheDocumentation_Compiles()
@@ -163,7 +187,8 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
         Assert.IsTrue(
             examples.Count > 5,
             $"only {examples.Count} examples were found, so the fences or the paths moved and this "
-            + "test is checking nothing");
+                + "test is checking nothing"
+        );
 
         string root = PublicSurfaceTests.RepoRoot();
 
@@ -184,8 +209,10 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
             foreach (string line in example.Code.TrimEnd().Split('\n'))
             {
                 Match u = Regex.Match(line, @"^\s*using ([\w.]+);\s*$");
-                if (u.Success) usings.Add(u.Groups[1].Value);
-                else lines.Add(line);
+                if (u.Success)
+                    usings.Add(u.Groups[1].Value);
+                else
+                    lines.Add(line);
             }
 
             bodies.Add([.. lines]);
@@ -193,7 +220,8 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
 
         var code = new StringBuilder(Preamble);
         code.AppendLine();
-        foreach (string ns in usings) code.AppendLine($"using {ns};");
+        foreach (string ns in usings)
+            code.AppendLine($"using {ns};");
         code.AppendLine();
         code.Append(Harness);
 
@@ -215,7 +243,11 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
 
         code.AppendLine("}");
 
-        File.WriteAllText(Path.Combine(dir, "Examples.cs"), code.ToString(), new UTF8Encoding(false));
+        File.WriteAllText(
+            Path.Combine(dir, "Examples.cs"),
+            code.ToString(),
+            new UTF8Encoding(false)
+        );
 
         string tfm = new DirectoryInfo(AppContext.BaseDirectory).Name;
 
@@ -223,22 +255,35 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
         foreach (string dll in new[] { "PipeWire.NET.dll", "PipeWire.NET.Media.dll" })
         {
             string path = Path.Combine(AppContext.BaseDirectory, dll);
-            Assert.IsTrue(File.Exists(path), $"{dll} is not beside the tests, so nothing can be compiled against it");
+            Assert.IsTrue(
+                File.Exists(path),
+                $"{dll} is not beside the tests, so nothing can be compiled against it"
+            );
             paths.Add(path);
         }
 
         // A context takes an ILoggerFactory, so an example that builds one is CS0012 without this.
         // Only on the frameworks that carry it locally: net11 resolves it from the shared framework
         // and has no copy beside the tests.
-        string logging = Path.Combine(AppContext.BaseDirectory, "Microsoft.Extensions.Logging.Abstractions.dll");
-        if (File.Exists(logging)) paths.Add(logging);
+        string logging = Path.Combine(
+            AppContext.BaseDirectory,
+            "Microsoft.Extensions.Logging.Abstractions.dll"
+        );
+        if (File.Exists(logging))
+            paths.Add(logging);
 
-        string references = string.Join('\n', paths.Select(
-            p => $"""    <Reference Include="{Path.GetFileNameWithoutExtension(p)}"><HintPath>{p}</HintPath></Reference>"""));
+        string references = string.Join(
+            '\n',
+            paths.Select(p =>
+                $"""    <Reference Include="{Path.GetFileNameWithoutExtension(p)}"><HintPath>{p}</HintPath></Reference>"""
+            )
+        );
 
         // Analyzers and warnings-as-errors are the repository's rules for its own code. An example
         // is written to be read, so it is held to compiling, not to CA1303.
-        File.WriteAllText(Path.Combine(dir, "doc-examples.csproj"), $"""
+        File.WriteAllText(
+            Path.Combine(dir, "doc-examples.csproj"),
+            $"""
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <TargetFramework>{tfm}</TargetFramework>
@@ -256,7 +301,9 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
             {references}
               </ItemGroup>
             </Project>
-            """, new UTF8Encoding(false));
+            """,
+            new UTF8Encoding(false)
+        );
 
         var psi = new ProcessStartInfo("dotnet")
         {
@@ -271,9 +318,13 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
         Assert.IsNotNull(build, "could not start dotnet to compile the examples");
 
         string output = build!.StandardOutput.ReadToEnd() + build.StandardError.ReadToEnd();
-        Assert.IsTrue(build.WaitForExit(milliseconds: 300_000), "compiling the examples did not finish");
+        Assert.IsTrue(
+            build.WaitForExit(milliseconds: 300_000),
+            "compiling the examples did not finish"
+        );
 
-        if (build.ExitCode == 0) return;
+        if (build.ExitCode == 0)
+            return;
 
         // Point at the markdown, not at the generated file nobody will open: each example carries a
         // comment naming its file and line, and the compiler's line numbers are into the generated
@@ -281,13 +332,19 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
         string[] generated = File.ReadAllLines(Path.Combine(dir, "Examples.cs"));
         var reported = new List<string>();
 
-        foreach (Match m in Regex.Matches(output, @"Examples\.cs\((?<line>\d+),\d+\): (?<rest>error .*)"))
+        foreach (
+            Match m in Regex.Matches(output, @"Examples\.cs\((?<line>\d+),\d+\): (?<rest>error .*)")
+        )
         {
-            var line = int.Parse(m.Groups["line"].Value, System.Globalization.CultureInfo.InvariantCulture);
+            var line = int.Parse(
+                m.Groups["line"].Value,
+                System.Globalization.CultureInfo.InvariantCulture
+            );
             string origin = "unknown example";
             for (int i = Math.Min(line, generated.Length) - 1; i >= 0; i--)
             {
-                if (!generated[i].TrimStart().StartsWith("// ", StringComparison.Ordinal)) continue;
+                if (!generated[i].TrimStart().StartsWith("// ", StringComparison.Ordinal))
+                    continue;
                 origin = generated[i].Trim(' ', '/');
                 break;
             }
@@ -297,6 +354,7 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
 
         Assert.Fail(
             "documentation examples do not compile against the shipped surface:\n"
-            + (reported.Count > 0 ? string.Join('\n', reported.Distinct()) : output));
+                + (reported.Count > 0 ? string.Join('\n', reported.Distinct()) : output)
+        );
     }
 }

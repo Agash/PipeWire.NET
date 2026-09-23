@@ -27,7 +27,10 @@ public sealed class AudioTimingTests : PipeWireTestBase
     private const AudioSampleFormat Format = AudioSampleFormat.F32Le;
 
     private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry, Func<PipeWireGraphSnapshot, bool> until, CancellationToken ct)
+        PipeWireRegistry registry,
+        Func<PipeWireGraphSnapshot, bool> until,
+        CancellationToken ct
+    )
     {
         await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(ct))
             if (until(graph))
@@ -58,7 +61,10 @@ public sealed class AudioTimingTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-audiots", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-audiots",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
@@ -78,13 +84,21 @@ public sealed class AudioTimingTests : PipeWireTestBase
         var missing = 0;
         var headers = 0;
 
-        await using var capture = new PipeWireAudioCapture(ctx, $"pwnet-audiots-sink-{Environment.ProcessId}");
+        await using var capture = new PipeWireAudioCapture(
+            ctx,
+            $"pwnet-audiots-sink-{Environment.ProcessId}"
+        );
         capture.FrameReady += (_, frame) =>
         {
-            if (frame.PresentationTimestampNs is not null) Interlocked.Increment(ref headers);
+            if (frame.PresentationTimestampNs is not null)
+                Interlocked.Increment(ref headers);
             if (frame.QueuedTimeNs is { } ts && ts > 0)
             {
-                lock (stamps) { if (stamps.Count < 32) stamps.Add(ts); }
+                lock (stamps)
+                {
+                    if (stamps.Count < 32)
+                        stamps.Add(ts);
+                }
             }
             else
             {
@@ -97,27 +111,42 @@ public sealed class AudioTimingTests : PipeWireTestBase
 
         for (int i = 0; i < 60; i++)
         {
-            lock (stamps) { if (stamps.Count >= 8) break; }
+            lock (stamps)
+            {
+                if (stamps.Count >= 8)
+                    break;
+            }
             await Task.Delay(50, cts.Token);
         }
 
         long[] seen;
-        lock (stamps) seen = [.. stamps];
+        lock (stamps)
+            seen = [.. stamps];
 
-        Assert.IsTrue(seen.Length >= 8,
-            $"only {seen.Length} audio frames carried a timestamp ({missing} carried none)");
+        Assert.IsTrue(
+            seen.Length >= 8,
+            $"only {seen.Length} audio frames carried a timestamp ({missing} carried none)"
+        );
 
         // Monotonic and actually moving: a constant value would satisfy "has a timestamp" while
         // being just as useless for alignment.
         for (int i = 1; i < seen.Length; i++)
-            Assert.IsTrue(seen[i] > seen[i - 1], $"timestamp went backwards or stalled at index {i}");
+            Assert.IsTrue(
+                seen[i] > seen[i - 1],
+                $"timestamp went backwards or stalled at index {i}"
+            );
 
-        Assert.IsTrue(seen[^1] - seen[0] > 1_000_000,
-            "timestamps advanced by less than a millisecond across eight frames");
+        Assert.IsTrue(
+            seen[^1] - seen[0] > 1_000_000,
+            "timestamps advanced by less than a millisecond across eight frames"
+        );
 
-        Assert.AreEqual(0, Volatile.Read(ref headers),
-            "an audio frame arrived with a header timestamp; audioconvert copies spa_meta_header now, " +
-            "and the PresentationTimestampNs docs that say audio consumers see null are wrong");
+        Assert.AreEqual(
+            0,
+            Volatile.Read(ref headers),
+            "an audio frame arrived with a header timestamp; audioconvert copies spa_meta_header now, "
+                + "and the PresentationTimestampNs docs that say audio consumers see null are wrong"
+        );
     }
 
     /// <summary>
@@ -135,7 +164,10 @@ public sealed class AudioTimingTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-audioq", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-audioq",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
@@ -156,7 +188,10 @@ public sealed class AudioTimingTests : PipeWireTestBase
 
         await WaitForAsync(reg, g => g.Nodes.Any(n => n.NodeName == nodeName), cts.Token);
 
-        await using var capture = new PipeWireAudioCapture(ctx, $"pwnet-audioq-sink-{Environment.ProcessId}");
+        await using var capture = new PipeWireAudioCapture(
+            ctx,
+            $"pwnet-audioq-sink-{Environment.ProcessId}"
+        );
         capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
         await Task.Delay(500, cts.Token);
@@ -166,7 +201,8 @@ public sealed class AudioTimingTests : PipeWireTestBase
 
         Assert.IsTrue(
             queue.Value.Queued > 0 || queue.Value.QueuedBuffers > 0,
-            "the output queued audio but reported an empty queue, so the size was never set");
+            "the output queued audio but reported an empty queue, so the size was never set"
+        );
 
         Assert.IsTrue(shortestAsk > 0 && shortestAsk < int.MaxValue, "the fill callback never ran");
         Assert.IsNotNull(output.GraphClock, "a running output should see the graph clock");

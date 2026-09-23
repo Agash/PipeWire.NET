@@ -35,7 +35,9 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken cancellationToken)
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -49,11 +51,15 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-formats", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-formats",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("Formats")
+            PipeWireNode node = await registry
+                .CreateVirtualSink("Formats")
                 .WithName($"pwnet_formats_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
 
@@ -76,7 +82,10 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-defsource", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-defsource",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -97,8 +106,11 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
                 // cache rather than waiting for an event.
                 await store.SetDefaultAudioSourceAsync(current!, cts.Token);
 
-                Assert.AreEqual(current, store.DefaultAudioSource?.NameValue,
-                    "rewriting the default source must leave it where it was");
+                Assert.AreEqual(
+                    current,
+                    store.DefaultAudioSource?.NameValue,
+                    "rewriting the default source must leave it where it was"
+                );
             }
         }
     }
@@ -108,7 +120,10 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-disposed", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-disposed",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -120,10 +135,12 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
 
             // ClearAsync empties a store the whole session shares, so it is checked only to the
             // point of its guard - calling it for real would take the session's defaults with it.
-            await Assert.ThrowsExactlyAsync<ObjectDisposedException>(
-                async () => await store.ClearAsync(cts.Token));
-            await Assert.ThrowsExactlyAsync<ObjectDisposedException>(
-                async () => await store.SetAsync("k", "v", cancellationToken: cts.Token));
+            await Assert.ThrowsExactlyAsync<ObjectDisposedException>(async () =>
+                await store.ClearAsync(cts.Token)
+            );
+            await Assert.ThrowsExactlyAsync<ObjectDisposedException>(async () =>
+                await store.SetAsync("k", "v", cancellationToken: cts.Token)
+            );
 
             PipeWireClient? self = registry.Current.Clients.FirstOrDefault();
             if (self is null)
@@ -132,9 +149,12 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
             PipeWireClientProxy client = registry.BindClient(self!.Id);
             await client.DisposeAsync();
 
-            await Assert.ThrowsExactlyAsync<ObjectDisposedException>(
-                async () => await client.UpdatePropertiesAsync(
-                    new Dictionary<string, string> { ["k"] = "v" }, cts.Token));
+            await Assert.ThrowsExactlyAsync<ObjectDisposedException>(async () =>
+                await client.UpdatePropertiesAsync(
+                    new Dictionary<string, string> { ["k"] = "v" },
+                    cts.Token
+                )
+            );
         }
     }
 
@@ -143,7 +163,10 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-perms", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-perms",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -155,8 +178,12 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
 
             // Reducing a real client's permissions can cut off the connection that would restore
             // them, so only the argument guard is driven here.
-            await Assert.ThrowsExactlyAsync<ArgumentException>(
-                async () => await client.UpdatePermissionsAsync(ReadOnlyMemory<PipeWireObjectPermission>.Empty, cts.Token));
+            await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+                await client.UpdatePermissionsAsync(
+                    ReadOnlyMemory<PipeWireObjectPermission>.Empty,
+                    cts.Token
+                )
+            );
         }
     }
 
@@ -197,11 +224,15 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
         RequireLinux();
         SessionGates.RequireDaemonAtLeast(1, 6, 8);
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-subscribe", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-subscribe",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("Subscribe")
+            PipeWireNode node = await registry
+                .CreateVirtualSink("Subscribe")
                 .WithName($"pwnet_sub_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
 
@@ -210,7 +241,9 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
 
             control.SubscribeParameters(SpaParamType.Props);
             CollectionAssert.AreEqual(
-                new[] { SpaParamType.Props }, control.SubscribedParameters.ToArray());
+                new[] { SpaParamType.Props },
+                control.SubscribedParameters.ToArray()
+            );
 
             // Completed by the event that carries the value written below, not by whichever Props
             // object arrives first. The subscription and the eight enumerations below share one
@@ -218,12 +251,15 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
             // write - and report it as the change. Waiting for the written value still fails if no
             // event ever carries it, which is the property under test.
             var changed = new TaskCompletionSource<SpaObject>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
+                TaskCreationOptions.RunContinuationsAsynchronously
+            );
             control.ParameterChanged += (_, value) =>
             {
-                if (value.ObjectType == SpaType.ObjectProps
+                if (
+                    value.ObjectType == SpaType.ObjectProps
                     && value[SpaProp.Volume] is SpaFloat v
-                    && Math.Abs(v.Value - 0.5f) < 0.0001f)
+                    && Math.Abs(v.Value - 0.5f) < 0.0001f
+                )
                 {
                     changed.TrySetResult(value);
                 }
@@ -231,10 +267,10 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
 
             // No writer is active, so every concurrent read must file under its own key and all
             // must describe the same state.
-            Task<ImmutableArray<SpaObject>>[] reads =
-                Enumerable.Range(0, 8)
-                    .Select(_ => control.EnumerateParametersAsync(SpaParamType.Props, cts.Token))
-                    .ToArray();
+            Task<ImmutableArray<SpaObject>>[] reads = Enumerable
+                .Range(0, 8)
+                .Select(_ => control.EnumerateParametersAsync(SpaParamType.Props, cts.Token))
+                .ToArray();
             ImmutableArray<SpaObject>[] results = await Task.WhenAll(reads);
             foreach (ImmutableArray<SpaObject> result in results)
                 CollectionAssert.AreEqual(results[0].ToArray(), result.ToArray());
@@ -258,11 +294,15 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
         // of them are checked against a node that is otherwise fully usable.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-nodeguards", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-nodeguards",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("Guards")
+            PipeWireNode node = await registry
+                .CreateVirtualSink("Guards")
                 .WithName($"pwnet_guards_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
 
@@ -270,19 +310,32 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
             await control.ReadyAsync(cts.Token);
 
             Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => control.SetVolumeAsync(-1f));
-            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => control.SetVolumeAsync(float.NaN));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+                control.SetVolumeAsync(float.NaN)
+            );
 
-            await Assert.ThrowsExactlyAsync<ArgumentNullException>(
-                async () => await control.SetPortConfigAsync(null!, cts.Token));
-            await Assert.ThrowsExactlyAsync<ArgumentNullException>(
-                async () => await control.SetProcessLatencyAsync(null!, cts.Token));
-            await Assert.ThrowsExactlyAsync<ArgumentNullException>(
-                async () => await control.SetTagAsync(null!, cts.Token));
+            await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+                await control.SetPortConfigAsync(null!, cts.Token)
+            );
+            await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+                await control.SetProcessLatencyAsync(null!, cts.Token)
+            );
+            await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+                await control.SetTagAsync(null!, cts.Token)
+            );
 
             // Both channel-volume overloads reach the daemon: unchecked writes verbatim, checked
             // writes against the map and the current volumes.
-            await control.SetChannelVolumesAsync(new float[] { 0.5f, 0.5f }, matchChannelMap: false, cts.Token);
-            await control.SetChannelVolumesAsync(new float[] { 0.5f, 0.5f }, matchChannelMap: true, cts.Token);
+            await control.SetChannelVolumesAsync(
+                new float[] { 0.5f, 0.5f },
+                matchChannelMap: false,
+                cts.Token
+            );
+            await control.SetChannelVolumesAsync(
+                new float[] { 0.5f, 0.5f },
+                matchChannelMap: true,
+                cts.Token
+            );
 
             ImmutableArray<float> volumes = await control.GetChannelVolumesAsync(cts.Token);
             CollectionAssert.AreEqual(new[] { 0.5f, 0.5f }, volumes.ToArray());
@@ -320,7 +373,10 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
         // empty case is refused here rather than written.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-defguards", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-defguards",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -330,10 +386,12 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
 
             await using (store)
             {
-                await Assert.ThrowsExactlyAsync<ArgumentException>(
-                    async () => await store!.SetDefaultAudioSinkAsync("", cts.Token));
-                await Assert.ThrowsExactlyAsync<ArgumentException>(
-                    async () => await store!.SetDefaultAudioSourceAsync("", cts.Token));
+                await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+                    await store!.SetDefaultAudioSinkAsync("", cts.Token)
+                );
+                await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+                    await store!.SetDefaultAudioSourceAsync("", cts.Token)
+                );
             }
         }
     }
@@ -369,38 +427,52 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
             PipeWireClient? own = null;
             for (var i = 0; i < 100 && own is null; i++)
             {
-                own = reg.Current.Clients.FirstOrDefault(
-                    c => c.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? v) && v == Before);
+                own = reg.Current.Clients.FirstOrDefault(c =>
+                    c.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? v)
+                    && v == Before
+                );
 
-                if (own is null) await Task.Delay(50, cts.Token);
+                if (own is null)
+                    await Task.Delay(50, cts.Token);
             }
 
-            Assert.IsNotNull(own, $"no client in the graph is this process (application.name '{Before}')");
+            Assert.IsNotNull(
+                own,
+                $"no client in the graph is this process (application.name '{Before}')"
+            );
 
             await using PipeWireClientProxy client = reg.BindClient(own!.Id);
             await client.ReadyAsync(cts.Token);
 
             Assert.AreEqual(
                 Before,
-                client.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? initial) ? initial : null,
-                "the bound client did not report the name it connected under");
+                client.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? initial)
+                    ? initial
+                    : null,
+                "the bound client did not report the name it connected under"
+            );
 
             Assert.IsTrue(
-                ctx.UpdateProperties(new Dictionary<string, string>
-                {
-                    [PipeWireKeys.PW_KEY_APP_NAME] = After,
-                }) > 0,
-                "the new application.name changed nothing, so it was never stored");
+                ctx.UpdateProperties(
+                    new Dictionary<string, string> { [PipeWireKeys.PW_KEY_APP_NAME] = After }
+                ) > 0,
+                "the new application.name changed nothing, so it was never stored"
+            );
 
             for (var i = 0; i < 100; i++)
             {
-                if (client.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? now) && now == After)
+                if (
+                    client.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? now)
+                    && now == After
+                )
                     return;
 
                 await Task.Delay(50, cts.Token);
             }
 
-            Assert.Fail("the daemon never sent the retagged application.name back on the client's info event");
+            Assert.Fail(
+                "the daemon never sent the retagged application.name back on the client's info event"
+            );
         }
     }
 
@@ -418,7 +490,10 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-perm-read", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
+            "pwnet-perm-read",
+            cts.Token
+        );
 
         await using (ctx)
         await using (reg)
@@ -426,11 +501,13 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
             PipeWireClient? own = null;
             for (var i = 0; i < 100 && own is null; i++)
             {
-                own = reg.Current.Clients.FirstOrDefault(
-                    c => c.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? v)
-                         && v == "pwnet-perm-read");
+                own = reg.Current.Clients.FirstOrDefault(c =>
+                    c.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? v)
+                    && v == "pwnet-perm-read"
+                );
 
-                if (own is null) await Task.Delay(50, cts.Token);
+                if (own is null)
+                    await Task.Delay(50, cts.Token);
             }
 
             Assert.IsNotNull(own, "no client in the graph is this process");
@@ -438,16 +515,19 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
             await using PipeWireClientProxy client = reg.BindClient(own!.Id);
             await client.ReadyAsync(cts.Token);
 
-            ImmutableArray<PipeWireObjectPermission> permissions =
-                await client.GetPermissionsAsync(cancellationToken: cts.Token);
+            ImmutableArray<PipeWireObjectPermission> permissions = await client.GetPermissionsAsync(
+                cancellationToken: cts.Token
+            );
 
             Assert.IsFalse(
                 permissions.IsDefaultOrEmpty,
-                "the daemon answered with no permission entries at all");
+                "the daemon answered with no permission entries at all"
+            );
 
             // Reading twice in a row has to work: the waiter is per-call and must be cleared.
-            ImmutableArray<PipeWireObjectPermission> again =
-                await client.GetPermissionsAsync(cancellationToken: cts.Token);
+            ImmutableArray<PipeWireObjectPermission> again = await client.GetPermissionsAsync(
+                cancellationToken: cts.Token
+            );
 
             Assert.AreEqual(permissions.Length, again.Length, "a second read answered differently");
         }
@@ -467,18 +547,25 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-removed", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
+            "pwnet-removed",
+            cts.Token
+        );
 
         await using (ctx)
         await using (reg)
         {
             PipeWireNode node = await reg.CreateVirtualSinkAsync(
-                "pwnet removed probe", cancellationToken: cts.Token);
+                "pwnet removed probe",
+                cancellationToken: cts.Token
+            );
 
             await using PipeWireNodeProxy proxy = reg.BindNode(node.NodeId);
             await proxy.ReadyAsync(cts.Token);
 
-            var removed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var removed = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously
+            );
             proxy.Removed += () => removed.TrySetResult();
 
             Assert.IsFalse(proxy.IsRemoved, "a live proxy reported its object as removed");
@@ -516,7 +603,11 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
             ctx.ConnectionLost += OnLost;
 
             Assert.IsNull(ctx.ConnectionFault, "a healthy connection reported a fault");
-            Assert.AreEqual(0, Volatile.Read(ref seen), "ConnectionLost fired on a healthy connection");
+            Assert.AreEqual(
+                0,
+                Volatile.Read(ref seen),
+                "ConnectionLost fired on a healthy connection"
+            );
 
             ctx.ConnectionLost -= OnLost;
         }

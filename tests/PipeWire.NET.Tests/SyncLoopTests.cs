@@ -42,7 +42,13 @@ public sealed class SyncLoopTests
 
     private static PipeWireAudioOutput SilentOutput(PipeWireContext ctx, string nodeName)
     {
-        var output = new PipeWireAudioOutput(ctx, nodeName, Rate, Channels, AudioSampleFormat.F32Le);
+        var output = new PipeWireAudioOutput(
+            ctx,
+            nodeName,
+            Rate,
+            Channels,
+            AudioSampleFormat.F32Le
+        );
         output.FillSamples += (_, samples, _, _, _) =>
         {
             samples.Clear();
@@ -53,14 +59,19 @@ public sealed class SyncLoopTests
     }
 
     private static async Task<PipeWireNode> WaitForNodeAsync(
-        PipeWireRegistry reg, string name, CancellationToken ct)
+        PipeWireRegistry reg,
+        string name,
+        CancellationToken ct
+    )
     {
         for (var i = 0; i < 100; i++)
         {
-            PipeWireNode? n = reg.Current.Nodes.FirstOrDefault(
-                x => string.Equals(x.NodeName, name, StringComparison.Ordinal));
+            PipeWireNode? n = reg.Current.Nodes.FirstOrDefault(x =>
+                string.Equals(x.NodeName, name, StringComparison.Ordinal)
+            );
 
-            if (n is not null) return n;
+            if (n is not null)
+                return n;
             await Task.Delay(50, ct);
         }
 
@@ -87,7 +98,10 @@ public sealed class SyncLoopTests
 
         string nodeName = $"pwnet-latency-{Environment.ProcessId}";
 
-        await using var ctx = new PipeWireContext("pwnet-latency", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-latency",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using PipeWireAudioOutput output = SilentOutput(ctx, nodeName);
@@ -99,7 +113,8 @@ public sealed class SyncLoopTests
 
         output.AnnounceLatency(
             new PipeWireLatency(SpaDirection.Output, 0, 0, 0, 0, announcedNs, announcedNs),
-            new PipeWireProcessLatency(0, 0, announcedNs));
+            new PipeWireProcessLatency(0, 0, announcedNs)
+        );
 
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
@@ -111,16 +126,21 @@ public sealed class SyncLoopTests
         for (var i = 0; i < 40 && reported?.Ns != announcedNs; i++)
         {
             reported = await control.GetProcessLatencyAsync(cts.Token);
-            if (reported?.Ns != announcedNs) await Task.Delay(100, cts.Token);
+            if (reported?.Ns != announcedNs)
+                await Task.Delay(100, cts.Token);
         }
 
-        Assert.IsNotNull(reported, "the daemon reported no process latency for a node that announced one");
+        Assert.IsNotNull(
+            reported,
+            "the daemon reported no process latency for a node that announced one"
+        );
 
         Assert.AreEqual(
             announcedNs,
             reported!.Ns,
             "the announced latency never reached the daemon, so the graph is compensating for a "
-            + "delay it cannot see");
+                + "delay it cannot see"
+        );
     }
 
     /// <summary>
@@ -143,18 +163,29 @@ public sealed class SyncLoopTests
 
         string nodeName = $"pwnet-ratematch-{Environment.ProcessId}";
 
-        await using var ctx = new PipeWireContext("pwnet-ratematch", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-ratematch",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var output = new PipeWireAudioOutput(
-            ctx, nodeName, offRate, Channels, AudioSampleFormat.F32Le);
+            ctx,
+            nodeName,
+            offRate,
+            Channels,
+            AudioSampleFormat.F32Le
+        );
 
         // Real samples, so the resampler has something to resample and the flow can be asserted.
         uint n = 0;
         output.FillSamples += (_, samples, _, _, _) =>
         {
-            Span<float> floats = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(samples);
-            for (var i = 0; i < floats.Length; i++) floats[i] = ++n;
+            Span<float> floats = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(
+                samples
+            );
+            for (var i = 0; i < floats.Length; i++)
+                floats[i] = ++n;
             return samples.Length;
         };
 
@@ -170,7 +201,8 @@ public sealed class SyncLoopTests
         for (var i = 0; i < 60 && match is null; i++)
         {
             match = output.RateMatch ?? capture.RateMatch;
-            if (match is null) await Task.Delay(50, cts.Token);
+            if (match is null)
+                await Task.Delay(50, cts.Token);
         }
 
         // Not a skip: the sessions this runs in fix the graph at 48000 (clock.allowed-rates), so a
@@ -184,16 +216,19 @@ public sealed class SyncLoopTests
         Assert.IsTrue(
             match!.Value.Rate is > 0.5 and < 2.0,
             $"the rate-match ratio reads {match.Value.Rate}, which is not a resampling ratio - the "
-            + "io area is being read at the wrong offset");
+                + "io area is being read at the wrong offset"
+        );
 
         Assert.IsTrue(
             match.Value.Size < 1_000_000,
-            $"the rate-match size reads {match.Value.Size}, which is not a quantum");
+            $"the rate-match size reads {match.Value.Size}, which is not a quantum"
+        );
 
         // And the resampler was actually carrying audio while it reported that.
         Assert.IsTrue(
             Interlocked.Read(ref receivedSamples) > 0,
-            "the rate-match area was reported on a stream through which nothing flowed");
+            "the rate-match area was reported on a stream through which nothing flowed"
+        );
     }
 
     /// <summary>The frames one stream handled over a window, at each of three corrections.</summary>
@@ -210,7 +245,11 @@ public sealed class SyncLoopTests
     /// Off the graph rate so a resampler is in the path: <c>pw_stream_set_rate</c> only sets
     /// <c>rate_match->rate</c> (stream.c), and without a resampler there is nothing to read it.
     /// </remarks>
-    private static async Task<RateSweep> SweepAsync(string name, bool correctTheOutput, CancellationToken ct)
+    private static async Task<RateSweep> SweepAsync(
+        string name,
+        bool correctTheOutput,
+        CancellationToken ct
+    )
     {
         const int offRate = 44100;
         string nodeName = $"{name}-{Environment.ProcessId}";
@@ -218,10 +257,16 @@ public sealed class SyncLoopTests
         await using var ctx = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(ct);
 
-        long framesAsked = 0, framesHanded = 0;
+        long framesAsked = 0,
+            framesHanded = 0;
 
         await using var output = new PipeWireAudioOutput(
-            ctx, nodeName, offRate, Channels, AudioSampleFormat.F32Le);
+            ctx,
+            nodeName,
+            offRate,
+            Channels,
+            AudioSampleFormat.F32Le
+        );
         output.FillSamples += (_, samples, _, _, _) =>
         {
             Interlocked.Add(ref framesAsked, samples.Length / (4 * Channels));
@@ -232,20 +277,29 @@ public sealed class SyncLoopTests
 
         await using var capture = new PipeWireAudioCapture(ctx, $"{nodeName}-sink");
         capture.FrameReady += (_, f) => Interlocked.Add(ref framesHanded, f.FrameCount);
-        capture.Connect((await output.WaitForNodeIdAsync(ct)), sampleRate: offRate, channels: Channels,
-            format: AudioSampleFormat.F32Le);
+        capture.Connect(
+            (await output.WaitForNodeIdAsync(ct)),
+            sampleRate: offRate,
+            channels: Channels,
+            format: AudioSampleFormat.F32Le
+        );
 
         await capture.WaitForStreamingAsync(ct);
         await Task.Delay(400, ct);
 
         if ((correctTheOutput ? output.RateMatch : capture.RateMatch) is null)
-            Assert.Fail("no resampler on the corrected stream, although it runs off the graph rate");
+            Assert.Fail(
+                "no resampler on the corrected stream, although it runs off the graph rate"
+            );
 
         long Read() => Interlocked.Read(ref correctTheOutput ? ref framesAsked : ref framesHanded);
 
         async Task<long> MeasureAt(double rate)
         {
-            if (correctTheOutput) output.SetRate(rate); else capture.SetRate(rate);
+            if (correctTheOutput)
+                output.SetRate(rate);
+            else
+                capture.SetRate(rate);
             await Task.Delay(250, ct);
             long before = Read();
             await Task.Delay(TimeSpan.FromMilliseconds(900), ct);
@@ -255,7 +309,10 @@ public sealed class SyncLoopTests
         long neutral = await MeasureAt(1.0);
         long below = await MeasureAt(0.85);
         long above = await MeasureAt(1.15);
-        if (correctTheOutput) output.SetRate(1.0); else capture.SetRate(1.0);
+        if (correctTheOutput)
+            output.SetRate(1.0);
+        else
+            capture.SetRate(1.0);
 
         Assert.IsTrue(neutral > 0, "nothing flowed at the neutral rate");
         return new RateSweep(neutral, below, above);
@@ -307,8 +364,14 @@ public sealed class SyncLoopTests
 
         RateSweep r = await SweepAsync("pwnet-setrate-in", correctTheOutput: false, cts.Token);
 
-        Assert.IsTrue(r.Below < r.Neutral * 0.95, $"0.85 did not hand the capture fewer frames [{r}]");
-        Assert.IsTrue(r.Above > r.Neutral * 1.05, $"1.15 did not hand the capture more frames [{r}]");
+        Assert.IsTrue(
+            r.Below < r.Neutral * 0.95,
+            $"0.85 did not hand the capture fewer frames [{r}]"
+        );
+        Assert.IsTrue(
+            r.Above > r.Neutral * 1.05,
+            $"1.15 did not hand the capture more frames [{r}]"
+        );
     }
 
     /// <summary>
@@ -365,7 +428,8 @@ public sealed class SyncLoopTests
             baseline!.Value,
             after!.Value,
             $"the node accumulated {after.Value - baseline.Value} xruns over two seconds of steady "
-            + "streaming; frames may line up, but the graph is missing its deadline to make that happen");
+                + "streaming; frames may line up, but the graph is missing its deadline to make that happen"
+        );
     }
 
     /// <summary>
@@ -393,11 +457,18 @@ public sealed class SyncLoopTests
         long produced = 0;
 
         await using var output = new PipeWireAudioOutput(
-            ctx, nodeName, Rate, 1, AudioSampleFormat.F32Le);
+            ctx,
+            nodeName,
+            Rate,
+            1,
+            AudioSampleFormat.F32Le
+        );
 
         output.FillSamples += (_, samples, _, _, _) =>
         {
-            Span<float> floats = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(samples);
+            Span<float> floats = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(
+                samples
+            );
             for (var i = 0; i < floats.Length; i++)
             {
                 long n = Interlocked.Increment(ref produced);
@@ -413,17 +484,24 @@ public sealed class SyncLoopTests
         await using var capture = new PipeWireAudioCapture(ctx, $"{nodeName}-sink");
         capture.FrameReady += (_, f) =>
         {
-            ReadOnlySpan<float> floats =
-                System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(f.Samples);
+            ReadOnlySpan<float> floats = System.Runtime.InteropServices.MemoryMarshal.Cast<
+                byte,
+                float
+            >(f.Samples);
 
             foreach (float v in floats)
             {
-                if (v > Volatile.Read(ref highestSeen)) Volatile.Write(ref highestSeen, v);
+                if (v > Volatile.Read(ref highestSeen))
+                    Volatile.Write(ref highestSeen, v);
             }
         };
 
-        capture.Connect((await output.WaitForNodeIdAsync(cts.Token)), sampleRate: Rate, channels: 1,
-            format: AudioSampleFormat.F32Le);
+        capture.Connect(
+            (await output.WaitForNodeIdAsync(cts.Token)),
+            sampleRate: Rate,
+            channels: 1,
+            format: AudioSampleFormat.F32Le
+        );
 
         await capture.WaitForStreamingAsync(cts.Token);
 
@@ -433,7 +511,8 @@ public sealed class SyncLoopTests
 
         Assert.IsTrue(
             Interlocked.Read(ref produced) >= total,
-            "the producer never got through the ramp, so there was no tail to drain");
+            "the producer never got through the ramp, so there was no tail to drain"
+        );
 
         await output.DrainAsync(cts.Token).WaitAsync(TimeSpan.FromSeconds(15), cts.Token);
 
@@ -442,15 +521,14 @@ public sealed class SyncLoopTests
 
         float seen = Volatile.Read(ref highestSeen);
 
-        Assert.IsTrue(
-            seen > 0,
-            "the consumer received none of the ramp at all");
+        Assert.IsTrue(seen > 0, "the consumer received none of the ramp at all");
 
         // The tail: within one quantum of the end of the ramp. A drain that dropped the queue
         // would leave the consumer short by however much was still buffered.
         Assert.IsTrue(
             seen >= total - 4096,
-            $"the consumer's last sample was {seen} of {total}; the drain dropped the tail");
+            $"the consumer's last sample was {seen} of {total}; the drain dropped the tail"
+        );
 
         Assert.IsNotNull(output.Queue, "the stream stopped answering after being drained");
     }

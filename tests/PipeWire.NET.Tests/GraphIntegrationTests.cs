@@ -23,7 +23,8 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext("pwnet-graph-tests", ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -36,7 +37,8 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
     private static async Task<PipeWireGraphSnapshot> WaitForAsync(
         PipeWireRegistry registry,
         Func<PipeWireGraphSnapshot, bool> until,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
             if (until(graph))
@@ -46,8 +48,10 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
     }
 
     private static Task<PipeWireGraphSnapshot> WaitForPortsAsync(
-        PipeWireRegistry registry, uint nodeId, CancellationToken cancellationToken) =>
-        WaitForAsync(registry, g => g.GetPortsForNode(nodeId).Length == 4, cancellationToken);
+        PipeWireRegistry registry,
+        uint nodeId,
+        CancellationToken cancellationToken
+    ) => WaitForAsync(registry, g => g.GetPortsForNode(nodeId).Length == 4, cancellationToken);
 
     [TestMethod]
     public async Task InitialEnumeration_ReportsTheGraphWithoutASettleDelay()
@@ -74,15 +78,26 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
         await using (registry)
         {
             PipeWireNode node = await registry.CreateVirtualSinkAsync(
-                "PipeWire.NET test sink", "pwnet_test_sink", cts.Token);
+                "PipeWire.NET test sink",
+                "pwnet_test_sink",
+                cts.Token
+            );
 
-            Assert.IsNotNull(registry.Current.GetNode(node.NodeId),
-                "the node must be in the graph by the time the call returns");
+            Assert.IsNotNull(
+                registry.Current.GetNode(node.NodeId),
+                "the node must be in the graph by the time the call returns"
+            );
 
             PipeWireGraphSnapshot graph = await WaitForPortsAsync(registry, node.NodeId, cts.Token);
 
-            Assert.AreEqual(2, graph.GetPortsForNode(node.NodeId, PipeWirePortDirection.In).Count());
-            Assert.AreEqual(2, graph.GetPortsForNode(node.NodeId, PipeWirePortDirection.Out).Count());
+            Assert.AreEqual(
+                2,
+                graph.GetPortsForNode(node.NodeId, PipeWirePortDirection.In).Count()
+            );
+            Assert.AreEqual(
+                2,
+                graph.GetPortsForNode(node.NodeId, PipeWirePortDirection.Out).Count()
+            );
         }
     }
 
@@ -100,22 +115,36 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
 
             PipeWireGraphSnapshot ready = await WaitForAsync(
                 registry,
-                g => g.GetPortsForNode(a.NodeId).Length == 4 && g.GetPortsForNode(b.NodeId).Length == 4,
-                cts.Token);
+                g =>
+                    g.GetPortsForNode(a.NodeId).Length == 4
+                    && g.GetPortsForNode(b.NodeId).Length == 4,
+                cts.Token
+            );
 
-            PipeWirePort output = ready.GetPortsForNode(a.NodeId, PipeWirePortDirection.Out).First();
+            PipeWirePort output = ready
+                .GetPortsForNode(a.NodeId, PipeWirePortDirection.Out)
+                .First();
             PipeWirePort input = ready.GetPortsForNode(b.NodeId, PipeWirePortDirection.In).First();
 
             PipeWireLink link = await registry.CreateLinkAsync(output, input, cts.Token);
 
             PipeWireGraphSnapshot linked = registry.Current;
             Assert.IsNotNull(linked.GetLink(link.LinkId));
-            Assert.AreEqual(1, linked.GetOutputLinksForPort(output.PortId).Length,
-                "the link must be reachable from the output port");
-            Assert.AreEqual(1, linked.GetInputLinksForPort(input.PortId).Length,
-                "and from the input port");
-            Assert.AreEqual(0, linked.GetInputLinksForPort(output.PortId).Length,
-                "but not as an input of the output port");
+            Assert.AreEqual(
+                1,
+                linked.GetOutputLinksForPort(output.PortId).Length,
+                "the link must be reachable from the output port"
+            );
+            Assert.AreEqual(
+                1,
+                linked.GetInputLinksForPort(input.PortId).Length,
+                "and from the input port"
+            );
+            Assert.AreEqual(
+                0,
+                linked.GetInputLinksForPort(output.PortId).Length,
+                "but not as an input of the output port"
+            );
 
             await registry.RemoveLinkAsync(link, cts.Token);
             await WaitForAsync(registry, g => g.GetLink(link.LinkId) is null, cts.Token);
@@ -131,14 +160,23 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSinkAsync("R", "pwnet_reject", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync(
+                "R",
+                "pwnet_reject",
+                cts.Token
+            );
             PipeWireGraphSnapshot graph = await WaitForPortsAsync(registry, node.NodeId, cts.Token);
 
-            PipeWirePort output = graph.GetPortsForNode(node.NodeId, PipeWirePortDirection.Out).First();
-            PipeWirePort input = graph.GetPortsForNode(node.NodeId, PipeWirePortDirection.In).First();
+            PipeWirePort output = graph
+                .GetPortsForNode(node.NodeId, PipeWirePortDirection.Out)
+                .First();
+            PipeWirePort input = graph
+                .GetPortsForNode(node.NodeId, PipeWirePortDirection.In)
+                .First();
 
-            await Assert.ThrowsExactlyAsync<ArgumentException>(
-                () => registry.CreateLinkAsync(input, output, cts.Token));
+            await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
+                registry.CreateLinkAsync(input, output, cts.Token)
+            );
         }
     }
 
@@ -163,11 +201,18 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
                     violations.Add($"node {n.NodeId}");
             };
 
-            PipeWireNode node = await registry.CreateVirtualSinkAsync("O", "pwnet_order", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync(
+                "O",
+                "pwnet_order",
+                cts.Token
+            );
             await WaitForPortsAsync(registry, node.NodeId, cts.Token);
 
-            CollectionAssert.AreEqual(Array.Empty<string>(), violations,
-                "Current must already contain whatever an event announces");
+            CollectionAssert.AreEqual(
+                Array.Empty<string>(),
+                violations,
+                "Current must already contain whatever an event announces"
+            );
         }
     }
 
@@ -183,8 +228,9 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
             using var cancelled = new CancellationTokenSource();
             await cancelled.CancelAsync();
 
-            await Assert.ThrowsAsync<OperationCanceledException>(
-                () => registry.CreateVirtualSinkAsync("C", "pwnet_cancel", cancelled.Token));
+            await Assert.ThrowsAsync<OperationCanceledException>(() =>
+                registry.CreateVirtualSinkAsync("C", "pwnet_cancel", cancelled.Token)
+            );
         }
     }
 
@@ -202,8 +248,15 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
 
             await registry.CreateVirtualSinkAsync("I", "pwnet_immutable", cts.Token);
 
-            Assert.AreEqual(nodesBefore, before.Nodes.Length, "an already-published snapshot must not change");
-            Assert.IsTrue(registry.Current.Version > before.Version, "a new snapshot must have been published");
+            Assert.AreEqual(
+                nodesBefore,
+                before.Nodes.Length,
+                "an already-published snapshot must not change"
+            );
+            Assert.IsTrue(
+                registry.Current.Version > before.Version,
+                "a new snapshot must have been published"
+            );
         }
     }
 }

@@ -1,8 +1,8 @@
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Interop;
-using PipeWire.NET.Spa;
 using PipeWire.NET.Media;
+using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Tests;
 
@@ -25,14 +25,19 @@ public sealed class SpaFormatTests : PipeWireTestBase
         var broken = new List<string>();
         foreach (PixelFormat fmt in Enum.GetValues<PixelFormat>())
         {
-            if (fmt == PixelFormat.Unknown) continue;
+            if (fmt == PixelFormat.Unknown)
+                continue;
 
             PixelFormat back = SpaFormatPod.FromSpaVideoFormat(SpaFormatPod.ToSpaVideoFormat(fmt));
-            if (back != fmt) broken.Add($"{fmt} -> {back}");
+            if (back != fmt)
+                broken.Add($"{fmt} -> {back}");
         }
 
-        CollectionAssert.AreEqual(Array.Empty<string>(), broken,
-            "these formats do not survive the round trip and would silently be treated as another format");
+        CollectionAssert.AreEqual(
+            Array.Empty<string>(),
+            broken,
+            "these formats do not survive the round trip and would silently be treated as another format"
+        );
     }
 
     [TestMethod]
@@ -42,11 +47,14 @@ public sealed class SpaFormatTests : PipeWireTestBase
         var seen = new Dictionary<SpaVideoFormat, PixelFormat>();
         foreach (PixelFormat fmt in Enum.GetValues<PixelFormat>())
         {
-            if (fmt == PixelFormat.Unknown) continue;
+            if (fmt == PixelFormat.Unknown)
+                continue;
 
             SpaVideoFormat spa = SpaFormatPod.ToSpaVideoFormat(fmt);
-            Assert.IsFalse(seen.TryGetValue(spa, out PixelFormat other),
-                $"{fmt} and {other} both map to spa format {spa}");
+            Assert.IsFalse(
+                seen.TryGetValue(spa, out PixelFormat other),
+                $"{fmt} and {other} both map to spa format {spa}"
+            );
             seen[spa] = fmt;
         }
     }
@@ -57,7 +65,10 @@ public sealed class SpaFormatTests : PipeWireTestBase
         // Reinterpreting an unrecognised layout as a known one produces a plausible-looking but
         // wrong image, which is far harder to notice than an unsupported format, so the sentinel
         // is the answer, and it still does not throw.
-        Assert.AreEqual(PixelFormat.Unknown, SpaFormatPod.FromSpaVideoFormat((SpaVideoFormat)0xDEADBEEF));
+        Assert.AreEqual(
+            PixelFormat.Unknown,
+            SpaFormatPod.FromSpaVideoFormat((SpaVideoFormat)0xDEADBEEF)
+        );
     }
 
     [TestMethod]
@@ -65,11 +76,20 @@ public sealed class SpaFormatTests : PipeWireTestBase
     {
         // An unrecognised format must not read as a real one, or a consumer reads four-byte
         // floats out of whatever was actually negotiated.
-        Assert.AreEqual(AudioSampleFormat.Unknown, SpaFormatPod.FromSpaAudioFormat((SpaAudioFormat)0xDEADBEEF));
+        Assert.AreEqual(
+            AudioSampleFormat.Unknown,
+            SpaFormatPod.FromSpaAudioFormat((SpaAudioFormat)0xDEADBEEF)
+        );
 
         // Two the daemon really does negotiate.
-        Assert.AreEqual(AudioSampleFormat.S24_32Le, SpaFormatPod.FromSpaAudioFormat(SpaAudioFormat.S24_32Le));
-        Assert.AreEqual(AudioSampleFormat.F64Le, SpaFormatPod.FromSpaAudioFormat(SpaAudioFormat.F64Le));
+        Assert.AreEqual(
+            AudioSampleFormat.S24_32Le,
+            SpaFormatPod.FromSpaAudioFormat(SpaAudioFormat.S24_32Le)
+        );
+        Assert.AreEqual(
+            AudioSampleFormat.F64Le,
+            SpaFormatPod.FromSpaAudioFormat(SpaAudioFormat.F64Le)
+        );
     }
 
     [TestMethod]
@@ -79,14 +99,19 @@ public sealed class SpaFormatTests : PipeWireTestBase
         {
             // Unknown is an answer, never a request: there is nothing to ask the daemon for, so
             // offering it is a caller mistake rather than a round trip.
-            if (fmt is AudioSampleFormat.Unknown) continue;
+            if (fmt is AudioSampleFormat.Unknown)
+                continue;
 
-            Assert.AreEqual(fmt, SpaFormatPod.FromSpaAudioFormat(SpaFormatPod.ToSpaAudioFormat(fmt)),
-                $"{fmt} does not round-trip");
+            Assert.AreEqual(
+                fmt,
+                SpaFormatPod.FromSpaAudioFormat(SpaFormatPod.ToSpaAudioFormat(fmt)),
+                $"{fmt} does not round-trip"
+            );
         }
 
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => SpaFormatPod.ToSpaAudioFormat(AudioSampleFormat.Unknown));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            SpaFormatPod.ToSpaAudioFormat(AudioSampleFormat.Unknown)
+        );
     }
 
     // ---------------------------------------------------------------- buffer arithmetic
@@ -108,14 +133,18 @@ public sealed class SpaFormatTests : PipeWireTestBase
         // Guessing four bytes per pixel for an unmodelled format sizes every buffer and stride
         // derived from it wrongly, and the frame that comes back renders as a tinted, sheared image
         // rather than failing anywhere a caller can see.
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => SpaFormatPod.BytesPerPixel(PixelFormat.Unknown));
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => SpaFormatPod.VideoStride(PixelFormat.Unknown, 640));
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => SpaFormatPod.VideoImageSize(PixelFormat.Unknown, 640, 480));
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => SpaFormatPod.ToSpaVideoFormat(PixelFormat.Unknown));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            SpaFormatPod.BytesPerPixel(PixelFormat.Unknown)
+        );
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            SpaFormatPod.VideoStride(PixelFormat.Unknown, 640)
+        );
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            SpaFormatPod.VideoImageSize(PixelFormat.Unknown, 640, 480)
+        );
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            SpaFormatPod.ToSpaVideoFormat(PixelFormat.Unknown)
+        );
     }
 
     [TestMethod]
@@ -124,9 +153,12 @@ public sealed class SpaFormatTests : PipeWireTestBase
         // Two functions computing the same thing independently; if they drift, a consumer walks
         // rows at the wrong pitch and every frame shears.
         foreach (PixelFormat fmt in KnownFormats)
-            foreach (int w in (int[])[1, 2, 3, 640, 1920, 4096])
-                Assert.AreEqual(w * SpaFormatPod.BytesPerPixel(fmt), SpaFormatPod.VideoStride(fmt, w),
-                    $"{fmt} at width {w}: stride and bytes-per-pixel disagree");
+        foreach (int w in (int[])[1, 2, 3, 640, 1920, 4096])
+            Assert.AreEqual(
+                w * SpaFormatPod.BytesPerPixel(fmt),
+                SpaFormatPod.VideoStride(fmt, w),
+                $"{fmt} at width {w}: stride and bytes-per-pixel disagree"
+            );
     }
 
     [TestMethod]
@@ -134,8 +166,11 @@ public sealed class SpaFormatTests : PipeWireTestBase
     {
         // VideoPlaneCount and PlaneCount are separate implementations of the same fact.
         foreach (PixelFormat fmt in Enum.GetValues<PixelFormat>())
-            Assert.AreEqual(SpaFormatPod.PlaneCount(fmt), SpaFormatPod.VideoPlaneCount(fmt),
-                $"{fmt}: PlaneCount and VideoPlaneCount disagree");
+            Assert.AreEqual(
+                SpaFormatPod.PlaneCount(fmt),
+                SpaFormatPod.VideoPlaneCount(fmt),
+                $"{fmt}: PlaneCount and VideoPlaneCount disagree"
+            );
     }
 
     [TestMethod]
@@ -153,13 +188,18 @@ public sealed class SpaFormatTests : PipeWireTestBase
         // The absolute floor for any layout: the primary plane must fit. An allocation below this
         // is an overflow waiting to happen in whoever writes the frame.
         foreach (PixelFormat fmt in KnownFormats)
-            foreach ((int w, int h) in (( int, int )[])[(1, 1), (2, 2), (3, 3), (17, 13), (640, 480), (1920, 1080)])
-            {
-                int size = SpaFormatPod.VideoImageSize(fmt, w, h);
-                int primaryPlane = SpaFormatPod.VideoStride(fmt, w) * h;
-                Assert.IsTrue(size >= primaryPlane,
-                    $"{fmt} {w}x{h}: size {size} is smaller than the primary plane {primaryPlane}");
-            }
+        foreach (
+            (int w, int h) in ((int, int)[])
+                [(1, 1), (2, 2), (3, 3), (17, 13), (640, 480), (1920, 1080)]
+        )
+        {
+            int size = SpaFormatPod.VideoImageSize(fmt, w, h);
+            int primaryPlane = SpaFormatPod.VideoStride(fmt, w) * h;
+            Assert.IsTrue(
+                size >= primaryPlane,
+                $"{fmt} {w}x{h}: size {size} is smaller than the primary plane {primaryPlane}"
+            );
+        }
     }
 
     [TestMethod]
@@ -176,8 +216,10 @@ public sealed class SpaFormatTests : PipeWireTestBase
         foreach (PixelFormat fmt in (PixelFormat[])[PixelFormat.Yuv420, PixelFormat.Nv12])
         {
             int size = SpaFormatPod.VideoImageSize(fmt, w, h);
-            Assert.IsTrue(size >= required,
-                $"{fmt} {w}x{h}: allocates {size} but the layout needs {required}");
+            Assert.IsTrue(
+                size >= required,
+                $"{fmt} {w}x{h}: allocates {size} but the layout needs {required}"
+            );
         }
     }
 
@@ -186,37 +228,47 @@ public sealed class SpaFormatTests : PipeWireTestBase
     {
         // Realistic sizes must still compute.
         foreach (PixelFormat fmt in KnownFormats)
-            foreach ((int w, int h) in (( int, int )[])[(7680, 4320), (16384, 16384)])
-                Assert.IsTrue(SpaFormatPod.VideoImageSize(fmt, w, h) > 0, $"{fmt} {w}x{h} should compute");
+        foreach ((int w, int h) in ((int, int)[])[(7680, 4320), (16384, 16384)])
+            Assert.IsTrue(
+                SpaFormatPod.VideoImageSize(fmt, w, h) > 0,
+                $"{fmt} {w}x{h} should compute"
+            );
 
         // 32768 square at 32bpp is exactly 2^32 bytes, which must be refused rather than
         // truncating to a zero-sized buffer.
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => SpaFormatPod.VideoImageSize(PixelFormat.Rgba, 32768, 32768));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            SpaFormatPod.VideoImageSize(PixelFormat.Rgba, 32768, 32768)
+        );
     }
 
     [TestMethod]
     public void ImageSize_RejectsNegativeDimensions()
     {
         // Dimensions come off a negotiated param, so a nonsense value must not reach the arithmetic.
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => SpaFormatPod.VideoImageSize(PixelFormat.Bgra, -1, 480));
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => SpaFormatPod.VideoImageSize(PixelFormat.Bgra, 640, -1));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            SpaFormatPod.VideoImageSize(PixelFormat.Bgra, -1, 480)
+        );
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            SpaFormatPod.VideoImageSize(PixelFormat.Bgra, 640, -1)
+        );
     }
 
     [TestMethod]
     public void Stride_ComputesForLargeWidthsAndRefusesImpossibleOnes()
     {
         foreach (PixelFormat fmt in KnownFormats)
-            foreach (int w in (int[])[16384, 65536, 268_435_456])
-                Assert.IsTrue(SpaFormatPod.VideoStride(fmt, w) > 0,
-                    $"{fmt} at width {w}: stride computed as {SpaFormatPod.VideoStride(fmt, w)}");
+        foreach (int w in (int[])[16384, 65536, 268_435_456])
+            Assert.IsTrue(
+                SpaFormatPod.VideoStride(fmt, w) > 0,
+                $"{fmt} at width {w}: stride computed as {SpaFormatPod.VideoStride(fmt, w)}"
+            );
 
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => SpaFormatPod.VideoStride(PixelFormat.Bgra, int.MaxValue));
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => SpaFormatPod.VideoStride(PixelFormat.Bgra, -1));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            SpaFormatPod.VideoStride(PixelFormat.Bgra, int.MaxValue)
+        );
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            SpaFormatPod.VideoStride(PixelFormat.Bgra, -1)
+        );
     }
 
     // ---------------------------------------------------------------- buffer types
@@ -228,7 +280,10 @@ public sealed class SpaFormatTests : PipeWireTestBase
         Assert.AreEqual(PipeWireBufferType.MemFd, SpaFormatPod.ToBufferType(SpaDataType.MemFd));
         Assert.AreEqual(PipeWireBufferType.DmaBuf, SpaFormatPod.ToBufferType(SpaDataType.DmaBuf));
         Assert.AreEqual(PipeWireBufferType.Unknown, SpaFormatPod.ToBufferType((SpaDataType)0));
-        Assert.AreEqual(PipeWireBufferType.Unknown, SpaFormatPod.ToBufferType((SpaDataType)uint.MaxValue));
+        Assert.AreEqual(
+            PipeWireBufferType.Unknown,
+            SpaFormatPod.ToBufferType((SpaDataType)uint.MaxValue)
+        );
     }
 
     [TestMethod]
@@ -237,11 +292,17 @@ public sealed class SpaFormatTests : PipeWireTestBase
         int mask = SpaFormatPod.VideoCaptureDataTypeMask;
 
         // Advertising a type we cannot handle makes the producer hand us buffers we then drop.
-        foreach (SpaDataType t in (SpaDataType[])[SpaDataType.MemPtr, SpaDataType.MemFd, SpaDataType.DmaBuf])
+        foreach (
+            SpaDataType t in (SpaDataType[])
+                [SpaDataType.MemPtr, SpaDataType.MemFd, SpaDataType.DmaBuf]
+        )
         {
             Assert.AreNotEqual(0, mask & (1 << (int)t), $"data type {t} must be advertised");
-            Assert.AreNotEqual(PipeWireBufferType.Unknown, SpaFormatPod.ToBufferType(t),
-                $"data type {t} is advertised but does not map to a known buffer type");
+            Assert.AreNotEqual(
+                PipeWireBufferType.Unknown,
+                SpaFormatPod.ToBufferType(t),
+                $"data type {t} is advertised but does not map to a known buffer type"
+            );
         }
     }
 
@@ -251,51 +312,73 @@ public sealed class SpaFormatTests : PipeWireTestBase
     public void UnknownColourMetadata_MapsToUnknownRatherThanAPlausibleDefault()
     {
         // Guessing BT.709 for an unknown matrix would silently mis-convert colour.
-        Assert.AreEqual(VideoColorRange.Unknown, SpaFormatPod.MapColorRange((SpaVideoColorRange)0xDEADBEEF));
-        Assert.AreEqual(VideoColorMatrix.Unknown, SpaFormatPod.MapColorMatrix((SpaVideoColorMatrix)0xDEADBEEF));
-        Assert.AreEqual(VideoTransferFunction.Unknown, SpaFormatPod.MapTransfer((SpaVideoTransferFunction)0xDEADBEEF));
-        Assert.AreEqual(VideoColorPrimaries.Unknown, SpaFormatPod.MapPrimaries((SpaVideoColorPrimaries)0xDEADBEEF));
+        Assert.AreEqual(
+            VideoColorRange.Unknown,
+            SpaFormatPod.MapColorRange((SpaVideoColorRange)0xDEADBEEF)
+        );
+        Assert.AreEqual(
+            VideoColorMatrix.Unknown,
+            SpaFormatPod.MapColorMatrix((SpaVideoColorMatrix)0xDEADBEEF)
+        );
+        Assert.AreEqual(
+            VideoTransferFunction.Unknown,
+            SpaFormatPod.MapTransfer((SpaVideoTransferFunction)0xDEADBEEF)
+        );
+        Assert.AreEqual(
+            VideoColorPrimaries.Unknown,
+            SpaFormatPod.MapPrimaries((SpaVideoColorPrimaries)0xDEADBEEF)
+        );
     }
 
     [TestMethod]
     public void KnownColourMetadata_MapsToTheMatchingMember()
     {
-        Assert.AreEqual(VideoColorRange.Full_0_255,
-            SpaFormatPod.MapColorRange(SpaVideoColorRange.Full));
-        Assert.AreEqual(VideoColorRange.Limited_16_235,
-            SpaFormatPod.MapColorRange(SpaVideoColorRange.Limited));
+        Assert.AreEqual(
+            VideoColorRange.Full_0_255,
+            SpaFormatPod.MapColorRange(SpaVideoColorRange.Full)
+        );
+        Assert.AreEqual(
+            VideoColorRange.Limited_16_235,
+            SpaFormatPod.MapColorRange(SpaVideoColorRange.Limited)
+        );
 
         // Every member is mapped or explicitly unknown: a quiet default here mistranslates
         // colour, so the map is total by test rather than by inspection.
-        foreach ((SpaVideoColorMatrix spa, VideoColorMatrix expected) in new[]
-        {
-            (SpaVideoColorMatrix.Unknown, VideoColorMatrix.Unknown),
-            (SpaVideoColorMatrix.Rgb, VideoColorMatrix.Rgb),
-            (SpaVideoColorMatrix.Fcc, VideoColorMatrix.Unknown),
-            (SpaVideoColorMatrix.Bt709, VideoColorMatrix.Bt709),
-            (SpaVideoColorMatrix.Bt601, VideoColorMatrix.Bt601),
-            (SpaVideoColorMatrix.Smpte240M, VideoColorMatrix.Unknown),
-            (SpaVideoColorMatrix.Bt2020, VideoColorMatrix.Bt2020),
-        })
+        foreach (
+            (SpaVideoColorMatrix spa, VideoColorMatrix expected) in new[]
+            {
+                (SpaVideoColorMatrix.Unknown, VideoColorMatrix.Unknown),
+                (SpaVideoColorMatrix.Rgb, VideoColorMatrix.Rgb),
+                (SpaVideoColorMatrix.Fcc, VideoColorMatrix.Unknown),
+                (SpaVideoColorMatrix.Bt709, VideoColorMatrix.Bt709),
+                (SpaVideoColorMatrix.Bt601, VideoColorMatrix.Bt601),
+                (SpaVideoColorMatrix.Smpte240M, VideoColorMatrix.Unknown),
+                (SpaVideoColorMatrix.Bt2020, VideoColorMatrix.Bt2020),
+            }
+        )
             Assert.AreEqual(expected, SpaFormatPod.MapColorMatrix(spa), $"matrix {spa}");
 
-        foreach ((SpaVideoTransferFunction spa, VideoTransferFunction expected) in new[]
-        {
-            (SpaVideoTransferFunction.Unknown, VideoTransferFunction.Unknown),
-            (SpaVideoTransferFunction.Gamma22, VideoTransferFunction.Gamma22),
-            (SpaVideoTransferFunction.Bt709, VideoTransferFunction.Bt709),
-            (SpaVideoTransferFunction.Srgb, VideoTransferFunction.Srgb),
-            (SpaVideoTransferFunction.Bt2020_12, VideoTransferFunction.Bt2020_12),
-            (SpaVideoTransferFunction.Gamma10, VideoTransferFunction.Unknown),
-            (SpaVideoTransferFunction.Smpte2084, VideoTransferFunction.Unknown),
-        })
+        foreach (
+            (SpaVideoTransferFunction spa, VideoTransferFunction expected) in new[]
+            {
+                (SpaVideoTransferFunction.Unknown, VideoTransferFunction.Unknown),
+                (SpaVideoTransferFunction.Gamma22, VideoTransferFunction.Gamma22),
+                (SpaVideoTransferFunction.Bt709, VideoTransferFunction.Bt709),
+                (SpaVideoTransferFunction.Srgb, VideoTransferFunction.Srgb),
+                (SpaVideoTransferFunction.Bt2020_12, VideoTransferFunction.Bt2020_12),
+                (SpaVideoTransferFunction.Gamma10, VideoTransferFunction.Unknown),
+                (SpaVideoTransferFunction.Smpte2084, VideoTransferFunction.Unknown),
+            }
+        )
             Assert.AreEqual(expected, SpaFormatPod.MapTransfer(spa), $"transfer {spa}");
 
-        foreach ((SpaVideoColorPrimaries spa, VideoColorPrimaries expected) in new[]
-        {
-            (SpaVideoColorPrimaries.Bt709, VideoColorPrimaries.Bt709),
-            (SpaVideoColorPrimaries.Bt2020, VideoColorPrimaries.Bt2020),
-        })
+        foreach (
+            (SpaVideoColorPrimaries spa, VideoColorPrimaries expected) in new[]
+            {
+                (SpaVideoColorPrimaries.Bt709, VideoColorPrimaries.Bt709),
+                (SpaVideoColorPrimaries.Bt2020, VideoColorPrimaries.Bt2020),
+            }
+        )
             Assert.AreEqual(expected, SpaFormatPod.MapPrimaries(spa), $"primaries {spa}");
     }
 
@@ -308,25 +391,41 @@ public sealed class SpaFormatTests : PipeWireTestBase
         Span<byte> tiny = stackalloc byte[8];
         try
         {
-            _ = SpaFormatPod.WriteVideoFormat(tiny, [PixelFormat.Bgra], 640, 480, 30, fixedSize: true);
+            _ = SpaFormatPod.WriteVideoFormat(
+                tiny,
+                [PixelFormat.Bgra],
+                640,
+                480,
+                30,
+                fixedSize: true
+            );
             Assert.Fail("writing a format into 8 bytes must not appear to succeed");
         }
-        catch (Exception e) when (e is InvalidOperationException or ArgumentException or IndexOutOfRangeException)
-        {
-        }
+        catch (Exception e)
+            when (e is InvalidOperationException or ArgumentException or IndexOutOfRangeException)
+        { }
     }
 
     [TestMethod]
     public void WriteVideoFormat_ProducesAPodThatParsesBackToWhatWasWritten()
     {
         Span<byte> buf = stackalloc byte[1024];
-        int written = SpaFormatPod.WriteVideoFormat(buf, [PixelFormat.Bgra], 1280, 720, 60, fixedSize: true);
+        int written = SpaFormatPod.WriteVideoFormat(
+            buf,
+            [PixelFormat.Bgra],
+            1280,
+            720,
+            60,
+            fixedSize: true
+        );
 
         Assert.IsTrue(written > 0 && written <= buf.Length);
 
         var reader = new SpaPodReader(buf[..written]);
-        Assert.IsTrue(reader.EnterObject(out uint objType, out _, out _),
-            "what we write must be a well-formed object pod");
+        Assert.IsTrue(
+            reader.EnterObject(out uint objType, out _, out _),
+            "what we write must be a well-formed object pod"
+        );
         Assert.AreEqual(SpaType.ObjectFormat, (SpaType)objType);
     }
 
@@ -339,7 +438,13 @@ public sealed class SpaFormatTests : PipeWireTestBase
         Assert.IsTrue(new SpaPodReader(meta[..m]).EnterObject(out _, out _, out _));
 
         Span<byte> buffers = stackalloc byte[256];
-        int b = SpaFormatPod.WriteVideoBuffersParam(buffers, size: 1024, stride: 64, dataTypes: 1, blocks: 1);
+        int b = SpaFormatPod.WriteVideoBuffersParam(
+            buffers,
+            size: 1024,
+            stride: 64,
+            dataTypes: 1,
+            blocks: 1
+        );
         Assert.IsTrue(b > 0);
         Assert.IsTrue(new SpaPodReader(buffers[..b]).EnterObject(out _, out _, out _));
     }
@@ -352,7 +457,10 @@ public sealed class SpaFormatTests : PipeWireTestBase
         foreach (PixelFormat fmt in (PixelFormat[])[PixelFormat.Nv12, PixelFormat.Yuv420])
         {
             Assert.AreEqual(320 * 240 * 3 / 2, SpaFormatPod.VideoImageSize(fmt, 320, 240));
-            Assert.IsTrue(SpaFormatPod.VideoImageSize(fmt, 320, 240) > SpaFormatPod.VideoStride(fmt, 320) * 240);
+            Assert.IsTrue(
+                SpaFormatPod.VideoImageSize(fmt, 320, 240)
+                    > SpaFormatPod.VideoStride(fmt, 320) * 240
+            );
         }
     }
 
@@ -368,16 +476,19 @@ public sealed class SpaFormatTests : PipeWireTestBase
         var format = (SpaObject)value!;
         var choice = (SpaChoice)format[SpaFormat.VideoFormat]!;
 
-        var offered = choice.Alternatives
-            .OfType<SpaId>()
+        var offered = choice
+            .Alternatives.OfType<SpaId>()
             .Select(id => SpaFormatPod.FromSpaVideoFormat((SpaVideoFormat)id.Value))
             .ToHashSet();
 
         var supported = Enum.GetValues<PixelFormat>().Where(f => f != PixelFormat.Unknown).ToList();
 
         var missing = supported.Where(f => !offered.Contains(f)).ToList();
-        CollectionAssert.AreEqual(Array.Empty<PixelFormat>(), missing,
-            $"these supported formats are not offered by default: {string.Join(", ", missing)}");
+        CollectionAssert.AreEqual(
+            Array.Empty<PixelFormat>(),
+            missing,
+            $"these supported formats are not offered by default: {string.Join(", ", missing)}"
+        );
     }
 
     // ---------------------------------------------------------------- explicit sync and hostile formats
@@ -395,8 +506,7 @@ public sealed class SpaFormatTests : PipeWireTestBase
         var obj = (SpaObject)value!;
         Assert.AreEqual(SpaType.ObjectParamMeta, obj.ObjectType);
         Assert.AreEqual(SpaParamType.Meta, obj.ObjectId);
-        Assert.AreEqual(
-            (uint)SpaMetaType.SyncTimeline, ((SpaId)obj[SpaParamMeta.Type]!).Value);
+        Assert.AreEqual((uint)SpaMetaType.SyncTimeline, ((SpaId)obj[SpaParamMeta.Type]!).Value);
     }
 
     [TestMethod]
@@ -404,7 +514,9 @@ public sealed class SpaFormatTests : PipeWireTestBase
     {
         spa_meta_sync_timeline native = new()
         {
-            flags = 1, acquire_point = 10, release_point = 20,
+            flags = 1,
+            acquire_point = 10,
+            release_point = 20,
         };
         spa_meta meta = new()
         {

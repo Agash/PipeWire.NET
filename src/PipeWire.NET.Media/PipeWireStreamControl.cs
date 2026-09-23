@@ -28,4 +28,5 @@ public sealed record PipeWireStreamControl(
     float Minimum,
     float Maximum,
     ImmutableArray<float> Values,
-    uint MaximumValues);
+    uint MaximumValues
+);

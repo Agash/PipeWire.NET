@@ -34,28 +34,49 @@ public sealed partial class PipeWirePortProxy : PipeWireParameterObject
         : base(ctx, id) => _logger = logger;
 
     internal static unsafe PipeWirePortProxy Bind(
-        PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger,
-        Action<uint, PipeWireProperties>? propertiesObserved = null)
+        PipeWireContext ctx,
+        pw_registry* registry,
+        uint id,
+        uint version,
+        ILogger logger,
+        Action<uint, PipeWireProperties>? propertiesObserved = null
+    )
     {
         // The observer is in place before the proxy is bound: the first info after a bind is the
         // only one that carries the object's properties (later ones set no PROPS in their change
         // mask, so their dictionary arrives empty), and it can arrive the moment the bind is sent.
         // Assigned after Bind returned, a fast daemon's first info found no observer and the
         // properties never reached the registry.
-        var control = new PipeWirePortProxy(ctx, id, logger) { PropertiesObserved = propertiesObserved };
-        control.Attach(BoundProxy.Bind(
-            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Port, version, NativeConstants.PW_VERSION_PORT,
-            sizeof(pw_port_events),
-            events =>
-            {
-                var table = (pw_port_events*)events;
-                table->version = NativeConstants.PW_VERSION_PORT_EVENTS;
-                table->info = &OnInfoCallback;
-                table->param = &OnParamCallback;
-            },
-            static (proxy, hook, events, data) => Native.pw_port_add_listener(
-                (pw_port*)proxy, (spa_hook*)hook, (pw_port_events*)events, (void*)data),
-            control));
+        var control = new PipeWirePortProxy(ctx, id, logger)
+        {
+            PropertiesObserved = propertiesObserved,
+        };
+        control.Attach(
+            BoundProxy.Bind(
+                ctx,
+                registry,
+                id,
+                PipeWireKeys.PW_TYPE_INTERFACE_Port,
+                version,
+                NativeConstants.PW_VERSION_PORT,
+                sizeof(pw_port_events),
+                events =>
+                {
+                    var table = (pw_port_events*)events;
+                    table->version = NativeConstants.PW_VERSION_PORT_EVENTS;
+                    table->info = &OnInfoCallback;
+                    table->param = &OnParamCallback;
+                },
+                static (proxy, hook, events, data) =>
+                    Native.pw_port_add_listener(
+                        (pw_port*)proxy,
+                        (spa_hook*)hook,
+                        (pw_port_events*)events,
+                        (void*)data
+                    ),
+                control
+            )
+        );
 
         return control;
     }
@@ -67,8 +88,8 @@ public sealed partial class PipeWirePortProxy : PipeWireParameterObject
     /// negotiated format, and neither does one whose link is still negotiating.
     /// </remarks>
     public Task<ImmutableArray<SpaObject>> EnumerateFormatsAsync(
-        CancellationToken cancellationToken = default) =>
-        EnumerateParametersAsync(SpaParamType.Format, cancellationToken);
+        CancellationToken cancellationToken = default
+    ) => EnumerateParametersAsync(SpaParamType.Format, cancellationToken);
 
     /// <summary>Every format this port is willing to accept.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
@@ -78,8 +99,8 @@ public sealed partial class PipeWirePortProxy : PipeWireParameterObject
     /// <see cref="EnumerateFormatsAsync"/>.
     /// </remarks>
     public Task<ImmutableArray<SpaObject>> EnumerateSupportedFormatsAsync(
-        CancellationToken cancellationToken = default) =>
-        EnumerateParametersAsync(SpaParamType.EnumFormat, cancellationToken);
+        CancellationToken cancellationToken = default
+    ) => EnumerateParametersAsync(SpaParamType.EnumFormat, cancellationToken);
 
     /// <summary>The latency the graph has settled on for this port, in both directions.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
@@ -88,8 +109,8 @@ public sealed partial class PipeWirePortProxy : PipeWireParameterObject
     /// port's figure.
     /// </remarks>
     public Task<ImmutableArray<SpaObject>> EnumerateLatencyAsync(
-        CancellationToken cancellationToken = default) =>
-        EnumerateParametersAsync(SpaParamType.Latency, cancellationToken);
+        CancellationToken cancellationToken = default
+    ) => EnumerateParametersAsync(SpaParamType.Latency, cancellationToken);
 
     /// <summary>The settled latency of this port, read as a typed value per direction.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
@@ -100,15 +121,17 @@ public sealed partial class PipeWirePortProxy : PipeWireParameterObject
     /// something this version does not model.
     /// </remarks>
     public async Task<ImmutableArray<PipeWireLatency>> GetLatenciesAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
-        ImmutableArray<SpaObject> raw =
-            await EnumerateLatencyAsync(cancellationToken).ConfigureAwait(false);
+        ImmutableArray<SpaObject> raw = await EnumerateLatencyAsync(cancellationToken)
+            .ConfigureAwait(false);
 
         var latencies = ImmutableArray.CreateBuilder<PipeWireLatency>(raw.Length);
         foreach (SpaObject param in raw)
         {
-            if (PipeWireLatency.From(param) is { } latency) latencies.Add(latency);
+            if (PipeWireLatency.From(param) is { } latency)
+                latencies.Add(latency);
         }
 
         return latencies.ToImmutable();
@@ -117,23 +140,33 @@ public sealed partial class PipeWirePortProxy : PipeWireParameterObject
     /// <summary>The metadata travelling through this port, per direction.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
     public async Task<ImmutableArray<PipeWireTag>> GetTagsAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
-        ImmutableArray<SpaObject> raw =
-            await EnumerateParametersAsync(SpaParamType.Tag, cancellationToken).ConfigureAwait(false);
+        ImmutableArray<SpaObject> raw = await EnumerateParametersAsync(
+                SpaParamType.Tag,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
 
         var tags = ImmutableArray.CreateBuilder<PipeWireTag>(raw.Length);
         foreach (SpaObject param in raw)
         {
-            if (PipeWireTag.From(param) is { } tag) tags.Add(tag);
+            if (PipeWireTag.From(param) is { } tag)
+                tags.Add(tag);
         }
 
         return tags.ToImmutable();
     }
 
     private protected override unsafe int EnumParamsNative(
-        void* proxy, int seq, uint id, uint start, uint num, spa_pod* filter) =>
-        Native.pw_port_enum_params((pw_port*)proxy, seq, id, start, num, filter);
+        void* proxy,
+        int seq,
+        uint id,
+        uint start,
+        uint num,
+        spa_pod* filter
+    ) => Native.pw_port_enum_params((pw_port*)proxy, seq, id, start, num, filter);
 
     /// <remarks>
     /// ENOTSUP, not a call. <c>pw_port_methods</c> has no <c>set_param</c>: a port's format is
@@ -142,13 +175,21 @@ public sealed partial class PipeWirePortProxy : PipeWireParameterObject
     /// <c>SetParameterAsync</c> and hiding it would be worse, because a caller holding the base
     /// type would walk straight past the override.
     /// </remarks>
-    private protected override unsafe int SetParamNative(void* proxy, uint id, uint flags, spa_pod* param) =>
-        -95;
+    private protected override unsafe int SetParamNative(
+        void* proxy,
+        uint id,
+        uint flags,
+        spa_pod* param
+    ) => -95;
 
-    private protected override unsafe int SubscribeParamsNative(void* proxy, uint* ids, uint count) =>
-        Native.pw_port_subscribe_params((pw_port*)proxy, ids, count);
+    private protected override unsafe int SubscribeParamsNative(
+        void* proxy,
+        uint* ids,
+        uint count
+    ) => Native.pw_port_subscribe_params((pw_port*)proxy, ids, count);
 
-    private protected override void OnHandlerFaulted(Exception exception) => LogHandlerFaulted(exception);
+    private protected override void OnHandlerFaulted(Exception exception) =>
+        LogHandlerFaulted(exception);
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnInfoCallback(void* data, pw_port_info* info)
@@ -171,7 +212,13 @@ public sealed partial class PipeWirePortProxy : PipeWireParameterObject
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnParamCallback(
-        void* data, int seq, uint id, uint index, uint next, spa_pod* param)
+        void* data,
+        int seq,
+        uint id,
+        uint index,
+        uint next,
+        spa_pod* param
+    )
     {
         try
         {
@@ -183,6 +230,10 @@ public sealed partial class PipeWirePortProxy : PipeWireParameterObject
         }
     }
 
-    [LoggerMessage(EventId = 34400, Level = LogLevel.Warning, Message = "a port parameter handler threw")]
+    [LoggerMessage(
+        EventId = 34400,
+        Level = LogLevel.Warning,
+        Message = "a port parameter handler threw"
+    )]
     private partial void LogHandlerFaulted(Exception exception);
 }

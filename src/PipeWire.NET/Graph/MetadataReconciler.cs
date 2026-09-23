@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 
-
 namespace PipeWire.NET.Graph;
 
 /// <summary>
@@ -28,7 +27,10 @@ namespace PipeWire.NET.Graph;
 /// </remarks>
 internal sealed class MetadataReconciler(TimeSpan window, TimeProvider? time = null)
 {
-    private readonly ConcurrentDictionary<(uint Subject, string Key), List<PendingWrite>> _outstanding = new();
+    private readonly ConcurrentDictionary<
+        (uint Subject, string Key),
+        List<PendingWrite>
+    > _outstanding = new();
     private readonly TimeProvider _time = time ?? TimeProvider.System;
     private readonly TimeSpan _windowSpan = window;
 
@@ -82,8 +84,10 @@ internal sealed class MetadataReconciler(TimeSpan window, TimeProvider? time = n
 
             lock (bucket)
             {
-                if (_outstanding.TryGetValue((subject, key), out List<PendingWrite>? current)
-                    && ReferenceEquals(current, bucket))
+                if (
+                    _outstanding.TryGetValue((subject, key), out List<PendingWrite>? current)
+                    && ReferenceEquals(current, bucket)
+                )
                 {
                     bucket.RemoveAll(e => e.Expired(now, _window));
                     bucket.Add(pending);
@@ -96,9 +100,11 @@ internal sealed class MetadataReconciler(TimeSpan window, TimeProvider? time = n
     /// <summary>Drops a write that never landed, so it cannot suppress an echo that will not come.</summary>
     internal void Forget(uint subject, string key, PendingWrite pending)
     {
-        if (!_outstanding.TryGetValue((subject, key), out List<PendingWrite>? bucket)) return;
+        if (!_outstanding.TryGetValue((subject, key), out List<PendingWrite>? bucket))
+            return;
 
-        lock (bucket) bucket.Remove(pending);
+        lock (bucket)
+            bucket.Remove(pending);
         DropIfEmpty(subject, key, bucket);
     }
 
@@ -136,7 +142,8 @@ internal sealed class MetadataReconciler(TimeSpan window, TimeProvider? time = n
 
             // Our newest write coming home. The store raised it when it applied the write, so
             // raising again here would report one change twice.
-            if (bucket[^1].Matches(type, value)) return EchoAction.AlreadyKnown;
+            if (bucket[^1].Matches(type, value))
+                return EchoAction.AlreadyKnown;
 
             // Records are deliberately not cleared when the newest is acknowledged: clearing
             // discards the older entries, and echoes still in flight for those then match nothing
@@ -159,9 +166,11 @@ internal sealed class MetadataReconciler(TimeSpan window, TimeProvider? time = n
         // the bucket still present or re-adds it through GetOrAdd.
         lock (bucket)
         {
-            if (bucket.Count != 0) return;
+            if (bucket.Count != 0)
+                return;
             _outstanding.TryRemove(
-                new KeyValuePair<(uint, string), List<PendingWrite>>((subject, key), bucket));
+                new KeyValuePair<(uint, string), List<PendingWrite>>((subject, key), bucket)
+            );
         }
     }
 
@@ -185,7 +194,8 @@ internal sealed class MetadataReconciler(TimeSpan window, TimeProvider? time = n
     /// </remarks>
     internal void Settle(uint subject, string key)
     {
-        if (!_outstanding.TryGetValue((subject, key), out List<PendingWrite>? bucket)) return;
+        if (!_outstanding.TryGetValue((subject, key), out List<PendingWrite>? bucket))
+            return;
 
         // The round trip proves every request issued before it was processed, so this is where the
         // records in this bucket start ageing. Anything still unacknowledged after it was never
@@ -193,7 +203,8 @@ internal sealed class MetadataReconciler(TimeSpan window, TimeProvider? time = n
         long now = Now();
         lock (bucket)
         {
-            foreach (PendingWrite entry in bucket) entry.Acknowledge(now);
+            foreach (PendingWrite entry in bucket)
+                entry.Acknowledge(now);
         }
 
         DropIfEmpty(subject, key, bucket);

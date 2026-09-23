@@ -46,18 +46,29 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
     }
 
     /// <summary>One producer and consumer pair, run to a frame count and then torn down.</summary>
-    private static async Task<(int Frames, int DmaBufFrames, IReadOnlyList<int> Indexes)> RunSessionAsync(
-        GbmAllocator gbm, List<GbmAllocator.Buffer> buffers, string name)
+    private static async Task<(
+        int Frames,
+        int DmaBufFrames,
+        IReadOnlyList<int> Indexes
+    )> RunSessionAsync(GbmAllocator gbm, List<GbmAllocator.Buffer> buffers, string name)
     {
         long modifier = (long)GbmAllocator.LinearModifier;
         var indexes = new ConcurrentQueue<int>();
         bool streaming = false;
-        int frames = 0, dmaBufFrames = 0;
+        int frames = 0,
+            dmaBufFrames = 0;
 
         await using var ctx = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync();
 
-        await using var output = new PipeWireVideoOutput(ctx, $"{name}-src", Width, Height, PixelFormat.Bgra, 30);
+        await using var output = new PipeWireVideoOutput(
+            ctx,
+            $"{name}-src",
+            Width,
+            Height,
+            PixelFormat.Bgra,
+            30
+        );
 
         output.AllocateDmaBuf += (_, index, _, _, _, _, planes) =>
         {
@@ -66,9 +77,11 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
             // The daemon chooses the index. An allocator that grew an array per index rather than
             // reusing one would be the leak this is looking for, so the cap is enforced here and
             // the assertions below check it was never approached from the other side.
-            if (index >= PoolCap) return 0;
+            if (index >= PoolCap)
+                return 0;
 
-            while (buffers.Count <= index) buffers.Add(gbm.CreateBgra(Width, Height));
+            while (buffers.Count <= index)
+                buffers.Add(gbm.CreateBgra(Width, Height));
 
             GbmAllocator.Buffer b = buffers[index];
             planes[0] = new VideoPlane(b.Fd, b.Offset, b.Stride, b.Size);
@@ -83,16 +96,19 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
         for (int i = 0; i < 50 && nodeId is null; i++)
         {
             nodeId = output.NodeId;
-            if (nodeId is null) await Task.Delay(50);
+            if (nodeId is null)
+                await Task.Delay(50);
         }
 
-        if (nodeId is null) Assert.Inconclusive("the producer was never given a node id.");
+        if (nodeId is null)
+            Assert.Inconclusive("the producer was never given a node id.");
 
         await using var capture = new PipeWireVideoCapture(ctx, $"{name}-sink");
         capture.FrameReady += (_, frame) =>
         {
             Interlocked.Increment(ref frames);
-            if (frame.BufferType == PipeWireBufferType.DmaBuf) Interlocked.Increment(ref dmaBufFrames);
+            if (frame.BufferType == PipeWireBufferType.DmaBuf)
+                Interlocked.Increment(ref dmaBufFrames);
         };
 
         capture.Connect(nodeId!.Value, [PixelFormat.Bgra], modifiers: [modifier]);
@@ -136,12 +152,15 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
 
             // The buffers themselves are owned by this test and deliberately still alive, so what
             // is being measured is whether the streams gave back what they imported.
-            Assert.IsTrue(after <= before + 2,
-                $"three connect/teardown cycles left {after - before} descriptors behind");
+            Assert.IsTrue(
+                after <= before + 2,
+                $"three connect/teardown cycles left {after - before} descriptors behind"
+            );
         }
         finally
         {
-            foreach (GbmAllocator.Buffer b in buffers) b.Dispose();
+            foreach (GbmAllocator.Buffer b in buffers)
+                b.Dispose();
             gbm.Dispose();
         }
     }
@@ -154,31 +173,42 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
 
         try
         {
-            (int frames, int dmaBufFrames, IReadOnlyList<int> indexes) =
-                await RunSessionAsync(gbm, buffers, "pwnet-dmabuf-pool");
+            (int frames, int dmaBufFrames, IReadOnlyList<int> indexes) = await RunSessionAsync(
+                gbm,
+                buffers,
+                "pwnet-dmabuf-pool"
+            );
 
             if (dmaBufFrames == 0)
-                Assert.Inconclusive($"no dmabuf frames arrived ({frames} total), so the pool never cycled.");
+                Assert.Inconclusive(
+                    $"no dmabuf frames arrived ({frames} total), so the pool never cycled."
+                );
 
             Assert.IsTrue(indexes.Count > 0, "no buffer was ever allocated");
 
             // The daemon asks for a bounded set and reuses it. An index beyond the pool means it
             // kept asking for new ones, which is the shape a leak takes on this path.
             int highest = indexes.Max();
-            Assert.IsTrue(highest < PoolCap,
-                $"the daemon asked for buffer index {highest}, beyond the pool of {PoolCap}");
+            Assert.IsTrue(
+                highest < PoolCap,
+                $"the daemon asked for buffer index {highest}, beyond the pool of {PoolCap}"
+            );
 
             // And far more frames than buffers, which is what proves the buffers are being cycled
             // rather than one being used per frame.
-            Assert.IsTrue(dmaBufFrames > indexes.Count,
-                $"{dmaBufFrames} frames from {indexes.Count} allocations, so nothing was reused");
+            Assert.IsTrue(
+                dmaBufFrames > indexes.Count,
+                $"{dmaBufFrames} frames from {indexes.Count} allocations, so nothing was reused"
+            );
 
             Console.Error.WriteLine(
-                $"pool: {indexes.Count} allocations, highest index {highest}, {dmaBufFrames} dmabuf frames");
+                $"pool: {indexes.Count} allocations, highest index {highest}, {dmaBufFrames} dmabuf frames"
+            );
         }
         finally
         {
-            foreach (GbmAllocator.Buffer b in buffers) b.Dispose();
+            foreach (GbmAllocator.Buffer b in buffers)
+                b.Dispose();
             gbm.Dispose();
         }
     }
@@ -197,8 +227,11 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
 
         try
         {
-            (_, int dmaBufFrames, IReadOnlyList<int> indexes) =
-                await RunSessionAsync(gbm, buffers, "pwnet-dmabuf-hold");
+            (_, int dmaBufFrames, IReadOnlyList<int> indexes) = await RunSessionAsync(
+                gbm,
+                buffers,
+                "pwnet-dmabuf-hold"
+            );
 
             if (dmaBufFrames == 0 || indexes.Count == 0)
                 Assert.Inconclusive("no dmabuf frames arrived, so no descriptor was ever shared.");
@@ -208,30 +241,41 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
             foreach (GbmAllocator.Buffer buffer in buffers)
             {
                 int duplicate = dup((int)buffer.Fd);
-                if (duplicate >= 0) held.Add(duplicate);
+                if (duplicate >= 0)
+                    held.Add(duplicate);
             }
 
-            Assert.IsTrue(held.Count > 0, "no descriptor could be duplicated, so nothing was tested");
+            Assert.IsTrue(
+                held.Count > 0,
+                "no descriptor could be duplicated, so nothing was tested"
+            );
 
             // Still usable after the stream that published them is gone: fstat succeeds on a live
             // descriptor and fails with EBADF on a closed one, which is exactly the distinction.
             foreach (int duplicate in held)
             {
-                Assert.AreEqual(0, FStatSucceeds(duplicate) ? 0 : 1,
-                    $"descriptor {duplicate} was closed underneath a holder that still had it");
+                Assert.AreEqual(
+                    0,
+                    FStatSucceeds(duplicate) ? 0 : 1,
+                    $"descriptor {duplicate} was closed underneath a holder that still had it"
+                );
             }
 
             // And the originals too: teardown must not have closed what the allocator owns.
             foreach (GbmAllocator.Buffer buffer in buffers)
             {
-                Assert.IsTrue(FStatSucceeds((int)buffer.Fd),
-                    "the stream closed a descriptor the allocator owns");
+                Assert.IsTrue(
+                    FStatSucceeds((int)buffer.Fd),
+                    "the stream closed a descriptor the allocator owns"
+                );
             }
         }
         finally
         {
-            foreach (int duplicate in held) close(duplicate);
-            foreach (GbmAllocator.Buffer b in buffers) b.Dispose();
+            foreach (int duplicate in held)
+                close(duplicate);
+            foreach (GbmAllocator.Buffer b in buffers)
+                b.Dispose();
             gbm.Dispose();
         }
     }
@@ -246,7 +290,8 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
         Span<byte> statbuf = stackalloc byte[512];
         unsafe
         {
-            fixed (byte* p = statbuf) return fstat(fd, p) == 0;
+            fixed (byte* p = statbuf)
+                return fstat(fd, p) == 0;
         }
     }
 
@@ -272,25 +317,39 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
 
         try
         {
-            (_, int firstDmaBuf, IReadOnlyList<int> first) =
-                await RunSessionAsync(gbm, buffers, "pwnet-dmabuf-reconnect-a");
+            (_, int firstDmaBuf, IReadOnlyList<int> first) = await RunSessionAsync(
+                gbm,
+                buffers,
+                "pwnet-dmabuf-reconnect-a"
+            );
 
-            (_, int secondDmaBuf, IReadOnlyList<int> second) =
-                await RunSessionAsync(gbm, buffers, "pwnet-dmabuf-reconnect-b");
+            (_, int secondDmaBuf, IReadOnlyList<int> second) = await RunSessionAsync(
+                gbm,
+                buffers,
+                "pwnet-dmabuf-reconnect-b"
+            );
 
             if (firstDmaBuf == 0 || secondDmaBuf == 0)
-                Assert.Inconclusive("a session produced no dmabuf frames, so there is nothing to compare.");
+                Assert.Inconclusive(
+                    "a session produced no dmabuf frames, so there is nothing to compare."
+                );
 
             Assert.IsTrue(first.Count > 0 && second.Count > 0, "a session allocated nothing");
 
-            Assert.AreEqual(0, second.Min(),
-                "the second session's indexes did not start again from zero");
-            Assert.IsTrue(second.Max() < PoolCap,
-                $"the second session asked for index {second.Max()}, beyond the pool");
+            Assert.AreEqual(
+                0,
+                second.Min(),
+                "the second session's indexes did not start again from zero"
+            );
+            Assert.IsTrue(
+                second.Max() < PoolCap,
+                $"the second session asked for index {second.Max()}, beyond the pool"
+            );
         }
         finally
         {
-            foreach (GbmAllocator.Buffer b in buffers) b.Dispose();
+            foreach (GbmAllocator.Buffer b in buffers)
+                b.Dispose();
             gbm.Dispose();
         }
     }
@@ -326,27 +385,42 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
         var gate = new object();
         var live = new HashSet<int>();
         var violations = new List<string>();
-        int allocations = 0, releases = 0, highest = -1;
+        int allocations = 0,
+            releases = 0,
+            highest = -1;
 
         try
         {
-            await using var ctx = new PipeWireContext("pwnet-dmabuf-churn", ConsoleTestLoggerFactory.Instance);
+            await using var ctx = new PipeWireContext(
+                "pwnet-dmabuf-churn",
+                ConsoleTestLoggerFactory.Instance
+            );
             await ctx.StartAsync();
 
-            await using var output = new PipeWireVideoOutput(ctx, "pwnet-dmabuf-churn-src", Width, Height, PixelFormat.Bgra, 30);
+            await using var output = new PipeWireVideoOutput(
+                ctx,
+                "pwnet-dmabuf-churn-src",
+                Width,
+                Height,
+                PixelFormat.Bgra,
+                30
+            );
 
             output.AllocateDmaBuf += (_, index, _, _, _, _, planes) =>
             {
-                if (index >= PoolCap) return 0;
+                if (index >= PoolCap)
+                    return 0;
 
                 lock (gate)
                 {
-                    if (!live.Add(index)) violations.Add($"index {index} handed out while still live");
+                    if (!live.Add(index))
+                        violations.Add($"index {index} handed out while still live");
                     allocations++;
                     highest = Math.Max(highest, index);
                 }
 
-                while (buffers.Count <= index) buffers.Add(gbm.CreateBgra(Width, Height));
+                while (buffers.Count <= index)
+                    buffers.Add(gbm.CreateBgra(Width, Height));
 
                 GbmAllocator.Buffer b = buffers[index];
                 planes[0] = new VideoPlane(b.Fd, b.Offset, b.Stride, b.Size);
@@ -357,7 +431,8 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
             {
                 lock (gate)
                 {
-                    if (!live.Remove(index)) violations.Add($"index {index} released without being live");
+                    if (!live.Remove(index))
+                        violations.Add($"index {index} released without being live");
                     releases++;
                 }
             };
@@ -371,11 +446,14 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
             {
                 int dmaBufFrames = 0;
 
-                await using (var capture = new PipeWireVideoCapture(ctx, $"pwnet-dmabuf-churn-sink-{round}"))
+                await using (
+                    var capture = new PipeWireVideoCapture(ctx, $"pwnet-dmabuf-churn-sink-{round}")
+                )
                 {
                     capture.FrameReady += (_, frame) =>
                     {
-                        if (frame.BufferType == PipeWireBufferType.DmaBuf) Interlocked.Increment(ref dmaBufFrames);
+                        if (frame.BufferType == PipeWireBufferType.DmaBuf)
+                            Interlocked.Increment(ref dmaBufFrames);
                     };
 
                     capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
@@ -385,42 +463,59 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
                 }
 
                 if (round == 0 && Volatile.Read(ref dmaBufFrames) == 0)
-                    Assert.Inconclusive("the first round produced no dmabuf frames, so there is no pool to churn.");
+                    Assert.Inconclusive(
+                        "the first round produced no dmabuf frames, so there is no pool to churn."
+                    );
 
-                Assert.IsTrue(Volatile.Read(ref dmaBufFrames) >= 10,
-                    $"round {round}: only {dmaBufFrames} dmabuf frames after the producer was renegotiated");
+                Assert.IsTrue(
+                    Volatile.Read(ref dmaBufFrames) >= 10,
+                    $"round {round}: only {dmaBufFrames} dmabuf frames after the producer was renegotiated"
+                );
 
                 // The consumer is gone, so its link is, and upstream clears the producer's format
                 // and every buffer with it. Waiting for that is the proof the round renegotiated.
                 for (int i = 0; i < 100; i++)
                 {
-                    lock (gate) { if (live.Count == 0) break; }
+                    lock (gate)
+                    {
+                        if (live.Count == 0)
+                            break;
+                    }
                     await Task.Delay(50);
                 }
 
                 lock (gate)
                 {
-                    Assert.AreEqual(0, live.Count,
-                        $"round {round}: buffers {string.Join(",", live)} were never released after the consumer left");
+                    Assert.AreEqual(
+                        0,
+                        live.Count,
+                        $"round {round}: buffers {string.Join(",", live)} were never released after the consumer left"
+                    );
                 }
             }
 
             lock (gate)
             {
                 Console.Error.WriteLine(
-                    $"churn: {Rounds} rounds, {allocations} allocations, {releases} releases, highest index {highest}");
+                    $"churn: {Rounds} rounds, {allocations} allocations, {releases} releases, highest index {highest}"
+                );
 
                 Assert.AreEqual(0, violations.Count, string.Join("; ", violations));
                 Assert.AreEqual(allocations, releases, "allocations and releases do not balance");
-                Assert.IsTrue(allocations >= Rounds,
-                    $"{allocations} allocations over {Rounds} rounds, so the pool was not rebuilt each round");
-                Assert.IsTrue(highest < PoolCap,
-                    $"index {highest} after {Rounds} renegotiations, so freed indexes were not reused");
+                Assert.IsTrue(
+                    allocations >= Rounds,
+                    $"{allocations} allocations over {Rounds} rounds, so the pool was not rebuilt each round"
+                );
+                Assert.IsTrue(
+                    highest < PoolCap,
+                    $"index {highest} after {Rounds} renegotiations, so freed indexes were not reused"
+                );
             }
         }
         finally
         {
-            foreach (GbmAllocator.Buffer b in buffers) b.Dispose();
+            foreach (GbmAllocator.Buffer b in buffers)
+                b.Dispose();
             gbm.Dispose();
         }
     }
@@ -453,14 +548,23 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
         try
         {
             long modifier = (long)GbmAllocator.LinearModifier;
-            int calls = 0, framesSeen = 0;
+            int calls = 0,
+                framesSeen = 0;
 
             await using var ctx = new PipeWireContext(
-                $"pwnet-badalloc-{mode}", ConsoleTestLoggerFactory.Instance);
+                $"pwnet-badalloc-{mode}",
+                ConsoleTestLoggerFactory.Instance
+            );
             await ctx.StartAsync();
 
             await using var output = new PipeWireVideoOutput(
-                ctx, $"pwnet-badalloc-src-{mode}", Width, Height, PixelFormat.Bgra, 30);
+                ctx,
+                $"pwnet-badalloc-src-{mode}",
+                Width,
+                Height,
+                PixelFormat.Bgra,
+                30
+            );
 
             output.AllocateDmaBuf += (_, index, _, _, _, _, planes) =>
             {
@@ -480,7 +584,8 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
 
                     default:
                         // One real plane, but claiming none were backed: the partial answer.
-                        while (buffers.Count <= index) buffers.Add(gbm.CreateBgra(Width, Height));
+                        while (buffers.Count <= index)
+                            buffers.Add(gbm.CreateBgra(Width, Height));
                         GbmAllocator.Buffer b = buffers[index];
                         planes[0] = new VideoPlane(b.Fd, b.Offset, b.Stride, b.Size);
                         return 0;
@@ -494,10 +599,12 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
             for (var i = 0; i < 50 && nodeId is null; i++)
             {
                 nodeId = output.NodeId;
-                if (nodeId is null) await Task.Delay(50);
+                if (nodeId is null)
+                    await Task.Delay(50);
             }
 
-            if (nodeId is null) Assert.Inconclusive("the producer was never given a node id.");
+            if (nodeId is null)
+                Assert.Inconclusive("the producer was never given a node id.");
 
             await using var capture = new PipeWireVideoCapture(ctx, $"pwnet-badalloc-sink-{mode}");
             capture.FrameReady += (_, _) => Interlocked.Increment(ref framesSeen);
@@ -506,12 +613,16 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
             await Task.Delay(TimeSpan.FromSeconds(3));
 
             Assert.AreNotEqual(
-                0, Volatile.Read(ref calls),
-                "the daemon never asked for a buffer, so nothing was actually exercised");
+                0,
+                Volatile.Read(ref calls),
+                "the daemon never asked for a buffer, so nothing was actually exercised"
+            );
 
             Assert.AreEqual(
-                0, Volatile.Read(ref framesSeen),
-                $"a producer whose allocator {how} published a frame anyway");
+                0,
+                Volatile.Read(ref framesSeen),
+                $"a producer whose allocator {how} published a frame anyway"
+            );
 
             // The stream is still the library's to talk to: a refused pool is not a torn-down one.
             Assert.IsNotNull(output.NodeId, "the producer fell out of the graph");
@@ -522,18 +633,21 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
             {
                 Assert.IsNotNull(
                     output.LastProcessError,
-                    "an allocator that threw was contained but never reported");
+                    "an allocator that threw was contained but never reported"
+                );
             }
             else
             {
                 Assert.IsNull(
                     output.LastProcessError,
-                    "an allocator that refused cleanly was recorded as a fault");
+                    "an allocator that refused cleanly was recorded as a fault"
+                );
             }
         }
         finally
         {
-            foreach (GbmAllocator.Buffer b in buffers) b.Dispose();
+            foreach (GbmAllocator.Buffer b in buffers)
+                b.Dispose();
         }
     }
 }

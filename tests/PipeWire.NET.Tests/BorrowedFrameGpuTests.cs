@@ -75,18 +75,29 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
 
         try
         {
-            await using var ctx = new PipeWireContext("pwnet-borrow-gpu", ConsoleTestLoggerFactory.Instance);
+            await using var ctx = new PipeWireContext(
+                "pwnet-borrow-gpu",
+                ConsoleTestLoggerFactory.Instance
+            );
             await ctx.StartAsync(cts.Token);
 
             long modifier = (long)GbmAllocator.LinearModifier;
 
             await using var output = new PipeWireVideoOutput(
-                ctx, "pwnet-borrow-gpu-src", Width, Height, PixelFormat.Bgra, 30);
+                ctx,
+                "pwnet-borrow-gpu-src",
+                Width,
+                Height,
+                PixelFormat.Bgra,
+                30
+            );
 
             output.AllocateDmaBuf += (_, index, _, _, _, _, planes) =>
             {
-                if (index >= PoolCap) return 0;
-                while (buffers.Count <= index) buffers.Add(gbm.CreateBgra(Width, Height));
+                if (index >= PoolCap)
+                    return 0;
+                while (buffers.Count <= index)
+                    buffers.Add(gbm.CreateBgra(Width, Height));
                 GbmAllocator.Buffer b = buffers[index];
                 planes[0] = new VideoPlane(b.Fd, b.Offset, b.Stride, b.Size);
                 return 1;
@@ -99,7 +110,8 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
             for (var i = 0; i < 60 && nodeId is null; i++)
             {
                 nodeId = output.NodeId;
-                if (nodeId is null) await Task.Delay(50, cts.Token);
+                if (nodeId is null)
+                    await Task.Delay(50, cts.Token);
             }
 
             Assert.IsNotNull(nodeId, "the dmabuf producer was never assigned a node id");
@@ -112,7 +124,8 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
             var sawDmaBuf = 0;
             capture.FrameReady += (_, frame) =>
             {
-                if (frame.BufferType == PipeWireBufferType.DmaBuf) Interlocked.Increment(ref sawDmaBuf);
+                if (frame.BufferType == PipeWireBufferType.DmaBuf)
+                    Interlocked.Increment(ref sawDmaBuf);
             };
 
             capture.Connect(nodeId!.Value, [PixelFormat.Bgra], modifiers: [modifier]);
@@ -122,42 +135,54 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
             for (var i = 0; i < 120 && !got; i++)
             {
                 got = capture.TryGetBorrowedFrame(out borrowed) && borrowed.IsFdBacked;
-                if (!got) await Task.Delay(50, cts.Token);
+                if (!got)
+                    await Task.Delay(50, cts.Token);
             }
 
             Assert.IsTrue(
                 Volatile.Read(ref sawDmaBuf) > 0,
-                "no DMA-BUF frame ever arrived, so the borrowed path was never given a GPU buffer");
+                "no DMA-BUF frame ever arrived, so the borrowed path was never given a GPU buffer"
+            );
 
             Assert.IsTrue(got, "borrowed retention never produced an fd-backed frame");
 
             Assert.AreEqual(Width, borrowed.Width);
             Assert.AreEqual(Height, borrowed.Height);
-            Assert.IsTrue(borrowed.PlaneCount > 0, "an fd-backed frame with no planes cannot be imported");
+            Assert.IsTrue(
+                borrowed.PlaneCount > 0,
+                "an fd-backed frame with no planes cannot be imported"
+            );
 
             Assert.AreEqual(
                 DrmFormat.FromPixelFormat(PixelFormat.Bgra),
                 borrowed.DrmFourcc,
-                "the fourcc does not describe the format that was negotiated");
+                "the fourcc does not describe the format that was negotiated"
+            );
 
             Assert.AreEqual(
                 (ulong)modifier,
                 borrowed.Modifier,
-                "the modifier does not match the one the producer and consumer agreed on");
+                "the modifier does not match the one the producer and consumer agreed on"
+            );
 
             BorrowedVideoPlane plane = borrowed[0];
             Assert.IsTrue(plane.Fd >= 0, "the plane carries no descriptor");
-            Assert.IsTrue(plane.Stride > 0, "the plane carries no stride, so an import cannot lay it out");
+            Assert.IsTrue(
+                plane.Stride > 0,
+                "the plane carries no stride, so an import cannot lay it out"
+            );
 
             // The liveness check. A stale number survives every assertion above.
             using SafeFileHandle duplicate = FdInterop.DuplicateWithCloseOnExec((int)plane.Fd);
             Assert.IsFalse(
                 duplicate.IsInvalid,
-                "the borrowed descriptor could not be duplicated, so it is not a live dmabuf");
+                "the borrowed descriptor could not be duplicated, so it is not a live dmabuf"
+            );
         }
         finally
         {
-            foreach (GbmAllocator.Buffer b in buffers) b.Dispose();
+            foreach (GbmAllocator.Buffer b in buffers)
+                b.Dispose();
         }
     }
 
@@ -183,18 +208,29 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
 
         try
         {
-            await using var ctx = new PipeWireContext("pwnet-borrow-once", ConsoleTestLoggerFactory.Instance);
+            await using var ctx = new PipeWireContext(
+                "pwnet-borrow-once",
+                ConsoleTestLoggerFactory.Instance
+            );
             await ctx.StartAsync(cts.Token);
 
             long modifier = (long)GbmAllocator.LinearModifier;
 
             await using var output = new PipeWireVideoOutput(
-                ctx, "pwnet-borrow-once-src", Width, Height, PixelFormat.Bgra, 30);
+                ctx,
+                "pwnet-borrow-once-src",
+                Width,
+                Height,
+                PixelFormat.Bgra,
+                30
+            );
 
             output.AllocateDmaBuf += (_, index, _, _, _, _, planes) =>
             {
-                if (index >= PoolCap) return 0;
-                while (buffers.Count <= index) buffers.Add(gbm.CreateBgra(Width, Height));
+                if (index >= PoolCap)
+                    return 0;
+                while (buffers.Count <= index)
+                    buffers.Add(gbm.CreateBgra(Width, Height));
                 GbmAllocator.Buffer b = buffers[index];
                 planes[0] = new VideoPlane(b.Fd, b.Offset, b.Stride, b.Size);
                 return 1;
@@ -207,7 +243,8 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
             for (var i = 0; i < 60 && nodeId is null; i++)
             {
                 nodeId = output.NodeId;
-                if (nodeId is null) await Task.Delay(50, cts.Token);
+                if (nodeId is null)
+                    await Task.Delay(50, cts.Token);
             }
 
             Assert.IsNotNull(nodeId);
@@ -223,7 +260,8 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
             for (var i = 0; i < 120 && !got; i++)
             {
                 got = capture.TryGetBorrowedFrame(out BorrowedVideoFrame first) && first.IsFdBacked;
-                if (!got) await Task.Delay(50, cts.Token);
+                if (!got)
+                    await Task.Delay(50, cts.Token);
             }
 
             Assert.IsTrue(got, "borrowed retention never produced an fd-backed frame");
@@ -231,11 +269,13 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
             // Taken immediately after, before the producer's next cycle can refill the slot.
             Assert.IsFalse(
                 capture.TryGetBorrowedFrame(out _),
-                "the same borrowed GPU frame was handed out twice");
+                "the same borrowed GPU frame was handed out twice"
+            );
         }
         finally
         {
-            foreach (GbmAllocator.Buffer b in buffers) b.Dispose();
+            foreach (GbmAllocator.Buffer b in buffers)
+                b.Dispose();
         }
     }
 }

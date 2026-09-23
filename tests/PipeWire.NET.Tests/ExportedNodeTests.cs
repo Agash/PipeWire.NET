@@ -58,7 +58,10 @@ public sealed class ExportedNodeTests
 
         string name = $"pwnet-export-{Environment.ProcessId}";
 
-        await using var ctx = new PipeWireContext("pwnet-export", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-export",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var reg = new PipeWireRegistry(ctx);
@@ -73,15 +76,18 @@ public sealed class ExportedNodeTests
             {
                 [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source",
                 [PipeWireKeys.PW_KEY_NODE_DESCRIPTION] = "exported by PipeWire.NET",
-            });
+            }
+        );
 
         PipeWireNode? seen = null;
         for (var i = 0; i < 100 && seen is null; i++)
         {
-            seen = reg.Current.Nodes.FirstOrDefault(
-                n => string.Equals(n.NodeName, name, StringComparison.Ordinal));
+            seen = reg.Current.Nodes.FirstOrDefault(n =>
+                string.Equals(n.NodeName, name, StringComparison.Ordinal)
+            );
 
-            if (seen is null) await Task.Delay(50, cts.Token);
+            if (seen is null)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(seen, "the exported node never appeared in the graph");
@@ -91,7 +97,8 @@ public sealed class ExportedNodeTests
         Assert.AreEqual(
             "exported by PipeWire.NET",
             seen.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_NODE_DESCRIPTION),
-            "the exported node lost the properties it was published with");
+            "the exported node lost the properties it was published with"
+        );
 
         // A node with no ports is in the graph but cannot be linked to, which presents downstream
         // as "no target node available" when something tries to connect - a message that says
@@ -100,17 +107,20 @@ public sealed class ExportedNodeTests
         for (var i = 0; i < 60 && ports.Count == 0; i++)
         {
             ports = [.. reg.Current.Ports.Where(p => p.NodeId == seen.NodeId)];
-            if (ports.Count == 0) await Task.Delay(50, cts.Token);
+            if (ports.Count == 0)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsTrue(
             ports.Count > 0,
             "the exported node has no ports in the graph, so nothing can link to it - the node's "
-            + "port_info emission did not register a port");
+                + "port_info emission did not register a port"
+        );
 
         Assert.IsTrue(
             ports.Any(p => p.PortDirection == PipeWirePortDirection.Out),
-            "the exported source has no output port for a consumer to read from");
+            "the exported source has no output port for a consumer to read from"
+        );
     }
 
     /// <summary>
@@ -130,7 +140,10 @@ public sealed class ExportedNodeTests
 
         string name = $"pwnet-exportsrc-{Environment.ProcessId}";
 
-        await using var ctx = new PipeWireContext("pwnet-exportsrc", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-exportsrc",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var reg = new PipeWireRegistry(ctx);
@@ -145,25 +158,26 @@ public sealed class ExportedNodeTests
             name,
             PipeWireExportedFormat.AudioF32(Rate, Channels),
             SpaDirection.Output,
-            new Dictionary<string, string>
-            {
-                [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source",
-            });
+            new Dictionary<string, string> { [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source" }
+        );
 
         node.ProcessCallback = (_, data) =>
         {
             Span<float> floats = MemoryMarshal.Cast<byte, float>(data);
-            for (var i = 0; i < floats.Length; i++) floats[i] = ++next;
+            for (var i = 0; i < floats.Length; i++)
+                floats[i] = ++next;
             return floats.Length * 4;
         };
 
         PipeWireNode? exported = null;
         for (var i = 0; i < 100 && exported is null; i++)
         {
-            exported = reg.Current.Nodes.FirstOrDefault(
-                n => string.Equals(n.NodeName, name, StringComparison.Ordinal));
+            exported = reg.Current.Nodes.FirstOrDefault(n =>
+                string.Equals(n.NodeName, name, StringComparison.Ordinal)
+            );
 
-            if (exported is null) await Task.Delay(50, cts.Token);
+            if (exported is null)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(exported, "the exported node never appeared in the graph");
@@ -173,7 +187,12 @@ public sealed class ExportedNodeTests
         capture.FrameReady += (_, f) =>
         {
             ReadOnlySpan<float> floats = MemoryMarshal.Cast<byte, float>(f.Samples);
-            lock (received) { if (received.Count < 8000) foreach (float v in floats) received.Add(v); }
+            lock (received)
+            {
+                if (received.Count < 8000)
+                    foreach (float v in floats)
+                        received.Add(v);
+            }
         };
 
         // Routed by the session manager, as upstream's export-source is: it exports with
@@ -189,28 +208,43 @@ public sealed class ExportedNodeTests
         PipeWirePort? source = null;
         for (var i = 0; i < 100 && source is null; i++)
         {
-            source = reg.Current.Ports.FirstOrDefault(
-                p => p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.Out);
+            source = reg.Current.Ports.FirstOrDefault(p =>
+                p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.Out
+            );
 
-            if (source is null) await Task.Delay(50, cts.Token);
+            if (source is null)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(source, "the exported node never registered an output port to route to");
 
-        capture.Connect(exported!.NodeId, sampleRate: Rate, channels: Channels, format: AudioSampleFormat.F32Le);
+        capture.Connect(
+            exported!.NodeId,
+            sampleRate: Rate,
+            channels: Channels,
+            format: AudioSampleFormat.F32Le
+        );
         await capture.WaitForStreamingAsync(cts.Token);
 
         for (var i = 0; i < 100; i++)
         {
-            lock (received) { if (received.Count > 2000) break; }
+            lock (received)
+            {
+                if (received.Count > 2000)
+                    break;
+            }
             await Task.Delay(50, cts.Token);
         }
 
         float[] got;
-        lock (received) got = [.. received];
+        lock (received)
+            got = [.. received];
 
         // The graph negotiated: the node was told a format and given buffers.
-        Assert.IsNotNull(node.NegotiatedFormat, "the graph never settled a format on the exported node");
+        Assert.IsNotNull(
+            node.NegotiatedFormat,
+            "the graph never settled a format on the exported node"
+        );
         Assert.IsTrue(node.BufferCount > 0, "the graph never gave the exported node any buffers");
         Assert.IsTrue(node.HasProcessed, "the exported node was never driven");
 
@@ -218,19 +252,23 @@ public sealed class ExportedNodeTests
 
         // And what arrived is the ramp this node wrote, in order - not silence, and not garbage.
         int start = 0;
-        while (start < got.Length && got[start] == 0f) start++;
+        while (start < got.Length && got[start] == 0f)
+            start++;
 
         Assert.IsTrue(
             got.Length - start > 500,
-            "the consumer received only silence, so the exported node's data never reached it");
+            "the consumer received only silence, so the exported node's data never reached it"
+        );
 
         var breaks = 0;
         for (int i = start + 1; i < got.Length; i++)
-            if (got[i] != got[i - 1] + 1f) breaks++;
+            if (got[i] != got[i - 1] + 1f)
+                breaks++;
 
         Assert.IsTrue(
             breaks <= 2,
-            $"the ramp broke {breaks} times, so the exported node's buffers were reordered or lost");
+            $"the ramp broke {breaks} times, so the exported node's buffers were reordered or lost"
+        );
     }
 
     /// <summary>
@@ -257,7 +295,10 @@ public sealed class ExportedNodeTests
 
         string name = $"pwnet-exportauto-{Environment.ProcessId}";
 
-        await using var ctx = new PipeWireContext("pwnet-exportauto", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-exportauto",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var reg = new PipeWireRegistry(ctx);
@@ -270,25 +311,26 @@ public sealed class ExportedNodeTests
             name,
             PipeWireExportedFormat.AudioF32(Rate, Channels),
             SpaDirection.Output,
-            new Dictionary<string, string>
-            {
-                [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source",
-            });
+            new Dictionary<string, string> { [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source" }
+        );
 
         node.ProcessCallback = (_, data) =>
         {
             Span<float> floats = MemoryMarshal.Cast<byte, float>(data);
-            for (var i = 0; i < floats.Length; i++) floats[i] = ++next;
+            for (var i = 0; i < floats.Length; i++)
+                floats[i] = ++next;
             return floats.Length * 4;
         };
 
         PipeWireNode? exported = null;
         for (var i = 0; i < 100 && exported is null; i++)
         {
-            exported = reg.Current.Nodes.FirstOrDefault(
-                n => string.Equals(n.NodeName, name, StringComparison.Ordinal));
+            exported = reg.Current.Nodes.FirstOrDefault(n =>
+                string.Equals(n.NodeName, name, StringComparison.Ordinal)
+            );
 
-            if (exported is null) await Task.Delay(50, cts.Token);
+            if (exported is null)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(exported, "the exported node never appeared in the graph");
@@ -297,10 +339,12 @@ public sealed class ExportedNodeTests
         var hasPort = false;
         for (var i = 0; i < 100 && !hasPort; i++)
         {
-            hasPort = reg.Current.Ports.Any(
-                p => p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.Out);
+            hasPort = reg.Current.Ports.Any(p =>
+                p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.Out
+            );
 
-            if (!hasPort) await Task.Delay(50, cts.Token);
+            if (!hasPort)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsTrue(hasPort, "the exported node never exposed an output port to route to");
@@ -310,11 +354,20 @@ public sealed class ExportedNodeTests
         capture.FrameReady += (_, f) =>
         {
             ReadOnlySpan<float> floats = MemoryMarshal.Cast<byte, float>(f.Samples);
-            lock (received) { if (received.Count < 8000) foreach (float v in floats) received.Add(v); }
+            lock (received)
+            {
+                if (received.Count < 8000)
+                    foreach (float v in floats)
+                        received.Add(v);
+            }
         };
 
-        capture.Connect(exported!.NodeId, sampleRate: Rate, channels: Channels,
-            format: AudioSampleFormat.F32Le);
+        capture.Connect(
+            exported!.NodeId,
+            sampleRate: Rate,
+            channels: Channels,
+            format: AudioSampleFormat.F32Le
+        );
 
         await capture.WaitForStreamingAsync(cts.Token);
         uint captureNode = await capture.WaitForNodeIdAsync(cts.Token);
@@ -326,15 +379,22 @@ public sealed class ExportedNodeTests
         bool linked = false;
         for (var i = 0; i < 100 && !linked; i++)
         {
-            linked = reg.Current.Links.Any(l => l.OutputNodeId == exported.NodeId && l.InputNodeId == captureNode);
-            if (!linked) await Task.Delay(50, cts.Token);
+            linked = reg.Current.Links.Any(l =>
+                l.OutputNodeId == exported.NodeId && l.InputNodeId == captureNode
+            );
+            if (!linked)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsTrue(linked, "the session manager never linked the consumer to the exported node");
 
         for (var i = 0; i < 100; i++)
         {
-            lock (received) { if (received.Count > 2000) break; }
+            lock (received)
+            {
+                if (received.Count > 2000)
+                    break;
+            }
             await Task.Delay(50, cts.Token);
         }
 
@@ -358,7 +418,10 @@ public sealed class ExportedNodeTests
 
         string name = $"pwnet-exportspa-{Environment.ProcessId}";
 
-        await using var ctx = new PipeWireContext("pwnet-exportspa", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-exportspa",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var reg = new PipeWireRegistry(ctx);
@@ -378,7 +441,8 @@ public sealed class ExportedNodeTests
                 // Named outright, as upstream's export-spa does. A client's context.spa-libs map
                 // does not cover audiotestsrc, so resolving it by name alone fails on a stock
                 // install and the test skips itself claiming the plugin is not installed.
-                libraryName: "audiotestsrc/libspa-audiotestsrc");
+                libraryName: "audiotestsrc/libspa-audiotestsrc"
+            );
         }
         catch (InvalidOperationException ex)
         {
@@ -392,10 +456,12 @@ public sealed class ExportedNodeTests
             PipeWireNode? seen = null;
             for (var i = 0; i < 100 && seen is null; i++)
             {
-                seen = reg.Current.Nodes.FirstOrDefault(
-                    n => string.Equals(n.NodeName, name, StringComparison.Ordinal));
+                seen = reg.Current.Nodes.FirstOrDefault(n =>
+                    string.Equals(n.NodeName, name, StringComparison.Ordinal)
+                );
 
-                if (seen is null) await Task.Delay(50, cts.Token);
+                if (seen is null)
+                    await Task.Delay(50, cts.Token);
             }
 
             Assert.IsNotNull(seen, "the exported SPA factory node never appeared in the graph");
@@ -420,7 +486,10 @@ public sealed class ExportedNodeTests
 
         string sinkName = $"pwnet-exportsink-{Environment.ProcessId}";
 
-        await using var ctx = new PipeWireContext("pwnet-exportsink", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-exportsink",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var reg = new PipeWireRegistry(ctx);
@@ -433,25 +502,30 @@ public sealed class ExportedNodeTests
             sinkName,
             PipeWireExportedFormat.AudioF32(Rate, Channels),
             SpaDirection.Input,
-            new Dictionary<string, string>
-            {
-                [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Sink",
-            });
+            new Dictionary<string, string> { [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Sink" }
+        );
 
         sink.ProcessCallback = (_, data) =>
         {
             ReadOnlySpan<float> floats = MemoryMarshal.Cast<byte, float>(data);
-            lock (consumed) { if (consumed.Count < 8000) foreach (float v in floats) consumed.Add(v); }
+            lock (consumed)
+            {
+                if (consumed.Count < 8000)
+                    foreach (float v in floats)
+                        consumed.Add(v);
+            }
             return 0;
         };
 
         PipeWireNode? exported = null;
         for (var i = 0; i < 100 && exported is null; i++)
         {
-            exported = reg.Current.Nodes.FirstOrDefault(
-                n => string.Equals(n.NodeName, sinkName, StringComparison.Ordinal));
+            exported = reg.Current.Nodes.FirstOrDefault(n =>
+                string.Equals(n.NodeName, sinkName, StringComparison.Ordinal)
+            );
 
-            if (exported is null) await Task.Delay(50, cts.Token);
+            if (exported is null)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(exported, "the exported sink never appeared in the graph");
@@ -462,10 +536,12 @@ public sealed class ExportedNodeTests
         PipeWirePort? input = null;
         for (var i = 0; i < 100 && input is null; i++)
         {
-            input = reg.Current.Ports.FirstOrDefault(
-                p => p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.In);
+            input = reg.Current.Ports.FirstOrDefault(p =>
+                p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.In
+            );
 
-            if (input is null) await Task.Delay(50, cts.Token);
+            if (input is null)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(input, "the exported sink never registered an input port to route to");
@@ -473,12 +549,18 @@ public sealed class ExportedNodeTests
         // An ordinary producer, which knows nothing about how the sink is implemented.
         uint next = 0;
         await using var output = new PipeWireAudioOutput(
-            ctx, $"{sinkName}-src", Rate, Channels, AudioSampleFormat.F32Le);
+            ctx,
+            $"{sinkName}-src",
+            Rate,
+            Channels,
+            AudioSampleFormat.F32Le
+        );
 
         output.FillSamples += (_, samples, _, _, _) =>
         {
             Span<float> floats = MemoryMarshal.Cast<byte, float>(samples);
-            for (var i = 0; i < floats.Length; i++) floats[i] = ++next;
+            for (var i = 0; i < floats.Length; i++)
+                floats[i] = ++next;
             return samples.Length;
         };
 
@@ -486,16 +568,24 @@ public sealed class ExportedNodeTests
 
         for (var i = 0; i < 120; i++)
         {
-            lock (consumed) { if (consumed.Count > 1000) break; }
+            lock (consumed)
+            {
+                if (consumed.Count > 1000)
+                    break;
+            }
             await Task.Delay(50, cts.Token);
         }
 
         float[] got;
-        lock (consumed) got = [.. consumed];
+        lock (consumed)
+            got = [.. consumed];
 
         // A failure, not a skip: the port is registered and the producer was routed to it, so a
         // sink that is never driven is this node failing to negotiate or to be scheduled.
-        Assert.IsNotNull(sink.NegotiatedFormat, "the graph never settled a format on the exported sink");
+        Assert.IsNotNull(
+            sink.NegotiatedFormat,
+            "the graph never settled a format on the exported sink"
+        );
         Assert.IsTrue(sink.BufferCount > 0, "the graph never gave the exported sink any buffers");
         Assert.IsTrue(sink.HasProcessed, "the exported sink was linked but never driven");
         Assert.IsNull(sink.LastCallbackError, $"a sink callback faulted: {sink.LastCallbackError}");
@@ -503,11 +593,13 @@ public sealed class ExportedNodeTests
         Assert.IsTrue(got.Length > 500, $"the exported sink was handed only {got.Length} samples");
 
         int start = 0;
-        while (start < got.Length && got[start] == 0f) start++;
+        while (start < got.Length && got[start] == 0f)
+            start++;
 
         Assert.IsTrue(
             got.Length - start > 200,
-            "the exported sink was handed only silence, so the producer's data never reached it");
+            "the exported sink was handed only silence, so the producer's data never reached it"
+        );
     }
 
     /// <summary>
@@ -526,20 +618,29 @@ public sealed class ExportedNodeTests
 
         string name = $"pwnet-exportgone-{Environment.ProcessId}";
 
-        await using var ctx = new PipeWireContext("pwnet-exportgone", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-exportgone",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         PipeWireNodeProvider node = PipeWireNodeProvider.Create(
-            ctx, name, PipeWireExportedFormat.AudioF32(Rate, Channels));
+            ctx,
+            name,
+            PipeWireExportedFormat.AudioF32(Rate, Channels)
+        );
 
         var appeared = false;
         for (var i = 0; i < 100 && !appeared; i++)
         {
-            appeared = reg.Current.Nodes.Any(n => string.Equals(n.NodeName, name, StringComparison.Ordinal));
-            if (!appeared) await Task.Delay(50, cts.Token);
+            appeared = reg.Current.Nodes.Any(n =>
+                string.Equals(n.NodeName, name, StringComparison.Ordinal)
+            );
+            if (!appeared)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsTrue(appeared, "the exported node never appeared, so its removal proves nothing");
@@ -549,8 +650,11 @@ public sealed class ExportedNodeTests
         var gone = false;
         for (var i = 0; i < 100 && !gone; i++)
         {
-            gone = !reg.Current.Nodes.Any(n => string.Equals(n.NodeName, name, StringComparison.Ordinal));
-            if (!gone) await Task.Delay(50, cts.Token);
+            gone = !reg.Current.Nodes.Any(n =>
+                string.Equals(n.NodeName, name, StringComparison.Ordinal)
+            );
+            if (!gone)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsTrue(gone, "the exported node outlived its disposal, so the graph still holds it");
@@ -583,7 +687,10 @@ public sealed class ExportedNodeTests
 
         string name = $"pwnet-exportthrow-{Environment.ProcessId}";
 
-        await using var ctx = new PipeWireContext("pwnet-exportthrow", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-exportthrow",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var reg = new PipeWireRegistry(ctx);
@@ -596,10 +703,8 @@ public sealed class ExportedNodeTests
             name,
             PipeWireExportedFormat.AudioF32(Rate, Channels),
             SpaDirection.Output,
-            new Dictionary<string, string>
-            {
-                [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source",
-            });
+            new Dictionary<string, string> { [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source" }
+        );
 
         node.ProcessCallback = (_, _) =>
         {
@@ -610,28 +715,42 @@ public sealed class ExportedNodeTests
         PipeWireNode? exported = null;
         for (var i = 0; i < 100 && exported is null; i++)
         {
-            exported = reg.Current.Nodes.FirstOrDefault(
-                n => string.Equals(n.NodeName, name, StringComparison.Ordinal));
+            exported = reg.Current.Nodes.FirstOrDefault(n =>
+                string.Equals(n.NodeName, name, StringComparison.Ordinal)
+            );
 
-            if (exported is null) await Task.Delay(50, cts.Token);
+            if (exported is null)
+                await Task.Delay(50, cts.Token);
         }
 
-        Assert.IsNotNull(exported, "the exported node never appeared, so nothing would have driven it");
+        Assert.IsNotNull(
+            exported,
+            "the exported node never appeared, so nothing would have driven it"
+        );
 
         var hasPort = false;
         for (var i = 0; i < 100 && !hasPort; i++)
         {
-            hasPort = reg.Current.Ports.Any(
-                p => p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.Out);
+            hasPort = reg.Current.Ports.Any(p =>
+                p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.Out
+            );
 
-            if (!hasPort) await Task.Delay(50, cts.Token);
+            if (!hasPort)
+                await Task.Delay(50, cts.Token);
         }
 
-        Assert.IsTrue(hasPort, "the exported node never exposed a port, so it would never be scheduled");
+        Assert.IsTrue(
+            hasPort,
+            "the exported node never exposed a port, so it would never be scheduled"
+        );
 
         await using var capture = new PipeWireAudioCapture(ctx, $"{name}-sink");
-        capture.Connect(exported!.NodeId, sampleRate: Rate, channels: Channels,
-            format: AudioSampleFormat.F32Le);
+        capture.Connect(
+            exported!.NodeId,
+            sampleRate: Rate,
+            channels: Channels,
+            format: AudioSampleFormat.F32Le
+        );
 
         await capture.WaitForStreamingAsync(cts.Token);
         await Task.Delay(700, cts.Token);
@@ -640,16 +759,19 @@ public sealed class ExportedNodeTests
         // throw above ended the test host here rather than failing this test.
         Assert.IsTrue(
             Volatile.Read(ref calls) > 0,
-            "the handler was never invoked, so the throw was never actually exercised");
+            "the handler was never invoked, so the throw was never actually exercised"
+        );
 
         Assert.IsInstanceOfType<InvalidOperationException>(
             node.LastProcessError,
-            "the exception a cycle threw should be recorded where a caller can diagnose it");
+            "the exception a cycle threw should be recorded where a caller can diagnose it"
+        );
 
         // And the graph keeps running: the node stays, and the context is still usable afterwards.
         Assert.IsTrue(
             reg.Current.Nodes.Any(n => string.Equals(n.NodeName, name, StringComparison.Ordinal)),
-            "the node was torn out of the graph by a fault that should only have dropped one cycle");
+            "the node was torn out of the graph by a fault that should only have dropped one cycle"
+        );
     }
 
     /// <summary>
@@ -686,7 +808,10 @@ public sealed class ExportedNodeTests
         string name = $"pwnet-exportgst-{Environment.ProcessId}";
         string output = Path.Combine(Path.GetTempPath(), $"{name}.f32");
 
-        await using var ctx = new PipeWireContext("pwnet-exportgst", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-exportgst",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var reg = new PipeWireRegistry(ctx);
@@ -699,7 +824,8 @@ public sealed class ExportedNodeTests
             name,
             PipeWireExportedFormat.AudioF32(Rate, stereo),
             SpaDirection.Output,
-            new Dictionary<string, string> { [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source" });
+            new Dictionary<string, string> { [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source" }
+        );
 
         // Every cycle's io state, so a failure below says whether a quantum was lost at this end
         // (published over a buffer the consumer had not taken) or after it.
@@ -712,9 +838,11 @@ public sealed class ExportedNodeTests
         node.ProcessCallback = (_, data) =>
         {
             Span<float> floats = MemoryMarshal.Cast<byte, float>(data);
-            if (cycles < firstOfCycle.Length) firstOfCycle[cycles] = next + 1;
+            if (cycles < firstOfCycle.Length)
+                firstOfCycle[cycles] = next + 1;
             cycles++;
-            for (var i = 0; i < floats.Length; i++) floats[i] = ++next;
+            for (var i = 0; i < floats.Length; i++)
+                floats[i] = ++next;
             return floats.Length * 4;
         };
 
@@ -722,12 +850,20 @@ public sealed class ExportedNodeTests
         for (var i = 0; i < 100 && port is null; i++)
         {
             port = reg.Current.Ports.FirstOrDefault(p =>
-                reg.Current.Nodes.Any(n => n.NodeId == p.NodeId && string.Equals(n.NodeName, name, StringComparison.Ordinal))
-                && p.PortDirection == PipeWirePortDirection.Out);
-            if (port is null) await Task.Delay(50, cts.Token);
+                reg.Current.Nodes.Any(n =>
+                    n.NodeId == p.NodeId
+                    && string.Equals(n.NodeName, name, StringComparison.Ordinal)
+                )
+                && p.PortDirection == PipeWirePortDirection.Out
+            );
+            if (port is null)
+                await Task.Delay(50, cts.Token);
         }
 
-        Assert.IsNotNull(port, "the exported node never registered an output port for GStreamer to reach");
+        Assert.IsNotNull(
+            port,
+            "the exported node never registered an output port for GStreamer to reach"
+        );
 
         var psi = new ProcessStartInfo("/usr/bin/gst-launch-1.0")
         {
@@ -745,17 +881,28 @@ public sealed class ExportedNodeTests
         // min-buffers: pipewiresrc asks for one by default and negotiates two, so any moment
         // GStreamer holds both (filesink writing, the machine loaded) drops a whole cycle. Sixteen
         // is the headroom upstream's property exists to give a consumer that must not drop.
-        foreach (string arg in new[]
-                 {
-                     "-q", "pipewiresrc", $"target-object={name}", "num-buffers=40", "min-buffers=16", "!",
-                     $"audio/x-raw,format=F32LE,channels={stereo},rate={Rate}", "!",
-                     "filesink", $"location={output}",
-                 })
+        foreach (
+            string arg in new[]
+            {
+                "-q",
+                "pipewiresrc",
+                $"target-object={name}",
+                "num-buffers=40",
+                "min-buffers=16",
+                "!",
+                $"audio/x-raw,format=F32LE,channels={stereo},rate={Rate}",
+                "!",
+                "filesink",
+                $"location={output}",
+            }
+        )
         {
             psi.ArgumentList.Add(arg);
         }
 
-        using Process gst = Process.Start(psi) ?? throw new InvalidOperationException("gst-launch-1.0 did not start");
+        using Process gst =
+            Process.Start(psi)
+            ?? throw new InvalidOperationException("gst-launch-1.0 did not start");
 
         // Both streams drained: a child writing to a pipe nobody reads blocks once it fills, and a
         // blocked child looks exactly like a hung test.
@@ -785,15 +932,23 @@ public sealed class ExportedNodeTests
             Assert.IsTrue(got.Length > 1000, $"GStreamer wrote only {got.Length} samples");
 
             int start = 0;
-            while (start < got.Length && got[start] == 0f) start++;
-            Assert.IsTrue(got.Length - start > 500, "GStreamer received only silence from the exported node");
+            while (start < got.Length && got[start] == 0f)
+                start++;
+            Assert.IsTrue(
+                got.Length - start > 500,
+                "GStreamer received only silence from the exported node"
+            );
 
             // Every break must be a whole number of cycles skipped, and reported by the consumer.
             // Our node records the value each published cycle started at; a lost cycle ends one run
             // on a cycle's last value and resumes on a later cycle's first, forward. Anything else
             // (a jump inside a cycle, backwards, a value never written) is data altered on the way.
-            var cycleStarts = new HashSet<float>(firstOfCycle.Take(Math.Min(cycles, firstOfCycle.Length)));
-            int dropsReported = errors.Split((char)10).Count(l => l.Contains("out of buffers", StringComparison.Ordinal));
+            var cycleStarts = new HashSet<float>(
+                firstOfCycle.Take(Math.Min(cycles, firstOfCycle.Length))
+            );
+            int dropsReported = errors
+                .Split((char)10)
+                .Count(l => l.Contains("out of buffers", StringComparison.Ordinal));
 
             var breaks = 0;
             var altered = 0;
@@ -801,20 +956,32 @@ public sealed class ExportedNodeTests
             var breakList = new List<string>();
             for (int i = start + 1; i < got.Length; i++)
             {
-                if (got[i] == got[i - 1] + 1f) continue;
+                if (got[i] == got[i - 1] + 1f)
+                    continue;
                 breaks++;
-                if (firstBreak < 0) firstBreak = i;
-                bool wholeCycles = got[i] > got[i - 1] && cycleStarts.Contains(got[i]) && cycleStarts.Contains(got[i - 1] + 1f);
-                if (!wholeCycles) altered++;
+                if (firstBreak < 0)
+                    firstBreak = i;
+                bool wholeCycles =
+                    got[i] > got[i - 1]
+                    && cycleStarts.Contains(got[i])
+                    && cycleStarts.Contains(got[i - 1] + 1f);
+                if (!wholeCycles)
+                    altered++;
                 if (breakList.Count < 16)
-                    breakList.Add($"{i - start}:{got[i] - got[i - 1] - 1f:+0;-0}{(wholeCycles ? "" : "!")}");
+                    breakList.Add(
+                        $"{i - start}:{got[i] - got[i - 1] - 1f:+0;-0}{(wholeCycles ? "" : "!")}"
+                    );
             }
 
             // What the stream looked like where it first went wrong, so a failure says whether the
             // values were scaled (a volume), interpolated (a resampler), repeated or reordered.
-            string around = firstBreak < 0
-                ? ""
-                : string.Join(", ", got[Math.Max(start, firstBreak - 4)..Math.Min(got.Length, firstBreak + 6)]);
+            string around =
+                firstBreak < 0
+                    ? ""
+                    : string.Join(
+                        ", ",
+                        got[Math.Max(start, firstBreak - 4)..Math.Min(got.Length, firstBreak + 6)]
+                    );
 
             string gstLog = Path.Combine(Path.GetTempPath(), $"{name}.gst.log");
             if (altered > 0 || (breaks > 0 && dropsReported == 0))
@@ -827,22 +994,39 @@ public sealed class ExportedNodeTests
                 for (int c = 0, written = 0; c < recorded; c++)
                 {
                     PipeWireNodeProvider.ProduceCycleRecord r = trace[c];
-                    string at = r.Result == 2 && written < firstOfCycle.Length ? $" @{firstOfCycle[written++]}" : "";
-                    cycleLines.Append(System.Globalization.CultureInfo.InvariantCulture,
-                        $"{c}: s{r.EntryStatus}/b{(int)r.EntryBuffer} -> b{(int)r.Published} : {r.Result} free {r.FreeAfter}/{r.Pool}{at}")
+                    string at =
+                        r.Result == 2 && written < firstOfCycle.Length
+                            ? $" @{firstOfCycle[written++]}"
+                            : "";
+                    cycleLines
+                        .Append(
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            $"{c}: s{r.EntryStatus}/b{(int)r.EntryBuffer} -> b{(int)r.Published} : {r.Result} free {r.FreeAfter}/{r.Pool}{at}"
+                        )
                         .Append((char)10);
                 }
 
-                await File.WriteAllTextAsync(gstLog, errors + (char)10 + "--- exported node cycles ---" + (char)10 + cycleLines, cts.Token);
+                await File.WriteAllTextAsync(
+                    gstLog,
+                    errors + (char)10 + "--- exported node cycles ---" + (char)10 + cycleLines,
+                    cts.Token
+                );
             }
 
-            string detail = $"{breaks} break(s) in {got.Length - start} samples, first at {firstBreak - start}: [{around}]; "
+            string detail =
+                $"{breaks} break(s) in {got.Length - start} samples, first at {firstBreak - start}: [{around}]; "
                 + $"breaks (index:jump, ! = not whole cycles): {string.Join(" ", breakList)}; "
                 + $"the consumer reported {dropsReported} drop(s); logs: {gstLog}";
 
-            Assert.AreEqual(0, altered, $"the exported node's data reached GStreamer altered: {detail}");
-            Assert.IsTrue(breaks == 0 || dropsReported > 0,
-                $"whole cycles went missing without the consumer reporting a drop, so they were lost between this node and it: {detail}");
+            Assert.AreEqual(
+                0,
+                altered,
+                $"the exported node's data reached GStreamer altered: {detail}"
+            );
+            Assert.IsTrue(
+                breaks == 0 || dropsReported > 0,
+                $"whole cycles went missing without the consumer reporting a drop, so they were lost between this node and it: {detail}"
+            );
         }
         finally
         {
@@ -878,7 +1062,10 @@ public sealed class ExportedNodeTests
 
         string name = $"pwnet-exportchurn-{Environment.ProcessId}";
 
-        await using var ctx = new PipeWireContext("pwnet-exportchurn", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-exportchurn",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var reg = new PipeWireRegistry(ctx);
@@ -890,12 +1077,14 @@ public sealed class ExportedNodeTests
             name,
             PipeWireExportedFormat.AudioF32(Rate, Channels),
             SpaDirection.Output,
-            new Dictionary<string, string> { [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source" });
+            new Dictionary<string, string> { [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source" }
+        );
 
         node.ProcessCallback = (_, data) =>
         {
             Span<float> floats = MemoryMarshal.Cast<byte, float>(data);
-            for (var i = 0; i < floats.Length; i++) floats[i] = ++next;
+            for (var i = 0; i < floats.Length; i++)
+                floats[i] = ++next;
             return floats.Length * 4;
         };
 
@@ -903,14 +1092,18 @@ public sealed class ExportedNodeTests
         PipeWirePort? source = null;
         for (var i = 0; i < 100 && source is null; i++)
         {
-            exported ??= reg.Current.Nodes.FirstOrDefault(n => string.Equals(n.NodeName, name, StringComparison.Ordinal));
+            exported ??= reg.Current.Nodes.FirstOrDefault(n =>
+                string.Equals(n.NodeName, name, StringComparison.Ordinal)
+            );
             if (exported is not null)
             {
-                source = reg.Current.Ports.FirstOrDefault(
-                    p => p.NodeId == exported.NodeId && p.PortDirection == PipeWirePortDirection.Out);
+                source = reg.Current.Ports.FirstOrDefault(p =>
+                    p.NodeId == exported.NodeId && p.PortDirection == PipeWirePortDirection.Out
+                );
             }
 
-            if (source is null) await Task.Delay(50, cts.Token);
+            if (source is null)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(source, "the exported node never registered an output port to route to");
@@ -920,11 +1113,25 @@ public sealed class ExportedNodeTests
             var first = new List<float>();
             var second = new List<float>();
 
-            await using (PipeWireAudioCapture a = await ConnectRampConsumerAsync(ctx, $"{name}-a{round}", exported!.NodeId, first, cts.Token))
+            await using (
+                PipeWireAudioCapture a = await ConnectRampConsumerAsync(
+                    ctx,
+                    $"{name}-a{round}",
+                    exported!.NodeId,
+                    first,
+                    cts.Token
+                )
+            )
             {
                 if (round % 2 == 1)
                 {
-                    await using PipeWireAudioCapture b = await ConnectRampConsumerAsync(ctx, $"{name}-b{round}", exported.NodeId, second, cts.Token);
+                    await using PipeWireAudioCapture b = await ConnectRampConsumerAsync(
+                        ctx,
+                        $"{name}-b{round}",
+                        exported.NodeId,
+                        second,
+                        cts.Token
+                    );
                     await WaitForSamplesAsync(second, cts.Token);
                     AssertRamp(second, $"round {round}, joining consumer");
                 }
@@ -935,21 +1142,42 @@ public sealed class ExportedNodeTests
             AssertRamp(first, $"round {round}");
         }
 
-        Assert.IsNull(node.LastCallbackError, $"a node callback faulted while reconfigured: {node.LastCallbackError}");
-        Assert.IsNull(node.LastProcessError, $"the process handler faulted while reconfigured: {node.LastProcessError}");
+        Assert.IsNull(
+            node.LastCallbackError,
+            $"a node callback faulted while reconfigured: {node.LastCallbackError}"
+        );
+        Assert.IsNull(
+            node.LastProcessError,
+            $"the process handler faulted while reconfigured: {node.LastProcessError}"
+        );
     }
 
     private static async Task<PipeWireAudioCapture> ConnectRampConsumerAsync(
-        PipeWireContext ctx, string name, uint target, List<float> received, CancellationToken ct)
+        PipeWireContext ctx,
+        string name,
+        uint target,
+        List<float> received,
+        CancellationToken ct
+    )
     {
         var capture = new PipeWireAudioCapture(ctx, name);
         capture.FrameReady += (_, f) =>
         {
             ReadOnlySpan<float> floats = MemoryMarshal.Cast<byte, float>(f.Samples);
-            lock (received) { if (received.Count < 8000) foreach (float v in floats) received.Add(v); }
+            lock (received)
+            {
+                if (received.Count < 8000)
+                    foreach (float v in floats)
+                        received.Add(v);
+            }
         };
 
-        capture.Connect(target, sampleRate: Rate, channels: Channels, format: AudioSampleFormat.F32Le);
+        capture.Connect(
+            target,
+            sampleRate: Rate,
+            channels: Channels,
+            format: AudioSampleFormat.F32Le
+        );
         await capture.WaitForStreamingAsync(ct);
         return capture;
     }
@@ -958,7 +1186,11 @@ public sealed class ExportedNodeTests
     {
         for (var i = 0; i < 100; i++)
         {
-            lock (received) { if (received.Count > 2000) return; }
+            lock (received)
+            {
+                if (received.Count > 2000)
+                    return;
+            }
             await Task.Delay(50, ct);
         }
     }
@@ -966,18 +1198,27 @@ public sealed class ExportedNodeTests
     private static void AssertRamp(List<float> received, string what)
     {
         float[] got;
-        lock (received) got = [.. received];
+        lock (received)
+            got = [.. received];
 
         int start = 0;
-        while (start < got.Length && got[start] == 0f) start++;
+        while (start < got.Length && got[start] == 0f)
+            start++;
 
-        Assert.IsTrue(got.Length - start > 500, $"{what}: only {got.Length - start} samples of the ramp arrived");
+        Assert.IsTrue(
+            got.Length - start > 500,
+            $"{what}: only {got.Length - start} samples of the ramp arrived"
+        );
 
         var breaks = 0;
         for (int i = start + 1; i < got.Length; i++)
-            if (got[i] != got[i - 1] + 1f) breaks++;
+            if (got[i] != got[i - 1] + 1f)
+                breaks++;
 
-        Assert.IsTrue(breaks <= 2, $"{what}: the ramp broke {breaks} times, so a buffer was reordered or recycled in use");
+        Assert.IsTrue(
+            breaks <= 2,
+            $"{what}: the ramp broke {breaks} times, so a buffer was reordered or recycled in use"
+        );
     }
 
     /// <summary>
@@ -1017,10 +1258,8 @@ public sealed class ExportedNodeTests
             name,
             PipeWireExportedFormat.AudioF32(Rate, Channels),
             SpaDirection.Output,
-            new Dictionary<string, string>
-            {
-                [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source",
-            });
+            new Dictionary<string, string> { [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source" }
+        );
 
         var reported = 0;
         var accepted = 0;
@@ -1045,18 +1284,24 @@ public sealed class ExportedNodeTests
 
         Assert.IsTrue(
             Volatile.Read(ref accepted) > 0,
-            "the graph installed no xrun callback, so a node here cannot report a missed cycle at all");
+            "the graph installed no xrun callback, so a node here cannot report a missed cycle at all"
+        );
     }
 
     private static async Task<uint> WaitForNodeIdAsync(
-        PipeWireRegistry reg, string nodeName, CancellationToken cancellationToken)
+        PipeWireRegistry reg,
+        string nodeName,
+        CancellationToken cancellationToken
+    )
     {
         for (var i = 0; i < 100; i++)
         {
-            PipeWireNode? found = reg.Current.Nodes.FirstOrDefault(
-                n => string.Equals(n.NodeName, nodeName, StringComparison.Ordinal));
+            PipeWireNode? found = reg.Current.Nodes.FirstOrDefault(n =>
+                string.Equals(n.NodeName, nodeName, StringComparison.Ordinal)
+            );
 
-            if (found is not null) return found.NodeId;
+            if (found is not null)
+                return found.NodeId;
             await Task.Delay(50, cancellationToken);
         }
 
@@ -1085,7 +1330,10 @@ public sealed class ExportedNodeTests
 
         string name = $"pwnet-nohandler-{Environment.ProcessId}";
 
-        await using var ctx = new PipeWireContext("pwnet-nohandler", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-nohandler",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var reg = new PipeWireRegistry(ctx);
@@ -1096,20 +1344,20 @@ public sealed class ExportedNodeTests
             name,
             PipeWireExportedFormat.AudioF32(Rate, Channels),
             SpaDirection.Output,
-            new Dictionary<string, string>
-            {
-                [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source",
-            });
+            new Dictionary<string, string> { [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source" }
+        );
 
         // Deliberately no ProcessCallback.
 
         PipeWireNode? exported = null;
         for (var i = 0; i < 100 && exported is null; i++)
         {
-            exported = reg.Current.Nodes.FirstOrDefault(
-                n => string.Equals(n.NodeName, name, StringComparison.Ordinal));
+            exported = reg.Current.Nodes.FirstOrDefault(n =>
+                string.Equals(n.NodeName, name, StringComparison.Ordinal)
+            );
 
-            if (exported is null) await Task.Delay(50, cts.Token);
+            if (exported is null)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(exported, "the exported node never appeared in the graph");
@@ -1117,10 +1365,12 @@ public sealed class ExportedNodeTests
         PipeWirePort? source = null;
         for (var i = 0; i < 100 && source is null; i++)
         {
-            source = reg.Current.Ports.FirstOrDefault(
-                p => p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.Out);
+            source = reg.Current.Ports.FirstOrDefault(p =>
+                p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.Out
+            );
 
-            if (source is null) await Task.Delay(50, cts.Token);
+            if (source is null)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(source, "the exported node never registered an output port to route to");
@@ -1135,33 +1385,45 @@ public sealed class ExportedNodeTests
             ReadOnlySpan<float> floats = MemoryMarshal.Cast<byte, float>(f.Samples);
             foreach (float v in floats)
             {
-                if (v != 0f) { Interlocked.Increment(ref nonZero); break; }
+                if (v != 0f)
+                {
+                    Interlocked.Increment(ref nonZero);
+                    break;
+                }
             }
         };
 
-        capture.Connect(exported!.NodeId, sampleRate: Rate, channels: Channels, format: AudioSampleFormat.F32Le);
+        capture.Connect(
+            exported!.NodeId,
+            sampleRate: Rate,
+            channels: Channels,
+            format: AudioSampleFormat.F32Le
+        );
         await capture.WaitForStreamingAsync(cts.Token);
 
-        for (var i = 0; i < 100 && Volatile.Read(ref frames) < 10; i++) await Task.Delay(50, cts.Token);
+        for (var i = 0; i < 100 && Volatile.Read(ref frames) < 10; i++)
+            await Task.Delay(50, cts.Token);
 
-        Assert.IsTrue(
-            node.HasBeenScheduled,
-            "a node with no handler was never driven at all");
+        Assert.IsTrue(node.HasBeenScheduled, "a node with no handler was never driven at all");
 
         Assert.IsFalse(
             node.HasProcessed,
-            "a node with no handler reported that a handler had produced something");
+            "a node with no handler reported that a handler had produced something"
+        );
 
         Assert.IsTrue(node.BufferCount > 0, "the graph never gave the node any buffers");
         Assert.IsNull(node.LastProcessError, "an absent handler was recorded as a process fault");
 
         Assert.AreEqual(
-            0, Volatile.Read(ref nonZero),
-            "a node with no handler produced something other than silence");
+            0,
+            Volatile.Read(ref nonZero),
+            "a node with no handler produced something other than silence"
+        );
 
         // Still there: an empty cycle is not a reason for the graph to drop the node.
         Assert.IsTrue(
             reg.Current.Nodes.Any(n => n.NodeId == exported.NodeId),
-            "the graph removed a node that was merely producing nothing");
+            "the graph removed a node that was merely producing nothing"
+        );
     }
 }

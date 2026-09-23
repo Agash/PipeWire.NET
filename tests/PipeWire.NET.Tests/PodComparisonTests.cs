@@ -48,14 +48,21 @@ public sealed class PodComparisonTests
     public void CompareValue_OrdersRectanglesByAreaThenWidth()
     {
         Assert.AreEqual(
-            -1, SpaPodCompare.CompareValue(new SpaRectangle(4, 1), new SpaRectangle(2, 4)),
-            "a rectangle with less area sorted higher");
+            -1,
+            SpaPodCompare.CompareValue(new SpaRectangle(4, 1), new SpaRectangle(2, 4)),
+            "a rectangle with less area sorted higher"
+        );
 
         Assert.AreEqual(
-            1, SpaPodCompare.CompareValue(new SpaRectangle(4, 1), new SpaRectangle(1, 4)),
-            "equal areas did not fall through to width");
+            1,
+            SpaPodCompare.CompareValue(new SpaRectangle(4, 1), new SpaRectangle(1, 4)),
+            "equal areas did not fall through to width"
+        );
 
-        Assert.AreEqual(0, SpaPodCompare.CompareValue(new SpaRectangle(64, 64), new SpaRectangle(64, 64)));
+        Assert.AreEqual(
+            0,
+            SpaPodCompare.CompareValue(new SpaRectangle(64, 64), new SpaRectangle(64, 64))
+        );
     }
 
     /// <summary>Fractions cross-multiply, so unreduced forms of the same rate are equal.</summary>
@@ -63,11 +70,19 @@ public sealed class PodComparisonTests
     public void CompareValue_ComparesFractionsByValueNotByForm()
     {
         Assert.AreEqual(
-            0, SpaPodCompare.CompareValue(new SpaFraction(1, 2), new SpaFraction(2, 4)),
-            "the same rate written two ways did not compare equal");
+            0,
+            SpaPodCompare.CompareValue(new SpaFraction(1, 2), new SpaFraction(2, 4)),
+            "the same rate written two ways did not compare equal"
+        );
 
-        Assert.AreEqual(1, SpaPodCompare.CompareValue(new SpaFraction(60, 1), new SpaFraction(30, 1)));
-        Assert.AreEqual(-1, SpaPodCompare.CompareValue(new SpaFraction(24000, 1001), new SpaFraction(30, 1)));
+        Assert.AreEqual(
+            1,
+            SpaPodCompare.CompareValue(new SpaFraction(60, 1), new SpaFraction(30, 1))
+        );
+        Assert.AreEqual(
+            -1,
+            SpaPodCompare.CompareValue(new SpaFraction(24000, 1001), new SpaFraction(30, 1))
+        );
     }
 
     /// <summary>Two values of different types fall back to comparing their encodings.</summary>
@@ -80,14 +95,20 @@ public sealed class PodComparisonTests
     public void CompareValue_FallsBackToBytesForTypesWithNoOrdering()
     {
         Assert.AreEqual(
-            1, SpaPodCompare.CompareValue(new SpaInt(1), new SpaLong(1)),
-            "two different types compared equal");
+            1,
+            SpaPodCompare.CompareValue(new SpaInt(1), new SpaLong(1)),
+            "two different types compared equal"
+        );
 
         var one = new SpaArray(SpaType.Int, [new SpaInt(1), new SpaInt(2)]);
         var same = new SpaArray(SpaType.Int, [new SpaInt(1), new SpaInt(2)]);
         var other = new SpaArray(SpaType.Int, [new SpaInt(1), new SpaInt(3)]);
 
-        Assert.AreEqual(0, SpaPodCompare.CompareValue(one, same), "identical arrays compared unequal");
+        Assert.AreEqual(
+            0,
+            SpaPodCompare.CompareValue(one, same),
+            "identical arrays compared unequal"
+        );
         Assert.AreEqual(1, SpaPodCompare.CompareValue(one, other));
     }
 
@@ -109,21 +130,36 @@ public sealed class PodComparisonTests
         Assert.AreEqual(0, SpaPodCompare.IsStepOf(new SpaLong(1001), new SpaLong(250)));
         Assert.AreEqual(-1, SpaPodCompare.IsStepOf(new SpaLong(1000), new SpaLong(0)));
 
-        Assert.AreEqual(1, SpaPodCompare.IsStepOf(new SpaRectangle(64, 32), new SpaRectangle(16, 16)));
-        Assert.AreEqual(0, SpaPodCompare.IsStepOf(new SpaRectangle(65, 32), new SpaRectangle(16, 16)));
-        Assert.AreEqual(-1, SpaPodCompare.IsStepOf(new SpaRectangle(64, 32), new SpaRectangle(0, 16)));
-        Assert.AreEqual(-1, SpaPodCompare.IsStepOf(new SpaRectangle(64, 32), new SpaRectangle(16, 0)));
+        Assert.AreEqual(
+            1,
+            SpaPodCompare.IsStepOf(new SpaRectangle(64, 32), new SpaRectangle(16, 16))
+        );
+        Assert.AreEqual(
+            0,
+            SpaPodCompare.IsStepOf(new SpaRectangle(65, 32), new SpaRectangle(16, 16))
+        );
+        Assert.AreEqual(
+            -1,
+            SpaPodCompare.IsStepOf(new SpaRectangle(64, 32), new SpaRectangle(0, 16))
+        );
+        Assert.AreEqual(
+            -1,
+            SpaPodCompare.IsStepOf(new SpaRectangle(64, 32), new SpaRectangle(16, 0))
+        );
 
         Assert.AreEqual(
-            -1, SpaPodCompare.IsStepOf(new SpaFloat(1f), new SpaFloat(0.5f)),
-            "a type with no step rule reported a step");
+            -1,
+            SpaPodCompare.IsStepOf(new SpaFloat(1f), new SpaFloat(0.5f)),
+            "a type with no step rule reported a step"
+        );
     }
 
     /// <summary>A range is inclusive at both ends, and a step applies inside it.</summary>
     [TestMethod]
     public void IsInRange_IsInclusiveAndHonoursAStep()
     {
-        SpaValue min = new SpaInt(10), max = new SpaInt(20);
+        SpaValue min = new SpaInt(10),
+            max = new SpaInt(20);
 
         Assert.AreEqual(1, SpaPodCompare.IsInRange(new SpaInt(10), min, max, null));
         Assert.AreEqual(1, SpaPodCompare.IsInRange(new SpaInt(20), min, max, null));
@@ -145,13 +181,22 @@ public sealed class PodComparisonTests
     public void IsValidChoice_FollowsTheRuleForEachKind()
     {
         ImmutableArray<SpaValue> enumeration =
-            [new SpaInt(44100), new SpaInt(48000), new SpaInt(96000)];
+        [
+            new SpaInt(44100),
+            new SpaInt(48000),
+            new SpaInt(96000),
+        ];
 
-        Assert.IsTrue(SpaPodCompare.IsValidChoice(new SpaInt(48000), enumeration, SpaChoiceType.Enum));
-        Assert.IsTrue(SpaPodCompare.IsValidChoice(new SpaInt(96000), enumeration, SpaChoiceType.Enum));
+        Assert.IsTrue(
+            SpaPodCompare.IsValidChoice(new SpaInt(48000), enumeration, SpaChoiceType.Enum)
+        );
+        Assert.IsTrue(
+            SpaPodCompare.IsValidChoice(new SpaInt(96000), enumeration, SpaChoiceType.Enum)
+        );
         Assert.IsFalse(
             SpaPodCompare.IsValidChoice(new SpaInt(44100), enumeration, SpaChoiceType.Enum),
-            "an enumeration accepted its own default, which upstream does not list as a member");
+            "an enumeration accepted its own default, which upstream does not list as a member"
+        );
 
         ImmutableArray<SpaValue> none = [new SpaInt(48000)];
         Assert.IsTrue(SpaPodCompare.IsValidChoice(new SpaInt(48000), none, SpaChoiceType.None));
@@ -162,18 +207,29 @@ public sealed class PodComparisonTests
         Assert.IsTrue(SpaPodCompare.IsValidChoice(new SpaInt(48000), range, SpaChoiceType.Range));
         Assert.IsFalse(SpaPodCompare.IsValidChoice(new SpaInt(4000), range, SpaChoiceType.Range));
         Assert.IsFalse(
-            SpaPodCompare.IsValidChoice(new SpaInt(48000), [new SpaInt(48000)], SpaChoiceType.Range),
-            "a range without bounds accepted a value anyway");
+            SpaPodCompare.IsValidChoice(
+                new SpaInt(48000),
+                [new SpaInt(48000)],
+                SpaChoiceType.Range
+            ),
+            "a range without bounds accepted a value anyway"
+        );
 
         ImmutableArray<SpaValue> step =
-            [new SpaInt(48000), new SpaInt(8000), new SpaInt(192000), new SpaInt(8000)];
+        [
+            new SpaInt(48000),
+            new SpaInt(8000),
+            new SpaInt(192000),
+            new SpaInt(8000),
+        ];
         Assert.IsTrue(SpaPodCompare.IsValidChoice(new SpaInt(48000), step, SpaChoiceType.Step));
         Assert.IsFalse(SpaPodCompare.IsValidChoice(new SpaInt(48001), step, SpaChoiceType.Step));
         Assert.IsFalse(SpaPodCompare.IsValidChoice(new SpaInt(48000), range, SpaChoiceType.Step));
 
         Assert.IsTrue(
             SpaPodCompare.IsValidChoice(new SpaInt(7), [], SpaChoiceType.Flags),
-            "flags refused a value, but any combination of flags is allowed");
+            "flags refused a value, but any combination of flags is allowed"
+        );
 
         Assert.IsFalse(SpaPodCompare.IsValidChoice(new SpaInt(1), none, (SpaChoiceType)999));
     }
@@ -187,14 +243,21 @@ public sealed class PodComparisonTests
     [TestMethod]
     public void AndFlags_AnswersNothingWhenTheSidesShareNoBits()
     {
-        Assert.AreEqual(new SpaInt(0b0100), SpaPodCompare.AndFlags(new SpaInt(0b1100), new SpaInt(0b0110)));
-        Assert.AreEqual(new SpaLong(0b0100), SpaPodCompare.AndFlags(new SpaLong(0b1100), new SpaLong(0b0110)));
+        Assert.AreEqual(
+            new SpaInt(0b0100),
+            SpaPodCompare.AndFlags(new SpaInt(0b1100), new SpaInt(0b0110))
+        );
+        Assert.AreEqual(
+            new SpaLong(0b0100),
+            SpaPodCompare.AndFlags(new SpaLong(0b1100), new SpaLong(0b0110))
+        );
 
         Assert.IsNull(SpaPodCompare.AndFlags(new SpaInt(0b1000), new SpaInt(0b0001)));
         Assert.IsNull(SpaPodCompare.AndFlags(new SpaLong(0b1000), new SpaLong(0b0001)));
         Assert.IsNull(
             SpaPodCompare.AndFlags(new SpaInt(0b1100), new SpaLong(0b0110)),
-            "two different types were intersected as though they were the same one");
+            "two different types were intersected as though they were the same one"
+        );
         Assert.IsNull(SpaPodCompare.AndFlags(new SpaFloat(1f), new SpaFloat(1f)));
     }
 }

@@ -29,7 +29,9 @@ public sealed class ReentrancyTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken cancellationToken)
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -38,14 +40,18 @@ public sealed class ReentrancyTests : PipeWireTestBase
         return (context, registry);
     }
 
-    private static string Unique(string p) => $"{p}_{Environment.ProcessId}_{Random.Shared.Next():x}";
+    private static string Unique(string p) =>
+        $"{p}_{Environment.ProcessId}_{Random.Shared.Next():x}";
 
     [TestMethod]
     public async Task ReadingAndBindingFromInsideAGraphCallback_Works()
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-reentrant-read", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-reentrant-read",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -79,8 +85,10 @@ public sealed class ReentrancyTests : PipeWireTestBase
             {
                 for (int i = 0; i < 10; i++)
                 {
-                    PipeWireNode node = await registry.CreateVirtualSink("Reentrant")
-                        .WithName(Unique("pwnet_reentrant")).ExecuteAsync(cts.Token);
+                    PipeWireNode node = await registry
+                        .CreateVirtualSink("Reentrant")
+                        .WithName(Unique("pwnet_reentrant"))
+                        .ExecuteAsync(cts.Token);
                     await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
                 }
 
@@ -101,7 +109,10 @@ public sealed class ReentrancyTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-reentrant-sub", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-reentrant-sub",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -141,8 +152,10 @@ public sealed class ReentrancyTests : PipeWireTestBase
             {
                 for (int i = 0; i < 10; i++)
                 {
-                    PipeWireNode node = await registry.CreateVirtualSink("Mutate")
-                        .WithName(Unique("pwnet_mutate")).ExecuteAsync(cts.Token);
+                    PipeWireNode node = await registry
+                        .CreateVirtualSink("Mutate")
+                        .WithName(Unique("pwnet_mutate"))
+                        .ExecuteAsync(cts.Token);
                     await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
                 }
 
@@ -152,12 +165,15 @@ public sealed class ReentrancyTests : PipeWireTestBase
             {
                 registry.NodeAdded -= Stable;
                 registry.NodeAdded -= Mutating;
-                if (transient is not null) registry.NodeAdded -= transient;
+                if (transient is not null)
+                    registry.NodeAdded -= transient;
             }
 
             Assert.IsTrue(faults.IsEmpty, string.Join("; ", faults));
-            Assert.IsTrue(Volatile.Read(ref stable) > 0,
-                "the handler that never moved stopped being invoked");
+            Assert.IsTrue(
+                Volatile.Read(ref stable) > 0,
+                "the handler that never moved stopped being invoked"
+            );
         }
     }
 
@@ -166,12 +182,16 @@ public sealed class ReentrancyTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-reentrant-meta", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-reentrant-meta",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             PipeWireMetadataProxy? store = registry.BindMetadata("default");
-            if (store is null) Assert.Inconclusive("no session manager, so no default store.");
+            if (store is null)
+                Assert.Inconclusive("no session manager, so no default store.");
 
             await using (store)
             {
@@ -179,24 +199,33 @@ public sealed class ReentrancyTests : PipeWireTestBase
 
                 string trigger = Unique("pwnet.reentrant.trigger");
                 string echo = Unique("pwnet.reentrant.echo");
-                var wrote = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var wrote = new TaskCompletionSource(
+                    TaskCreationOptions.RunContinuationsAsynchronously
+                );
                 var faults = new ConcurrentQueue<string>();
 
                 void OnChanged(PipeWireMetadataProxy s, PipeWireMetadataEntry e)
                 {
-                    if (e.Key != trigger || e.Value is null) return;
+                    if (e.Key != trigger || e.Value is null)
+                        return;
 
                     // A write from inside the handler. It must not be awaited here: this is the
                     // loop thread, and the round-trip it waits on is answered by this same thread.
-                    _ = Task.Run(async () =>
-                    {
-                        try
+                    _ = Task.Run(
+                        async () =>
                         {
-                            await s.SetAsync(echo, "seen", cancellationToken: cts.Token);
-                            wrote.TrySetResult();
-                        }
-                        catch (Exception ex) { faults.Enqueue($"{ex.GetType().Name}: {ex.Message}"); }
-                    }, cts.Token);
+                            try
+                            {
+                                await s.SetAsync(echo, "seen", cancellationToken: cts.Token);
+                                wrote.TrySetResult();
+                            }
+                            catch (Exception ex)
+                            {
+                                faults.Enqueue($"{ex.GetType().Name}: {ex.Message}");
+                            }
+                        },
+                        cts.Token
+                    );
                 }
 
                 store.EntryChanged += OnChanged;
@@ -223,7 +252,10 @@ public sealed class ReentrancyTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-reentrant-dispose", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-reentrant-dispose",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -233,11 +265,15 @@ public sealed class ReentrancyTests : PipeWireTestBase
 
             for (int round = 0; round < 6; round++)
             {
-                PipeWireNode node = await registry.CreateVirtualSink("SelfDispose")
-                    .WithName(Unique("pwnet_selfdispose")).ExecuteAsync(cts.Token);
+                PipeWireNode node = await registry
+                    .CreateVirtualSink("SelfDispose")
+                    .WithName(Unique("pwnet_selfdispose"))
+                    .ExecuteAsync(cts.Token);
 
                 PipeWireNodeProxy control = registry.BindNode(node.NodeId);
-                var attempted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var attempted = new TaskCompletionSource(
+                    TaskCreationOptions.RunContinuationsAsynchronously
+                );
 
                 control.InfoChanged += _ =>
                 {
@@ -280,13 +316,19 @@ public sealed class ReentrancyTests : PipeWireTestBase
         // regresses to a join, the test times out instead of hanging the run for ever.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-dispose-self", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-dispose-self",
+            cts.Token
+        );
 
-        var attempted = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempted = new TaskCompletionSource<Exception?>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
 
         void OnAdded(PipeWireNode _)
         {
-            if (attempted.Task.IsCompleted) return;
+            if (attempted.Task.IsCompleted)
+                return;
 
             try
             {
@@ -302,13 +344,17 @@ public sealed class ReentrancyTests : PipeWireTestBase
         registry.NodeAdded += OnAdded;
         try
         {
-            PipeWireNode node = await registry.CreateVirtualSink("DisposeSelf")
-                .WithName(Unique("pwnet_dispose_self")).ExecuteAsync(cts.Token);
+            PipeWireNode node = await registry
+                .CreateVirtualSink("DisposeSelf")
+                .WithName(Unique("pwnet_dispose_self"))
+                .ExecuteAsync(cts.Token);
 
             Exception? thrown = await attempted.Task.WaitAsync(TimeSpan.FromSeconds(20), cts.Token);
 
-            Assert.IsInstanceOfType<InvalidOperationException>(thrown,
-                "disposing from the loop thread has to be refused, not attempted");
+            Assert.IsInstanceOfType<InvalidOperationException>(
+                thrown,
+                "disposing from the loop thread has to be refused, not attempted"
+            );
             Assert.Contains("loop thread", thrown!.Message, StringComparison.Ordinal);
 
             // Refused, so the context is untouched and still works.

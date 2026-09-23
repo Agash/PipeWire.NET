@@ -56,8 +56,7 @@ internal static class NativeReaper
         _queue.Add(new WorkItem(release, loop, WaitForDrain: true));
 
     /// <summary>How many enqueued releases for this loop have not run yet.</summary>
-    internal static int PendingFor(nint loop) =>
-        _pending.TryGetValue(loop, out int n) ? n : 0;
+    internal static int PendingFor(nint loop) => _pending.TryGetValue(loop, out int n) ? n : 0;
 
     private static void Run()
     {
@@ -82,8 +81,11 @@ internal static class NativeReaper
             }
             finally
             {
-                if (!work.WaitForDrain && work.Loop != 0
-                    && _pending.AddOrUpdate(work.Loop, 0, static (_, n) => n - 1) <= 0)
+                if (
+                    !work.WaitForDrain
+                    && work.Loop != 0
+                    && _pending.AddOrUpdate(work.Loop, 0, static (_, n) => n - 1) <= 0
+                )
                     _pending.TryRemove(work.Loop, out _);
             }
         }

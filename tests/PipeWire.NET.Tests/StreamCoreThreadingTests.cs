@@ -20,16 +20,27 @@ public sealed class StreamCoreThreadingTests
     [TestMethod]
     public void RealtimeProcessing_IsRefusedForStreams()
     {
-        Assert.ThrowsExactly<ArgumentException>(
-            () => PipeWireStreamCore.RequireLoopThreadProcess(PipeWireStreamFlags.RtProcess | PipeWireStreamFlags.MapBuffers));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            PipeWireStreamCore.RequireLoopThreadProcess(
+                PipeWireStreamFlags.RtProcess | PipeWireStreamFlags.MapBuffers
+            )
+        );
     }
 
     [TestMethod]
     public void TheFlagsTheStreamsUse_AreAccepted()
     {
-        PipeWireStreamCore.RequireLoopThreadProcess(PipeWireStreamFlags.MapBuffers | PipeWireStreamFlags.Autoconnect);
         PipeWireStreamCore.RequireLoopThreadProcess(
-            PipeWireStreamFlags.Autoconnect | PipeWireStreamFlags.MapBuffers | PipeWireStreamFlags.DontReconnect | PipeWireStreamFlags.Driver);
-        PipeWireStreamCore.RequireLoopThreadProcess(PipeWireStreamFlags.Inactive | PipeWireStreamFlags.AllocBuffers);
+            PipeWireStreamFlags.MapBuffers | PipeWireStreamFlags.Autoconnect
+        );
+        PipeWireStreamCore.RequireLoopThreadProcess(
+            PipeWireStreamFlags.Autoconnect
+                | PipeWireStreamFlags.MapBuffers
+                | PipeWireStreamFlags.DontReconnect
+                | PipeWireStreamFlags.Driver
+        );
+        PipeWireStreamCore.RequireLoopThreadProcess(
+            PipeWireStreamFlags.Inactive | PipeWireStreamFlags.AllocBuffers
+        );
     }
 }

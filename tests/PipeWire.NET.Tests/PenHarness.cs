@@ -58,7 +58,8 @@ public sealed class PenHarness : PipeWireTestBase
             File.AppendAllText(
                 ReportPath,
                 $"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}Z pid={Environment.ProcessId} {line}"
-                + Environment.NewLine);
+                    + Environment.NewLine
+            );
         }
     }
 
@@ -81,8 +82,13 @@ public sealed class PenHarness : PipeWireTestBase
     public async Task Churn()
     {
         using CancellationTokenSource cts = Budget();
-        long binds = 0, reads = 0;
-        try { (binds, reads) = await ChurnAsync(cts.Token); } catch (OperationCanceledException) { }
+        long binds = 0,
+            reads = 0;
+        try
+        {
+            (binds, reads) = await ChurnAsync(cts.Token);
+        }
+        catch (OperationCanceledException) { }
 
         // Asserted here rather than inside the scenario: a budget expiring mid-iteration
         // otherwise skips the report and the check together, and the run passes having
@@ -95,8 +101,13 @@ public sealed class PenHarness : PipeWireTestBase
     public async Task BindAll()
     {
         using CancellationTokenSource cts = Budget();
-        long held = 0, ok = 0;
-        try { (held, ok) = await BindAllAsync(cts.Token); } catch (OperationCanceledException) { }
+        long held = 0,
+            ok = 0;
+        try
+        {
+            (held, ok) = await BindAllAsync(cts.Token);
+        }
+        catch (OperationCanceledException) { }
 
         Assert.IsTrue(held > 0, "nothing in the graph could be bound");
         Assert.IsTrue(ok > 0, "every read against every held binding failed");
@@ -107,9 +118,16 @@ public sealed class PenHarness : PipeWireTestBase
     {
         using CancellationTokenSource cts = Budget();
         long writes = 0;
-        try { writes = await MetaAsync(cts.Token); } catch (OperationCanceledException) { }
+        try
+        {
+            writes = await MetaAsync(cts.Token);
+        }
+        catch (OperationCanceledException) { }
 
-        Assert.IsTrue(writes > 0, "the metadata scenario wrote nothing; it never reached the store");
+        Assert.IsTrue(
+            writes > 0,
+            "the metadata scenario wrote nothing; it never reached the store"
+        );
     }
 
     [TestMethod]
@@ -117,7 +135,11 @@ public sealed class PenHarness : PipeWireTestBase
     {
         using CancellationTokenSource cts = Budget();
         long made = 0;
-        try { made = await ContextsAsync(cts.Token); } catch (OperationCanceledException) { }
+        try
+        {
+            made = await ContextsAsync(cts.Token);
+        }
+        catch (OperationCanceledException) { }
 
         Assert.IsTrue(made > 0, "no context completed a full open-and-close cycle");
     }
@@ -129,14 +151,17 @@ public sealed class PenHarness : PipeWireTestBase
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(ct);
 
-        long reads = 0, errors = 0, binds = 0;
+        long reads = 0,
+            errors = 0,
+            binds = 0;
         try
         {
             while (!ct.IsCancellationRequested)
             {
                 foreach (PipeWireNode node in reg.Current.Nodes)
                 {
-                    if (ct.IsCancellationRequested) break;
+                    if (ct.IsCancellationRequested)
+                        break;
                     PipeWireNodeProxy? control = null;
                     try
                     {
@@ -145,9 +170,21 @@ public sealed class PenHarness : PipeWireTestBase
                         await control.EnumerateParametersAsync(SpaParamType.Props, ct);
                         reads++;
                     }
-                    catch (OperationCanceledException) { throw; }
-                    catch (Exception ex) { errors++; if (errors < 6) Report($"PEN churn: {ex.GetType().Name}: {ex.Message}"); }
-                    finally { if (control is not null) await control.DisposeAsync(); }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        errors++;
+                        if (errors < 6)
+                            Report($"PEN churn: {ex.GetType().Name}: {ex.Message}");
+                    }
+                    finally
+                    {
+                        if (control is not null)
+                            await control.DisposeAsync();
+                    }
                 }
             }
         }
@@ -174,21 +211,37 @@ public sealed class PenHarness : PipeWireTestBase
         var held = new List<PipeWireNodeProxy>();
         foreach (PipeWireNode node in reg.Current.Nodes)
         {
-            try { held.Add(reg.BindNode(node.NodeId)); } catch (Exception) { }
+            try
+            {
+                held.Add(reg.BindNode(node.NodeId));
+            }
+            catch (Exception) { }
         }
         Report($"PEN bindall: holding {held.Count} bindings");
 
-        long ok = 0, gone = 0;
+        long ok = 0,
+            gone = 0;
         try
         {
             while (!ct.IsCancellationRequested)
             {
                 foreach (PipeWireNodeProxy c in held)
                 {
-                    if (ct.IsCancellationRequested) break;
-                    try { await c.GetVolumeAsync(ct); ok++; }
-                    catch (OperationCanceledException) { throw; }
-                    catch (Exception) { gone++; }
+                    if (ct.IsCancellationRequested)
+                        break;
+                    try
+                    {
+                        await c.GetVolumeAsync(ct);
+                        ok++;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception)
+                    {
+                        gone++;
+                    }
                 }
             }
         }
@@ -198,7 +251,8 @@ public sealed class PenHarness : PipeWireTestBase
         }
         finally
         {
-            foreach (PipeWireNodeProxy c in held) await c.DisposeAsync();
+            foreach (PipeWireNodeProxy c in held)
+                await c.DisposeAsync();
             Report($"PEN bindall: reads={ok} failed={gone}");
         }
         return (held.Count, ok);
@@ -213,12 +267,17 @@ public sealed class PenHarness : PipeWireTestBase
         await reg.WaitForInitialEnumerationAsync(ct);
 
         PipeWireMetadataProxy? store = reg.BindMetadata("default");
-        if (store is null) { Report("PEN meta: no default store"); return 0; }
+        if (store is null)
+        {
+            Report("PEN meta: no default store");
+            return 0;
+        }
 
         await using (store)
         {
             await store.ReadyAsync(ct);
-            long writes = 0, events = 0;
+            long writes = 0,
+                events = 0;
             store.EntryChanged += (_, _) => Interlocked.Increment(ref events);
 
             string key = $"pen.meta.{Environment.ProcessId}";
@@ -233,8 +292,15 @@ public sealed class PenHarness : PipeWireTestBase
                             Report($"PEN meta: READ-AFTER-WRITE MISMATCH at {writes}");
                         writes++;
                     }
-                    catch (OperationCanceledException) { throw; }
-                    catch (Exception ex) { Report($"PEN meta: {ex.GetType().Name}"); break; }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        Report($"PEN meta: {ex.GetType().Name}");
+                        break;
+                    }
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -243,7 +309,11 @@ public sealed class PenHarness : PipeWireTestBase
             }
             finally
             {
-                try { await store.SetAsync(key, null, cancellationToken: CancellationToken.None); } catch { }
+                try
+                {
+                    await store.SetAsync(key, null, cancellationToken: CancellationToken.None);
+                }
+                catch { }
                 Report($"PEN meta: writes={writes} events={Interlocked.Read(ref events)}");
             }
             return writes;
@@ -260,25 +330,42 @@ public sealed class PenHarness : PipeWireTestBase
             {
                 Task[] wave =
                 [
-                    .. Enumerable.Range(0, 12).Select(i => Task.Run(async () =>
-                    {
-                        var c = new PipeWireContext($"pen-ctx-{i}");
-                        try
-                        {
-                            await c.StartAsync(ct);
-                            var r = new PipeWireRegistry(c);
-                            await r.WaitForInitialEnumerationAsync(ct);
-                            await r.DisposeAsync();
-                            // Only a full cycle counts. Incrementing in a finally would count
-                            // attempts that never reached the graph as successes.
-                            Interlocked.Increment(ref made);
-                        }
-                        catch (OperationCanceledException) { }
-                        catch (Exception ex) { Report($"PEN ctx: {ex.GetType().Name}: {ex.Message}"); }
-                        finally { await c.DisposeAsync(); }
-                    }, ct)),
+                    .. Enumerable
+                        .Range(0, 12)
+                        .Select(i =>
+                            Task.Run(
+                                async () =>
+                                {
+                                    var c = new PipeWireContext($"pen-ctx-{i}");
+                                    try
+                                    {
+                                        await c.StartAsync(ct);
+                                        var r = new PipeWireRegistry(c);
+                                        await r.WaitForInitialEnumerationAsync(ct);
+                                        await r.DisposeAsync();
+                                        // Only a full cycle counts. Incrementing in a finally would count
+                                        // attempts that never reached the graph as successes.
+                                        Interlocked.Increment(ref made);
+                                    }
+                                    catch (OperationCanceledException) { }
+                                    catch (Exception ex)
+                                    {
+                                        Report($"PEN ctx: {ex.GetType().Name}: {ex.Message}");
+                                    }
+                                    finally
+                                    {
+                                        await c.DisposeAsync();
+                                    }
+                                },
+                                ct
+                            )
+                        ),
                 ];
-                try { await Task.WhenAll(wave); } catch (OperationCanceledException) { }
+                try
+                {
+                    await Task.WhenAll(wave);
+                }
+                catch (OperationCanceledException) { }
             }
         }
         finally

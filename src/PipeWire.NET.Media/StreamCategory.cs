@@ -10,6 +10,7 @@ public enum StreamCategory
 {
     /// <summary>Receiving data from a source (<c>media.category=Capture</c>).</summary>
     Capture,
+
     /// <summary>Sending data to a sink / publishing as a source (<c>media.category=Playback</c>).</summary>
     Playback,
 }

@@ -1,6 +1,5 @@
-using System.Runtime.InteropServices;
-
 using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 
 namespace PipeWire.NET.Media;
 
@@ -71,31 +70,32 @@ public readonly ref struct VideoFrame
         ReadOnlySpan<VideoRegion> damage = default,
         VideoCursor cursor = default,
         bool hasCursor = false,
-        long queuedTimeNs = -1)
+        long queuedTimeNs = -1
+    )
     {
-        Cursor                  = cursor;
-        HasCursor               = hasCursor;
-        Crop                    = crop;
-        Transform               = transform;
-        Damage                  = damage;
-        Pixels                  = pixels;
-        Stride                  = stride;
-        Width                   = width;
-        Height                  = height;
-        Format                  = format;
-        SequenceNumber          = sequenceNumber;
-        BufferType              = bufferType;
-        Fd                      = fd;
-        MapOffset               = mapOffset;
+        Cursor = cursor;
+        HasCursor = hasCursor;
+        Crop = crop;
+        Transform = transform;
+        Damage = damage;
+        Pixels = pixels;
+        Stride = stride;
+        Width = width;
+        Height = height;
+        Format = format;
+        SequenceNumber = sequenceNumber;
+        BufferType = bufferType;
+        Fd = fd;
+        MapOffset = mapOffset;
         PresentationTimestampNs = presentationTimestampNs < 0 ? null : presentationTimestampNs;
-        QueuedTimeNs            = queuedTimeNs < 0 ? null : queuedTimeNs;
-        Color                   = color;
-        GraphTimeNs             = graphTimeNs < 0 ? null : graphTimeNs;
-        StreamPositionNs        = streamPositionNs < 0 ? null : streamPositionNs;
-        DelayNs                 = delayNs;
-        Modifier                = modifier;
-        Planes                  = planes;
-        SyncTimeline            = syncTimeline;
+        QueuedTimeNs = queuedTimeNs < 0 ? null : queuedTimeNs;
+        Color = color;
+        GraphTimeNs = graphTimeNs < 0 ? null : graphTimeNs;
+        StreamPositionNs = streamPositionNs < 0 ? null : streamPositionNs;
+        DelayNs = delayNs;
+        Modifier = modifier;
+        Planes = planes;
+        SyncTimeline = syncTimeline;
     }
 
     /// <summary>Raw pixel bytes. Empty for an unmapped DMA-BUF frame (use <see cref="Fd"/>).</summary>
@@ -309,7 +309,8 @@ public readonly ref struct VideoFrame
         if (IsFdBacked)
             throw new InvalidOperationException(
                 "an fd-backed frame has no host bytes to copy; duplicate its descriptors instead "
-                + "(VideoFrame.DuplicateFd, VideoPlane.DuplicateFd).");
+                    + "(VideoFrame.DuplicateFd, VideoPlane.DuplicateFd)."
+            );
 
         return new OwnedVideoFrame(
             [.. Pixels],
@@ -323,7 +324,8 @@ public readonly ref struct VideoFrame
             QueuedTimeNs,
             GraphTimeNs,
             StreamPositionNs,
-            DelayNs);
+            DelayNs
+        );
     }
 
     /// <summary>A private copy of <see cref="Fd"/> that the caller owns and must close.</summary>

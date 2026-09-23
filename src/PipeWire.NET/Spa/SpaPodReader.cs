@@ -46,16 +46,23 @@ internal ref struct SpaPodReader
     /// </summary>
     public bool EnterObject(out uint objectType, out uint objectId, out uint bodySize)
     {
-        objectType = 0; objectId = 0; bodySize = 0;
-        if (!TryReadHeader(out uint size, out SpaType type)) return false;
-        if (type != SpaType.Object) return false;
+        objectType = 0;
+        objectId = 0;
+        bodySize = 0;
+        if (!TryReadHeader(out uint size, out SpaType type))
+            return false;
+        if (type != SpaType.Object)
+            return false;
 
         // An object body always carries at least its type and id. Without this check `size - 8`
         // underflows for a malformed pod and reports a body of nearly 4GB.
-        if (size < 8) return false;
+        if (size < 8)
+            return false;
 
-        if (!TryReadU32(out objectType)) return false;
-        if (!TryReadU32(out objectId))   return false;
+        if (!TryReadU32(out objectType))
+            return false;
+        if (!TryReadU32(out objectId))
+            return false;
         bodySize = size - 8; // size includes the object-type + object-id 8 bytes already consumed
 
         // Property iteration stops at the object's own end, not the buffer's. An object nested in a
@@ -90,22 +97,27 @@ internal ref struct SpaPodReader
 
         // spa_pod_prop header = [uint32 key][uint32 flags][value pod...]
         int end = _objectEnd ?? _buf.Length;
-        if (_pos + 8 > end) return false;
-        if (!TryReadU32(out uint rawKey)) return false;
+        if (_pos + 8 > end)
+            return false;
+        if (!TryReadU32(out uint rawKey))
+            return false;
         key = SpaKey.FromRaw(rawKey);
-        if (!TryReadU32(out uint rawFlags)) return false;
+        if (!TryReadU32(out uint rawFlags))
+            return false;
         flags = (SpaPodPropFlags)rawFlags;
 
         // The value pod sits at the current offset. Peek its size.
-        if (_pos + 8 > end) return false;
+        if (_pos + 8 > end)
+            return false;
         // Checked against what is left before any arithmetic. Casting first and checking after is
         // not enough: a size of uint.MaxValue casts to -1 and passes the bounds test, and one near
         // int.MaxValue overflows the addition to a negative length that then throws out of Slice -
         // from a parser whose whole contract is that malformed input returns false.
         uint vSize = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
-        if (vSize > (uint)(end - _pos - 8)) return false;
+        if (vSize > (uint)(end - _pos - 8))
+            return false;
 
-        int valueLen = 8 + (int)vSize;          // pod header + body
+        int valueLen = 8 + (int)vSize; // pod header + body
         int valueLenAligned = (valueLen + 7) & ~7;
 
         value = new SpaPodReader(_buf.Slice(_pos, valueLen));
@@ -119,7 +131,8 @@ internal ref struct SpaPodReader
     {
         ReadHeaderOrThrow(SpaType.Int, expectedSize: 4);
         int v = MemoryMarshal.Read<int>(_buf.Slice(_pos, 4));
-        _pos += 4; AlignTo8();
+        _pos += 4;
+        AlignTo8();
         return v;
     }
 
@@ -135,7 +148,8 @@ internal ref struct SpaPodReader
     {
         ReadHeaderOrThrow(SpaType.Float, expectedSize: 4);
         float v = MemoryMarshal.Read<float>(_buf.Slice(_pos, 4));
-        _pos += 4; AlignTo8();
+        _pos += 4;
+        AlignTo8();
         return v;
     }
 
@@ -151,7 +165,8 @@ internal ref struct SpaPodReader
     {
         ReadHeaderOrThrow(SpaType.Bool, expectedSize: 4);
         int v = MemoryMarshal.Read<int>(_buf.Slice(_pos, 4));
-        _pos += 4; AlignTo8();
+        _pos += 4;
+        AlignTo8();
         return v != 0;
     }
 
@@ -159,23 +174,28 @@ internal ref struct SpaPodReader
     {
         ReadHeaderOrThrow(SpaType.Id, expectedSize: 4);
         uint v = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
-        _pos += 4; AlignTo8();
+        _pos += 4;
+        AlignTo8();
         return SpaIdValue.FromRaw(v);
     }
 
     public (uint Width, uint Height) ReadRectangle()
     {
         ReadHeaderOrThrow(SpaType.Rectangle, expectedSize: 8);
-        uint w = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4)); _pos += 4;
-        uint h = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4)); _pos += 4;
+        uint w = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
+        _pos += 4;
+        uint h = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
+        _pos += 4;
         return (w, h);
     }
 
     public (uint Numerator, uint Denominator) ReadFraction()
     {
         ReadHeaderOrThrow(SpaType.Fraction, expectedSize: 8);
-        uint n = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4)); _pos += 4;
-        uint d = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4)); _pos += 4;
+        uint n = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
+        _pos += 4;
+        uint d = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
+        _pos += 4;
         return (n, d);
     }
 
@@ -190,7 +210,8 @@ internal ref struct SpaPodReader
         // Choice (None for a single match).
         if (_synthesizedType is { } synthesized)
         {
-            if (synthesized != SpaType.Bytes) return false;
+            if (synthesized != SpaType.Bytes)
+                return false;
             bytes = _buf[_pos..];
             _pos = _buf.Length;
             return true;
@@ -222,26 +243,62 @@ internal ref struct SpaPodReader
         first = 0;
         count = 0;
         int savedPos = _pos;
-        if (!TryReadHeader(out uint size, out SpaType type)) { _pos = savedPos; return false; }
+        if (!TryReadHeader(out uint size, out SpaType type))
+        {
+            _pos = savedPos;
+            return false;
+        }
 
         if (type == SpaType.Long)
         {
-            if (size < 8 || _pos + 8 > _buf.Length) { _pos = savedPos; return false; }
+            if (size < 8 || _pos + 8 > _buf.Length)
+            {
+                _pos = savedPos;
+                return false;
+            }
             first = MemoryMarshal.Read<long>(_buf.Slice(_pos, 8));
             _pos += 8;
             count = 1;
             return true;
         }
 
-        if (type != SpaType.Choice) { _pos = savedPos; return false; }
+        if (type != SpaType.Choice)
+        {
+            _pos = savedPos;
+            return false;
+        }
 
         // spa_pod_choice_body: [choiceType][flags][childSize][childType], then the values.
-        if (_pos + 16 > _buf.Length) { _pos = savedPos; return false; }
-        if (!TryReadU32(out uint choiceType))  { _pos = savedPos; return false; }
-        if (!TryReadU32(out _))               { _pos = savedPos; return false; } // flags
-        if (!TryReadU32(out uint childSize))  { _pos = savedPos; return false; }
-        if (!TryReadU32(out uint childType))  { _pos = savedPos; return false; }
-        if ((SpaType)childType != SpaType.Long || childSize != 8) { _pos = savedPos; return false; }
+        if (_pos + 16 > _buf.Length)
+        {
+            _pos = savedPos;
+            return false;
+        }
+        if (!TryReadU32(out uint choiceType))
+        {
+            _pos = savedPos;
+            return false;
+        }
+        if (!TryReadU32(out _))
+        {
+            _pos = savedPos;
+            return false;
+        } // flags
+        if (!TryReadU32(out uint childSize))
+        {
+            _pos = savedPos;
+            return false;
+        }
+        if (!TryReadU32(out uint childType))
+        {
+            _pos = savedPos;
+            return false;
+        }
+        if ((SpaType)childType != SpaType.Long || childSize != 8)
+        {
+            _pos = savedPos;
+            return false;
+        }
 
         // Which kind of choice it is decides what the values mean. Enum is { default, alt... } and
         // None is a single value; Range is { default, min, max } and Step adds a stride, and reading
@@ -256,7 +313,11 @@ internal ref struct SpaPodReader
         // The choice body length (size) covers the 16-byte header + N child values. Compared
         // unsigned before the cast, like every other bound in this file: size is the producer's
         // word, and casting first is what turns a large one into a negative length.
-        if (size < 16 + 8u) { _pos = savedPos; return false; }
+        if (size < 16 + 8u)
+        {
+            _pos = savedPos;
+            return false;
+        }
         uint valuesLen = size - 16;
         if (valuesLen % 8 != 0 || valuesLen > (uint)(_buf.Length - _pos))
         {
@@ -293,11 +354,13 @@ internal ref struct SpaPodReader
         // Every exit below restores the position. The caller falls back to a plain typed read on
         // this same reader when a choice is declined, so leaving the position moved does not fail,
         // it silently reads the wrong bytes as the value.
-        if (_pos + 16 > _buf.Length
-            || !TryReadU32(out _)                    // choiceType
-            || !TryReadU32(out _)                    // flags
+        if (
+            _pos + 16 > _buf.Length
+            || !TryReadU32(out _) // choiceType
+            || !TryReadU32(out _) // flags
             || !TryReadU32(out uint childSize)
-            || !TryReadU32(out uint childType))
+            || !TryReadU32(out uint childType)
+        )
         {
             _pos = savedPos;
             return false;
@@ -331,15 +394,18 @@ internal ref struct SpaPodReader
 
     private bool TryReadHeader(out uint size, out SpaType type)
     {
-        size = 0; type = 0;
-        if (_pos + 8 > _buf.Length) return false;
+        size = 0;
+        type = 0;
+        if (_pos + 8 > _buf.Length)
+            return false;
 
         uint declared = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
         uint declaredType = MemoryMarshal.Read<uint>(_buf.Slice(_pos + 4, 4));
 
         // The size field is attacker- or bug-controlled, so a pod claiming more body than the
         // buffer holds is rejected here rather than handed on as a length someone slices with.
-        if (declared > (uint)(_buf.Length - _pos - 8)) return false;
+        if (declared > (uint)(_buf.Length - _pos - 8))
+            return false;
 
         size = declared;
         type = (SpaType)declaredType;
@@ -355,7 +421,8 @@ internal ref struct SpaPodReader
         {
             if (synthesized != expectedType)
                 throw new InvalidOperationException(
-                    $"SPA pod type mismatch: expected {expectedType}, got synthesized {synthesized}");
+                    $"SPA pod type mismatch: expected {expectedType}, got synthesized {synthesized}"
+                );
 
             // The body came from a choice's childSize, which the producer chose. A short one -
             // an Id choice declaring one byte per child - would otherwise reach the Slice in the
@@ -364,7 +431,8 @@ internal ref struct SpaPodReader
             if ((uint)(_buf.Length - _pos) < expectedSize)
                 throw new InvalidOperationException(
                     $"SPA pod size mismatch: expected {expectedSize}, "
-                    + $"synthesized body holds {_buf.Length - _pos}");
+                        + $"synthesized body holds {_buf.Length - _pos}"
+                );
             return;
         }
 
@@ -372,16 +440,22 @@ internal ref struct SpaPodReader
             throw new InvalidOperationException("Truncated SPA pod.");
         if (type != expectedType)
             throw new InvalidOperationException(
-                $"SPA pod type mismatch: expected {expectedType}, got {type}");
+                $"SPA pod type mismatch: expected {expectedType}, got {type}"
+            );
         if (size != expectedSize)
             throw new InvalidOperationException(
-                $"SPA pod size mismatch: expected {expectedSize}, got {size}");
+                $"SPA pod size mismatch: expected {expectedSize}, got {size}"
+            );
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool TryReadU32(out uint value)
     {
-        if (_pos + 4 > _buf.Length) { value = 0; return false; }
+        if (_pos + 4 > _buf.Length)
+        {
+            value = 0;
+            return false;
+        }
         value = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
         _pos += 4;
         return true;
@@ -391,6 +465,7 @@ internal ref struct SpaPodReader
     private void AlignTo8()
     {
         int rem = _pos & 7;
-        if (rem != 0) _pos += 8 - rem;
+        if (rem != 0)
+            _pos += 8 - rem;
     }
 }

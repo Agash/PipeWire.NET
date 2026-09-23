@@ -1,9 +1,9 @@
 using System.Collections.Immutable;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using PipeWire.NET;
 using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
-using PipeWire.NET;
 
 namespace PipeWire.NET.SampleConsole;
 
@@ -19,13 +19,16 @@ internal static class ServeCommands
         // a node nobody can see any more.
         using var lost = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        await using var session = await Session.ConnectAsync(
-            "sample-serve", lost, cancellationToken).ConfigureAwait(false);
+        await using var session = await Session
+            .ConnectAsync("sample-serve", lost, cancellationToken)
+            .ConfigureAwait(false);
 
-        PipeWireNode node = await session.Registry.CreateVirtualSink("Sample virtual source")
+        PipeWireNode node = await session
+            .Registry.CreateVirtualSink("Sample virtual source")
             .WithMediaClass("Audio/Source")
             .WithName("sample_source")
-            .ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            .ExecuteAsync(cancellationToken)
+            .ConfigureAwait(false);
 
         Console.WriteLine($"Serving virtual source [{node.NodeId}] 'sample_source'. Ctrl+C stops.");
 
@@ -54,13 +57,18 @@ internal static class ServeCommands
     {
         int seconds = Program.Seconds(args, 8);
 
-        await using var session = await Session.ConnectAsync(
-            "sample-filter", cancellationToken).ConfigureAwait(false);
+        await using var session = await Session
+            .ConnectAsync("sample-filter", cancellationToken)
+            .ConfigureAwait(false);
 
         // A generated tone so the chain works on a machine with no microphone: tone feeds the
         // filter, the filter feeds the sink. Unrouted on purpose; the links below are explicit.
         await using var tone = new PipeWireAudioOutput(
-            session.Context, "sample_tone", sampleRate: 48000, channels: 1);
+            session.Context,
+            "sample_tone",
+            sampleRate: 48000,
+            channels: 1
+        );
         double phase = 0;
         tone.FillSamples += (_, samples, sampleRate, channels, format) =>
         {
@@ -116,9 +124,17 @@ internal static class ServeCommands
         Console.WriteLine($"Filter is node [{filterId}] with {filter.Ports.Count} ports.");
 
         ImmutableArray<PipeWirePort> tonePorts = await WaitForPortsAsync(
-            session.Registry, toneId.Value, cancellationToken).ConfigureAwait(false);
+                session.Registry,
+                toneId.Value,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
         ImmutableArray<PipeWirePort> filterPorts = await WaitForPortsAsync(
-            session.Registry, filterId, cancellationToken).ConfigureAwait(false);
+                session.Registry,
+                filterId,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
 
         uint toneOut = PortId(tonePorts, PipeWirePortDirection.Out);
         uint filterIn = PortId(filterPorts, PipeWirePortDirection.In);
@@ -130,21 +146,30 @@ internal static class ServeCommands
             return Program.NothingToDo;
         }
 
-        PipeWireLink up = await session.Registry.CreateLink(toneOut, filterIn)
-            .ExecuteAsync(cancellationToken).ConfigureAwait(false);
+        PipeWireLink up = await session
+            .Registry.CreateLink(toneOut, filterIn)
+            .ExecuteAsync(cancellationToken)
+            .ConfigureAwait(false);
         Console.WriteLine($"Linked tone -> filter [{up.LinkId}].");
 
-        PipeWireNode? sink = await GraphCommands.DefaultSinkNodeAsync(
-            session, cancellationToken).ConfigureAwait(false);
+        PipeWireNode? sink = await GraphCommands
+            .DefaultSinkNodeAsync(session, cancellationToken)
+            .ConfigureAwait(false);
         if (sink is not null)
         {
             ImmutableArray<PipeWirePort> sinkPorts = await WaitForPortsAsync(
-                session.Registry, sink.NodeId, cancellationToken).ConfigureAwait(false);
+                    session.Registry,
+                    sink.NodeId,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
             uint sinkIn = PortId(sinkPorts, PipeWirePortDirection.In);
             if (sinkIn != 0)
             {
-                PipeWireLink down = await session.Registry.CreateLink(filterOut, sinkIn)
-                    .ExecuteAsync(cancellationToken).ConfigureAwait(false);
+                PipeWireLink down = await session
+                    .Registry.CreateLink(filterOut, sinkIn)
+                    .ExecuteAsync(cancellationToken)
+                    .ConfigureAwait(false);
                 Console.WriteLine($"Linked filter -> '{sink.NodeName}' [{down.LinkId}].");
             }
             else
@@ -172,8 +197,10 @@ internal static class ServeCommands
 
             long nowCycles = Interlocked.Read(ref cycles);
             long nowProcessed = Interlocked.Read(ref processed);
-            Console.WriteLine($"  cycles/s={nowCycles - lastCycles} " +
-                $"with-buffers/s={nowProcessed - lastProcessed}");
+            Console.WriteLine(
+                $"  cycles/s={nowCycles - lastCycles} "
+                    + $"with-buffers/s={nowProcessed - lastProcessed}"
+            );
             lastCycles = nowCycles;
             lastProcessed = nowProcessed;
         }
@@ -195,11 +222,16 @@ internal static class ServeCommands
     }
 
     private static async Task<ImmutableArray<PipeWirePort>> WaitForPortsAsync(
-        PipeWireRegistry registry, uint nodeId, CancellationToken cancellationToken)
+        PipeWireRegistry registry,
+        uint nodeId,
+        CancellationToken cancellationToken
+    )
     {
         using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken, bound.Token);
+            cancellationToken,
+            bound.Token
+        );
 
         while (!linked.Token.IsCancellationRequested)
         {
@@ -218,7 +250,8 @@ internal static class ServeCommands
 
             try
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(100), linked.Token).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(100), linked.Token)
+                    .ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -230,11 +263,15 @@ internal static class ServeCommands
     }
 
     private static async Task<uint?> WaitForNodeIdAsync(
-        PipeWireAudioOutput tone, CancellationToken cancellationToken)
+        PipeWireAudioOutput tone,
+        CancellationToken cancellationToken
+    )
     {
         using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken, bound.Token);
+            cancellationToken,
+            bound.Token
+        );
 
         while (!linked.Token.IsCancellationRequested)
         {
@@ -243,7 +280,8 @@ internal static class ServeCommands
 
             try
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(100), linked.Token).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(100), linked.Token)
+                    .ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

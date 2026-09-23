@@ -18,8 +18,8 @@ internal sealed unsafe class NativeDict : IDisposable
 
     public NativeDict(params (string Key, string? Value)[] pairs)
     {
-        _items = (spa_dict_item*)NativeMemory.AllocZeroed(
-            (nuint)(sizeof(spa_dict_item) * Math.Max(pairs.Length, 1)));
+        _items = (spa_dict_item*)
+            NativeMemory.AllocZeroed((nuint)(sizeof(spa_dict_item) * Math.Max(pairs.Length, 1)));
 
         for (int i = 0; i < pairs.Length; i++)
         {
@@ -28,7 +28,12 @@ internal sealed unsafe class NativeDict : IDisposable
             _items[i].value = pairs[i].Value is null ? null : (sbyte*)Utf8(pairs[i].Value!);
         }
 
-        Dict = new spa_dict { flags = 0, n_items = (uint)pairs.Length, items = _items };
+        Dict = new spa_dict
+        {
+            flags = 0,
+            n_items = (uint)pairs.Length,
+            items = _items,
+        };
     }
 
     public spa_dict Dict;
@@ -45,7 +50,8 @@ internal sealed unsafe class NativeDict : IDisposable
 
     public void Dispose()
     {
-        foreach (nint p in _allocations) Marshal.FreeHGlobal(p);
+        foreach (nint p in _allocations)
+            Marshal.FreeHGlobal(p);
         NativeMemory.Free(_items);
     }
 }

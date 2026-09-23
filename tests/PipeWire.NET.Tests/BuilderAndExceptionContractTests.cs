@@ -36,14 +36,16 @@ public sealed class BuilderAndExceptionContractTests
     [TestMethod]
     public void EveryStreamPropertyBuilder_SetsTheKeyItNames()
     {
-        IReadOnlyDictionary<string, string> props =
-            new StreamProperties(StreamMediaType.Video, StreamCategory.Capture)
-                .WithRole("Production")
-                .WithTargetObject("some-node")
-                .WithNodeName("my-name")
-                .WithNodeDescription("my description")
-                .With("custom.key", "custom-value")
-                .Values;
+        IReadOnlyDictionary<string, string> props = new StreamProperties(
+            StreamMediaType.Video,
+            StreamCategory.Capture
+        )
+            .WithRole("Production")
+            .WithTargetObject("some-node")
+            .WithNodeName("my-name")
+            .WithNodeDescription("my description")
+            .With("custom.key", "custom-value")
+            .Values;
 
         Assert.AreEqual("Production", props[PipeWireKeys.PW_KEY_MEDIA_ROLE]);
         Assert.AreEqual("some-node", props[PipeWireKeys.PW_KEY_TARGET_OBJECT]);
@@ -60,8 +62,10 @@ public sealed class BuilderAndExceptionContractTests
     [TestMethod]
     public void TheMediaTypeAndCategory_ReflectTheConstructorsArguments()
     {
-        IReadOnlyDictionary<string, string> audio =
-            new StreamProperties(StreamMediaType.Audio, StreamCategory.Playback).Values;
+        IReadOnlyDictionary<string, string> audio = new StreamProperties(
+            StreamMediaType.Audio,
+            StreamCategory.Playback
+        ).Values;
 
         Assert.AreEqual("Audio", audio[PipeWireKeys.PW_KEY_MEDIA_TYPE]);
         Assert.AreEqual("Playback", audio[PipeWireKeys.PW_KEY_MEDIA_CATEGORY]);
@@ -76,11 +80,13 @@ public sealed class BuilderAndExceptionContractTests
     [TestMethod]
     public void SettingAPropertyTwice_KeepsTheLastValue()
     {
-        IReadOnlyDictionary<string, string> props =
-            new StreamProperties(StreamMediaType.Audio, StreamCategory.Capture)
-                .WithNodeName("first")
-                .WithNodeName("second")
-                .Values;
+        IReadOnlyDictionary<string, string> props = new StreamProperties(
+            StreamMediaType.Audio,
+            StreamCategory.Capture
+        )
+            .WithNodeName("first")
+            .WithNodeName("second")
+            .Values;
 
         Assert.AreEqual("second", props[PipeWireKeys.PW_KEY_NODE_NAME]);
     }
@@ -101,13 +107,15 @@ public sealed class BuilderAndExceptionContractTests
         const int eacces = -13;
         const uint objectId = 42;
 
-        foreach (PipeWireException ex in new PipeWireException[]
-                 {
-                     new PipeWireConnectFailedException("connect", eacces, objectId, "denied"),
-                     new PipeWireConnectionClosedException("closed", eacces, objectId, "denied"),
-                     new PipeWireInteropException("interop", eacces, objectId, "denied"),
-                     new PipeWireRequestRefusedException("refused", eacces, objectId, "denied"),
-                 })
+        foreach (
+            PipeWireException ex in new PipeWireException[]
+            {
+                new PipeWireConnectFailedException("connect", eacces, objectId, "denied"),
+                new PipeWireConnectionClosedException("closed", eacces, objectId, "denied"),
+                new PipeWireInteropException("interop", eacces, objectId, "denied"),
+                new PipeWireRequestRefusedException("refused", eacces, objectId, "denied"),
+            }
+        )
         {
             string which = ex.GetType().Name;
 
@@ -127,9 +135,9 @@ public sealed class BuilderAndExceptionContractTests
     [TestMethod]
     public void TheErrnoClassifiers_SeparateTheCasesACallerActsOnDifferently()
     {
-        const int eacces = -13;   // permission denied
-        const int enoent = -2;    // no such object
-        const int epipe = -32;    // the connection went away
+        const int eacces = -13; // permission denied
+        const int enoent = -2; // no such object
+        const int epipe = -32; // the connection went away
 
         var refused = new PipeWireRequestRefusedException("op", eacces, null, null);
         Assert.IsTrue(refused.IsPermissionDenied);

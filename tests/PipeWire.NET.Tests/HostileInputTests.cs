@@ -32,7 +32,7 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
         var raw = (byte*)NativeMemory.Alloc(length);
         try
         {
-            NativeMemory.Fill(raw, length, 0x41);   // 'A', no NUL anywhere
+            NativeMemory.Fill(raw, length, 0x41); // 'A', no NUL anywhere
 
             ReadOnlySpan<byte> bytes = DaemonText.Bytes((sbyte*)raw);
             Assert.AreEqual(DaemonText.MaxBytes, bytes.Length);
@@ -54,7 +54,10 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
         fixed (byte* p = utf8)
         {
             Assert.AreEqual(utf8.Length - 1, DaemonText.Bytes((sbyte*)p).Length);
-            Assert.AreEqual("alsa_output.pci-0000_00_1f.3.analog-stereo", DaemonText.String((sbyte*)p));
+            Assert.AreEqual(
+                "alsa_output.pci-0000_00_1f.3.analog-stereo",
+                DaemonText.String((sbyte*)p)
+            );
         }
 
         Assert.IsTrue(DaemonText.Bytes(null).IsEmpty);
@@ -91,8 +94,11 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
             buffer.metas[cap].size = (uint)sizeof(spa_meta_header);
             buffer.metas[cap].data = &header;
 
-            Assert.AreEqual(-1, SpaFormatPod.FindPresentationTimestampNs(&buffer),
-                "the walk read past the entry the cap should have stopped it at");
+            Assert.AreEqual(
+                -1,
+                SpaFormatPod.FindPresentationTimestampNs(&buffer),
+                "the walk read past the entry the cap should have stopped it at"
+            );
         }
         finally
         {
@@ -156,16 +162,21 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
         // The caller's properties are written into the dict ahead of the library's own and
         // spa_dict_lookup returns the first match, so accepting these would let a caller route a
         // link somewhere else or hand the request to a different factory.
-        Assert.ThrowsExactly<ArgumentException>(
-            () => PipeWireObjectOptions.ThrowIfReserved("factory.name", forLink: false));
-        Assert.ThrowsExactly<ArgumentException>(
-            () => PipeWireObjectOptions.ThrowIfReserved("factory.name", forLink: true));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            PipeWireObjectOptions.ThrowIfReserved("factory.name", forLink: false)
+        );
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            PipeWireObjectOptions.ThrowIfReserved("factory.name", forLink: true)
+        );
 
-        foreach (string endpoint in (string[])
-                 ["link.output.node", "link.output.port", "link.input.node", "link.input.port"])
+        foreach (
+            string endpoint in (string[])
+                ["link.output.node", "link.output.port", "link.input.node", "link.input.port"]
+        )
         {
-            Assert.ThrowsExactly<ArgumentException>(
-                () => PipeWireObjectOptions.ThrowIfReserved(endpoint, forLink: true));
+            Assert.ThrowsExactly<ArgumentException>(() =>
+                PipeWireObjectOptions.ThrowIfReserved(endpoint, forLink: true)
+            );
 
             // Not reserved on a node: the key means nothing there, and refusing it would be
             // refusing a property the daemon would simply ignore.
@@ -176,8 +187,10 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
     [TestMethod]
     public void TheKeysACallerIsMeantToSet_AreStillAccepted()
     {
-        foreach (string key in (string[])
-                 ["media.class", "audio.position", "node.name", "object.linger", "link.passive"])
+        foreach (
+            string key in (string[])
+                ["media.class", "audio.position", "node.name", "object.linger", "link.passive"]
+        )
         {
             PipeWireObjectOptions.ThrowIfReserved(key, forLink: false);
             PipeWireObjectOptions.ThrowIfReserved(key, forLink: true);
@@ -214,14 +227,22 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
     [TestMethod]
     public void AWellFormedProfilerReport_ParsesToItsObject()
     {
-        var expected = new SpaObject(SpaType.ObjectProfiler, SpaParamType.Props,
-            [new SpaPodProperty(1, 0, new SpaInt(7))]);
+        var expected = new SpaObject(
+            SpaType.ObjectProfiler,
+            SpaParamType.Props,
+            [new SpaPodProperty(1, 0, new SpaInt(7))]
+        );
         byte[] pod = SpaPod.ToBytes(expected);
 
         fixed (byte* p = pod)
         {
-            Assert.IsTrue(PipeWireProfilerProxy.TryParseReport(
-                (spa_pod*)p, out System.Collections.Immutable.ImmutableArray<SpaObject> reports, out int size));
+            Assert.IsTrue(
+                PipeWireProfilerProxy.TryParseReport(
+                    (spa_pod*)p,
+                    out System.Collections.Immutable.ImmutableArray<SpaObject> reports,
+                    out int size
+                )
+            );
             Assert.AreEqual(pod.Length, size);
             Assert.HasCount(1, reports);
             Assert.AreEqual(expected, reports[0]);
@@ -251,8 +272,7 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
         BitConverter.TryWriteBytes(huge.AsSpan(4), (uint)SpaType.Object);
         fixed (byte* h = huge)
         {
-            Assert.IsFalse(
-                PipeWireProfilerProxy.TryParseReport((spa_pod*)h, out _, out int size));
+            Assert.IsFalse(PipeWireProfilerProxy.TryParseReport((spa_pod*)h, out _, out int size));
             Assert.AreEqual(int.MaxValue, size);
         }
 
@@ -285,27 +305,62 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
         // The number is what a caller branches on, but the message is read by a person, and the
         // symbolic name is the half of it that says what went wrong. Every mapped code is named;
         // anything else still reports the number rather than inventing a name for it.
-        foreach ((int code, string name) in new[]
+        foreach (
+            (int code, string name) in new[]
+            {
+                (-1, "EPERM"),
+                (-2, "ENOENT"),
+                (-4, "EINTR"),
+                (-5, "EIO"),
+                (-9, "EBADF"),
+                (-11, "EAGAIN"),
+                (-12, "ENOMEM"),
+                (-13, "EACCES"),
+                (-14, "EFAULT"),
+                (-16, "EBUSY"),
+                (-17, "EEXIST"),
+                (-19, "ENODEV"),
+                (-22, "EINVAL"),
+                (-24, "EMFILE"),
+                (-25, "ENOTTY"),
+                (-28, "ENOSPC"),
+                (-32, "EPIPE"),
+                (-34, "ERANGE"),
+                (-38, "ENOSYS"),
+                (-39, "ENOTEMPTY"),
+                (-71, "EPROTO"),
+                (-74, "EBADMSG"),
+                (-75, "EOVERFLOW"),
+                (-84, "EILSEQ"),
+                (-88, "ENOTSOCK"),
+                (-90, "EMSGSIZE"),
+                (-93, "EPROTONOSUPPORT"),
+                (-95, "EOPNOTSUPP"),
+                (-98, "EADDRINUSE"),
+                (-103, "ECONNABORTED"),
+                (-104, "ECONNRESET"),
+                (-105, "ENOBUFS"),
+                (-107, "ENOTCONN"),
+                (-108, "ESHUTDOWN"),
+                (-110, "ETIMEDOUT"),
+                (-111, "ECONNREFUSED"),
+                (-125, "ECANCELED"),
+            }
+        )
         {
-            (-1, "EPERM"), (-2, "ENOENT"), (-4, "EINTR"), (-5, "EIO"), (-9, "EBADF"),
-            (-11, "EAGAIN"), (-12, "ENOMEM"), (-13, "EACCES"), (-14, "EFAULT"), (-16, "EBUSY"),
-            (-17, "EEXIST"), (-19, "ENODEV"), (-22, "EINVAL"), (-24, "EMFILE"), (-25, "ENOTTY"),
-            (-28, "ENOSPC"), (-32, "EPIPE"), (-34, "ERANGE"), (-38, "ENOSYS"), (-39, "ENOTEMPTY"),
-            (-71, "EPROTO"), (-74, "EBADMSG"), (-75, "EOVERFLOW"), (-84, "EILSEQ"),
-            (-88, "ENOTSOCK"), (-90, "EMSGSIZE"), (-93, "EPROTONOSUPPORT"), (-95, "EOPNOTSUPP"),
-            (-98, "EADDRINUSE"), (-103, "ECONNABORTED"), (-104, "ECONNRESET"), (-105, "ENOBUFS"),
-            (-107, "ENOTCONN"), (-108, "ESHUTDOWN"), (-110, "ETIMEDOUT"), (-111, "ECONNREFUSED"),
-            (-125, "ECANCELED"),
-        })
-        {
-            StringAssert.Contains(new PipeWireException("op", code).Message, name,
-                $"{code} is not named in the message");
+            StringAssert.Contains(
+                new PipeWireException("op", code).Message,
+                name,
+                $"{code} is not named in the message"
+            );
         }
 
         string unmapped = new PipeWireException("op", -9999).Message;
         StringAssert.Contains(unmapped, "-9999");
-        Assert.IsFalse(unmapped.Contains('(', StringComparison.Ordinal),
-            "an unmapped code was given a symbolic name");
+        Assert.IsFalse(
+            unmapped.Contains('(', StringComparison.Ordinal),
+            "an unmapped code was given a symbolic name"
+        );
     }
 
     [TestMethod]
@@ -331,12 +386,14 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
         PipeWireException.ThrowIfFailed(0, "op");
         PipeWireException.ThrowIfFailed(3, "op");
 
-        PipeWireException thrown = Assert.ThrowsExactly<PipeWireInteropException>(
-            () => PipeWireException.ThrowIfFailed(-2, "op", 7));
+        PipeWireException thrown = Assert.ThrowsExactly<PipeWireInteropException>(() =>
+            PipeWireException.ThrowIfFailed(-2, "op", 7)
+        );
         Assert.AreEqual(-2, thrown.Result);
         Assert.AreEqual("op", thrown.Operation);
         Assert.AreEqual((uint)7, thrown.ObjectId);
     }
+
     [TestMethod]
     public void BothRefusalCodes_ReadAsPermissionDenied()
     {
@@ -354,12 +411,19 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
     public void ADaemonFailureCarriesItsCode_RatherThanASentence()
     {
         // The code is the part a caller branches on; the message is for a person reading a log.
-        var error = new PipeWireException("pw_context_connect", -2, null, "ensure the daemon is running");
+        var error = new PipeWireException(
+            "pw_context_connect",
+            -2,
+            null,
+            "ensure the daemon is running"
+        );
 
         Assert.AreEqual(-2, error.Result);
         Assert.AreEqual("pw_context_connect", error.Operation);
         Assert.IsTrue(error.Message.Contains("ENOENT", StringComparison.Ordinal));
-        Assert.IsTrue(error.Message.Contains("ensure the daemon is running", StringComparison.Ordinal));
+        Assert.IsTrue(
+            error.Message.Contains("ensure the daemon is running", StringComparison.Ordinal)
+        );
     }
 
     // - Interface dispatch -
@@ -396,15 +460,20 @@ public sealed unsafe class HostileInputTests : PipeWireTestBase
         Assert.AreEqual(-1, Native.pw_profiler_add_listener(obj, null, null, null));
         Assert.AreEqual(-1, Native.pw_security_context_create(obj, 0, 0, null));
         Assert.AreEqual(-1, Native.pw_metadata_add_listener((pw_metadata*)obj, null, null, null));
-        Assert.AreEqual(-1, Native.pw_metadata_set_property((pw_metadata*)obj, 0, null, null, null));
+        Assert.AreEqual(
+            -1,
+            Native.pw_metadata_set_property((pw_metadata*)obj, 0, null, null, null)
+        );
         Assert.AreEqual(-1, Native.pw_metadata_clear((pw_metadata*)obj));
 
         // Creating is not reportable as -1: there is no call to fail, so it throws ENOSYS.
-        PipeWireException refused = Assert.ThrowsExactly<PipeWireInteropException>(
-            () => Native.pw_core_get_registry((pw_core*)obj, 0, 0));
+        PipeWireException refused = Assert.ThrowsExactly<PipeWireInteropException>(() =>
+            Native.pw_core_get_registry((pw_core*)obj, 0, 0)
+        );
         Assert.AreEqual(-38, refused.Result);
-        refused = Assert.ThrowsExactly<PipeWireInteropException>(
-            () => Native.pw_core_create_object((pw_core*)obj, null, null, 0, null, 0));
+        refused = Assert.ThrowsExactly<PipeWireInteropException>(() =>
+            Native.pw_core_create_object((pw_core*)obj, null, null, 0, null, 0)
+        );
         Assert.AreEqual(-38, refused.Result);
 
         // Detaching nothing detaches nothing.

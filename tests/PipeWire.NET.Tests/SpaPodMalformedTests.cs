@@ -35,9 +35,15 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
         // body for a type that needs eight is the shape that reads into the next pod.
         (SpaType Type, int Needs)[] cases =
         [
-            (SpaType.Bool, 4), (SpaType.Id, 4), (SpaType.Int, 4), (SpaType.Float, 4),
-            (SpaType.Long, 8), (SpaType.Double, 8), (SpaType.Fd, 8),
-            (SpaType.Rectangle, 8), (SpaType.Fraction, 8),
+            (SpaType.Bool, 4),
+            (SpaType.Id, 4),
+            (SpaType.Int, 4),
+            (SpaType.Float, 4),
+            (SpaType.Long, 8),
+            (SpaType.Double, 8),
+            (SpaType.Fd, 8),
+            (SpaType.Rectangle, 8),
+            (SpaType.Fraction, 8),
         ];
 
         foreach ((SpaType type, int needs) in cases)
@@ -45,8 +51,10 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
             int truncated = needs - 1;
             byte[] pod = Pod(type, (uint)truncated, truncated);
 
-            Assert.IsFalse(SpaPod.TryParse(pod, out SpaValue? value),
-                $"{type} with {truncated} body bytes must be refused; it needs {needs}");
+            Assert.IsFalse(
+                SpaPod.TryParse(pod, out SpaValue? value),
+                $"{type} with {truncated} body bytes must be refused; it needs {needs}"
+            );
             Assert.IsNull(value);
         }
     }
@@ -57,15 +65,24 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
         // The other side of the same boundary, so the check above cannot pass by refusing everything.
         (SpaType Type, int Needs)[] cases =
         [
-            (SpaType.Bool, 4), (SpaType.Id, 4), (SpaType.Int, 4), (SpaType.Float, 4),
-            (SpaType.Long, 8), (SpaType.Double, 8), (SpaType.Fd, 8),
-            (SpaType.Rectangle, 8), (SpaType.Fraction, 8),
+            (SpaType.Bool, 4),
+            (SpaType.Id, 4),
+            (SpaType.Int, 4),
+            (SpaType.Float, 4),
+            (SpaType.Long, 8),
+            (SpaType.Double, 8),
+            (SpaType.Fd, 8),
+            (SpaType.Rectangle, 8),
+            (SpaType.Fraction, 8),
         ];
 
         foreach ((SpaType type, int needs) in cases)
         {
             byte[] pod = Pod(type, (uint)needs, needs);
-            Assert.IsTrue(SpaPod.TryParse(pod, out SpaValue? value), $"{type} with {needs} bytes is valid");
+            Assert.IsTrue(
+                SpaPod.TryParse(pod, out SpaValue? value),
+                $"{type} with {needs} bytes is valid"
+            );
             Assert.AreEqual(type, value!.Type);
         }
     }
@@ -78,7 +95,10 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
         foreach (uint declared in (uint[])[0, 1, 4, 7])
         {
             byte[] pod = Pod(SpaType.Object, declared, (int)declared);
-            Assert.IsFalse(SpaPod.TryParse(pod, out _), $"an object with a {declared}-byte body is malformed");
+            Assert.IsFalse(
+                SpaPod.TryParse(pod, out _),
+                $"an object with a {declared}-byte body is malformed"
+            );
         }
 
         // Exactly eight is a valid object with no properties.
@@ -96,7 +116,7 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
         // Sixteen exactly is an empty choice, which is legal.
         byte[] pod = Pod(SpaType.Choice, 16, 16);
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(8, 4), (uint)SpaChoiceType.Enum);
-        BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(16, 4), 0);          // child size
+        BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(16, 4), 0); // child size
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(20, 4), (uint)SpaType.Int);
 
         Assert.IsTrue(SpaPod.TryParse(pod, out SpaValue? value));
@@ -109,7 +129,7 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
         // Zero-sized children with a non-empty body describes infinitely many of them.
         byte[] pod = Pod(SpaType.Choice, 24, 24);
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(8, 4), (uint)SpaChoiceType.Enum);
-        BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(16, 4), 0);          // child size
+        BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(16, 4), 0); // child size
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(20, 4), (uint)SpaType.Int);
 
         Assert.IsFalse(SpaPod.TryParse(pod, out _));
@@ -122,7 +142,7 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
         // One claiming to hold Longs in four bytes each is describing something that cannot exist.
         byte[] pod = Pod(SpaType.Choice, 24, 24);
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(8, 4), (uint)SpaChoiceType.Enum);
-        BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(16, 4), 4);          // child size: 4
+        BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(16, 4), 4); // child size: 4
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(20, 4), (uint)SpaType.Long); // needs 8
 
         Assert.IsFalse(SpaPod.TryParse(pod, out _));
@@ -142,10 +162,14 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
     public void APointerBodyTooShortForAPointer_IsRefused()
     {
         // Type, padding, then a native-word pointer.
-        Assert.IsFalse(SpaPod.TryParse(Pod(SpaType.Pointer, 8, 8), out _),
-            "eight bytes holds the type and padding but no pointer");
+        Assert.IsFalse(
+            SpaPod.TryParse(Pod(SpaType.Pointer, 8, 8), out _),
+            "eight bytes holds the type and padding but no pointer"
+        );
 
-        Assert.IsTrue(SpaPod.TryParse(Pod(SpaType.Pointer, (uint)(8 + IntPtr.Size), 8 + IntPtr.Size), out _));
+        Assert.IsTrue(
+            SpaPod.TryParse(Pod(SpaType.Pointer, (uint)(8 + IntPtr.Size), 8 + IntPtr.Size), out _)
+        );
     }
 
     [TestMethod]
@@ -159,8 +183,8 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(8, 4), (uint)SpaType.ObjectProps);
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(12, 4), (uint)SpaParamType.Props);
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(16, 4), (uint)SpaProp.Volume); // key
-        BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(20, 4), 0);                     // flags
-        BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(24, 4), 0xFFFF);                // value size
+        BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(20, 4), 0); // flags
+        BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(24, 4), 0xFFFF); // value size
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(28, 4), (uint)SpaType.Float);
 
         Assert.IsFalse(SpaPod.TryParse(pod, out _));
@@ -172,7 +196,7 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
         byte[] pod = new byte[8 + 16];
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(0, 4), 16);
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(4, 4), (uint)SpaType.Struct);
-        BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(8, 4), 0xFFFF);   // field claims 64KB
+        BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(8, 4), 0xFFFF); // field claims 64KB
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(12, 4), (uint)SpaType.Int);
 
         Assert.IsFalse(SpaPod.TryParse(pod, out _));
@@ -182,7 +206,7 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
     public void AnArrayWhoseChildTypeCannotFitItsChildSize_IsRefused()
     {
         byte[] pod = Pod(SpaType.Array, 16, 16);
-        BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(8, 4), 4);                    // child size
+        BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(8, 4), 4); // child size
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(12, 4), (uint)SpaType.Double); // needs 8
 
         Assert.IsFalse(SpaPod.TryParse(pod, out _));
@@ -195,7 +219,9 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
         byte[] pod = new byte[8 + 8];
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(0, 4), 3);
         BinaryPrimitives.WriteUInt32LittleEndian(pod.AsSpan(4, 4), (uint)SpaType.String);
-        pod[8] = (byte)'a'; pod[9] = (byte)'b'; pod[10] = (byte)'c';
+        pod[8] = (byte)'a';
+        pod[9] = (byte)'b';
+        pod[10] = (byte)'c';
 
         Assert.IsTrue(SpaPod.TryParse(pod, out SpaValue? value));
         Assert.AreEqual("abc", ((SpaString)value!).Value);
@@ -219,7 +245,8 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
         foreach (int length in (int[])[0, 1, 7, 64])
         {
             byte[] bytes = Pod(SpaType.Bytes, (uint)length, length);
-            for (int i = 0; i < length; i++) bytes[8 + i] = (byte)i;
+            for (int i = 0; i < length; i++)
+                bytes[8 + i] = (byte)i;
 
             Assert.IsTrue(SpaPod.TryParse(bytes, out SpaValue? value));
             Assert.AreEqual(length, ((SpaBytes)value!).Value.Length);
@@ -272,7 +299,10 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
         foreach ((SpaType type, SpaValue item) in cases)
         {
             var array = new SpaArray(type, [item, item, item]);
-            Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(array), out SpaValue? read), $"{type} array");
+            Assert.IsTrue(
+                SpaPod.TryParse(SpaPod.ToBytes(array), out SpaValue? read),
+                $"{type} array"
+            );
             Assert.AreEqual(array, read, $"{type} array changed on the way through");
         }
     }
@@ -293,7 +323,10 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
         // Ten bytes clear the eight-byte header, so the size field is known, but an int needs
         // twelve: neither the padded nor the unpadded extent fits, and there is no partial value.
         byte[] full = SpaPod.ToBytes(new SpaInt(7));
-        Assert.IsTrue(SpaPod.TryParse(full, out _), "the intact pod must parse, or this proves nothing");
+        Assert.IsTrue(
+            SpaPod.TryParse(full, out _),
+            "the intact pod must parse, or this proves nothing"
+        );
         Assert.IsFalse(SpaPod.TryParse(full.AsSpan(0, 10), out _));
     }
 
@@ -317,9 +350,14 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
     {
         // uint.MaxValue casts to -1, making "8 + (int)size" seven and small enough to pass a
         // bounds check; a value near int.MaxValue overflows the same sum to negative.
-        foreach (uint size in (uint[])[uint.MaxValue, uint.MaxValue - 7, int.MaxValue, (uint)int.MaxValue + 1])
+        foreach (
+            uint size in (uint[])
+                [uint.MaxValue, uint.MaxValue - 7, int.MaxValue, (uint)int.MaxValue + 1]
+        )
         {
-            if (SpaPod.TryParse(PropertyOfSize(size), out SpaValue? value) && value is SpaObject obj)
+            if (
+                SpaPod.TryParse(PropertyOfSize(size), out SpaValue? value) && value is SpaObject obj
+            )
                 Assert.AreEqual(0, obj.Properties.Length, $"size {size} produced a property");
         }
     }
@@ -373,7 +411,10 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
         builder.Pop();
 
         byte[] whole = builder.GetPod().ToArray();
-        Assert.IsTrue(SpaPod.TryParse(whole, out _), "the intact pod must parse, or this proves nothing");
+        Assert.IsTrue(
+            SpaPod.TryParse(whole, out _),
+            "the intact pod must parse, or this proves nothing"
+        );
 
         // Cut inside the trailing property, leaving too little for another header but more than
         // nothing. The pod's own size field is corrected so only the truncation is under test.
@@ -382,8 +423,10 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
             byte[] cut = whole[..^lost];
             BitConverter.TryWriteBytes(cut.AsSpan(0, 4), (uint)(cut.Length - 8));
 
-            Assert.IsFalse(SpaPod.TryParse(cut, out _),
-                $"an object body {lost} byte(s) short parsed as though it were whole");
+            Assert.IsFalse(
+                SpaPod.TryParse(cut, out _),
+                $"an object body {lost} byte(s) short parsed as though it were whole"
+            );
         }
     }
 
@@ -397,9 +440,9 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
         foreach (int truncateTo in (int[])[8, 12, 16, 20])
         {
             var body = new List<byte>();
-            body.AddRange(BitConverter.GetBytes(3u));            // choiceType (Enum)
-            body.AddRange(BitConverter.GetBytes(0u));            // flags
-            body.AddRange(BitConverter.GetBytes(8u));            // childSize
+            body.AddRange(BitConverter.GetBytes(3u)); // choiceType (Enum)
+            body.AddRange(BitConverter.GetBytes(0u)); // flags
+            body.AddRange(BitConverter.GetBytes(8u)); // childSize
             body.AddRange(BitConverter.GetBytes((uint)SpaType.Long));
 
             // Header plus body, written directly: the point is a pod whose declared size is honest
@@ -412,14 +455,19 @@ public sealed class SpaPodMalformedTests : PipeWireTestBase
             byte[] cut = pod[..Math.Min(truncateTo, pod.Length)];
 
             var reader = new SpaPodReader(cut);
-            Assert.IsFalse(reader.TryUnwrapChoice(out _),
-                $"a choice truncated to {truncateTo} bytes was accepted");
+            Assert.IsFalse(
+                reader.TryUnwrapChoice(out _),
+                $"a choice truncated to {truncateTo} bytes was accepted"
+            );
 
             // The proof that the position came back: the same reader now reads the header it would
             // have read had nothing been attempted.
             var again = new SpaPodReader(cut);
-            Assert.AreEqual(again.TryUnwrapChoice(out _), reader.TryUnwrapChoice(out _),
-                $"a second attempt at {truncateTo} bytes behaved differently, so the position moved");
+            Assert.AreEqual(
+                again.TryUnwrapChoice(out _),
+                reader.TryUnwrapChoice(out _),
+                $"a second attempt at {truncateTo} bytes behaved differently, so the position moved"
+            );
         }
     }
 }

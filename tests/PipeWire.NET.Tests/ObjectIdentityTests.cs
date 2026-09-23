@@ -13,14 +13,28 @@ namespace PipeWire.NET.Tests;
 public sealed class ObjectIdentityTests : PipeWireTestBase
 {
     private static PipeWireNode Node(uint id, ulong? serial, string? name = "n") =>
-        new(id, name, null, null, null, PipeWirePermissions.None, 3,
+        new(
+            id,
+            name,
+            null,
+            null,
+            null,
+            PipeWirePermissions.None,
+            3,
             Properties: serial is null
-                ? PipeWireProperties.FromItems(new Dictionary<string, string> { ["node.name"] = name ?? "n" })
-                : PipeWireProperties.FromItems(new Dictionary<string, string>
-                {
-                    ["node.name"] = name ?? "n",
-                    [PipeWireKeys.PW_KEY_OBJECT_SERIAL] = serial.Value.ToString(CultureInfo.InvariantCulture),
-                }));
+                ? PipeWireProperties.FromItems(
+                    new Dictionary<string, string> { ["node.name"] = name ?? "n" }
+                )
+                : PipeWireProperties.FromItems(
+                    new Dictionary<string, string>
+                    {
+                        ["node.name"] = name ?? "n",
+                        [PipeWireKeys.PW_KEY_OBJECT_SERIAL] = serial.Value.ToString(
+                            CultureInfo.InvariantCulture
+                        ),
+                    }
+                )
+        );
 
     private static PipeWireGraphSnapshot Graph(params PipeWireNode[] nodes) =>
         new(1, nodes, [], []);
@@ -31,8 +45,10 @@ public sealed class ObjectIdentityTests : PipeWireTestBase
         PipeWireNode held = Node(42, serial: 900);
         PipeWireGraphSnapshot after = Graph(Node(42, serial: 1500, name: "somebody else"));
 
-        Assert.IsFalse(held.IsStillIn(after),
-            "the id came back attached to a different object, so the held one is gone");
+        Assert.IsFalse(
+            held.IsStillIn(after),
+            "the id came back attached to a different object, so the held one is gone"
+        );
         Assert.IsTrue(Node(42, serial: 900).IsStillIn(Graph(Node(42, serial: 900))));
     }
 

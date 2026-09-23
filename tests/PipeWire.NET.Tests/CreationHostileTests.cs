@@ -27,7 +27,9 @@ public sealed class CreationHostileTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken cancellationToken)
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -36,31 +38,42 @@ public sealed class CreationHostileTests : PipeWireTestBase
         return (context, registry);
     }
 
-    private static string Unique(string p) => $"{p}_{Environment.ProcessId}_{Random.Shared.Next():x}";
+    private static string Unique(string p) =>
+        $"{p}_{Environment.ProcessId}_{Random.Shared.Next():x}";
 
     [TestMethod]
     public async Task ACreationTheDaemonRefuses_FaultsTheCallerRatherThanHanging()
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-create-refused", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-create-refused",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             // A link between two ports that cannot be linked: the daemon reports the failure on the
             // error stream after the proxy is bound, which is the window where a waiter has an id
             // and no object. It has to fault rather than wait for a global that is not coming.
-            PipeWireNode node = await registry.CreateVirtualSink("Refuse")
-                .WithName(Unique("pwnet_refuse")).ExecuteAsync(cts.Token);
+            PipeWireNode node = await registry
+                .CreateVirtualSink("Refuse")
+                .WithName(Unique("pwnet_refuse"))
+                .ExecuteAsync(cts.Token);
 
             PipeWirePort[] ports = await PortsAsync(registry, node.NodeId, cts.Token);
-            PipeWirePort? input = Array.Find(ports, p => p.PortDirection == PipeWirePortDirection.In);
-            if (input is null) Assert.Inconclusive("the node published no input port.");
+            PipeWirePort? input = Array.Find(
+                ports,
+                p => p.PortDirection == PipeWirePortDirection.In
+            );
+            if (input is null)
+                Assert.Inconclusive("the node published no input port.");
 
             // Input to input. Ports face the wrong way, so the library refuses before the daemon
             // is asked at all, which is the better of the two outcomes.
-            await Assert.ThrowsExactlyAsync<ArgumentException>(
-                async () => await registry.CreateLinkAsync(input!, input!, cts.Token));
+            await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+                await registry.CreateLinkAsync(input!, input!, cts.Token)
+            );
 
             // The connection is unharmed by the refusal.
             await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -77,8 +90,14 @@ public sealed class CreationHostileTests : PipeWireTestBase
         RequireLinux();
         SessionGates.RequireDaemonAtLeast(1, 6, 8);
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-create-vanish", cts.Token);
-        (PipeWireContext killerCtx, PipeWireRegistry killer) = await ConnectAsync("pwnet-create-killer", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-create-vanish",
+            cts.Token
+        );
+        (PipeWireContext killerCtx, PipeWireRegistry killer) = await ConnectAsync(
+            "pwnet-create-killer",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         await using (killerCtx)
@@ -98,17 +117,29 @@ public sealed class CreationHostileTests : PipeWireTestBase
             {
                 for (int round = 0; round < 10; round++)
                 {
-                    PipeWireNode node = await registry.CreateVirtualSink("Vanish")
-                        .WithName(Unique("pwnet_vanish")).ExecuteAsync(cts.Token);
+                    PipeWireNode node = await registry
+                        .CreateVirtualSink("Vanish")
+                        .WithName(Unique("pwnet_vanish"))
+                        .ExecuteAsync(cts.Token);
 
                     while (doomed.TryDequeue(out uint id))
                     {
-                        try { await killer.DestroyGlobalAsync(id, cts.Token); }
-                        catch (PipeWireException) { /* already gone; that is the race working */ }
+                        try
+                        {
+                            await killer.DestroyGlobalAsync(id, cts.Token);
+                        }
+                        catch (PipeWireException)
+                        { /* already gone; that is the race working */
+                        }
                     }
 
-                    try { await registry.DestroyGlobalAsync(node.NodeId, cts.Token); }
-                    catch (PipeWireException) { /* the killer got there first */ }
+                    try
+                    {
+                        await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
+                    }
+                    catch (PipeWireException)
+                    { /* the killer got there first */
+                    }
                 }
 
                 // Both connections still work, and neither is holding a waiter that never completed.
@@ -133,8 +164,14 @@ public sealed class CreationHostileTests : PipeWireTestBase
         RequireLinux();
         SessionGates.RequireDaemonAtLeast(1, 6, 8);
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-proxy-race", cts.Token);
-        (PipeWireContext killerCtx, PipeWireRegistry killer) = await ConnectAsync("pwnet-proxy-killer", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-proxy-race",
+            cts.Token
+        );
+        (PipeWireContext killerCtx, PipeWireRegistry killer) = await ConnectAsync(
+            "pwnet-proxy-killer",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         await using (killerCtx)
@@ -158,31 +195,51 @@ public sealed class CreationHostileTests : PipeWireTestBase
                 {
                     // The killer races the creation from the other connection. Whichever wins, the
                     // proxy must not be left filed for an object that no longer exists.
-                    Task<PipeWireNode> creating = registry.CreateVirtualSink("ProxyRace")
-                        .WithName(Unique("pwnet_proxyrace")).ExecuteAsync(cts.Token);
+                    Task<PipeWireNode> creating = registry
+                        .CreateVirtualSink("ProxyRace")
+                        .WithName(Unique("pwnet_proxyrace"))
+                        .ExecuteAsync(cts.Token);
 
                     while (doomed.TryDequeue(out uint id))
                     {
-                        try { await killer.DestroyGlobalAsync(id, cts.Token); }
-                        catch (PipeWireException) { /* already gone; that is the race working */ }
+                        try
+                        {
+                            await killer.DestroyGlobalAsync(id, cts.Token);
+                        }
+                        catch (PipeWireException)
+                        { /* already gone; that is the race working */
+                        }
                     }
 
-                    try { mine.Add((await creating).NodeId); }
-                    catch (PipeWireException) { /* the killer got it before it was published */ }
+                    try
+                    {
+                        mine.Add((await creating).NodeId);
+                    }
+                    catch (PipeWireException)
+                    { /* the killer got it before it was published */
+                    }
                 }
 
                 foreach (uint id in mine)
                 {
-                    try { await registry.DestroyGlobalAsync(id, cts.Token); }
-                    catch (PipeWireException) { /* the killer got there first */ }
+                    try
+                    {
+                        await registry.DestroyGlobalAsync(id, cts.Token);
+                    }
+                    catch (PipeWireException)
+                    { /* the killer got there first */
+                    }
                 }
 
                 // Every object this test made is gone, so every proxy it filed should be too.
                 for (int attempt = 0; attempt < 100 && registry.OwnedProxyCount > before; attempt++)
                     await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
 
-                Assert.AreEqual(before, registry.OwnedProxyCount,
-                    "proxies are still filed for objects that no longer exist");
+                Assert.AreEqual(
+                    before,
+                    registry.OwnedProxyCount,
+                    "proxies are still filed for objects that no longer exist"
+                );
             }
             finally
             {
@@ -196,14 +253,19 @@ public sealed class CreationHostileTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-id-reuse", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-id-reuse",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             // PipeWire reuses ids. A snapshot is immutable, so the object it recorded under an id
             // must stay that object even after the daemon has handed the id to something else.
-            PipeWireNode first = await registry.CreateVirtualSink("Reuse")
-                .WithName(Unique("pwnet_reuse_first")).ExecuteAsync(cts.Token);
+            PipeWireNode first = await registry
+                .CreateVirtualSink("Reuse")
+                .WithName(Unique("pwnet_reuse_first"))
+                .ExecuteAsync(cts.Token);
 
             await registry.WaitForInitialEnumerationAsync(cts.Token);
             PipeWireGraphSnapshot held = registry.Current;
@@ -217,34 +279,45 @@ public sealed class CreationHostileTests : PipeWireTestBase
             var created = new List<uint>();
             for (int i = 0; i < 30 && !reused; i++)
             {
-                PipeWireNode next = await registry.CreateVirtualSink("Reuse")
-                    .WithName(Unique("pwnet_reuse_next")).ExecuteAsync(cts.Token);
+                PipeWireNode next = await registry
+                    .CreateVirtualSink("Reuse")
+                    .WithName(Unique("pwnet_reuse_next"))
+                    .ExecuteAsync(cts.Token);
 
                 created.Add(next.NodeId);
 
                 // The id coming back is not on its own proof of reuse - it is proof only when the
                 // serial differs, since that is what says this is a different object rather than
                 // the same one still around.
-                reused = next.NodeId == first.NodeId
-                         && next.ObjectSerial != first.ObjectSerial;
+                reused = next.NodeId == first.NodeId && next.ObjectSerial != first.ObjectSerial;
             }
 
             foreach (uint id in created)
             {
-                try { await registry.DestroyGlobalAsync(id, cts.Token); }
-                catch (PipeWireException) { /* already gone */ }
+                try
+                {
+                    await registry.DestroyGlobalAsync(id, cts.Token);
+                }
+                catch (PipeWireException)
+                { /* already gone */
+                }
             }
 
             if (!reused)
                 Assert.Inconclusive("the daemon did not reuse an id within the churn budget.");
 
-            Assert.AreEqual(firstName, held.GetNode(first.NodeId)?.NodeName,
-                "a held snapshot changed when the daemon reused the id it recorded");
+            Assert.AreEqual(
+                firstName,
+                held.GetNode(first.NodeId)?.NodeName,
+                "a held snapshot changed when the daemon reused the id it recorded"
+            );
 
             // And the snapshot's own answer to "is this still that object". The id resolves in
             // both, so only the serial can tell them apart, which is the whole reason it is read.
-            Assert.IsFalse(held.GetNode(first.NodeId)!.IsStillIn(registry.Current),
-                "the object the snapshot recorded must not read as still present once its id was reused");
+            Assert.IsFalse(
+                held.GetNode(first.NodeId)!.IsStillIn(registry.Current),
+                "the object the snapshot recorded must not read as still present once its id was reused"
+            );
         }
     }
 
@@ -253,7 +326,10 @@ public sealed class CreationHostileTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-kind-mismatch", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-kind-mismatch",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -289,7 +365,10 @@ public sealed class CreationHostileTests : PipeWireTestBase
     }
 
     private static async Task<PipeWirePort[]> PortsAsync(
-        PipeWireRegistry registry, uint nodeId, CancellationToken cancellationToken)
+        PipeWireRegistry registry,
+        uint nodeId,
+        CancellationToken cancellationToken
+    )
     {
         while (true)
         {
@@ -297,7 +376,8 @@ public sealed class CreationHostileTests : PipeWireTestBase
             await registry.WaitForInitialEnumerationAsync(cancellationToken);
 
             PipeWirePort[] ports = [.. registry.Current.GetPortsForNode(nodeId)];
-            if (ports.Length > 0) return ports;
+            if (ports.Length > 0)
+                return ports;
         }
     }
 }

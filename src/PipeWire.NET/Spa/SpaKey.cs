@@ -38,13 +38,16 @@ public readonly record struct SpaKey
     /// throws a <see cref="NotSupportedException"/> naming neither type. Since the size is a
     /// constant for any given <typeparamref name="TEnum"/>, the check costs nothing once inlined.
     /// </remarks>
-    public unsafe TEnum As<TEnum>() where TEnum : unmanaged, Enum
+    public unsafe TEnum As<TEnum>()
+        where TEnum : unmanaged, Enum
     {
         if (sizeof(TEnum) != sizeof(uint))
         {
             throw new ArgumentException(
                 $"{typeof(TEnum).Name} is {sizeof(TEnum)} bytes; a SPA key enum is four. "
-                + "This key does not belong to that enum.", nameof(TEnum));
+                    + "This key does not belong to that enum.",
+                nameof(TEnum)
+            );
         }
 
         return System.Runtime.CompilerServices.Unsafe.BitCast<uint, TEnum>(Value);
@@ -107,5 +110,6 @@ public readonly record struct SpaKey
     public static implicit operator SpaKey(SpaParamDict key) => new((uint)key);
 
     /// <inheritdoc/>
-    public override string ToString() => Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    public override string ToString() =>
+        Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }

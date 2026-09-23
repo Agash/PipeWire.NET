@@ -31,4 +31,5 @@ public readonly record struct PipeWireGraphClock(
     uint RateDen,
     long Delay,
     double RateDiff,
-    ulong NextTimeNs);
+    ulong NextTimeNs
+);

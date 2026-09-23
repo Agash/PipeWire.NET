@@ -45,7 +45,11 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
     private spa_hook* _proxyHook;
     private GCHandle _proxySelf;
 
-    internal PipeWireProxyHandle(pw_proxy* proxy, PipeWireLoopHandle loop, PipeWireCoreHandle? core = null)
+    internal PipeWireProxyHandle(
+        pw_proxy* proxy,
+        PipeWireLoopHandle loop,
+        PipeWireCoreHandle? core = null
+    )
         : base((IntPtr)proxy, ownsHandle: true)
     {
         ArgumentNullException.ThrowIfNull(loop);
@@ -63,8 +67,16 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
         }
         catch
         {
-            if (_coreReferenced) { core!.DangerousRelease(); _coreReferenced = false; }
-            if (_loopReferenced) { loop.DangerousRelease(); _loopReferenced = false; }
+            if (_coreReferenced)
+            {
+                core!.DangerousRelease();
+                _coreReferenced = false;
+            }
+            if (_loopReferenced)
+            {
+                loop.DangerousRelease();
+                _loopReferenced = false;
+            }
             throw;
         }
     }
@@ -99,7 +111,8 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _deterministic = true;
+        if (disposing)
+            _deterministic = true;
         base.Dispose(disposing);
     }
 
@@ -118,7 +131,8 @@ internal sealed unsafe class PipeWireProxyHandle : SafeHandle
     private bool NeedsLoop(out nint loop)
     {
         loop = 0;
-        if (handle == IntPtr.Zero || !_loopReferenced || _loop.IsInvalid) return false;
+        if (handle == IntPtr.Zero || !_loopReferenced || _loop.IsInvalid)
+            return false;
         loop = (nint)_loop.Loop;
         return loop != 0;
     }

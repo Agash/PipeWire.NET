@@ -43,5 +43,4 @@
     <Using Include="PipeWire.NET.Spa" />
     <Using Include="PipeWire.NET.Graph" />
   </ItemGroup>
-
 </Project>

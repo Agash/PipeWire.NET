@@ -44,12 +44,14 @@ internal static unsafe class SpaFactoryExport
         string interfaceLabel,
         IReadOnlyDictionary<string, string>? properties,
         string? libraryName,
-        out spa_handle* handle)
+        out spa_handle* handle
+    )
     {
         var props = new Dictionary<string, string>(StringComparer.Ordinal);
         if (properties is not null)
         {
-            foreach (KeyValuePair<string, string> pair in properties) props[pair.Key] = pair.Value;
+            foreach (KeyValuePair<string, string> pair in properties)
+                props[pair.Key] = pair.Value;
         }
 
         // SPA_KEY_LIBRARY_NAME. A client's context.spa-libs map is far smaller than the daemon's -
@@ -58,7 +60,8 @@ internal static unsafe class SpaFactoryExport
         // even though the plugin is installed, and the failure reads as "not installed". Naming the
         // library outright skips the lookup, which is what upstream's export-spa does: it takes the
         // library as one argument and the factory as the next.
-        if (!string.IsNullOrEmpty(libraryName)) props["library.name"] = libraryName;
+        if (!string.IsNullOrEmpty(libraryName))
+            props["library.name"] = libraryName;
 
         ReadOnlySpan<byte> factoryUtf8 = Encoding.UTF8.GetBytes(factoryName + '\0');
 
@@ -74,14 +77,17 @@ internal static unsafe class SpaFactoryExport
             Span<byte> scratch = stackalloc byte[1024];
             Span<spa_dict_item> items = stackalloc spa_dict_item[16];
             var dict = new SpaDictBuilder(scratch, items);
-            foreach (KeyValuePair<string, string> pair in props) dict.Add(pair.Key, pair.Value);
+            foreach (KeyValuePair<string, string> pair in props)
+                dict.Add(pair.Key, pair.Value);
             spa_dict built = dict.Build();
 
             fixed (byte* f = factoryUtf8)
                 loaded = Native.pw_context_load_spa_handle(ctx.ContextHandle, (sbyte*)f, &built);
 
             if (loaded is null)
-                throw new InvalidOperationException($"the SPA factory '{factoryName}' is not installed.");
+                throw new InvalidOperationException(
+                    $"the SPA factory '{factoryName}' is not installed."
+                );
 
             void* iface = null;
             int res;
@@ -90,9 +96,11 @@ internal static unsafe class SpaFactoryExport
 
             if (res < 0 || iface is null)
             {
-                if (loaded->clear is not null) _ = loaded->clear(loaded);
+                if (loaded->clear is not null)
+                    _ = loaded->clear(loaded);
                 throw new InvalidOperationException(
-                    $"the SPA factory '{factoryName}' provides no {interfaceLabel} interface.");
+                    $"the SPA factory '{factoryName}' provides no {interfaceLabel} interface."
+                );
             }
 
             fixed (byte* type = interfaceType)
@@ -101,9 +109,11 @@ internal static unsafe class SpaFactoryExport
 
         if (proxy is null)
         {
-            if (loaded->clear is not null) _ = loaded->clear(loaded);
+            if (loaded->clear is not null)
+                _ = loaded->clear(loaded);
             throw new InvalidOperationException(
-                $"pw_core_export refused the {interfaceLabel} from factory '{factoryName}'.");
+                $"pw_core_export refused the {interfaceLabel} from factory '{factoryName}'."
+            );
         }
 
         handle = loaded;

@@ -49,8 +49,9 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
 
     private readonly PipeWireContext _ctx;
     private readonly ILogger _logger;
-    private readonly TaskCompletionSource _ready =
-        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _ready = new(
+        TaskCreationOptions.RunContinuationsAsynchronously
+    );
 
     private BoundProxy? _bound;
     private volatile bool _disposed;
@@ -74,12 +75,25 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
     public uint Id { get; }
 
     internal static unsafe PipeWireClientProxy Bind(
-        PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger,
-        Action<uint, PipeWireProperties>? propertiesObserved = null)
+        PipeWireContext ctx,
+        pw_registry* registry,
+        uint id,
+        uint version,
+        ILogger logger,
+        Action<uint, PipeWireProperties>? propertiesObserved = null
+    )
     {
-        var control = new PipeWireClientProxy(ctx, id, logger) { PropertiesObserved = propertiesObserved };
+        var control = new PipeWireClientProxy(ctx, id, logger)
+        {
+            PropertiesObserved = propertiesObserved,
+        };
         control._bound = BoundProxy.Bind(
-            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Client, version, NativeConstants.PW_VERSION_CLIENT,
+            ctx,
+            registry,
+            id,
+            PipeWireKeys.PW_TYPE_INTERFACE_Client,
+            version,
+            NativeConstants.PW_VERSION_CLIENT,
             sizeof(pw_client_events),
             events =>
             {
@@ -88,9 +102,15 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
                 table->info = &OnInfoCallback;
                 table->permissions = &OnPermissionsCallback;
             },
-            static (proxy, hook, events, data) => Native.pw_client_add_listener(
-                (pw_client*)proxy, (spa_hook*)hook, (pw_client_events*)events, (void*)data),
-            control);
+            static (proxy, hook, events, data) =>
+                Native.pw_client_add_listener(
+                    (pw_client*)proxy,
+                    (spa_hook*)hook,
+                    (pw_client_events*)events,
+                    (void*)data
+                ),
+            control
+        );
 
         control._bound.Removed = control.RaiseRemoved;
 
@@ -111,13 +131,18 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
     private void RaiseRemoved()
     {
         Action? handler = Removed;
-        if (handler is null) return;
+        if (handler is null)
+            return;
 
         // A native callback frame, so nothing may escape it.
-        try { handler(); }
-        catch (Exception) { /* a subscriber that throws must not reach the daemon */ }
+        try
+        {
+            handler();
+        }
+        catch (Exception)
+        { /* a subscriber that throws must not reach the daemon */
+        }
     }
-
 
     /// <summary>This client's properties, as the daemon last reported them.</summary>
     /// <remarks>
@@ -152,17 +177,26 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
         // An exception escaping a reverse P/Invoke aborts the process, so nothing here may throw.
         try
         {
-            if (info is null) return;
-            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireClientProxy self) return;
-            if (self._disposed) return;
+            if (info is null)
+                return;
+            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireClientProxy self)
+                return;
+            if (self._disposed)
+                return;
 
             if (info->props is not null)
             {
                 PipeWireProperties properties = PipeWireProperties.From(info->props);
                 self._properties = properties;
 
-                try { self.PropertiesObserved?.Invoke(self.Id, properties); }
-                catch (Exception ex) { self.LogHandlerFaulted(self.Id, ex); }
+                try
+                {
+                    self.PropertiesObserved?.Invoke(self.Id, properties);
+                }
+                catch (Exception ex)
+                {
+                    self.LogHandlerFaulted(self.Id, ex);
+                }
             }
 
             self._ready.TrySetResult();
@@ -193,12 +227,16 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
     /// <exception cref="ObjectDisposedException">The proxy has been disposed.</exception>
     /// <exception cref="InvalidOperationException">Another read is already in flight.</exception>
     public async Task<ImmutableArray<PipeWireObjectPermission>> GetPermissionsAsync(
-        uint index = 0, uint count = 64, CancellationToken cancellationToken = default)
+        uint index = 0,
+        uint count = 64,
+        CancellationToken cancellationToken = default
+    )
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         var waiter = new TaskCompletionSource<ImmutableArray<PipeWireObjectPermission>>(
-            TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
 
         lock (_permissionsGate)
         {
@@ -211,7 +249,8 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
         try
         {
             int res = Read(index, count);
-            if (res < 0) throw new PipeWireException("pw_client_get_permissions", res, Id);
+            if (res < 0)
+                throw new PipeWireException("pw_client_get_permissions", res, Id);
 
             return await waiter.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -219,13 +258,15 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
         {
             lock (_permissionsGate)
             {
-                if (ReferenceEquals(_permissionsWaiter, waiter)) _permissionsWaiter = null;
+                if (ReferenceEquals(_permissionsWaiter, waiter))
+                    _permissionsWaiter = null;
             }
         }
 
         unsafe int Read(uint from, uint howMany)
         {
-            BoundProxy proxy = _bound ?? throw new ObjectDisposedException(nameof(PipeWireClientProxy));
+            BoundProxy proxy =
+                _bound ?? throw new ObjectDisposedException(nameof(PipeWireClientProxy));
 
             using (_ctx.Lock())
                 return Native.pw_client_get_permissions((pw_client*)proxy.Object, from, howMany);
@@ -234,22 +275,32 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnPermissionsCallback(
-        void* data, uint index, uint count, pw_permission* permissions)
+        void* data,
+        uint index,
+        uint count,
+        pw_permission* permissions
+    )
     {
         // An exception escaping a reverse P/Invoke aborts the process, so nothing here may throw.
         try
         {
-            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireClientProxy self) return;
+            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireClientProxy self)
+                return;
 
             var entries = ImmutableArray.CreateBuilder<PipeWireObjectPermission>((int)count);
             for (uint i = 0; i < count && permissions is not null; i++)
             {
-                entries.Add(new PipeWireObjectPermission(
-                    permissions[i].id, (PipeWirePermissions)permissions[i].permissions));
+                entries.Add(
+                    new PipeWireObjectPermission(
+                        permissions[i].id,
+                        (PipeWirePermissions)permissions[i].permissions
+                    )
+                );
             }
 
             TaskCompletionSource<ImmutableArray<PipeWireObjectPermission>>? waiter;
-            lock (self._permissionsGate) waiter = self._permissionsWaiter;
+            lock (self._permissionsGate)
+                waiter = self._permissionsWaiter;
 
             waiter?.TrySetResult(entries.ToImmutable());
         }
@@ -289,11 +340,15 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
     /// <exception cref="InvalidOperationException">The daemon refused.</exception>
     public async Task UpdatePermissionsAsync(
         ReadOnlyMemory<PipeWireObjectPermission> permissions,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (permissions.IsEmpty)
-            throw new ArgumentException("at least one permission is required.", nameof(permissions));
+            throw new ArgumentException(
+                "at least one permission is required.",
+                nameof(permissions)
+            );
 
         // Bits the daemon does not define are a caller mistake, not a forward-compatible extension:
         // permission.h has held the same five since 0.3.77, and a stray bit is either a cast from
@@ -306,20 +361,23 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
 
         foreach (PipeWireObjectPermission entry in permissions.Span)
         {
-            if ((entry.Permissions & ~defined) == 0) continue;
+            if ((entry.Permissions & ~defined) == 0)
+                continue;
 
             throw new ArgumentException(
                 $"object {entry.ObjectId} carries permission bits this library does not define: "
-                + $"0x{(uint)(entry.Permissions & ~defined):x}.",
-                nameof(permissions));
+                    + $"0x{(uint)(entry.Permissions & ~defined):x}.",
+                nameof(permissions)
+            );
         }
 
         cancellationToken.ThrowIfCancellationRequested();
 
         // Inside the round-trip: a permission change the daemon refuses is answered out of band,
         // and a listener attached afterwards can miss it entirely.
-        await CoreSync.RoundTripAsync(
-            _ctx, () => Write(permissions.Span), cancellationToken).ConfigureAwait(false);
+        await CoreSync
+            .RoundTripAsync(_ctx, () => Write(permissions.Span), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -342,7 +400,8 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
     /// </exception>
     public Task ConfineToAsync(
         ReadOnlySpan<PipeWireObjectPermission> allowed,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var all = new PipeWireObjectPermission[allowed.Length + 1];
         all[0] = new PipeWireObjectPermission(AnyObject, PipeWirePermissions.None);
@@ -356,8 +415,9 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
             {
                 throw new ArgumentException(
                     "AnyObject is the default this method writes for you; it cannot also be a grant. "
-                    + "Use UpdatePermissionsAsync to set a default of your own.",
-                    nameof(allowed));
+                        + "Use UpdatePermissionsAsync to set a default of your own.",
+                    nameof(allowed)
+                );
             }
         }
 
@@ -373,20 +433,23 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
     /// <exception cref="ArgumentNullException"><paramref name="properties"/> is <see langword="null"/>.</exception>
     public async Task UpdatePropertiesAsync(
         IReadOnlyDictionary<string, string> properties,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(properties);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        await CoreSync.RoundTripAsync(
-            _ctx, () => WriteProperties(properties), cancellationToken).ConfigureAwait(false);
+        await CoreSync
+            .RoundTripAsync(_ctx, () => WriteProperties(properties), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private unsafe int Write(ReadOnlySpan<PipeWireObjectPermission> permissions)
     {
-        Span<pw_permission> native = permissions.Length <= 16
-            ? stackalloc pw_permission[permissions.Length]
-            : new pw_permission[permissions.Length];
+        Span<pw_permission> native =
+            permissions.Length <= 16
+                ? stackalloc pw_permission[permissions.Length]
+                : new pw_permission[permissions.Length];
 
         for (int i = 0; i < permissions.Length; i++)
         {
@@ -403,7 +466,11 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
         using (_ctx.Lock())
         {
             fixed (pw_permission* p = native)
-                return Native.pw_client_update_permissions((pw_client*)proxy.Object, (uint)native.Length, p);
+                return Native.pw_client_update_permissions(
+                    (pw_client*)proxy.Object,
+                    (uint)native.Length,
+                    p
+                );
         }
     }
 
@@ -416,12 +483,14 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
         // The dictionary holds raw pointers into these buffers, so they must not move between being
         // filled and the native call reading them. A stackalloc cannot move; a plain array can, so
         // the heap fallback allocates out of the pinned object heap rather than the normal one.
-        Span<byte> scratch = bytes <= 1024
-            ? stackalloc byte[bytes]
-            : GC.AllocateUninitializedArray<byte>(bytes, pinned: true);
-        Span<spa_dict_item> items = properties.Count <= 32
-            ? stackalloc spa_dict_item[properties.Count]
-            : GC.AllocateArray<spa_dict_item>(properties.Count, pinned: true);
+        Span<byte> scratch =
+            bytes <= 1024
+                ? stackalloc byte[bytes]
+                : GC.AllocateUninitializedArray<byte>(bytes, pinned: true);
+        Span<spa_dict_item> items =
+            properties.Count <= 32
+                ? stackalloc spa_dict_item[properties.Count]
+                : GC.AllocateArray<spa_dict_item>(properties.Count, pinned: true);
 
         var builder = new SpaDictBuilder(scratch, items);
         foreach ((string key, string value) in properties)
@@ -456,7 +525,8 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
 
     private void DisposeCore()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
 
         _bound?.Dispose();
@@ -465,7 +535,10 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
         GC.SuppressFinalize(this);
     }
 
-    [LoggerMessage(EventId = 34700, Level = LogLevel.Warning,
-        Message = "a properties handler for client {ClientId} threw")]
+    [LoggerMessage(
+        EventId = 34700,
+        Level = LogLevel.Warning,
+        Message = "a properties handler for client {ClientId} threw"
+    )]
     private partial void LogHandlerFaulted(uint clientId, Exception exception);
 }

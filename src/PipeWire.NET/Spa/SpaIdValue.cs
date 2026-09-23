@@ -35,13 +35,16 @@ public readonly record struct SpaIdValue
     /// error, reported as one here rather than as a NotSupportedException out of the reinterpret
     /// that names neither type.
     /// </remarks>
-    public unsafe TEnum As<TEnum>() where TEnum : unmanaged, Enum
+    public unsafe TEnum As<TEnum>()
+        where TEnum : unmanaged, Enum
     {
         if (sizeof(TEnum) != sizeof(uint))
         {
             throw new ArgumentException(
                 $"{typeof(TEnum).Name} is {sizeof(TEnum)} bytes; a SPA id enum is four. "
-                + "This id does not belong to that enum.", nameof(TEnum));
+                    + "This id does not belong to that enum.",
+                nameof(TEnum)
+            );
         }
 
         return System.Runtime.CompilerServices.Unsafe.BitCast<uint, TEnum>(Value);
@@ -136,5 +139,6 @@ public readonly record struct SpaIdValue
     public static implicit operator SpaIdValue(SpaMetaVideotransformValue id) => new((uint)id);
 
     /// <inheritdoc/>
-    public override string ToString() => Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    public override string ToString() =>
+        Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }

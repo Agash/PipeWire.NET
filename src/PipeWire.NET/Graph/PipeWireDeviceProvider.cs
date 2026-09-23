@@ -98,14 +98,18 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
         string name,
         string description,
         IReadOnlyDictionary<SpaParamType, ImmutableArray<SpaObject>>? parameters = null,
-        IReadOnlyDictionary<string, string>? properties = null)
+        IReadOnlyDictionary<string, string>? properties = null
+    )
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(description);
 
         var provider = new PipeWireDeviceProvider(
-            context, name, context.LoggerFactory.CreateLogger($"PipeWire.NET.Device.{name}"));
+            context,
+            name,
+            context.LoggerFactory.CreateLogger($"PipeWire.NET.Device.{name}")
+        );
 
         var props = ImmutableArray.CreateBuilder<KeyValuePair<string, string>>();
         props.Add(new(PipeWireKeys.PW_KEY_DEVICE_NAME, name));
@@ -116,7 +120,12 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
         {
             foreach (KeyValuePair<string, string> pair in properties)
             {
-                if (pair.Key is PipeWireKeys.PW_KEY_DEVICE_NAME or PipeWireKeys.PW_KEY_DEVICE_DESCRIPTION) continue;
+                if (
+                    pair.Key
+                    is PipeWireKeys.PW_KEY_DEVICE_NAME
+                        or PipeWireKeys.PW_KEY_DEVICE_DESCRIPTION
+                )
+                    continue;
                 props.Add(pair);
             }
         }
@@ -126,7 +135,9 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
         if (parameters is not null)
         {
             provider._params = parameters.ToImmutableDictionary(
-                static p => p.Key, static p => p.Value);
+                static p => p.Key,
+                static p => p.Value
+            );
         }
 
         provider.Publish();
@@ -168,13 +179,17 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
         PipeWireContext context,
         string factoryName,
         IReadOnlyDictionary<string, string>? properties = null,
-        string? libraryName = null)
+        string? libraryName = null
+    )
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentException.ThrowIfNullOrEmpty(factoryName);
 
         var provider = new PipeWireDeviceProvider(
-            context, factoryName, context.LoggerFactory.CreateLogger($"PipeWire.NET.Device.{factoryName}"));
+            context,
+            factoryName,
+            context.LoggerFactory.CreateLogger($"PipeWire.NET.Device.{factoryName}")
+        );
 
         pw_proxy* exported = SpaFactoryExport.Load(
             context,
@@ -183,9 +198,14 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
             "device",
             properties,
             libraryName,
-            out provider._spaHandle);
+            out provider._spaHandle
+        );
 
-        provider._exported = new PipeWireProxyHandle(exported, context.LoopOwner, context.CoreOwner!);
+        provider._exported = new PipeWireProxyHandle(
+            exported,
+            context.LoopOwner,
+            context.CoreOwner!
+        );
         provider.LogExported(factoryName);
         return provider;
     }
@@ -213,17 +233,19 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
         _paramInfoCount = (uint)_params.Count;
         if (_paramInfoCount > 0)
         {
-            _paramInfo = (spa_param_info*)NativeMemory.AllocZeroed(
-                (nuint)(sizeof(spa_param_info) * (int)_paramInfoCount));
+            _paramInfo = (spa_param_info*)
+                NativeMemory.AllocZeroed((nuint)(sizeof(spa_param_info) * (int)_paramInfoCount));
 
             int i = 0;
             foreach (SpaParamType id in _params.Keys)
             {
                 _paramInfo[i].id = (uint)id;
                 // Readable, and writable for the two a caller is expected to change.
-                _paramInfo[i].flags = (uint)(id is SpaParamType.Profile or SpaParamType.Route
-                    ? SpaParamInfoFlags.Serial | SpaParamInfoFlags.ReadWrite
-                    : SpaParamInfoFlags.Serial | SpaParamInfoFlags.Read);
+                _paramInfo[i].flags = (uint)(
+                    id is SpaParamType.Profile or SpaParamType.Route
+                        ? SpaParamInfoFlags.Serial | SpaParamInfoFlags.ReadWrite
+                        : SpaParamInfoFlags.Serial | SpaParamInfoFlags.Read
+                );
                 i++;
             }
         }
@@ -249,14 +271,14 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
             var dict = new SpaDictBuilder(scratch, items);
             foreach (KeyValuePair<string, string> pair in _properties)
             {
-                if (dict.Count == items.Length) break;
+                if (dict.Count == items.Length)
+                    break;
                 dict.Add(pair.Key, pair.Value);
             }
 
             spa_dict native = dict.Build();
 
-            exported = Native.pw_core_export(
-                _ctx.CoreHandle, _iface->type, &native, _iface, 0);
+            exported = Native.pw_core_export(_ctx.CoreHandle, _iface->type, &native, _iface, 0);
         }
 
         if (exported is null)
@@ -265,9 +287,9 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
             throw new PipeWireInteropException(
                 "pw_core_export",
                 -38,
-                daemonMessage:
-                "the context has no export type for Device. libpipewire-module-client-device "
-                + "registers it, and client.conf loads it unless module.client-device is off.");
+                daemonMessage: "the context has no export type for Device. libpipewire-module-client-device "
+                    + "registers it, and client.conf loads it unless module.client-device is off."
+            );
         }
 
         _exported = new PipeWireProxyHandle(exported, _ctx.LoopOwner, _ctx.CoreOwner!);
@@ -325,7 +347,8 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
         {
             throw new InvalidOperationException(
                 $"'{_name}' is served by a SPA plugin, which answers its own parameters; "
-                + "only a device built with Create has parameters this process can set.");
+                    + "only a device built with Create has parameters this process can set."
+            );
         }
 
         _params = _params.SetItem(parameter, values);
@@ -334,7 +357,8 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
         // loop thread reads while emitting, so toggling outside the lock races the read.
         using (_ctx.Lock())
         {
-            if (_disposed || _listeners is null) return;
+            if (_disposed || _listeners is null)
+                return;
             NoteParamsChanged(parameter);
             EmitInfoLocked();
         }
@@ -377,7 +401,8 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
         var dict = new SpaDictBuilder(scratch, items);
         foreach (KeyValuePair<string, string> pair in _properties)
         {
-            if (dict.Count == items.Length) break;
+            if (dict.Count == items.Length)
+                break;
             dict.Add(pair.Key, pair.Value);
         }
 
@@ -390,13 +415,12 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
         info.@params = _paramInfo;
         info.n_params = _paramInfoCount;
 
-        for (spa_list* node = _listeners->list.next;
-             node != &_listeners->list;
-             node = node->next)
+        for (spa_list* node = _listeners->list.next; node != &_listeners->list; node = node->next)
         {
             var hook = (spa_hook*)node;
             var events = (spa_device_events*)hook->cb.funcs;
-            if (events is null || events->info is null) continue;
+            if (events is null || events->info is null)
+                continue;
 
             events->info(hook->cb.data, &info);
         }
@@ -404,10 +428,15 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int OnAddListener(
-        void* obj, spa_hook* listener, spa_device_events* events, void* data)
+        void* obj,
+        spa_hook* listener,
+        spa_device_events* events,
+        void* data
+    )
     {
         PipeWireDeviceProvider? self = FromData(obj);
-        if (self is null || listener is null) return -NativeLibc.EINVAL;
+        if (self is null || listener is null)
+            return -NativeLibc.EINVAL;
 
         try
         {
@@ -440,7 +469,8 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
     private static int OnSync(void* obj, int seq)
     {
         PipeWireDeviceProvider? self = FromData(obj);
-        if (self is null) return -NativeLibc.EINVAL;
+        if (self is null)
+            return -NativeLibc.EINVAL;
 
         try
         {
@@ -460,10 +490,17 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int OnEnumParams(
-        void* obj, int seq, uint id, uint start, uint num, spa_pod* filter)
+        void* obj,
+        int seq,
+        uint id,
+        uint start,
+        uint num,
+        spa_pod* filter
+    )
     {
         PipeWireDeviceProvider? self = FromData(obj);
-        if (self is null) return -NativeLibc.EINVAL;
+        if (self is null)
+            return -NativeLibc.EINVAL;
 
         try
         {
@@ -493,7 +530,12 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
                     result.next = index + 1;
                     result.param = (spa_pod*)p;
 
-                    self.EmitResult(seq, 0, (uint)NativeConstants.SPA_RESULT_TYPE_DEVICE_PARAMS, &result);
+                    self.EmitResult(
+                        seq,
+                        0,
+                        (uint)NativeConstants.SPA_RESULT_TYPE_DEVICE_PARAMS,
+                        &result
+                    );
                 }
 
                 sent++;
@@ -512,13 +554,15 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
     /// <summary>Reads an enumeration filter pod, or null when there is none to apply.</summary>
     private static unsafe SpaObject? ParseFilter(spa_pod* filter)
     {
-        if (filter is null) return null;
+        if (filter is null)
+            return null;
 
         // The declared size is the caller's word, capped before a span is built over it the same
         // way every other length off the wire is. An unparseable filter is ignored rather than
         // failing the enumeration: the caller still gets the unfiltered set it would have had.
         uint size = filter->size;
-        if (size > MaxParamBytes) return null;
+        if (size > MaxParamBytes)
+            return null;
 
         var bytes = new ReadOnlySpan<byte>(filter, (int)size + 8);
         return SpaPod.TryParse(bytes, out SpaValue? parsed) && parsed is SpaObject o ? o : null;
@@ -538,7 +582,8 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
     private static int OnSetParam(void* obj, uint id, uint flags, spa_pod* param)
     {
         PipeWireDeviceProvider? self = FromData(obj);
-        if (self is null) return -NativeLibc.EINVAL;
+        if (self is null)
+            return -NativeLibc.EINVAL;
 
         try
         {
@@ -597,7 +642,8 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
             ParameterWritten,
             (Provider: this, Id: id, Value: value),
             static (h, s) => h(s.Provider, s.Id, s.Value),
-            static (s, ex) => s.Provider.LogCallbackThrew(nameof(ParameterWritten), ex));
+            static (s, ex) => s.Provider.LogCallbackThrew(nameof(ParameterWritten), ex)
+        );
 
     /// <summary>How many listeners are attached. Diagnostics only.</summary>
     private int ListenerCount
@@ -605,20 +651,24 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
         get
         {
             int n = 0;
-            for (spa_list* node = _listeners->list.next; node != &_listeners->list; node = node->next) n++;
+            for (
+                spa_list* node = _listeners->list.next;
+                node != &_listeners->list;
+                node = node->next
+            )
+                n++;
             return n;
         }
     }
 
     private void EmitResult(int seq, int res, uint type, void* result)
     {
-        for (spa_list* node = _listeners->list.next;
-             node != &_listeners->list;
-             node = node->next)
+        for (spa_list* node = _listeners->list.next; node != &_listeners->list; node = node->next)
         {
             var hook = (spa_hook*)node;
             var events = (spa_device_events*)hook->cb.funcs;
-            if (events is null || events->result is null) continue;
+            if (events is null || events->result is null)
+                continue;
 
             events->result(hook->cb.data, seq, res, type, result);
         }
@@ -626,7 +676,8 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
 
     private static PipeWireDeviceProvider? FromData(void* data)
     {
-        if (data is null) return null;
+        if (data is null)
+            return null;
 
         try
         {
@@ -653,7 +704,8 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
     /// <inheritdoc/>
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
 
         // Under the loop lock when it can be taken: the proxy destroy and the native frees below
@@ -687,7 +739,8 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
     {
         if (_iface is not null)
         {
-            if (_iface->type is not null) NativeMemory.Free(_iface->type);
+            if (_iface->type is not null)
+                NativeMemory.Free(_iface->type);
             NativeMemory.Free(_iface);
             _iface = null;
         }
@@ -696,33 +749,59 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
         // clearing it underneath a live proxy leaves the daemon dispatching through freed memory.
         if (_spaHandle is not null)
         {
-            if (_spaHandle->clear is not null) _ = _spaHandle->clear(_spaHandle);
+            if (_spaHandle->clear is not null)
+                _ = _spaHandle->clear(_spaHandle);
             _spaHandle = null;
         }
 
-        if (_methods is not null) { NativeMemory.Free(_methods); _methods = null; }
-        if (_listeners is not null) { NativeMemory.Free(_listeners); _listeners = null; }
-        if (_paramInfo is not null) { NativeMemory.Free(_paramInfo); _paramInfo = null; }
+        if (_methods is not null)
+        {
+            NativeMemory.Free(_methods);
+            _methods = null;
+        }
+        if (_listeners is not null)
+        {
+            NativeMemory.Free(_listeners);
+            _listeners = null;
+        }
+        if (_paramInfo is not null)
+        {
+            NativeMemory.Free(_paramInfo);
+            _paramInfo = null;
+        }
 
-        if (_self.IsAllocated) _self.Free();
+        if (_self.IsAllocated)
+            _self.Free();
     }
 
-    [LoggerMessage(EventId = 34300, Level = LogLevel.Information,
-        Message = "exported device {Name}; other clients can select its profiles")]
+    [LoggerMessage(
+        EventId = 34300,
+        Level = LogLevel.Information,
+        Message = "exported device {Name}; other clients can select its profiles"
+    )]
     private partial void LogExported(string name);
 
-    [LoggerMessage(EventId = 34302, Level = LogLevel.Debug,
-        Message = "enum_params id={Id} start={Start} num={Num}")]
+    [LoggerMessage(
+        EventId = 34302,
+        Level = LogLevel.Debug,
+        Message = "enum_params id={Id} start={Start} num={Num}"
+    )]
     private partial void LogEnumParams(uint id, uint start, uint num);
 
-    [LoggerMessage(EventId = 34304, Level = LogLevel.Debug,
-        Message = "enum_params sent {Sent} results to {Listeners} listeners")]
+    [LoggerMessage(
+        EventId = 34304,
+        Level = LogLevel.Debug,
+        Message = "enum_params sent {Sent} results to {Listeners} listeners"
+    )]
     private partial void LogEnumSent(uint sent, int listeners);
 
     [LoggerMessage(EventId = 34303, Level = LogLevel.Debug, Message = "a listener attached")]
     private partial void LogListenerAttached();
 
-    [LoggerMessage(EventId = 34301, Level = LogLevel.Error,
-        Message = "a device provider callback ({Callback}) threw")]
+    [LoggerMessage(
+        EventId = 34301,
+        Level = LogLevel.Error,
+        Message = "a device provider callback ({Callback}) threw"
+    )]
     private partial void LogCallbackThrew(string callback, Exception exception);
 }

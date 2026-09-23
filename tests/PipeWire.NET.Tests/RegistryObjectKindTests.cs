@@ -17,17 +17,27 @@ public sealed unsafe class RegistryObjectKindTests : PipeWireTestBase
     // carry device.name and media.class, and a Module global really does carry only module.name.
     private static readonly (string Key, string? Value)[] DeviceProps =
     [
-        ("object.serial", "50"), ("factory.id", "15"), ("client.id", "49"),
-        ("device.api", "alsa"), ("device.description", "Radeon High Definition Audio Controller"),
-        ("device.name", "alsa_card.pci-0000_e4_00.1"), ("device.nick", "HD-Audio Generic"),
-        ("media.class", "Audio/Device"), ("object.path", "alsa:acp:Generic"),
+        ("object.serial", "50"),
+        ("factory.id", "15"),
+        ("client.id", "49"),
+        ("device.api", "alsa"),
+        ("device.description", "Radeon High Definition Audio Controller"),
+        ("device.name", "alsa_card.pci-0000_e4_00.1"),
+        ("device.nick", "HD-Audio Generic"),
+        ("media.class", "Audio/Device"),
+        ("object.path", "alsa:acp:Generic"),
     ];
 
     private static readonly (string Key, string? Value)[] ClientProps =
     [
-        ("object.serial", "32"), ("module.id", "2"), ("pipewire.protocol", "protocol-native"),
-        ("pipewire.sec.pid", "3046"), ("pipewire.sec.uid", "1000"), ("pipewire.sec.gid", "1000"),
-        ("application.name", "xdg-desktop-portal"), ("pipewire.access", "portal"),
+        ("object.serial", "32"),
+        ("module.id", "2"),
+        ("pipewire.protocol", "protocol-native"),
+        ("pipewire.sec.pid", "3046"),
+        ("pipewire.sec.uid", "1000"),
+        ("pipewire.sec.gid", "1000"),
+        ("application.name", "xdg-desktop-portal"),
+        ("pipewire.access", "portal"),
     ];
 
     [TestMethod]
@@ -88,7 +98,8 @@ public sealed unsafe class RegistryObjectKindTests : PipeWireTestBase
         using var dict = new NativeDict(
             ("device.name", "alsa_card.junk"),
             ("factory.id", "not-a-number"),
-            ("client.id", "-1"));
+            ("client.id", "-1")
+        );
 
         PipeWireDevice device = ParseDevice(dict, id: 7);
 
@@ -100,19 +111,63 @@ public sealed unsafe class RegistryObjectKindTests : PipeWireTestBase
     [TestMethod]
     public void TheSnapshotSortsObjectsByKind_AndFindsAStoreByName()
     {
-        var device = new PipeWireDevice(10, PipeWirePermissions.None, 3,
-            "card", null, null, "alsa", "Audio/Device", null, null, null);
-        var client = new PipeWireClient(11, PipeWirePermissions.None, 3,
-            "firefox", 99, null, null, null, null, null);
+        var device = new PipeWireDevice(
+            10,
+            PipeWirePermissions.None,
+            3,
+            "card",
+            null,
+            null,
+            "alsa",
+            "Audio/Device",
+            null,
+            null,
+            null
+        );
+        var client = new PipeWireClient(
+            11,
+            PipeWirePermissions.None,
+            3,
+            "firefox",
+            99,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
         var settings = new PipeWireMetadata(12, PipeWirePermissions.None, 3, "settings");
         var defaults = new PipeWireMetadata(13, PipeWirePermissions.None, 3, "default");
-        var core = new PipeWireCore(0, PipeWirePermissions.None, 4, "pipewire-0", "1.6.8", null, null);
+        var core = new PipeWireCore(
+            0,
+            PipeWirePermissions.None,
+            4,
+            "pipewire-0",
+            "1.6.8",
+            null,
+            null
+        );
 
-        var graph = new PipeWireGraphSnapshot(1, [], [], [], [device, client, settings, defaults, core]);
+        var graph = new PipeWireGraphSnapshot(
+            1,
+            [],
+            [],
+            [],
+            [device, client, settings, defaults, core]
+        );
 
-        CollectionAssert.AreEquivalent(new uint[] { 10 }, graph.Devices.Select(d => d.Id).ToArray());
-        CollectionAssert.AreEquivalent(new uint[] { 11 }, graph.Clients.Select(c => c.Id).ToArray());
-        CollectionAssert.AreEquivalent(new uint[] { 12, 13 }, graph.Metadata.Select(m => m.Id).ToArray());
+        CollectionAssert.AreEquivalent(
+            new uint[] { 10 },
+            graph.Devices.Select(d => d.Id).ToArray()
+        );
+        CollectionAssert.AreEquivalent(
+            new uint[] { 11 },
+            graph.Clients.Select(c => c.Id).ToArray()
+        );
+        CollectionAssert.AreEquivalent(
+            new uint[] { 12, 13 },
+            graph.Metadata.Select(m => m.Id).ToArray()
+        );
         Assert.AreSame(core, graph.Core);
         Assert.IsNull(graph.Profiler, "the daemon in this graph has no profiler");
 
@@ -129,10 +184,20 @@ public sealed unsafe class RegistryObjectKindTests : PipeWireTestBase
     public void TheseObjectsDoNotDisplaceNodesPortsOrLinks_InLookups()
     {
         // Ids are unique across all kinds, so one index must not shadow another.
-        var device = new PipeWireDevice(1, PipeWirePermissions.None, 3,
-            "card", null, null, null, null, null, null, null);
-        var graph = new PipeWireGraphSnapshot(
-            1, [new(2, "node", null, null)], [], [], [device]);
+        var device = new PipeWireDevice(
+            1,
+            PipeWirePermissions.None,
+            3,
+            "card",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+        var graph = new PipeWireGraphSnapshot(1, [new(2, "node", null, null)], [], [], [device]);
 
         Assert.IsNull(graph.GetNode(1), "id 1 is a device, not a node");
         Assert.IsNotNull(graph.GetDevice(1));
@@ -143,12 +208,22 @@ public sealed unsafe class RegistryObjectKindTests : PipeWireTestBase
     private static PipeWireDevice ParseDevice(NativeDict dict, uint id)
     {
         fixed (spa_dict* d = &dict.Dict)
-            return PipeWireGlobalParser.ParseDevice(id, PipeWirePermissions.None, 3, PipeWireProperties.From(d));
+            return PipeWireGlobalParser.ParseDevice(
+                id,
+                PipeWirePermissions.None,
+                3,
+                PipeWireProperties.From(d)
+            );
     }
 
     private static PipeWireClient ParseClient(NativeDict dict, uint id)
     {
         fixed (spa_dict* d = &dict.Dict)
-            return PipeWireGlobalParser.ParseClient(id, PipeWirePermissions.None, 3, PipeWireProperties.From(d));
+            return PipeWireGlobalParser.ParseClient(
+                id,
+                PipeWirePermissions.None,
+                3,
+                PipeWireProperties.From(d)
+            );
     }
 }

@@ -29,7 +29,10 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var context = new PipeWireContext("pwnet-kinds", ConsoleTestLoggerFactory.Instance);
+        await using var context = new PipeWireContext(
+            "pwnet-kinds",
+            ConsoleTestLoggerFactory.Instance
+        );
         await context.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(context);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -41,7 +44,10 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
         // factory. Devices and metadata stores depend on the hardware and the session manager.
         Assert.IsNotNull(graph.Core, "the daemon must report its core object");
         Assert.IsTrue(graph.Clients.Length > 0, "this connection is itself a client");
-        Assert.IsTrue(graph.Factories.Length > 0, "the daemon must expose the factories it creates with");
+        Assert.IsTrue(
+            graph.Factories.Length > 0,
+            "the daemon must expose the factories it creates with"
+        );
         Assert.IsTrue(graph.Modules.Length > 0, "protocol-native alone is a module");
 
         // The factory names the library hardcodes when creating objects have to be among them, or
@@ -57,7 +63,10 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var context = new PipeWireContext("pwnet-kinds-ids", ConsoleTestLoggerFactory.Instance);
+        await using var context = new PipeWireContext(
+            "pwnet-kinds-ids",
+            ConsoleTestLoggerFactory.Instance
+        );
         await context.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(context);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -68,12 +77,23 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
         // over a live graph is what catches an index built from the wrong collection.
         foreach (IPipeWireObject expected in graph.Objects)
         {
-            Assert.IsTrue(graph.TryGetObject(expected.Id, out IPipeWireObject? found),
-                $"{expected.Kind} {expected.Id} is in the graph but does not resolve by id");
+            Assert.IsTrue(
+                graph.TryGetObject(expected.Id, out IPipeWireObject? found),
+                $"{expected.Kind} {expected.Id} is in the graph but does not resolve by id"
+            );
             Assert.AreSame(expected, found);
-            Assert.IsNull(graph.GetNode(expected.Id), $"{expected.Kind} {expected.Id} resolved as a node");
-            Assert.IsNull(graph.GetPort(expected.Id), $"{expected.Kind} {expected.Id} resolved as a port");
-            Assert.IsNull(graph.GetLink(expected.Id), $"{expected.Kind} {expected.Id} resolved as a link");
+            Assert.IsNull(
+                graph.GetNode(expected.Id),
+                $"{expected.Kind} {expected.Id} resolved as a node"
+            );
+            Assert.IsNull(
+                graph.GetPort(expected.Id),
+                $"{expected.Kind} {expected.Id} resolved as a port"
+            );
+            Assert.IsNull(
+                graph.GetLink(expected.Id),
+                $"{expected.Kind} {expected.Id} resolved as a link"
+            );
         }
 
         foreach (PipeWireNode node in graph.Nodes)
@@ -86,7 +106,10 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var context = new PipeWireContext("pwnet-module-details", ConsoleTestLoggerFactory.Instance);
+        await using var context = new PipeWireContext(
+            "pwnet-module-details",
+            ConsoleTestLoggerFactory.Instance
+        );
         await context.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(context);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -103,13 +126,20 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
 
         Assert.AreEqual(bare.ModuleName, full.ModuleName, "it must still be the same module");
         Assert.IsNotNull(full.Description, "binding must have filled the description in");
-        Assert.IsNotNull(full.Properties.GetValueOrDefault(PipeWireKeys.MODULE_FILENAME),
-            "the module's filename is on the info event and nowhere else");
+        Assert.IsNotNull(
+            full.Properties.GetValueOrDefault(PipeWireKeys.MODULE_FILENAME),
+            "the module's filename is on the info event and nowhere else"
+        );
 
-        Assert.AreSame(full, registry.Current.GetModule(bare.Id),
-            "the graph must hold the enriched module, not just the caller");
-        Assert.IsTrue(bare.IsStillIn(registry.Current),
-            "enriching an object must not read as the id having been reused");
+        Assert.AreSame(
+            full,
+            registry.Current.GetModule(bare.Id),
+            "the graph must hold the enriched module, not just the caller"
+        );
+        Assert.IsTrue(
+            bare.IsStillIn(registry.Current),
+            "enriching an object must not read as the id having been reused"
+        );
     }
 
     [TestMethod]
@@ -118,7 +148,10 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var context = new PipeWireContext("pwnet-serials", ConsoleTestLoggerFactory.Instance);
+        await using var context = new PipeWireContext(
+            "pwnet-serials",
+            ConsoleTestLoggerFactory.Instance
+        );
         await context.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(context);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -126,21 +159,32 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
         PipeWireGraphSnapshot graph = registry.Current;
         IPipeWireObject[] all =
         [
-            .. graph.Nodes, .. graph.Ports, .. graph.Links,
-            .. graph.Devices, .. graph.Clients, .. graph.Modules, .. graph.Factories,
+            .. graph.Nodes,
+            .. graph.Ports,
+            .. graph.Links,
+            .. graph.Devices,
+            .. graph.Clients,
+            .. graph.Modules,
+            .. graph.Factories,
         ];
 
         Assert.IsGreaterThan(0, all.Length, "an empty graph proves nothing");
 
         List<IPipeWireObject> without = [.. all.Where(o => o.ObjectSerial is null)];
-        Assert.AreEqual(0, without.Count,
+        Assert.AreEqual(
+            0,
+            without.Count,
             "every global carries object.serial: "
-            + string.Join(", ", without.Select(o => $"{o.Kind} {o.Id}")));
+                + string.Join(", ", without.Select(o => $"{o.Kind} {o.Id}"))
+        );
 
         // The point of the serial. Ids are unique among live objects too, so this only shows the
         // serial is usable as an identity; that it is not reused is what the id cannot promise.
-        Assert.AreEqual(all.Length, all.Select(o => o.ObjectSerial).Distinct().Count(),
-            "two live objects reported the same serial");
+        Assert.AreEqual(
+            all.Length,
+            all.Select(o => o.ObjectSerial).Distinct().Count(),
+            "two live objects reported the same serial"
+        );
     }
 
     [TestMethod]
@@ -149,7 +193,10 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var context = new PipeWireContext("pwnet-kinds-dev", ConsoleTestLoggerFactory.Instance);
+        await using var context = new PipeWireContext(
+            "pwnet-kinds-dev",
+            ConsoleTestLoggerFactory.Instance
+        );
         await context.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(context);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -175,16 +222,22 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var context = new PipeWireContext("pwnet-profiler", ConsoleTestLoggerFactory.Instance);
+        await using var context = new PipeWireContext(
+            "pwnet-profiler",
+            ConsoleTestLoggerFactory.Instance
+        );
         await context.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(context);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
         PipeWireProfiler? profiler = registry.Current.Profiler;
-        if (profiler is null) Assert.Inconclusive("this daemon was built without the profiler.");
+        if (profiler is null)
+            Assert.Inconclusive("this daemon was built without the profiler.");
 
-        Assert.ThrowsExactly<ArgumentException>(() => registry.BindProfiler(uint.MaxValue),
-            "an id that is not the profiler must be refused rather than bound");
+        Assert.ThrowsExactly<ArgumentException>(
+            () => registry.BindProfiler(uint.MaxValue),
+            "an id that is not the profiler must be refused rather than bound"
+        );
 
         var reports = new System.Collections.Concurrent.ConcurrentQueue<Spa.SpaObject>();
         var arrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -201,48 +254,58 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
             // library's contract.
             Assert.Inconclusive(
                 $"the daemon refused to bind its profiler (permissions {profiler!.Permissions}): "
-                + $"{e.GetType().Name}: {e.Message}");
+                    + $"{e.GetType().Name}: {e.Message}"
+            );
             return;
         }
 
         await using (reader)
         {
-        reader.ProfileReceived += (_, report) =>
-        {
-            reports.Enqueue(report);
-            arrived.TrySetResult();
-        };
+            reader.ProfileReceived += (_, report) =>
+            {
+                reports.Enqueue(report);
+                arrived.TrySetResult();
+            };
 
-        Assert.AreEqual(profiler.Id, reader.Id);
+            Assert.AreEqual(profiler.Id, reader.Id);
 
-        // The daemon only profiles a graph that is running, and an idle session drives nothing -
-        // which is why waiting here used to end in a skip rather than an answer. Give it something
-        // to drive: a producer and a consumer linked to each other keep the graph cycling for as
-        // long as they are connected.
-        await using var producer = new PipeWireAudioOutput(context, $"pwnet_profiler_drive_{Environment.ProcessId}");
-        producer.FillSamples += (_, _, _, _, _) => 0;
-        producer.Connect(autoConnect: false);
+            // The daemon only profiles a graph that is running, and an idle session drives nothing -
+            // which is why waiting here used to end in a skip rather than an answer. Give it something
+            // to drive: a producer and a consumer linked to each other keep the graph cycling for as
+            // long as they are connected.
+            await using var producer = new PipeWireAudioOutput(
+                context,
+                $"pwnet_profiler_drive_{Environment.ProcessId}"
+            );
+            producer.FillSamples += (_, _, _, _, _) => 0;
+            producer.Connect(autoConnect: false);
 
-        for (int i = 0; i < 100 && producer.NodeId is null; i++)
-        {
-            await Task.Delay(50, cts.Token);
-            await registry.WaitForInitialEnumerationAsync(cts.Token);
-        }
+            for (int i = 0; i < 100 && producer.NodeId is null; i++)
+            {
+                await Task.Delay(50, cts.Token);
+                await registry.WaitForInitialEnumerationAsync(cts.Token);
+            }
 
-        Assert.IsNotNull(producer.NodeId, "the driving producer never reached the graph");
+            Assert.IsNotNull(producer.NodeId, "the driving producer never reached the graph");
 
-        await using var consumer = new PipeWireAudioCapture(context, $"pwnet_profiler_sink_{Environment.ProcessId}");
-        consumer.FrameReady += (_, _) => { };
-        consumer.Connect((await producer.WaitForNodeIdAsync(cts.Token)));
+            await using var consumer = new PipeWireAudioCapture(
+                context,
+                $"pwnet_profiler_sink_{Environment.ProcessId}"
+            );
+            consumer.FrameReady += (_, _) => { };
+            consumer.Connect((await producer.WaitForNodeIdAsync(cts.Token)));
 
-        // Shorter than the class budget, so running out of patience is reported as such rather
-        // than arriving as the budget's own cancellation.
-        await arrived.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
+            // Shorter than the class budget, so running out of patience is reported as such rather
+            // than arriving as the budget's own cancellation.
+            await arrived.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
 
-        Assert.IsTrue(reports.TryDequeue(out Spa.SpaObject? first));
-        Assert.AreEqual(Spa.SpaType.ObjectProfiler, first!.ObjectType,
-            "a profiler report is a Profiler object");
-        Assert.IsTrue(first.Properties.Length > 0, "a report with no properties says nothing");
+            Assert.IsTrue(reports.TryDequeue(out Spa.SpaObject? first));
+            Assert.AreEqual(
+                Spa.SpaType.ObjectProfiler,
+                first!.ObjectType,
+                "a profiler report is a Profiler object"
+            );
+            Assert.IsTrue(first.Properties.Length > 0, "a report with no properties says nothing");
         }
     }
 }

@@ -42,18 +42,27 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
     [DataRow("I420", PixelFormat.Yuv420, 320, 240)]
     [DataRow("NV12", PixelFormat.Nv12, 320, 240)]
     public async Task EveryPixelFormat_NegotiatesAndDeliversWholeFrames(
-        string gstFormat, PixelFormat expected, int width, int height)
+        string gstFormat,
+        PixelFormat expected,
+        int width,
+        int height
+    )
     {
         Require();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext($"pwnet-fmt-{gstFormat}", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            $"pwnet-fmt-{gstFormat}",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         string node = $"pwnet_fmt_{gstFormat.ToLowerInvariant()}";
         await using GstTestSource src = await GstTestSource.StartAsync(
-            ctx, node,
+            ctx,
+            node,
             $"videotestsrc is-live=true ! video/x-raw,format={gstFormat},width={width},height={height},framerate=30/1",
-            "Video/Source");
+            "Video/Source"
+        );
 
         (int frames, int shortFrames, PixelFormat? negotiated, int w, int h) =
             await CaptureVideoAsync(ctx, src.NodeId, expected, cts.Token);
@@ -62,37 +71,52 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
         Assert.AreEqual(expected, negotiated, $"{gstFormat} negotiated as {negotiated}");
         Assert.AreEqual(width, w);
         Assert.AreEqual(height, h);
-        Assert.AreEqual(0, shortFrames,
-            $"{gstFormat}: {shortFrames} of {frames} frames were smaller than the format requires");
+        Assert.AreEqual(
+            0,
+            shortFrames,
+            $"{gstFormat}: {shortFrames} of {frames} frames were smaller than the format requires"
+        );
     }
 
     [TestMethod]
-    [DataRow(2, 2)]          // smallest sane frame
-    [DataRow(17, 13)]        // odd on both axes
-    [DataRow(641, 481)]      // odd, and past a page boundary
-    [DataRow(1920, 1080)]    // the common case
+    [DataRow(2, 2)] // smallest sane frame
+    [DataRow(17, 13)] // odd on both axes
+    [DataRow(641, 481)] // odd, and past a page boundary
+    [DataRow(1920, 1080)] // the common case
     public async Task OddAndExtremeDimensions_StillDeliverWholeFrames(int width, int height)
     {
         Require();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext($"pwnet-dim-{width}x{height}", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            $"pwnet-dim-{width}x{height}",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         // I420 is the format whose chroma planes round up, so odd dimensions are its hard case.
         string node = $"pwnet_dim_{width}x{height}";
         await using GstTestSource src = await GstTestSource.StartAsync(
-            ctx, node,
+            ctx,
+            node,
             $"videotestsrc is-live=true ! video/x-raw,format=I420,width={width},height={height},framerate=30/1",
-            "Video/Source");
+            "Video/Source"
+        );
 
-        (int frames, int shortFrames, PixelFormat? _, int w, int h) =
-            await CaptureVideoAsync(ctx, src.NodeId, PixelFormat.Yuv420, cts.Token);
+        (int frames, int shortFrames, PixelFormat? _, int w, int h) = await CaptureVideoAsync(
+            ctx,
+            src.NodeId,
+            PixelFormat.Yuv420,
+            cts.Token
+        );
 
         Assert.IsTrue(frames > 0, $"{width}x{height}: no frame arrived");
         Assert.AreEqual(width, w);
         Assert.AreEqual(height, h);
-        Assert.AreEqual(0, shortFrames,
-            $"{width}x{height}: {shortFrames} short frames - the planar size calculation under-allocates");
+        Assert.AreEqual(
+            0,
+            shortFrames,
+            $"{width}x{height}: {shortFrames} short frames - the planar size calculation under-allocates"
+        );
     }
 
     // ------------------------------------------------------------------ audio
@@ -105,24 +129,33 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
     [DataRow("F32LE", AudioSampleFormat.F32Le, 96000, 2)]
     [DataRow("S16LE", AudioSampleFormat.S16Le, 8000, 1)]
     public async Task EveryAudioShape_NegotiatesAndDeliversWholeFrames(
-        string gstFormat, AudioSampleFormat expected, int rate, int channels)
+        string gstFormat,
+        AudioSampleFormat expected,
+        int rate,
+        int channels
+    )
     {
         Require();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
-            $"pwnet-aud-{gstFormat}-{rate}-{channels}", ConsoleTestLoggerFactory.Instance);
+            $"pwnet-aud-{gstFormat}-{rate}-{channels}",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         string node = $"pwnet_aud_{gstFormat.ToLowerInvariant()}_{rate}_{channels}";
         await using GstTestSource src = await GstTestSource.StartAsync(
-            ctx, node,
+            ctx,
+            node,
             $"audiotestsrc is-live=true ! audio/x-raw,format={gstFormat},rate={rate},channels={channels}",
-            "Audio/Source");
+            "Audio/Source"
+        );
 
         var buffers = 0;
         var ragged = 0;
         AudioSampleFormat? negotiated = null;
-        int seenRate = 0, seenChannels = 0;
+        int seenRate = 0,
+            seenChannels = 0;
 
         await using var capture = new PipeWireAudioCapture(ctx, $"pwnet-aud-consumer-{node}");
         capture.FrameReady += (_, frame) =>
@@ -160,7 +193,10 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
     {
         Require();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-vanish", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-vanish",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -177,19 +213,25 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
             ExtraProperties = new Dictionary<string, string> { ["node.dont-fallback"] = "true" },
         };
         capture.FrameReady += (_, _) => Interlocked.Increment(ref frames);
-        capture.StateChanged += (_, _, s) => { lock (states) states.Add(s); };
+        capture.StateChanged += (_, _, s) =>
+        {
+            lock (states)
+                states.Add(s);
+        };
 
         uint nodeId;
         {
             await using GstTestSource src = await GstTestSource.StartAsync(
-                ctx, "pwnet_vanish",
+                ctx,
+                "pwnet_vanish",
                 "videotestsrc is-live=true ! video/x-raw,format=BGRA,width=160,height=120,framerate=30/1",
-                "Video/Source");
+                "Video/Source"
+            );
             nodeId = src.NodeId;
 
             capture.Connect(nodeId, [PixelFormat.Bgra]);
             await WaitForAsync(() => Volatile.Read(ref frames) >= 3, cts.Token);
-        }   // the producer is killed here
+        } // the producer is killed here
 
         int atDeath = Volatile.Read(ref frames);
         Assert.IsTrue(atDeath > 0, "no frames arrived before the producer was killed");
@@ -198,13 +240,22 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
         // The consumer must survive its producer, and must be told rather than left hanging: with
         // no fallback allowed, the session manager's answer to the lost target is a stream error,
         // and that has to reach this stream's state.
-        await WaitForAsync(() => { lock (states) return states.Contains(PipeWireStreamState.Error); }, cts.Token);
+        await WaitForAsync(
+            () =>
+            {
+                lock (states)
+                    return states.Contains(PipeWireStreamState.Error);
+            },
+            cts.Token
+        );
         lock (states)
         {
             int streaming = states.IndexOf(PipeWireStreamState.Streaming);
             int error = states.LastIndexOf(PipeWireStreamState.Error);
-            Assert.IsTrue(streaming >= 0 && error > streaming,
-                $"the consumer did not go from streaming to an error when its producer went: {string.Join(" -> ", states)}");
+            Assert.IsTrue(
+                streaming >= 0 && error > streaming,
+                $"the consumer did not go from streaming to an error when its producer went: {string.Join(" -> ", states)}"
+            );
         }
 
         // And it is still an object that can be torn down, which the await using below does.
@@ -215,13 +266,18 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
     {
         Require();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-fanout", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-fanout",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using GstTestSource src = await GstTestSource.StartAsync(
-            ctx, "pwnet_fanout",
+            ctx,
+            "pwnet_fanout",
             "videotestsrc is-live=true ! video/x-raw,format=BGRA,width=160,height=120,framerate=30/1",
-            "Video/Source");
+            "Video/Source"
+        );
 
         var a = 0;
         var b = 0;
@@ -244,13 +300,18 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
     {
         Require();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-badconsumer", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-badconsumer",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using GstTestSource src = await GstTestSource.StartAsync(
-            ctx, "pwnet_badconsumer",
+            ctx,
+            "pwnet_badconsumer",
             "videotestsrc is-live=true ! video/x-raw,format=BGRA,width=160,height=120,framerate=30/1",
-            "Video/Source");
+            "Video/Source"
+        );
 
         // FrameReady is raised from the data thread; an escaping exception there aborts the process.
         var seen = 0;
@@ -264,19 +325,27 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
         capture.Connect(src.NodeId, [PixelFormat.Bgra]);
         await WaitForAsync(() => Volatile.Read(ref seen) >= 5, cts.Token);
 
-        Assert.IsTrue(seen >= 5,
-            $"the stream stopped after {seen} frames; a throwing handler must not end delivery");
+        Assert.IsTrue(
+            seen >= 5,
+            $"the stream stopped after {seen} frames; a throwing handler must not end delivery"
+        );
     }
 
     // ------------------------------------------------------------------ helpers
 
-    private static async Task<(int Frames, int Short, PixelFormat? Format, int Width, int Height)>
-        CaptureVideoAsync(PipeWireContext ctx, uint nodeId, PixelFormat want, CancellationToken ct)
+    private static async Task<(
+        int Frames,
+        int Short,
+        PixelFormat? Format,
+        int Width,
+        int Height
+    )> CaptureVideoAsync(PipeWireContext ctx, uint nodeId, PixelFormat want, CancellationToken ct)
     {
         var frames = 0;
         var shortFrames = 0;
         PixelFormat? negotiated = null;
-        int width = 0, height = 0;
+        int width = 0,
+            height = 0;
 
         await using var capture = new PipeWireVideoCapture(ctx, $"pwnet-consumer-{nodeId}");
         capture.FrameReady += (_, frame) =>

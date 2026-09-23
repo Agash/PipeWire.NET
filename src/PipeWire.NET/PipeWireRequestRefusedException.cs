@@ -4,23 +4,23 @@ namespace PipeWire.NET;
 public sealed class PipeWireRequestRefusedException : PipeWireException
 {
     /// <inheritdoc cref="PipeWireException(string, int, uint?, string?)"/>
-    public PipeWireRequestRefusedException(string operation, int result, uint? objectId = null, string? daemonMessage = null)
-        : base(operation, result, objectId, daemonMessage)
-    {
-    }
+    public PipeWireRequestRefusedException(
+        string operation,
+        int result,
+        uint? objectId = null,
+        string? daemonMessage = null
+    )
+        : base(operation, result, objectId, daemonMessage) { }
 
     /// <inheritdoc/>
-    public PipeWireRequestRefusedException() : base()
-    {
-    }
+    public PipeWireRequestRefusedException()
+        : base() { }
 
     /// <inheritdoc/>
-    public PipeWireRequestRefusedException(string message) : base(message)
-    {
-    }
+    public PipeWireRequestRefusedException(string message)
+        : base(message) { }
 
     /// <inheritdoc/>
-    public PipeWireRequestRefusedException(string message, Exception innerException) : base(message, innerException)
-    {
-    }
+    public PipeWireRequestRefusedException(string message, Exception innerException)
+        : base(message, innerException) { }
 }

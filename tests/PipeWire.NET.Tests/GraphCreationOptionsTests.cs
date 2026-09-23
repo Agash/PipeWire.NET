@@ -23,7 +23,9 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken cancellationToken)
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -33,7 +35,10 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     }
 
     private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry, Func<PipeWireGraphSnapshot, bool> until, CancellationToken cancellationToken)
+        PipeWireRegistry registry,
+        Func<PipeWireGraphSnapshot, bool> until,
+        CancellationToken cancellationToken
+    )
     {
         await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
             if (until(graph))
@@ -52,15 +57,19 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         // target is not an error the daemon reports but a node that silently never links.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-targetguard", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-targetguard",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
         {
             var nameless = new PipeWireNode(0x7FFF0000, null, null, null);
 
-            Assert.ThrowsExactly<ArgumentException>(
-                () => registry.CreateVirtualSink("Targeted").WithTarget(nameless));
+            Assert.ThrowsExactly<ArgumentException>(() =>
+                registry.CreateVirtualSink("Targeted").WithTarget(nameless)
+            );
         }
     }
 
@@ -72,27 +81,37 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         // applies to linked nodes it manages), not a promise this library can keep by itself.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-stay", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-stay",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
         {
-            PipeWireNode target = await registry.CreateVirtualSink("StayTarget")
-                .WithName(Unique("pwnet_stay_target")).ExecuteAsync(cts.Token);
+            PipeWireNode target = await registry
+                .CreateVirtualSink("StayTarget")
+                .WithName(Unique("pwnet_stay_target"))
+                .ExecuteAsync(cts.Token);
 
-            PipeWireNode node = await registry.CreateVirtualSink("Staying")
-                .WithName(Unique("pwnet_stay")).WithTarget(target).WithDontReconnect()
+            PipeWireNode node = await registry
+                .CreateVirtualSink("Staying")
+                .WithName(Unique("pwnet_stay"))
+                .WithTarget(target)
+                .WithDontReconnect()
                 .ExecuteAsync(cts.Token);
 
             try
             {
                 PwDump dump = await PwDump.CaptureAsync(cts.Token);
-                PwDump.Entry? seen = dump.OfKind("Node")
-                    .FirstOrDefault(e => e.Id == node.NodeId);
+                PwDump.Entry? seen = dump.OfKind("Node").FirstOrDefault(e => e.Id == node.NodeId);
 
                 Assert.IsNotNull(seen, "the node this test made is not in pw-dump's graph");
-                Assert.AreEqual("true", seen!.Prop("node.dont-reconnect")?.ToLowerInvariant(),
-                    "node.dont-reconnect did not reach the daemon");
+                Assert.AreEqual(
+                    "true",
+                    seen!.Prop("node.dont-reconnect")?.ToLowerInvariant(),
+                    "node.dont-reconnect did not reach the daemon"
+                );
             }
             finally
             {
@@ -107,19 +126,26 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-inert", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-inert",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
         {
             long before = registry.Current.Version;
 
-            PipeWireNodeBuilder pending = registry.CreateVirtualSink("Inert")
-                                                   .WithName("pwnet_inert")
-                                                   .WithLinger();
+            PipeWireNodeBuilder pending = registry
+                .CreateVirtualSink("Inert")
+                .WithName("pwnet_inert")
+                .WithLinger();
 
-            Assert.AreEqual(before, registry.Current.Version,
-                "describing a node must not touch the daemon");
+            Assert.AreEqual(
+                before,
+                registry.Current.Version,
+                "describing a node must not touch the daemon"
+            );
 
             PipeWireNode node = await pending.ExecuteAsync(cts.Token);
             Assert.IsNotNull(registry.Current.GetNode(node.NodeId));
@@ -135,8 +161,10 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        (PipeWireContext observerContext, PipeWireRegistry observer) =
-            await ConnectAsync("pwnet-linger-observer", cts.Token);
+        (PipeWireContext observerContext, PipeWireRegistry observer) = await ConnectAsync(
+            "pwnet-linger-observer",
+            cts.Token
+        );
 
         await using (observerContext)
         await using (observer)
@@ -144,22 +172,32 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
             uint lingering;
             uint transient;
 
-            (PipeWireContext ownerContext, PipeWireRegistry owner) =
-                await ConnectAsync("pwnet-linger-owner", cts.Token);
+            (PipeWireContext ownerContext, PipeWireRegistry owner) = await ConnectAsync(
+                "pwnet-linger-owner",
+                cts.Token
+            );
             await using (ownerContext)
             {
-                lingering = (await owner.CreateVirtualSink("Lingering")
-                                        .WithName("pwnet_lingering")
-                                        .WithLinger()
-                                        .ExecuteAsync(cts.Token)).NodeId;
+                lingering = (
+                    await owner
+                        .CreateVirtualSink("Lingering")
+                        .WithName("pwnet_lingering")
+                        .WithLinger()
+                        .ExecuteAsync(cts.Token)
+                ).NodeId;
 
-                transient = (await owner.CreateVirtualSink("Transient")
-                                        .WithName("pwnet_transient")
-                                        .ExecuteAsync(cts.Token)).NodeId;
+                transient = (
+                    await owner
+                        .CreateVirtualSink("Transient")
+                        .WithName("pwnet_transient")
+                        .ExecuteAsync(cts.Token)
+                ).NodeId;
 
-                await WaitForAsync(observer,
+                await WaitForAsync(
+                    observer,
                     g => g.GetNode(lingering) is not null && g.GetNode(transient) is not null,
-                    cts.Token);
+                    cts.Token
+                );
 
                 await owner.DisposeAsync();
             }
@@ -167,10 +205,15 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
             // The transient node leaving is the signal that the disconnect has been processed, so
             // the lingering node's survival is then a real observation rather than a race.
             PipeWireGraphSnapshot after = await WaitForAsync(
-                observer, g => g.GetNode(transient) is null, cts.Token);
+                observer,
+                g => g.GetNode(transient) is null,
+                cts.Token
+            );
 
-            Assert.IsNotNull(after.GetNode(lingering),
-                "object.linger must keep the node alive past its creator's disconnect");
+            Assert.IsNotNull(
+                after.GetNode(lingering),
+                "object.linger must keep the node alive past its creator's disconnect"
+            );
 
             await observer.DestroyGlobalAsync(lingering, cts.Token);
             await WaitForAsync(observer, g => g.GetNode(lingering) is null, cts.Token);
@@ -182,7 +225,10 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-passive", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-passive",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
@@ -192,15 +238,21 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
 
             PipeWireGraphSnapshot ready = await WaitForAsync(
                 registry,
-                g => g.GetPortsForNode(a.NodeId).Length == 4 && g.GetPortsForNode(b.NodeId).Length == 4,
-                cts.Token);
+                g =>
+                    g.GetPortsForNode(a.NodeId).Length == 4
+                    && g.GetPortsForNode(b.NodeId).Length == 4,
+                cts.Token
+            );
 
-            PipeWirePort output = ready.GetPortsForNode(a.NodeId, PipeWirePortDirection.Out).First();
+            PipeWirePort output = ready
+                .GetPortsForNode(a.NodeId, PipeWirePortDirection.Out)
+                .First();
             PipeWirePort input = ready.GetPortsForNode(b.NodeId, PipeWirePortDirection.In).First();
 
-            PipeWireLink link = await registry.CreateLink(output, input)
-                                              .WithPassive()
-                                              .ExecuteAsync(cts.Token);
+            PipeWireLink link = await registry
+                .CreateLink(output, input)
+                .WithPassive()
+                .ExecuteAsync(cts.Token);
 
             Assert.IsNotNull(registry.Current.GetLink(link.LinkId));
             Assert.AreEqual(1, registry.Current.GetOutputLinksForPort(output.PortId).Length);
@@ -212,17 +264,29 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-version", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-version",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSinkAsync("V", "pwnet_version", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync(
+                "V",
+                "pwnet_version",
+                cts.Token
+            );
             PipeWireGraphSnapshot graph = await WaitForAsync(
-                registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
+                registry,
+                g => g.GetPortsForNode(node.NodeId).Length == 4,
+                cts.Token
+            );
 
-            Assert.IsTrue(graph.GetNode(node.NodeId)!.InterfaceVersion > 0,
-                "the registry must record the version from the global event");
+            Assert.IsTrue(
+                graph.GetNode(node.NodeId)!.InterfaceVersion > 0,
+                "the registry must record the version from the global event"
+            );
 
             foreach (PipeWirePort port in graph.GetPortsForNode(node.NodeId))
                 Assert.IsTrue(port.InterfaceVersion > 0, $"port {port.PortId} has no version");
@@ -241,37 +305,61 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         uint sourceId;
         uint sinkId;
 
-        (PipeWireContext maker, PipeWireRegistry makerRegistry) = await ConnectAsync("pwnet-linger-link", cts.Token);
+        (PipeWireContext maker, PipeWireRegistry makerRegistry) = await ConnectAsync(
+            "pwnet-linger-link",
+            cts.Token
+        );
         await using (maker)
         await using (makerRegistry)
         {
-            PipeWireNode source = await makerRegistry.CreateVirtualSink("LingerSrc")
+            PipeWireNode source = await makerRegistry
+                .CreateVirtualSink("LingerSrc")
                 .WithName($"pwnet_linger_src_{Environment.ProcessId}_{Random.Shared.Next():x}")
-                .WithLinger().ExecuteAsync(cts.Token);
-            PipeWireNode sink = await makerRegistry.CreateVirtualSink("LingerSink")
+                .WithLinger()
+                .ExecuteAsync(cts.Token);
+            PipeWireNode sink = await makerRegistry
+                .CreateVirtualSink("LingerSink")
                 .WithName($"pwnet_linger_sink_{Environment.ProcessId}_{Random.Shared.Next():x}")
-                .WithLinger().ExecuteAsync(cts.Token);
+                .WithLinger()
+                .ExecuteAsync(cts.Token);
 
             sourceId = source.NodeId;
             sinkId = sink.NodeId;
 
-            PipeWirePort output = await PortAsync(makerRegistry, sourceId, PipeWirePortDirection.Out, cts.Token);
-            PipeWirePort input = await PortAsync(makerRegistry, sinkId, PipeWirePortDirection.In, cts.Token);
+            PipeWirePort output = await PortAsync(
+                makerRegistry,
+                sourceId,
+                PipeWirePortDirection.Out,
+                cts.Token
+            );
+            PipeWirePort input = await PortAsync(
+                makerRegistry,
+                sinkId,
+                PipeWirePortDirection.In,
+                cts.Token
+            );
 
-            PipeWireLink link = await makerRegistry.CreateLink(output, input).WithLinger()
+            PipeWireLink link = await makerRegistry
+                .CreateLink(output, input)
+                .WithLinger()
                 .ExecuteAsync(cts.Token);
             linkId = link.LinkId;
         }
 
         // The maker is gone. A second client must still see the link, and be able to remove it.
-        (PipeWireContext other, PipeWireRegistry otherRegistry) = await ConnectAsync("pwnet-linger-peer", cts.Token);
+        (PipeWireContext other, PipeWireRegistry otherRegistry) = await ConnectAsync(
+            "pwnet-linger-peer",
+            cts.Token
+        );
         await using (other)
         await using (otherRegistry)
         {
             await otherRegistry.WaitForInitialEnumerationAsync(cts.Token);
 
-            Assert.IsNotNull(otherRegistry.Current.GetLink(linkId),
-                "a lingering link did not outlive the client that created it");
+            Assert.IsNotNull(
+                otherRegistry.Current.GetLink(linkId),
+                "a lingering link did not outlive the client that created it"
+            );
 
             await otherRegistry.DestroyGlobalAsync(linkId, cts.Token);
             await otherRegistry.DestroyGlobalAsync(sourceId, cts.Token);
@@ -286,20 +374,33 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         // a source publishes outputs, and the daemon decides that from the class we send.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-source-class", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-source-class",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode source = await registry.CreateVirtualSink("VirtualMic")
+            PipeWireNode source = await registry
+                .CreateVirtualSink("VirtualMic")
                 .WithName($"pwnet_vmic_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .WithMediaClass("Audio/Source")
                 .ExecuteAsync(cts.Token);
 
-            PipeWirePort output = await PortAsync(registry, source.NodeId, PipeWirePortDirection.Out, cts.Token);
+            PipeWirePort output = await PortAsync(
+                registry,
+                source.NodeId,
+                PipeWirePortDirection.Out,
+                cts.Token
+            );
             Assert.AreEqual(PipeWirePortDirection.Out, output.PortDirection);
 
             PipeWireNode read = registry.Current.GetNode(source.NodeId)!;
-            Assert.AreEqual("Audio/Source", read.MediaClass, "the daemon did not take the media class");
+            Assert.AreEqual(
+                "Audio/Source",
+                read.MediaClass,
+                "the daemon did not take the media class"
+            );
 
             await registry.DestroyGlobalAsync(source.NodeId, cts.Token);
         }
@@ -312,22 +413,39 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         // is what shows the map reached the daemon rather than being accepted and ignored.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-channel-map", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-channel-map",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode mono = await registry.CreateVirtualSink("MonoSink")
+            PipeWireNode mono = await registry
+                .CreateVirtualSink("MonoSink")
                 .WithName($"pwnet_mono_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .WithChannelPositions("[ MONO ]")
                 .ExecuteAsync(cts.Token);
 
-            PipeWireNode surround = await registry.CreateVirtualSink("SurroundSink")
+            PipeWireNode surround = await registry
+                .CreateVirtualSink("SurroundSink")
                 .WithName($"pwnet_surround_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .WithChannelPositions("[ FL FR FC LFE SL SR ]")
                 .ExecuteAsync(cts.Token);
 
-            int monoIn = await CountPortsAsync(registry, mono.NodeId, PipeWirePortDirection.In, 1, cts.Token);
-            int surroundIn = await CountPortsAsync(registry, surround.NodeId, PipeWirePortDirection.In, 6, cts.Token);
+            int monoIn = await CountPortsAsync(
+                registry,
+                mono.NodeId,
+                PipeWirePortDirection.In,
+                1,
+                cts.Token
+            );
+            int surroundIn = await CountPortsAsync(
+                registry,
+                surround.NodeId,
+                PipeWirePortDirection.In,
+                6,
+                cts.Token
+            );
 
             Assert.AreEqual(1, monoIn, "a mono node published a port count that is not one");
             Assert.AreEqual(6, surroundIn, "a six-channel map did not produce six input ports");
@@ -344,8 +462,12 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     /// the assertion with the real number rather than timing out with none.
     /// </remarks>
     private static async Task<int> CountPortsAsync(
-        PipeWireRegistry registry, uint nodeId, PipeWirePortDirection direction, int expected,
-        CancellationToken cancellationToken)
+        PipeWireRegistry registry,
+        uint nodeId,
+        PipeWirePortDirection direction,
+        int expected,
+        CancellationToken cancellationToken
+    )
     {
         var seen = 0;
 
@@ -353,8 +475,11 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         {
             await registry.WaitForInitialEnumerationAsync(cancellationToken);
 
-            seen = registry.Current.GetPortsForNode(nodeId).Count(p => p.PortDirection == direction);
-            if (seen >= expected) return seen;
+            seen = registry
+                .Current.GetPortsForNode(nodeId)
+                .Count(p => p.PortDirection == direction);
+            if (seen >= expected)
+                return seen;
 
             await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
         }
@@ -371,32 +496,57 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         // check on this side so a mistake is an ArgumentException rather than a daemon refusal.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-link-by-id", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-link-by-id",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode source = await registry.CreateVirtualSink("LinkById")
+            PipeWireNode source = await registry
+                .CreateVirtualSink("LinkById")
                 .WithName($"pwnet_lbi_src_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
-            PipeWireNode sink = await registry.CreateVirtualSink("LinkById")
+            PipeWireNode sink = await registry
+                .CreateVirtualSink("LinkById")
                 .WithName($"pwnet_lbi_sink_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
 
-            PipeWirePort output = await PortAsync(registry, source.NodeId, PipeWirePortDirection.Out, cts.Token);
-            PipeWirePort input = await PortAsync(registry, sink.NodeId, PipeWirePortDirection.In, cts.Token);
+            PipeWirePort output = await PortAsync(
+                registry,
+                source.NodeId,
+                PipeWirePortDirection.Out,
+                cts.Token
+            );
+            PipeWirePort input = await PortAsync(
+                registry,
+                sink.NodeId,
+                PipeWirePortDirection.In,
+                cts.Token
+            );
 
-            PipeWireLink link = await registry.CreateLinkAsync(output.PortId, input.PortId, cts.Token);
+            PipeWireLink link = await registry.CreateLinkAsync(
+                output.PortId,
+                input.PortId,
+                cts.Token
+            );
 
             Assert.AreEqual(output.PortId, link.OutputPortId);
             Assert.AreEqual(input.PortId, link.InputPortId);
             Assert.IsNotNull(registry.Current.GetLink(link.LinkId));
 
             // The wrong way round is caught here, not by the daemon.
-            Assert.ThrowsExactly<ArgumentException>(() => registry.CreateLink(input.PortId, output.PortId));
+            Assert.ThrowsExactly<ArgumentException>(() =>
+                registry.CreateLink(input.PortId, output.PortId)
+            );
 
             // And an id nothing has ever used.
-            Assert.ThrowsExactly<ArgumentException>(() => registry.CreateLink(0x7FFF_0000, input.PortId));
-            Assert.ThrowsExactly<ArgumentException>(() => registry.CreateLink(output.PortId, 0x7FFF_0000));
+            Assert.ThrowsExactly<ArgumentException>(() =>
+                registry.CreateLink(0x7FFF_0000, input.PortId)
+            );
+            Assert.ThrowsExactly<ArgumentException>(() =>
+                registry.CreateLink(output.PortId, 0x7FFF_0000)
+            );
 
             await registry.DestroyGlobalAsync(link.LinkId, cts.Token);
             await registry.DestroyGlobalAsync(source.NodeId, cts.Token);
@@ -412,20 +562,28 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         // with no named method on the builder still comes back on the created object.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-props", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-props",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             string nick = $"pwnet nick {Random.Shared.Next():x}";
 
-            PipeWireNode node = await registry.CreateVirtualSink("Props")
+            PipeWireNode node = await registry
+                .CreateVirtualSink("Props")
                 .WithName($"pwnet_props_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .WithProperty("node.nick", nick)
                 .WithProperty("node.virtual", "true")
                 .ExecuteAsync(cts.Token);
 
             PipeWireNode read = registry.Current.GetNode(node.NodeId)!;
-            Assert.AreEqual(nick, read.NodeNick, "a property with no named builder method was dropped");
+            Assert.AreEqual(
+                nick,
+                read.NodeNick,
+                "a property with no named builder method was dropped"
+            );
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
@@ -439,20 +597,27 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         // so does every caller override, which is worth pinning rather than assuming.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-override", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-override",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             // media.class is one the library sets itself, reached here through the general form
             // rather than the named helper, so this covers both.
-            PipeWireNode node = await registry.CreateVirtualSink("Override")
+            PipeWireNode node = await registry
+                .CreateVirtualSink("Override")
                 .WithName($"pwnet_override_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .WithProperty("media.class", "Audio/Source")
                 .ExecuteAsync(cts.Token);
 
             PipeWireNode read = registry.Current.GetNode(node.NodeId)!;
-            Assert.AreEqual("Audio/Source", read.MediaClass,
-                "the library's default won over the caller's property");
+            Assert.AreEqual(
+                "Audio/Source",
+                read.MediaClass,
+                "the library's default won over the caller's property"
+            );
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
@@ -466,11 +631,15 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         // proves the sizing is driven by the caller rather than by a fixed guess.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-manyprops", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-manyprops",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNodeBuilder creation = registry.CreateVirtualSink("ManyProps")
+            PipeWireNodeBuilder creation = registry
+                .CreateVirtualSink("ManyProps")
                 .WithName($"pwnet_many_{Environment.ProcessId}_{Random.Shared.Next():x}");
 
             // Past the eight the library sets itself, and long enough to overflow the stack scratch.
@@ -479,8 +648,10 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
 
             PipeWireNode node = await creation.ExecuteAsync(cts.Token);
 
-            Assert.IsNotNull(registry.Current.GetNode(node.NodeId),
-                "a node with many properties did not reach the graph");
+            Assert.IsNotNull(
+                registry.Current.GetNode(node.NodeId),
+                "a node with many properties did not reach the graph"
+            );
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
@@ -491,14 +662,17 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-props-guard", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-props-guard",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-        PipeWireNodeBuilder creation = registry.CreateVirtualSink("Guard");
+            PipeWireNodeBuilder creation = registry.CreateVirtualSink("Guard");
 
-        Assert.ThrowsExactly<ArgumentException>(() => creation.WithProperty("", "v"));
-        Assert.ThrowsExactly<ArgumentNullException>(() => creation.WithProperty("k", null!));
+            Assert.ThrowsExactly<ArgumentException>(() => creation.WithProperty("", "v"));
+            Assert.ThrowsExactly<ArgumentNullException>(() => creation.WithProperty("k", null!));
         }
     }
 
@@ -509,31 +683,46 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         // what a later session destroys explicitly instead of rediscovering ids by name.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-linger-list", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-linger-list",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("Listed")
+            PipeWireNode node = await registry
+                .CreateVirtualSink("Listed")
                 .WithName(Unique("pwnet_linger_listed"))
                 .WithLinger()
                 .ExecuteAsync(cts.Token);
 
-            Assert.IsTrue(registry.LingeringIds.Contains(node.NodeId),
-                "a node created lingering must be listed until destroyed");
+            Assert.IsTrue(
+                registry.LingeringIds.Contains(node.NodeId),
+                "a node created lingering must be listed until destroyed"
+            );
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
 
             PipeWireGraphSnapshot gone = await WaitForAsync(
-                registry, g => g.GetNode(node.NodeId) is null, cts.Token);
+                registry,
+                g => g.GetNode(node.NodeId) is null,
+                cts.Token
+            );
             Assert.IsNotNull(gone);
-            Assert.IsFalse(registry.LingeringIds.Contains(node.NodeId),
-                "a destroyed node must leave the listing with its removal");
+            Assert.IsFalse(
+                registry.LingeringIds.Contains(node.NodeId),
+                "a destroyed node must leave the listing with its removal"
+            );
         }
     }
 
     private static async Task<PipeWirePort> PortAsync(
-        PipeWireRegistry registry, uint nodeId, PipeWirePortDirection direction, CancellationToken cancellationToken)
+        PipeWireRegistry registry,
+        uint nodeId,
+        PipeWirePortDirection direction,
+        CancellationToken cancellationToken
+    )
     {
         while (true)
         {
@@ -542,7 +731,8 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
 
             foreach (PipeWirePort port in registry.Current.GetPortsForNode(nodeId))
             {
-                if (port.PortDirection == direction) return port;
+                if (port.PortDirection == direction)
+                    return port;
             }
         }
     }

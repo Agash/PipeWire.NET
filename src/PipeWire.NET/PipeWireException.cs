@@ -24,7 +24,12 @@ public class PipeWireException : Exception
     /// <param name="result">The result code, negative for a failure and normally a negative errno.</param>
     /// <param name="objectId">The global the operation was against, if it had one.</param>
     /// <param name="daemonMessage">What the daemon reported, if it reported anything.</param>
-    public PipeWireException(string operation, int result, uint? objectId = null, string? daemonMessage = null)
+    public PipeWireException(
+        string operation,
+        int result,
+        uint? objectId = null,
+        string? daemonMessage = null
+    )
         : base(Describe(operation, result, objectId, daemonMessage))
     {
         Operation = operation;
@@ -35,9 +40,7 @@ public class PipeWireException : Exception
 
     /// <inheritdoc/>
     public PipeWireException()
-        : this("unknown", 0)
-    {
-    }
+        : this("unknown", 0) { }
 
     /// <inheritdoc/>
     public PipeWireException(string message)
@@ -101,10 +104,16 @@ public class PipeWireException : Exception
     /// <summary>Throws if <paramref name="result"/> reports a failure.</summary>
     internal static void ThrowIfFailed(int result, string operation, uint? objectId = null)
     {
-        if (result < 0) throw new PipeWireInteropException(operation, result, objectId);
+        if (result < 0)
+            throw new PipeWireInteropException(operation, result, objectId);
     }
 
-    private static string Describe(string operation, int result, uint? objectId, string? daemonMessage)
+    private static string Describe(
+        string operation,
+        int result,
+        uint? objectId,
+        string? daemonMessage
+    )
     {
         var text = new System.Text.StringBuilder(operation);
 
@@ -115,8 +124,10 @@ public class PipeWireException : Exception
 
         string? name = ErrnoName(result);
 
-        if (name is not null) text.Append(CultureInfo.InvariantCulture, $" ({name})");
-        if (daemonMessage is not null) text.Append(CultureInfo.InvariantCulture, $": {daemonMessage}");
+        if (name is not null)
+            text.Append(CultureInfo.InvariantCulture, $" ({name})");
+        if (daemonMessage is not null)
+            text.Append(CultureInfo.InvariantCulture, $": {daemonMessage}");
 
         return text.ToString();
     }
@@ -127,45 +138,46 @@ public class PipeWireException : Exception
     /// through them. Not the whole of errno.h: a name is only worth printing where it tells a reader
     /// something the number does not, and an unmapped code still prints as a number.
     /// </remarks>
-    private static string? ErrnoName(int result) => result switch
-    {
-        -1 => "EPERM",
-        -2 => "ENOENT",
-        -4 => "EINTR",
-        -5 => "EIO",
-        -9 => "EBADF",
-        -11 => "EAGAIN",
-        -12 => "ENOMEM",
-        -13 => "EACCES",
-        -14 => "EFAULT",
-        -16 => "EBUSY",
-        -17 => "EEXIST",
-        -19 => "ENODEV",
-        -22 => "EINVAL",
-        -24 => "EMFILE",
-        -25 => "ENOTTY",
-        -28 => "ENOSPC",
-        -32 => "EPIPE",
-        -34 => "ERANGE",
-        -38 => "ENOSYS",
-        -39 => "ENOTEMPTY",
-        -71 => "EPROTO",
-        -74 => "EBADMSG",
-        -75 => "EOVERFLOW",
-        -84 => "EILSEQ",
-        -88 => "ENOTSOCK",
-        -90 => "EMSGSIZE",
-        -93 => "EPROTONOSUPPORT",
-        -95 => "EOPNOTSUPP",
-        -98 => "EADDRINUSE",
-        -103 => "ECONNABORTED",
-        -104 => "ECONNRESET",
-        -105 => "ENOBUFS",
-        -107 => "ENOTCONN",
-        -108 => "ESHUTDOWN",
-        -110 => "ETIMEDOUT",
-        -111 => "ECONNREFUSED",
-        -125 => "ECANCELED",
-        _ => null,
-    };
+    private static string? ErrnoName(int result) =>
+        result switch
+        {
+            -1 => "EPERM",
+            -2 => "ENOENT",
+            -4 => "EINTR",
+            -5 => "EIO",
+            -9 => "EBADF",
+            -11 => "EAGAIN",
+            -12 => "ENOMEM",
+            -13 => "EACCES",
+            -14 => "EFAULT",
+            -16 => "EBUSY",
+            -17 => "EEXIST",
+            -19 => "ENODEV",
+            -22 => "EINVAL",
+            -24 => "EMFILE",
+            -25 => "ENOTTY",
+            -28 => "ENOSPC",
+            -32 => "EPIPE",
+            -34 => "ERANGE",
+            -38 => "ENOSYS",
+            -39 => "ENOTEMPTY",
+            -71 => "EPROTO",
+            -74 => "EBADMSG",
+            -75 => "EOVERFLOW",
+            -84 => "EILSEQ",
+            -88 => "ENOTSOCK",
+            -90 => "EMSGSIZE",
+            -93 => "EPROTONOSUPPORT",
+            -95 => "EOPNOTSUPP",
+            -98 => "EADDRINUSE",
+            -103 => "ECONNABORTED",
+            -104 => "ECONNRESET",
+            -105 => "ENOBUFS",
+            -107 => "ENOTCONN",
+            -108 => "ESHUTDOWN",
+            -110 => "ETIMEDOUT",
+            -111 => "ECONNREFUSED",
+            -125 => "ECANCELED",
+            _ => null,
+        };
 }

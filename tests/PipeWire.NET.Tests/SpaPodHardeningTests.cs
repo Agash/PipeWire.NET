@@ -67,7 +67,7 @@ public sealed class SpaPodHardeningTests : PipeWireTestBase
         buffer.Fill(0xAB);
 
         var b = new SpaPodBuilder(buffer);
-        b.AddInt(1);                                  // 8-byte header + 4-byte body, 4 bytes of pad
+        b.AddInt(1); // 8-byte header + 4-byte body, 4 bytes of pad
         ReadOnlySpan<byte> pod = b.GetPod();
 
         Assert.AreEqual(16, pod.Length, "an Int pod occupies a header, four bytes and four of pad");
@@ -80,11 +80,14 @@ public sealed class SpaPodHardeningTests : PipeWireTestBase
     {
         // ArgumentOutOfRangeException from inside a Slice names an offset nobody can act on. The
         // caller's actual problem is the buffer size, so that is what the message has to say.
-        InvalidOperationException ex =
-            Assert.ThrowsExactly<InvalidOperationException>(WriteTwoLongsIntoRoomForOne);
+        InvalidOperationException ex = Assert.ThrowsExactly<InvalidOperationException>(
+            WriteTwoLongsIntoRoomForOne
+        );
 
-        Assert.IsTrue(ex.Message.Contains("SpaPodBuilder", StringComparison.Ordinal),
-            $"the message must name the builder: {ex.Message}");
+        Assert.IsTrue(
+            ex.Message.Contains("SpaPodBuilder", StringComparison.Ordinal),
+            $"the message must name the builder: {ex.Message}"
+        );
 
         static void WriteTwoLongsIntoRoomForOne()
         {
@@ -181,7 +184,9 @@ public sealed class SpaPodHardeningTests : PipeWireTestBase
         Assert.AreEqual(1, ((SpaStruct)parsedStruct!).Fields.Length);
 
         byte[] sequenceBody = Concat(U32(0, 0), U32(0, 0), Pod(SpaType.Int, U32(1)));
-        Assert.IsTrue(SpaPod.TryParse(Pod(SpaType.Sequence, sequenceBody), out SpaValue? parsedSequence));
+        Assert.IsTrue(
+            SpaPod.TryParse(Pod(SpaType.Sequence, sequenceBody), out SpaValue? parsedSequence)
+        );
         Assert.AreEqual(1, ((SpaSequence)parsedSequence!).Controls.Length);
     }
 
@@ -255,7 +260,8 @@ public sealed class SpaPodHardeningTests : PipeWireTestBase
         byte[] objectBody = Concat(
             U32((uint)SpaType.ObjectFormat, (uint)SpaParamType.Format),
             U32((uint)SpaFormat.VideoFormat, 0),
-            Pod(SpaType.Id, U32(1)));
+            Pod(SpaType.Id, U32(1))
+        );
 
         byte[] sibling = Pod(SpaType.Int, U32(0xDEAD));
         byte[] buffer = Concat(Pod(SpaType.Object, objectBody), sibling);
@@ -309,5 +315,8 @@ public sealed class SpaPodHardeningTests : PipeWireTestBase
         Assert.ThrowsExactly<ArgumentException>(() => _ = SpaIdValue.FromRaw(1).As<ByteWide>());
     }
 
-    private enum ByteWide : byte { Zero }
+    private enum ByteWide : byte
+    {
+        Zero,
+    }
 }

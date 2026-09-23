@@ -20,40 +20,45 @@ namespace PipeWire.NET.Interop;
 internal sealed class NativeObjectCreation : IDisposable
 {
     private readonly PipeWireContext _ctx;
-    private readonly TaskCompletionSource<uint> _bound = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly TaskCompletionSource _synced = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<uint> _bound = new(
+        TaskCreationOptions.RunContinuationsAsynchronously
+    );
+    private readonly TaskCompletionSource _synced = new(
+        TaskCreationOptions.RunContinuationsAsynchronously
+    );
 
     private unsafe pw_proxy_events* _proxyEvents;
-    private unsafe pw_core_events*  _coreEvents;
-    private unsafe spa_hook*        _proxyHook;
-    private unsafe spa_hook*        _coreHook;
+    private unsafe pw_core_events* _coreEvents;
+    private unsafe spa_hook* _proxyHook;
+    private unsafe spa_hook* _coreHook;
     private PipeWireLoopHandle? _loop;
     private bool _loopReferenced;
-    private GCHandle         _self;
-    private IntPtr           _proxy;
+    private GCHandle _self;
+    private IntPtr _proxy;
 
     // Written by the thread that starts the creation and read by the loop thread in the callbacks
     // below. The native loop mutex orders them in practice, but nothing in the .NET memory model
     // knows about it, so the accesses say so themselves.
-    private volatile uint    _proxyId = NativeConstants.SPA_ID_INVALID;
+    private volatile uint _proxyId = NativeConstants.SPA_ID_INVALID;
 
     // The daemon reports a refused creation on the core rather than on a proxy that was never
     // bound, but the core stream carries every client's errors. Kept as the reason to quote if this
     // creation turns out to have failed, never as the trigger for deciding that it did.
-    private volatile int     _lastCoreResult;
+    private volatile int _lastCoreResult;
     private volatile string? _lastCoreMessage;
+
     // Two barriers, two sequence numbers. The first proves the daemon has dealt with the create
     // request, so a bound that has not arrived by then never will. The second proves the new object
     // has reached our own registry. Sharing one field would let the first one satisfy the second's
     // await, and the caller would be handed an id the graph does not know yet.
-    private volatile int     _probeSeq = NoSequence;
-    private volatile int     _syncSeq = NoSequence;
-    private volatile bool    _probed;
+    private volatile int _probeSeq = NoSequence;
+    private volatile int _syncSeq = NoSequence;
+    private volatile bool _probed;
 
     // Claimed with an interlocked exchange: CompleteAsync disposes in its finally and a caller can
     // dispose from outside, and both freeing the same native blocks is heap corruption rather than
     // a wasted call.
-    private int              _disposed;
+    private int _disposed;
 
     private NativeObjectCreation(PipeWireContext ctx) => _ctx = ctx;
 
@@ -74,13 +79,15 @@ internal sealed class NativeObjectCreation : IDisposable
         uint interfaceVersion,
         spa_dict props,
         CancellationToken cancellationToken,
-        Action<uint>? onBound = null)
+        Action<uint>? onBound = null
+    )
     {
         // A connection the daemon has already taken away answers nothing: bound and the probe sync
         // both wait on a socket that is closed, and the caller would sit there until its own token
         // fired. The context records the death when it is announced; refusing here is what turns
         // that into an error instead of a hang.
-        if (ctx.ConnectionFault is { } dead) throw dead;
+        if (ctx.ConnectionFault is { } dead)
+            throw dead;
 
         // The native setup is synchronous so the spans never cross an await.
         var pending = new NativeObjectCreation(ctx);
@@ -111,12 +118,24 @@ internal sealed class NativeObjectCreation : IDisposable
     /// </param>
     /// <param name="cancellationToken">Abandons the wait and destroys the half-created object.</param>
     private async Task<(uint Id, PipeWireProxyHandle Proxy)> CompleteAsync(
-        Action<uint>? onBound, CancellationToken cancellationToken)
+        Action<uint>? onBound,
+        CancellationToken cancellationToken
+    )
     {
         try
         {
-            using (cancellationToken.UnsafeRegister(static s => ((NativeObjectCreation)s!).Cancel(), this))
-            using (_ctx.Shutdown.UnsafeRegister(static s => ((NativeObjectCreation)s!).OnContextShutdown(), this))
+            using (
+                cancellationToken.UnsafeRegister(
+                    static s => ((NativeObjectCreation)s!).Cancel(),
+                    this
+                )
+            )
+            using (
+                _ctx.Shutdown.UnsafeRegister(
+                    static s => ((NativeObjectCreation)s!).OnContextShutdown(),
+                    this
+                )
+            )
             {
                 uint id = await _bound.Task.ConfigureAwait(false);
                 onBound?.Invoke(id);
@@ -147,14 +166,20 @@ internal sealed class NativeObjectCreation : IDisposable
     /// </summary>
     private void OnContextShutdown()
     {
-        var ex = new ObjectDisposedException(nameof(PipeWireContext),
-            "the context was disposed while object creation was in flight.");
+        var ex = new ObjectDisposedException(
+            nameof(PipeWireContext),
+            "the context was disposed while object creation was in flight."
+        );
         _bound.TrySetException(ex);
         _synced.TrySetException(ex);
     }
 
-    private unsafe void Start(ReadOnlySpan<byte> factoryName, ReadOnlySpan<byte> interfaceType,
-                       uint interfaceVersion, spa_dict props)
+    private unsafe void Start(
+        ReadOnlySpan<byte> factoryName,
+        ReadOnlySpan<byte> interfaceType,
+        uint interfaceVersion,
+        spa_dict props
+    )
     {
         // A reference of its own on the loop, held for as long as the listeners are attached. The
         // context is not enough: it clears its handle fields while the created proxy is still
@@ -174,14 +199,14 @@ internal sealed class NativeObjectCreation : IDisposable
 
         _proxyEvents = (pw_proxy_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_proxy_events));
         _proxyEvents->version = NativeConstants.PW_VERSION_PROXY_EVENTS;
-        _proxyEvents->bound   = &OnBound;
-        _proxyEvents->error   = &OnProxyError;
+        _proxyEvents->bound = &OnBound;
+        _proxyEvents->error = &OnProxyError;
         _proxyHook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
 
         _coreEvents = (pw_core_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_core_events));
         _coreEvents->version = NativeConstants.PW_VERSION_CORE_EVENTS;
-        _coreEvents->done    = &OnDone;
-        _coreEvents->error   = &OnCoreError;
+        _coreEvents->done = &OnDone;
+        _coreEvents->error = &OnCoreError;
         _coreHook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
 
         using (_ctx.Lock())
@@ -192,8 +217,15 @@ internal sealed class NativeObjectCreation : IDisposable
             fixed (byte* type = interfaceType)
             {
                 spa_dict local = props;
-                _proxy = (IntPtr)Native.pw_core_create_object(
-                    _ctx.CoreHandle, (sbyte*)factory, (sbyte*)type, interfaceVersion, &local, 0);
+                _proxy = (IntPtr)
+                    Native.pw_core_create_object(
+                        _ctx.CoreHandle,
+                        (sbyte*)factory,
+                        (sbyte*)type,
+                        interfaceVersion,
+                        &local,
+                        0
+                    );
             }
 
             if (_proxy == IntPtr.Zero)
@@ -249,7 +281,8 @@ internal sealed class NativeObjectCreation : IDisposable
 
     private unsafe void DestroyProxy()
     {
-        if (_proxy == IntPtr.Zero) return;
+        if (_proxy == IntPtr.Zero)
+            return;
 
         // TryLock, not Lock. This runs on the failure and cancellation paths, where the context may
         // already be disposing; a throwing lock there replaces the caller's original error with an
@@ -269,7 +302,8 @@ internal sealed class NativeObjectCreation : IDisposable
     {
         try
         {
-            if (FromData(data) is { } self) self._bound.TrySetResult(globalId);
+            if (FromData(data) is { } self)
+                self._bound.TrySetResult(globalId);
         }
         catch (Exception)
         {
@@ -293,8 +327,10 @@ internal sealed class NativeObjectCreation : IDisposable
 
     private static unsafe void OnDoneCore(void* data, uint id, int seq)
     {
-        if (FromData(data) is not { } self) return;
-        if (id != NativeConstants.PW_ID_CORE) return;
+        if (FromData(data) is not { } self)
+            return;
+        if (id != NativeConstants.PW_ID_CORE)
+            return;
 
         // The daemon has processed everything sent before the probe. If the object had been
         // created, bound would already have arrived, because events are ordered. So a probe that
@@ -303,11 +339,14 @@ internal sealed class NativeObjectCreation : IDisposable
         {
             if (!self._bound.Task.IsCompleted)
             {
-                self._bound.TrySetException(new PipeWireRequestRefusedException(
-                    "create",
-                    self._lastCoreResult != 0 ? self._lastCoreResult : -NativeLibc.EINVAL,
-                    objectId: null,
-                    self._lastCoreMessage ?? "the daemon did not create the object"));
+                self._bound.TrySetException(
+                    new PipeWireRequestRefusedException(
+                        "create",
+                        self._lastCoreResult != 0 ? self._lastCoreResult : -NativeLibc.EINVAL,
+                        objectId: null,
+                        self._lastCoreMessage ?? "the daemon did not create the object"
+                    )
+                );
             }
 
             return;
@@ -317,7 +356,8 @@ internal sealed class NativeObjectCreation : IDisposable
         // a done the daemon sent for something else before RequestSync ran would otherwise satisfy
         // this wait and hand the caller an id its own registry has not seen yet.
         int syncSeq = self._syncSeq;
-        if (syncSeq != NoSequence && seq == syncSeq) self._synced.TrySetResult();
+        if (syncSeq != NoSequence && seq == syncSeq)
+            self._synced.TrySetResult();
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -348,7 +388,8 @@ internal sealed class NativeObjectCreation : IDisposable
 
     private static unsafe void OnCoreErrorCore(void* data, uint id, int res, sbyte* message)
     {
-        if (FromData(data) is not { } self) return;
+        if (FromData(data) is not { } self)
+            return;
 
         string? text = DaemonText.String(message);
 
@@ -372,7 +413,8 @@ internal sealed class NativeObjectCreation : IDisposable
 
     private static unsafe void Fail(void* data, int res, sbyte* message, uint? objectId)
     {
-        if (FromData(data) is not { } self) return;
+        if (FromData(data) is not { } self)
+            return;
 
         string? text = DaemonText.String(message);
 
@@ -392,7 +434,8 @@ internal sealed class NativeObjectCreation : IDisposable
     /// </remarks>
     private static unsafe NativeObjectCreation? FromData(void* data)
     {
-        if (data is null) return null;
+        if (data is null)
+            return null;
 
         try
         {
@@ -406,7 +449,8 @@ internal sealed class NativeObjectCreation : IDisposable
 
     public unsafe void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
 
         // Deferred off the loop thread, the way a bound proxy's teardown is. Detaching a hook while
         // the daemon is walking the list it is in, then freeing the events table behind it, is a
@@ -424,7 +468,6 @@ internal sealed class NativeObjectCreation : IDisposable
 
     private unsafe void ReleaseNative()
     {
-
         // Both hooks must be detached before their memory is freed. On success the caller keeps the
         // proxy, so its listener would otherwise be left pointing at freed memory. spa_hook_remove
         // is a no-op on a hook that was never attached.
@@ -452,11 +495,28 @@ internal sealed class NativeObjectCreation : IDisposable
         }
         finally
         {
-            if (_proxyHook is not null)   { NativeMemory.Free(_proxyHook);   _proxyHook = null; }
-            if (_coreHook is not null)    { NativeMemory.Free(_coreHook);    _coreHook = null; }
-            if (_proxyEvents is not null) { NativeMemory.Free(_proxyEvents); _proxyEvents = null; }
-            if (_coreEvents is not null)  { NativeMemory.Free(_coreEvents);  _coreEvents = null; }
-            if (_self.IsAllocated) _self.Free();
+            if (_proxyHook is not null)
+            {
+                NativeMemory.Free(_proxyHook);
+                _proxyHook = null;
+            }
+            if (_coreHook is not null)
+            {
+                NativeMemory.Free(_coreHook);
+                _coreHook = null;
+            }
+            if (_proxyEvents is not null)
+            {
+                NativeMemory.Free(_proxyEvents);
+                _proxyEvents = null;
+            }
+            if (_coreEvents is not null)
+            {
+                NativeMemory.Free(_coreEvents);
+                _coreEvents = null;
+            }
+            if (_self.IsAllocated)
+                _self.Free();
 
             if (_loopReferenced)
             {

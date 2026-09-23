@@ -27,7 +27,8 @@ namespace PipeWire.NET.Graph;
 internal readonly record struct PipeWireObjectOptions(
     bool Linger,
     bool Passive,
-    ImmutableArray<KeyValuePair<string, string>> Properties = default)
+    ImmutableArray<KeyValuePair<string, string>> Properties = default
+)
 {
     /// <summary>Keys that say what an object is rather than how it is configured.</summary>
     /// <remarks>
@@ -41,8 +42,10 @@ internal readonly record struct PipeWireObjectOptions(
 
     private static readonly string[] ReservedForLinks =
     [
-        PipeWireKeys.PW_KEY_LINK_OUTPUT_NODE, PipeWireKeys.PW_KEY_LINK_OUTPUT_PORT,
-        PipeWireKeys.PW_KEY_LINK_INPUT_NODE, PipeWireKeys.PW_KEY_LINK_INPUT_PORT,
+        PipeWireKeys.PW_KEY_LINK_OUTPUT_NODE,
+        PipeWireKeys.PW_KEY_LINK_OUTPUT_PORT,
+        PipeWireKeys.PW_KEY_LINK_INPUT_NODE,
+        PipeWireKeys.PW_KEY_LINK_INPUT_PORT,
     ];
 
     /// <summary>Refuses a key the caller does not get to set.</summary>
@@ -55,7 +58,8 @@ internal readonly record struct PipeWireObjectOptions(
         {
             throw new ArgumentException(
                 $"'{key}' is decided by the creation call itself and cannot be set as a property.",
-                nameof(key));
+                nameof(key)
+            );
         }
     }
 
@@ -63,14 +67,17 @@ internal readonly record struct PipeWireObjectOptions(
     {
         foreach (string reserved in ReservedForEverything)
         {
-            if (string.Equals(key, reserved, StringComparison.Ordinal)) return true;
+            if (string.Equals(key, reserved, StringComparison.Ordinal))
+                return true;
         }
 
-        if (!forLink) return false;
+        if (!forLink)
+            return false;
 
         foreach (string reserved in ReservedForLinks)
         {
-            if (string.Equals(key, reserved, StringComparison.Ordinal)) return true;
+            if (string.Equals(key, reserved, StringComparison.Ordinal))
+                return true;
         }
 
         return false;

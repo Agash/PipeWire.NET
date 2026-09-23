@@ -47,14 +47,20 @@ internal sealed class VirtualCamera : IAsyncDisposable
     {
         try
         {
-            using Process? p = Process.Start(new ProcessStartInfo(file, args)
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            });
+            using Process? p = Process.Start(
+                new ProcessStartInfo(file, args)
+                {
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                }
+            );
 
-            if (p is null) { output = "could not start " + file; return false; }
+            if (p is null)
+            {
+                output = "could not start " + file;
+                return false;
+            }
 
             output = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
             p.WaitForExit(20_000);
@@ -100,8 +106,14 @@ internal sealed class VirtualCamera : IAsyncDisposable
 
         if (!File.Exists(device))
         {
-            if (!Run("sudo", $"-n modprobe v4l2loopback devices=1 video_nr={VideoNr} "
-                             + $"card_label={CardLabel} exclusive_caps=0", out string modprobe))
+            if (
+                !Run(
+                    "sudo",
+                    $"-n modprobe v4l2loopback devices=1 video_nr={VideoNr} "
+                        + $"card_label={CardLabel} exclusive_caps=0",
+                    out string modprobe
+                )
+            )
             {
                 Assert.Inconclusive($"could not load v4l2loopback: {modprobe.Trim()}");
             }
@@ -121,18 +133,31 @@ internal sealed class VirtualCamera : IAsyncDisposable
             UseShellExecute = false,
         };
 
-        foreach (string arg in new[]
-                 {
-                     "-nostdin", "-loglevel", "error",
-                     "-re", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=30",
-                     "-pix_fmt", "yuyv422", "-f", "v4l2", device,
-                 })
+        foreach (
+            string arg in new[]
+            {
+                "-nostdin",
+                "-loglevel",
+                "error",
+                "-re",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=size=320x240:rate=30",
+                "-pix_fmt",
+                "yuyv422",
+                "-f",
+                "v4l2",
+                device,
+            }
+        )
         {
             psi.ArgumentList.Add(arg);
         }
 
         Process? feeder = Process.Start(psi);
-        if (feeder is null) Assert.Inconclusive("could not start ffmpeg to feed the virtual camera.");
+        if (feeder is null)
+            Assert.Inconclusive("could not start ffmpeg to feed the virtual camera.");
 
         // Drained, not merely redirected. A child whose pipe fills up blocks writing to it and then
         // never exits, which hangs teardown - and with the test host holding the read end, the whole
@@ -141,7 +166,12 @@ internal sealed class VirtualCamera : IAsyncDisposable
         feeder!.OutputDataReceived += (_, _) => { };
         feeder.ErrorDataReceived += (_, e) =>
         {
-            if (e.Data is not null) lock (stderr) { if (stderr.Length < 4000) stderr.AppendLine(e.Data); }
+            if (e.Data is not null)
+                lock (stderr)
+                {
+                    if (stderr.Length < 4000)
+                        stderr.AppendLine(e.Data);
+                }
         };
 
         feeder.BeginOutputReadLine();
@@ -155,7 +185,8 @@ internal sealed class VirtualCamera : IAsyncDisposable
         if (feeder.HasExited)
         {
             string err;
-            lock (stderr) err = stderr.ToString();
+            lock (stderr)
+                err = stderr.ToString();
             Assert.Inconclusive($"ffmpeg could not feed {device}: {err.Trim()}");
         }
 

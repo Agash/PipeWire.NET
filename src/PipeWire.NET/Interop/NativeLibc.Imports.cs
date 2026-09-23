@@ -32,7 +32,13 @@ internal static unsafe partial class NativeLibc
 
     /// <summary><c>getsockopt(2)</c>, for asking whether a descriptor is a listening socket.</summary>
     [LibraryImport("libc", EntryPoint = "getsockopt", SetLastError = true)]
-    internal static partial int getsockopt(int fd, int level, int optname, int* optval, int* optlen);
+    internal static partial int getsockopt(
+        int fd,
+        int level,
+        int optname,
+        int* optval,
+        int* optlen
+    );
 
     /// <summary><c>eventfd(2)</c>, the counter behind an explicit-sync timeline.</summary>
     [LibraryImport("libc", EntryPoint = "eventfd", SetLastError = true)]
@@ -59,5 +65,4 @@ internal static unsafe partial class NativeLibc
     /// </summary>
     [LibraryImport("libc", EntryPoint = "close")]
     internal static partial int close(int fd);
-
 }

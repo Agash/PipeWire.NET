@@ -53,18 +53,29 @@ internal static class SpaFormatPod
     {
         cursor = default;
         void* d = FindMeta(buf, SpaMetaType.Cursor, (uint)sizeof(spa_meta_cursor));
-        if (d is null) return false;
+        if (d is null)
+            return false;
 
         var c = (spa_meta_cursor*)d;
-        if (c->id == 0) return false;
+        if (c->id == 0)
+            return false;
 
         // A bitmap only follows when the offset points past the cursor struct itself; upstream
         // spells that rule out in spa/buffer/meta.h rather than using a flag.
         if (c->bitmap_offset < (uint)sizeof(spa_meta_cursor))
         {
             cursor = new VideoCursor(
-                c->id, c->position.x, c->position.y, c->hotspot.x, c->hotspot.y,
-                PixelFormat.Unknown, 0, 0, 0, default);
+                c->id,
+                c->position.x,
+                c->position.y,
+                c->hotspot.x,
+                c->hotspot.y,
+                PixelFormat.Unknown,
+                0,
+                0,
+                0,
+                default
+            );
             return true;
         }
 
@@ -72,13 +83,23 @@ internal static class SpaFormatPod
         int stride = bm->stride;
         uint height = bm->size.height;
 
-        ReadOnlySpan<byte> pixels = stride > 0 && height > 0
-            ? new ReadOnlySpan<byte>((byte*)bm + bm->offset, checked((int)(stride * height)))
-            : default;
+        ReadOnlySpan<byte> pixels =
+            stride > 0 && height > 0
+                ? new ReadOnlySpan<byte>((byte*)bm + bm->offset, checked((int)(stride * height)))
+                : default;
 
         cursor = new VideoCursor(
-            c->id, c->position.x, c->position.y, c->hotspot.x, c->hotspot.y,
-            FromSpaVideoFormat((SpaVideoFormat)bm->format), bm->size.width, height, stride, pixels);
+            c->id,
+            c->position.x,
+            c->position.y,
+            c->hotspot.x,
+            c->hotspot.y,
+            FromSpaVideoFormat((SpaVideoFormat)bm->format),
+            bm->size.width,
+            height,
+            stride,
+            pixels
+        );
         return true;
     }
 
@@ -150,7 +171,8 @@ internal static class SpaFormatPod
     internal static unsafe bool TryFindSyncTimeline(spa_buffer* buf, out SyncTimeline timeline)
     {
         timeline = default;
-        if (buf is null || buf->metas is null) return false;
+        if (buf is null || buf->metas is null)
+            return false;
 
         uint wanted = (uint)SpaMetaType.SyncTimeline;
         uint count = Math.Min(buf->n_metas, MaxMetasWalked);
@@ -158,11 +180,17 @@ internal static class SpaFormatPod
         for (uint i = 0; i < count; i++)
         {
             spa_meta* m = &buf->metas[i];
-            if (m->type != wanted || m->data is null) continue;
-            if (m->size < (uint)sizeof(spa_meta_sync_timeline)) continue;
+            if (m->type != wanted || m->data is null)
+                continue;
+            if (m->size < (uint)sizeof(spa_meta_sync_timeline))
+                continue;
 
             spa_meta_sync_timeline* t = (spa_meta_sync_timeline*)m->data;
-            timeline = new SyncTimeline((SpaMetaSyncTimelineFlags)t->flags, t->acquire_point, t->release_point);
+            timeline = new SyncTimeline(
+                (SpaMetaSyncTimelineFlags)t->flags,
+                t->acquire_point,
+                t->release_point
+            );
             return true;
         }
 
@@ -175,7 +203,11 @@ internal static class SpaFormatPod
     /// <param name="ReleasePoint">
     /// The timeline point the consumer signals when it is finished with the data.
     /// </param>
-    internal readonly record struct SyncTimeline(SpaMetaSyncTimelineFlags Flags, ulong AcquirePoint, ulong ReleasePoint);
+    internal readonly record struct SyncTimeline(
+        SpaMetaSyncTimelineFlags Flags,
+        ulong AcquirePoint,
+        ulong ReleasePoint
+    );
 
     /// <summary>Finds the acquire and release timeline descriptors of a buffer, in order.</summary>
     /// <remarks>
@@ -183,22 +215,33 @@ internal static class SpaFormatPod
     /// the format negotiated, and only their <c>SyncObj</c> type marks them. Both must be present
     /// and usable, or the buffer cannot take part in explicit sync.
     /// </remarks>
-    internal static unsafe bool TryFindSyncDataFds(spa_buffer* buf, out int acquireFd, out int releaseFd)
+    internal static unsafe bool TryFindSyncDataFds(
+        spa_buffer* buf,
+        out int acquireFd,
+        out int releaseFd
+    )
     {
         acquireFd = -1;
         releaseFd = -1;
-        if (buf is null || buf->datas is null) return false;
+        if (buf is null || buf->datas is null)
+            return false;
 
         // Bounded for the same reason every other pool walk is: the count belongs to the pool.
         uint count = Math.Min(buf->n_datas, 128u);
         uint found = 0;
         for (uint i = 0; i < count; i++)
         {
-            if (buf->datas[i].type != (uint)SpaDataType.SyncObj) continue;
+            if (buf->datas[i].type != (uint)SpaDataType.SyncObj)
+                continue;
             long fd = (long)buf->datas[i].fd;
-            if (fd < 0 || fd > int.MaxValue) return false;
-            if (found == 0) acquireFd = (int)fd; else releaseFd = (int)fd;
-            if (++found == 2) return true;
+            if (fd < 0 || fd > int.MaxValue)
+                return false;
+            if (found == 0)
+                acquireFd = (int)fd;
+            else
+                releaseFd = (int)fd;
+            if (++found == 2)
+                return true;
         }
 
         acquireFd = -1;
@@ -240,8 +283,14 @@ internal static class SpaFormatPod
     /// the points the descriptors order.
     /// </param>
     internal static int WriteVideoBuffersParam(
-        Span<byte> buf, int size, int stride, int dataTypes, int blocks = 1, bool sizeIsAnyOf = false,
-        int syncDataBlocks = 0)
+        Span<byte> buf,
+        int size,
+        int stride,
+        int dataTypes,
+        int blocks = 1,
+        bool sizeIsAnyOf = false,
+        int syncDataBlocks = 0
+    )
     {
         var b = new SpaPodBuilder(buf);
         b.PushObject(SpaType.ObjectParamBuffers, SpaParamType.Buffers);
@@ -262,8 +311,11 @@ internal static class SpaFormatPod
         // than silently accept buffers whose ordering guarantees it cannot keep, which would read
         // as GPU corruption rather than a failed negotiation.
         if (syncDataBlocks > 0)
-            b.AddInt(SpaParamBuffers.MetaType, 1 << (int)SpaMetaType.SyncTimeline,
-                SpaPodPropFlags.Mandatory);
+            b.AddInt(
+                SpaParamBuffers.MetaType,
+                1 << (int)SpaMetaType.SyncTimeline,
+                SpaPodPropFlags.Mandatory
+            );
 
         return b.GetPod().Length;
     }
@@ -292,8 +344,10 @@ internal static class SpaFormatPod
 
         long stride = (long)width * BytesPerPixel(fmt);
         if (stride > int.MaxValue)
-            throw new ArgumentOutOfRangeException(nameof(width),
-                $"a {width}px {fmt} row needs {stride} bytes, which does not fit in an int.");
+            throw new ArgumentOutOfRangeException(
+                nameof(width),
+                $"a {width}px {fmt} row needs {stride} bytes, which does not fit in an int."
+            );
 
         return (int)stride;
     }
@@ -319,33 +373,42 @@ internal static class SpaFormatPod
         ArgumentOutOfRangeException.ThrowIfNegative(width);
         ArgumentOutOfRangeException.ThrowIfNegative(height);
 
-        long w = width, h = height;
+        long w = width,
+            h = height;
         long chroma = ((w + 1) / 2) * ((h + 1) / 2);
 
         long size = fmt switch
         {
-            PixelFormat.Yuv420 => (w * h) + (2 * chroma),   // Y + U + V
-            PixelFormat.Nv12   => (w * h) + (2 * chroma),   // Y + interleaved UV
-            PixelFormat.Yuyv   => w * h * 2,
+            PixelFormat.Yuv420 => (w * h) + (2 * chroma), // Y + U + V
+            PixelFormat.Nv12 => (w * h) + (2 * chroma), // Y + interleaved UV
+            PixelFormat.Yuyv => w * h * 2,
 
             // Packed formats only. Anything else has no layout this code knows, and assuming four
             // bytes per pixel for it sizes the buffer from a guess.
-            PixelFormat.Rgba or PixelFormat.Bgra or PixelFormat.Rgbx or PixelFormat.Bgrx
-                => w * h * 4,
+            PixelFormat.Rgba or PixelFormat.Bgra or PixelFormat.Rgbx or PixelFormat.Bgrx => w
+                * h
+                * 4,
             _ => throw new ArgumentOutOfRangeException(
-                nameof(fmt), fmt, "no known image size for this format"),
+                nameof(fmt),
+                fmt,
+                "no known image size for this format"
+            ),
         };
 
         if (size > int.MaxValue)
-            throw new ArgumentOutOfRangeException(nameof(width),
-                $"a {width}x{height} {fmt} frame needs {size} bytes, which does not fit in an int.");
+            throw new ArgumentOutOfRangeException(
+                nameof(width),
+                $"a {width}x{height} {fmt} frame needs {size} bytes, which does not fit in an int."
+            );
 
         return (int)size;
     }
 
     /// <summary>Accepted capture data types: host memory + DMA-BUF (zero-copy GPU).</summary>
     internal static int VideoCaptureDataTypeMask =>
-        (1 << (int)SpaDataType.MemPtr) | (1 << (int)SpaDataType.MemFd) | (1 << (int)SpaDataType.DmaBuf);
+        (1 << (int)SpaDataType.MemPtr)
+        | (1 << (int)SpaDataType.MemFd)
+        | (1 << (int)SpaDataType.DmaBuf);
 
     /// <summary>
     /// Number of memory blocks a buffer carries for the format: one block per plane. gst's pipewiresink
@@ -353,23 +416,25 @@ internal static class SpaFormatPod
     /// host memory and DMA-BUF, so a consumer must declare a block per plane (I420=3, NV12=2). Packed
     /// formats are a single block.
     /// </summary>
-    internal static int VideoPlaneCount(PixelFormat fmt) => fmt switch
-    {
-        PixelFormat.Yuv420 => 3,   // Y + U + V
-        PixelFormat.Nv12   => 2,   // Y + interleaved UV
-        _                  => 1,   // packed
-    };
+    internal static int VideoPlaneCount(PixelFormat fmt) =>
+        fmt switch
+        {
+            PixelFormat.Yuv420 => 3, // Y + U + V
+            PixelFormat.Nv12 => 2, // Y + interleaved UV
+            _ => 1, // packed
+        };
 
     // - Buffer metadata -
 
     /// <summary>Maps a raw <c>spa_data.type</c> to <see cref="PipeWireBufferType"/>.</summary>
-    internal static PipeWireBufferType ToBufferType(SpaDataType spaDataType) => spaDataType switch
-    {
-        SpaDataType.MemPtr => PipeWireBufferType.MemPtr,
-        SpaDataType.MemFd  => PipeWireBufferType.MemFd,
-        SpaDataType.DmaBuf => PipeWireBufferType.DmaBuf,
-        _                  => PipeWireBufferType.Unknown,
-    };
+    internal static PipeWireBufferType ToBufferType(SpaDataType spaDataType) =>
+        spaDataType switch
+        {
+            SpaDataType.MemPtr => PipeWireBufferType.MemPtr,
+            SpaDataType.MemFd => PipeWireBufferType.MemFd,
+            SpaDataType.DmaBuf => PipeWireBufferType.DmaBuf,
+            _ => PipeWireBufferType.Unknown,
+        };
 
     /// <summary>The most metadata entries a buffer will be walked for.</summary>
     /// <remarks>
@@ -407,13 +472,18 @@ internal static class SpaFormatPod
     /// <inheritdoc cref="FindPresentationTimestampNs(pw_buffer*)"/>
     internal static unsafe long FindPresentationTimestampNs(spa_buffer* buf)
     {
-        if (buf is null || buf->metas is null) return -1;
+        if (buf is null || buf->metas is null)
+            return -1;
         uint headerType = (uint)SpaMetaType.Header;
         uint count = Math.Min(buf->n_metas, MaxMetasWalked);
         for (uint i = 0; i < count; i++)
         {
             spa_meta* m = &buf->metas[i];
-            if (m->type == headerType && m->data is not null && m->size >= (uint)sizeof(spa_meta_header))
+            if (
+                m->type == headerType
+                && m->data is not null
+                && m->size >= (uint)sizeof(spa_meta_header)
+            )
                 return (long)((spa_meta_header*)m->data)->pts;
         }
         return -1;
@@ -427,7 +497,8 @@ internal static class SpaFormatPod
     /// </remarks>
     internal static unsafe void* FindMeta(spa_buffer* buf, SpaMetaType type, uint minimumSize)
     {
-        if (buf is null || buf->metas is null) return null;
+        if (buf is null || buf->metas is null)
+            return null;
 
         uint want = (uint)type;
         uint count = Math.Min(buf->n_metas, MaxMetasWalked);
@@ -444,12 +515,14 @@ internal static class SpaFormatPod
     internal static unsafe VideoRegion? FindCrop(spa_buffer* buf)
     {
         void* d = FindMeta(buf, SpaMetaType.VideoCrop, (uint)sizeof(spa_meta_region));
-        if (d is null) return null;
+        if (d is null)
+            return null;
 
         spa_region r = ((spa_meta_region*)d)->region;
 
         // An all-zero region is how a producer says "nothing cropped" rather than "crop everything".
-        if (r.size.width == 0 || r.size.height == 0) return null;
+        if (r.size.width == 0 || r.size.height == 0)
+            return null;
 
         return new VideoRegion(r.position.x, r.position.y, r.size.width, r.size.height);
     }
@@ -475,7 +548,8 @@ internal static class SpaFormatPod
     internal static unsafe int ReadDamage(spa_buffer* buf, Span<VideoRegion> into)
     {
         void* d = FindMeta(buf, SpaMetaType.VideoDamage, (uint)sizeof(spa_meta_region));
-        if (d is null || into.IsEmpty) return 0;
+        if (d is null || into.IsEmpty)
+            return 0;
 
         var region = (spa_meta_region*)d;
         int n = 0;
@@ -515,10 +589,14 @@ internal static class SpaFormatPod
     // (a record struct held in a field) with zero heap allocation per negotiation - materialising the
     // set into a long[] would allocate for no benefit and break the library's zero-copy discipline.
     internal readonly record struct VideoFormatInfo(
-        PixelFormat Format, int Width, int Height, VideoColorInfo Color,
+        PixelFormat Format,
+        int Width,
+        int Height,
+        VideoColorInfo Color,
         ulong Modifier = DrmFormatModifier.Invalid,
         bool ModifierNeedsFixation = false,
-        ulong? DeviceId = null);
+        ulong? DeviceId = null
+    );
 
     /// <summary>The largest parameter pod this library will parse, in bytes.</summary>
     /// <remarks>
@@ -537,13 +615,22 @@ internal static class SpaFormatPod
     internal const uint MaxParamPodBytes = 64 * 1024;
 
     /// <summary>The negotiated audio format extracted from a Format pod.</summary>
-    internal readonly record struct AudioFormatInfo(AudioSampleFormat Format, int SampleRate, int Channels);
+    internal readonly record struct AudioFormatInfo(
+        AudioSampleFormat Format,
+        int SampleRate,
+        int Channels
+    );
 
     /// <summary>Parses a Format object pod into video format/size/color. Unset fields keep their incoming value.</summary>
     internal static unsafe VideoFormatInfo ParseVideoFormat(spa_pod* param, VideoFormatInfo current)
     {
         var (fmt, w, h, color) = (current.Format, current.Width, current.Height, current.Color);
-        var (range, matrix, transfer, primaries) = (color.Range, color.Matrix, color.Transfer, color.Primaries);
+        var (range, matrix, transfer, primaries) = (
+            color.Range,
+            color.Matrix,
+            color.Transfer,
+            color.Primaries
+        );
         // Not carried over from the incoming format. An absent VideoModifier means the producer
         // negotiated host memory, and keeping the last DMA-BUF modifier there makes the fallback
         // look like a still-active GPU path to everything downstream that imports by modifier.
@@ -556,20 +643,27 @@ internal static class SpaFormatPod
 
         // Null means the parameter was withdrawn, not that it is empty; there is nothing to read
         // and dereferencing it is a fault in a callback the loop thread cannot survive.
-        if (param is null) return current;
+        if (param is null)
+            return current;
 
         // The size is the producer's word about memory this process does not own the length of.
         // Overflow is not the only lie available: a size within int range but far past the real
         // allocation makes a span the reader walks off the end of, and the fault lands in the
         // middle of a stream callback. Nothing legitimate is anywhere near the cap.
         uint size = ((uint*)param)[0];
-        if (size > MaxParamPodBytes) return current;
+        if (size > MaxParamPodBytes)
+            return current;
 
         var pod = new ReadOnlySpan<byte>(param, 8 + (int)size);
         var reader = new SpaPodReader(pod);
-        if (reader.EnterObject(out uint objType, out _, out _) && (SpaType)objType == SpaType.ObjectFormat)
+        if (
+            reader.EnterObject(out uint objType, out _, out _)
+            && (SpaType)objType == SpaType.ObjectFormat
+        )
         {
-            while (reader.TryReadProperty(out SpaKey key, out SpaPodPropFlags propFlags, out var value))
+            while (
+                reader.TryReadProperty(out SpaKey key, out SpaPodPropFlags propFlags, out var value)
+            )
             {
                 try
                 {
@@ -604,11 +698,15 @@ internal static class SpaFormatPod
                             ? inner.TryReadBytes(out bytes)
                             : value.TryReadBytes(out bytes);
                         if (read && bytes.Length == sizeof(ulong))
-                            deviceId = System.Runtime.InteropServices.MemoryMarshal.Read<ulong>(bytes);
+                            deviceId = System.Runtime.InteropServices.MemoryMarshal.Read<ulong>(
+                                bytes
+                            );
                     }
                     else if (key == SpaFormat.VideoSize)
                     {
-                        var (rw, rh) = value.TryUnwrapChoice(out var i) ? i.ReadRectangle() : value.ReadRectangle();
+                        var (rw, rh) = value.TryUnwrapChoice(out var i)
+                            ? i.ReadRectangle()
+                            : value.ReadRectangle();
 
                         // Dimensions arrive as uint32 and are used as int everywhere below. A value
                         // past int.MaxValue casts negative and every size derived from it is wrong;
@@ -629,13 +727,23 @@ internal static class SpaFormatPod
                     else if (key == SpaFormat.VideoColorPrimaries)
                         primaries = MapPrimaries((SpaVideoColorPrimaries)ReadId(ref value));
                 }
-                catch (InvalidOperationException) { /* malformed property - skip */ }
+                catch (InvalidOperationException)
+                { /* malformed property - skip */
+                }
             }
         }
-        return new VideoFormatInfo(fmt, w, h, new VideoColorInfo(range, matrix, transfer, primaries),
-            modifier, modifierNeedsFixation, deviceId);
+        return new VideoFormatInfo(
+            fmt,
+            w,
+            h,
+            new VideoColorInfo(range, matrix, transfer, primaries),
+            modifier,
+            modifierNeedsFixation,
+            deviceId
+        );
 
-        static uint ReadId(ref SpaPodReader v) => v.TryUnwrapChoice(out var inner) ? inner.ReadId() : v.ReadId();
+        static uint ReadId(ref SpaPodReader v) =>
+            v.TryUnwrapChoice(out var inner) ? inner.ReadId() : v.ReadId();
     }
 
     /// <summary>Parses a Format object pod into audio format/rate/channels.</summary>
@@ -645,31 +753,42 @@ internal static class SpaFormatPod
 
         // Null means the parameter was withdrawn, not that it is empty; there is nothing to read
         // and dereferencing it is a fault in a callback the loop thread cannot survive.
-        if (param is null) return current;
+        if (param is null)
+            return current;
 
         // The size is the producer's word about memory this process does not own the length of.
         // Overflow is not the only lie available: a size within int range but far past the real
         // allocation makes a span the reader walks off the end of, and the fault lands in the
         // middle of a stream callback. Nothing legitimate is anywhere near the cap.
         uint size = ((uint*)param)[0];
-        if (size > MaxParamPodBytes) return current;
+        if (size > MaxParamPodBytes)
+            return current;
 
         var pod = new ReadOnlySpan<byte>(param, 8 + (int)size);
         var reader = new SpaPodReader(pod);
-        if (reader.EnterObject(out uint objType, out _, out _) && (SpaType)objType == SpaType.ObjectFormat)
+        if (
+            reader.EnterObject(out uint objType, out _, out _)
+            && (SpaType)objType == SpaType.ObjectFormat
+        )
         {
             while (reader.TryReadProperty(out SpaKey key, out var value))
             {
                 try
                 {
                     if (key == SpaFormat.AudioFormat)
-                        fmt = FromSpaAudioFormat((value.TryUnwrapChoice(out var i) ? i.ReadId() : value.ReadId()).As<SpaAudioFormat>());
+                        fmt = FromSpaAudioFormat(
+                            (
+                                value.TryUnwrapChoice(out var i) ? i.ReadId() : value.ReadId()
+                            ).As<SpaAudioFormat>()
+                        );
                     else if (key == SpaFormat.AudioRate)
                         rate = value.TryUnwrapChoice(out var i) ? i.ReadInt() : value.ReadInt();
                     else if (key == SpaFormat.AudioChannels)
                         ch = value.TryUnwrapChoice(out var i) ? i.ReadInt() : value.ReadInt();
                 }
-                catch (InvalidOperationException) { /* malformed property - skip */ }
+                catch (InvalidOperationException)
+                { /* malformed property - skip */
+                }
             }
         }
         return new AudioFormatInfo(fmt, rate, ch);
@@ -706,15 +825,18 @@ internal static class SpaFormatPod
     internal static int WriteVideoFormat(
         Span<byte> buf,
         ReadOnlySpan<PixelFormat> formats,
-        uint defaultWidth, uint defaultHeight, uint defaultFrameRate,
+        uint defaultWidth,
+        uint defaultHeight,
+        uint defaultFrameRate,
         bool fixedSize,
         ReadOnlySpan<long> modifiers = default,
         bool fixateModifier = false,
-        ulong? deviceId = null)
+        ulong? deviceId = null
+    )
     {
         var b = new SpaPodBuilder(buf);
         b.PushObject(SpaType.ObjectFormat, SpaParamType.EnumFormat);
-        b.AddId(SpaFormat.MediaType,    SpaMediaType.Video);
+        b.AddId(SpaFormat.MediaType, SpaMediaType.Video);
         b.AddId(SpaFormat.MediaSubtype, SpaMediaSubtype.Raw);
 
         // Before the format, MANDATORY, as a dev_t in host byte order - upstream's order and flags.
@@ -730,11 +852,16 @@ internal static class SpaFormatPod
         {
             // Every format this library can decode. A supported format left out here works only
             // when the caller names it explicitly, which reads as the producer not offering it.
-            b.AddChoiceEnum(SpaFormat.VideoFormat,
-                SpaVideoFormat.Bgra, SpaVideoFormat.Rgba,
-                SpaVideoFormat.Bgrx, SpaVideoFormat.Rgbx,
-                SpaVideoFormat.Yuy2, SpaVideoFormat.I420,
-                SpaVideoFormat.Nv12);
+            b.AddChoiceEnum(
+                SpaFormat.VideoFormat,
+                SpaVideoFormat.Bgra,
+                SpaVideoFormat.Rgba,
+                SpaVideoFormat.Bgrx,
+                SpaVideoFormat.Rgbx,
+                SpaVideoFormat.Yuy2,
+                SpaVideoFormat.I420,
+                SpaVideoFormat.Nv12
+            );
         }
         else if (formats.Length == 1)
         {
@@ -761,8 +888,11 @@ internal static class SpaFormatPod
             }
             else
             {
-                b.AddChoiceEnumLong(SpaFormat.VideoModifier, modifiers,
-                    SpaPodPropFlags.Mandatory | SpaPodPropFlags.DontFixate);
+                b.AddChoiceEnumLong(
+                    SpaFormat.VideoModifier,
+                    modifiers,
+                    SpaPodPropFlags.Mandatory | SpaPodPropFlags.DontFixate
+                );
             }
         }
 
@@ -773,58 +903,70 @@ internal static class SpaFormatPod
         }
         else
         {
-            b.AddChoiceRangeRectangle(SpaFormat.VideoSize,
-                defaultWidth, defaultHeight, 1, 1, 8192, 8192);
-            b.AddChoiceRangeFraction(SpaFormat.VideoFramerate,
-                defaultFrameRate, 1, 0, 1, 1000, 1);
+            b.AddChoiceRangeRectangle(
+                SpaFormat.VideoSize,
+                defaultWidth,
+                defaultHeight,
+                1,
+                1,
+                8192,
+                8192
+            );
+            b.AddChoiceRangeFraction(SpaFormat.VideoFramerate, defaultFrameRate, 1, 0, 1, 1000, 1);
         }
 
         return b.GetPod().Length;
     }
 
-    internal static SpaVideoFormat ToSpaVideoFormat(PixelFormat fmt) => fmt switch
-    {
-        PixelFormat.Rgba   => SpaVideoFormat.Rgba,
-        PixelFormat.Bgra   => SpaVideoFormat.Bgra,
-        PixelFormat.Rgbx   => SpaVideoFormat.Rgbx,
-        PixelFormat.Bgrx   => SpaVideoFormat.Bgrx,
-        PixelFormat.Yuyv   => SpaVideoFormat.Yuy2,
-        PixelFormat.Yuv420 => SpaVideoFormat.I420,
-        PixelFormat.Nv12   => SpaVideoFormat.Nv12,
+    internal static SpaVideoFormat ToSpaVideoFormat(PixelFormat fmt) =>
+        fmt switch
+        {
+            PixelFormat.Rgba => SpaVideoFormat.Rgba,
+            PixelFormat.Bgra => SpaVideoFormat.Bgra,
+            PixelFormat.Rgbx => SpaVideoFormat.Rgbx,
+            PixelFormat.Bgrx => SpaVideoFormat.Bgrx,
+            PixelFormat.Yuyv => SpaVideoFormat.Yuy2,
+            PixelFormat.Yuv420 => SpaVideoFormat.I420,
+            PixelFormat.Nv12 => SpaVideoFormat.Nv12,
 
-        // Unknown is what a negotiation reports when the producer named a format this version does
-        // not model; there is nothing to ask for. Falling through to BGRA would offer the wrong format
-        // and decode whatever comes back as BGRA, which renders as a tinted, sheared image
-        // rather than failing.
-        _ => throw new ArgumentOutOfRangeException(
-            nameof(fmt), fmt, "not a pixel format that can be offered"),
-    };
+            // Unknown is what a negotiation reports when the producer named a format this version does
+            // not model; there is nothing to ask for. Falling through to BGRA would offer the wrong format
+            // and decode whatever comes back as BGRA, which renders as a tinted, sheared image
+            // rather than failing.
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(fmt),
+                fmt,
+                "not a pixel format that can be offered"
+            ),
+        };
 
-    internal static PixelFormat FromSpaVideoFormat(SpaVideoFormat spa) => spa switch
-    {
-        SpaVideoFormat.Rgba => PixelFormat.Rgba,
-        SpaVideoFormat.Bgra => PixelFormat.Bgra,
-        SpaVideoFormat.Rgbx => PixelFormat.Rgbx,
-        SpaVideoFormat.Bgrx => PixelFormat.Bgrx,
-        SpaVideoFormat.Yuy2 => PixelFormat.Yuyv,
-        SpaVideoFormat.I420 => PixelFormat.Yuv420,
-        SpaVideoFormat.Nv12 => PixelFormat.Nv12,
-        // Not BGRA. Reinterpreting an unrecognised layout as BGRA produces a plausible-looking but
-        // wrong image, which is far harder to notice than a format that is simply unsupported.
-        _                                  => PixelFormat.Unknown,
-    };
+    internal static PixelFormat FromSpaVideoFormat(SpaVideoFormat spa) =>
+        spa switch
+        {
+            SpaVideoFormat.Rgba => PixelFormat.Rgba,
+            SpaVideoFormat.Bgra => PixelFormat.Bgra,
+            SpaVideoFormat.Rgbx => PixelFormat.Rgbx,
+            SpaVideoFormat.Bgrx => PixelFormat.Bgrx,
+            SpaVideoFormat.Yuy2 => PixelFormat.Yuyv,
+            SpaVideoFormat.I420 => PixelFormat.Yuv420,
+            SpaVideoFormat.Nv12 => PixelFormat.Nv12,
+            // Not BGRA. Reinterpreting an unrecognised layout as BGRA produces a plausible-looking but
+            // wrong image, which is far harder to notice than a format that is simply unsupported.
+            _ => PixelFormat.Unknown,
+        };
 
     /// <summary>
     /// Number of dmabuf planes (spa_data blocks) for a format: packed RGB and YUY2 are one plane;
     /// NV12 is two (Y, interleaved UV); I420 is three (Y, U, V). Planes may share one fd at different
     /// offsets, but each still occupies its own block so PipeWire allocates the right buffer shape.
     /// </summary>
-    internal static int PlaneCount(PixelFormat fmt) => fmt switch
-    {
-        PixelFormat.Nv12   => 2,
-        PixelFormat.Yuv420 => 3,
-        _                  => 1,
-    };
+    internal static int PlaneCount(PixelFormat fmt) =>
+        fmt switch
+        {
+            PixelFormat.Nv12 => 2,
+            PixelFormat.Yuv420 => 3,
+            _ => 1,
+        };
 
     /// <summary>Bytes per pixel in the primary plane (planar formats report the Y-plane stride unit).</summary>
     /// <exception cref="ArgumentOutOfRangeException">The format is not one this version models.</exception>
@@ -833,95 +975,113 @@ internal static class SpaFormatPod
     /// it is sizes every buffer and stride derived from it wrongly rather than reporting that the
     /// format is not understood.
     /// </remarks>
-    internal static int BytesPerPixel(PixelFormat fmt) => fmt switch
-    {
-        PixelFormat.Yuv420 => 1,
-        PixelFormat.Nv12   => 1,
-        PixelFormat.Yuyv   => 2,
-        PixelFormat.Rgba or PixelFormat.Bgra or PixelFormat.Rgbx or PixelFormat.Bgrx => 4,
-        _ => throw new ArgumentOutOfRangeException(
-            nameof(fmt), fmt, "no known bytes-per-pixel for this format"),
-    };
+    internal static int BytesPerPixel(PixelFormat fmt) =>
+        fmt switch
+        {
+            PixelFormat.Yuv420 => 1,
+            PixelFormat.Nv12 => 1,
+            PixelFormat.Yuyv => 2,
+            PixelFormat.Rgba or PixelFormat.Bgra or PixelFormat.Rgbx or PixelFormat.Bgrx => 4,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(fmt),
+                fmt,
+                "no known bytes-per-pixel for this format"
+            ),
+        };
 
     // - Audio -
 
     internal static int WriteAudioFormat(
-        Span<byte> buf, AudioSampleFormat format, int sampleRate, int channels)
+        Span<byte> buf,
+        AudioSampleFormat format,
+        int sampleRate,
+        int channels
+    )
     {
         var b = new SpaPodBuilder(buf);
         b.PushObject(SpaType.ObjectFormat, SpaParamType.EnumFormat);
-        b.AddId(SpaFormat.MediaType,    SpaMediaType.Audio);
+        b.AddId(SpaFormat.MediaType, SpaMediaType.Audio);
         b.AddId(SpaFormat.MediaSubtype, SpaMediaSubtype.Raw);
-        b.AddId(SpaFormat.AudioFormat,       ToSpaAudioFormat(format));
-        b.AddInt(SpaFormat.AudioRate,        sampleRate);
-        b.AddInt(SpaFormat.AudioChannels,    channels);
+        b.AddId(SpaFormat.AudioFormat, ToSpaAudioFormat(format));
+        b.AddInt(SpaFormat.AudioRate, sampleRate);
+        b.AddInt(SpaFormat.AudioChannels, channels);
         return b.GetPod().Length;
     }
 
-    internal static SpaAudioFormat ToSpaAudioFormat(AudioSampleFormat fmt) => fmt switch
-    {
-        AudioSampleFormat.U8    => SpaAudioFormat.U8,
-        AudioSampleFormat.S16Le => SpaAudioFormat.S16Le,
-        AudioSampleFormat.S24Le => SpaAudioFormat.S24Le,
-        AudioSampleFormat.S32Le => SpaAudioFormat.S32Le,
-        AudioSampleFormat.F32Le => SpaAudioFormat.F32Le,
-        AudioSampleFormat.S24_32Le => SpaAudioFormat.S24_32Le,
-        AudioSampleFormat.F64Le => SpaAudioFormat.F64Le,
+    internal static SpaAudioFormat ToSpaAudioFormat(AudioSampleFormat fmt) =>
+        fmt switch
+        {
+            AudioSampleFormat.U8 => SpaAudioFormat.U8,
+            AudioSampleFormat.S16Le => SpaAudioFormat.S16Le,
+            AudioSampleFormat.S24Le => SpaAudioFormat.S24Le,
+            AudioSampleFormat.S32Le => SpaAudioFormat.S32Le,
+            AudioSampleFormat.F32Le => SpaAudioFormat.F32Le,
+            AudioSampleFormat.S24_32Le => SpaAudioFormat.S24_32Le,
+            AudioSampleFormat.F64Le => SpaAudioFormat.F64Le,
 
-        // Unknown is what a negotiation reports, never something to offer: there is nothing to ask
-        // for. Anything else is a caller passing a value the enum does not define.
-        _ => throw new ArgumentOutOfRangeException(nameof(fmt), fmt, "not a format that can be offered"),
-    };
+            // Unknown is what a negotiation reports, never something to offer: there is nothing to ask
+            // for. Anything else is a caller passing a value the enum does not define.
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(fmt),
+                fmt,
+                "not a format that can be offered"
+            ),
+        };
 
     // - Color enum mapping -
     // SPA's enum numbering is not contiguous with our public enums, so map by the
     // generated enum values explicitly (a plain cast would be wrong).
 
-    internal static VideoColorRange MapColorRange(SpaVideoColorRange spa) => spa switch
-    {
-        SpaVideoColorRange.Full  => VideoColorRange.Full_0_255,
-        SpaVideoColorRange.Limited => VideoColorRange.Limited_16_235,
-        _                                                                      => VideoColorRange.Unknown,
-    };
+    internal static VideoColorRange MapColorRange(SpaVideoColorRange spa) =>
+        spa switch
+        {
+            SpaVideoColorRange.Full => VideoColorRange.Full_0_255,
+            SpaVideoColorRange.Limited => VideoColorRange.Limited_16_235,
+            _ => VideoColorRange.Unknown,
+        };
 
-    internal static VideoColorMatrix MapColorMatrix(SpaVideoColorMatrix spa) => spa switch
-    {
-        SpaVideoColorMatrix.Rgb    => VideoColorMatrix.Rgb,
-        SpaVideoColorMatrix.Bt709  => VideoColorMatrix.Bt709,
-        SpaVideoColorMatrix.Bt601  => VideoColorMatrix.Bt601,
-        SpaVideoColorMatrix.Bt2020 => VideoColorMatrix.Bt2020,
-        _                                                                        => VideoColorMatrix.Unknown,
-    };
+    internal static VideoColorMatrix MapColorMatrix(SpaVideoColorMatrix spa) =>
+        spa switch
+        {
+            SpaVideoColorMatrix.Rgb => VideoColorMatrix.Rgb,
+            SpaVideoColorMatrix.Bt709 => VideoColorMatrix.Bt709,
+            SpaVideoColorMatrix.Bt601 => VideoColorMatrix.Bt601,
+            SpaVideoColorMatrix.Bt2020 => VideoColorMatrix.Bt2020,
+            _ => VideoColorMatrix.Unknown,
+        };
 
-    internal static VideoTransferFunction MapTransfer(SpaVideoTransferFunction spa) => spa switch
-    {
-        SpaVideoTransferFunction.Gamma22   => VideoTransferFunction.Gamma22,
-        SpaVideoTransferFunction.Bt709     => VideoTransferFunction.Bt709,
-        SpaVideoTransferFunction.Srgb      => VideoTransferFunction.Srgb,
-        SpaVideoTransferFunction.Bt2020_12 => VideoTransferFunction.Bt2020_12,
-        _                                                                            => VideoTransferFunction.Unknown,
-    };
+    internal static VideoTransferFunction MapTransfer(SpaVideoTransferFunction spa) =>
+        spa switch
+        {
+            SpaVideoTransferFunction.Gamma22 => VideoTransferFunction.Gamma22,
+            SpaVideoTransferFunction.Bt709 => VideoTransferFunction.Bt709,
+            SpaVideoTransferFunction.Srgb => VideoTransferFunction.Srgb,
+            SpaVideoTransferFunction.Bt2020_12 => VideoTransferFunction.Bt2020_12,
+            _ => VideoTransferFunction.Unknown,
+        };
 
-    internal static VideoColorPrimaries MapPrimaries(SpaVideoColorPrimaries spa) => spa switch
-    {
-        SpaVideoColorPrimaries.Bt709  => VideoColorPrimaries.Bt709,
-        SpaVideoColorPrimaries.Bt2020 => VideoColorPrimaries.Bt2020,
-        _                                                                              => VideoColorPrimaries.Unknown,
-    };
+    internal static VideoColorPrimaries MapPrimaries(SpaVideoColorPrimaries spa) =>
+        spa switch
+        {
+            SpaVideoColorPrimaries.Bt709 => VideoColorPrimaries.Bt709,
+            SpaVideoColorPrimaries.Bt2020 => VideoColorPrimaries.Bt2020,
+            _ => VideoColorPrimaries.Unknown,
+        };
 
-    internal static AudioSampleFormat FromSpaAudioFormat(SpaAudioFormat spa) => spa switch
-    {
-        SpaAudioFormat.U8    => AudioSampleFormat.U8,
-        SpaAudioFormat.S16Le => AudioSampleFormat.S16Le,
-        SpaAudioFormat.S24Le => AudioSampleFormat.S24Le,
-        SpaAudioFormat.S32Le => AudioSampleFormat.S32Le,
-        SpaAudioFormat.F32Le => AudioSampleFormat.F32Le,
-        SpaAudioFormat.S24_32Le => AudioSampleFormat.S24_32Le,
-        SpaAudioFormat.F64Le => AudioSampleFormat.F64Le,
+    internal static AudioSampleFormat FromSpaAudioFormat(SpaAudioFormat spa) =>
+        spa switch
+        {
+            SpaAudioFormat.U8 => AudioSampleFormat.U8,
+            SpaAudioFormat.S16Le => AudioSampleFormat.S16Le,
+            SpaAudioFormat.S24Le => AudioSampleFormat.S24Le,
+            SpaAudioFormat.S32Le => AudioSampleFormat.S32Le,
+            SpaAudioFormat.F32Le => AudioSampleFormat.F32Le,
+            SpaAudioFormat.S24_32Le => AudioSampleFormat.S24_32Le,
+            SpaAudioFormat.F64Le => AudioSampleFormat.F64Le,
 
-        // Not F32Le. Claiming a format the producer did not negotiate makes the consumer read the
-        // wrong number of bytes per sample and every channel after the first is offset: audio that
-        // plays, sounds wrong, and blames the device.
-        _ => AudioSampleFormat.Unknown,
-    };
+            // Not F32Le. Claiming a format the producer did not negotiate makes the consumer read the
+            // wrong number of bytes per sample and every channel after the first is offset: audio that
+            // plays, sounds wrong, and blames the device.
+            _ => AudioSampleFormat.Unknown,
+        };
 }

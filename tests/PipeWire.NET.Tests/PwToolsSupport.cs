@@ -27,7 +27,8 @@ internal static class PwTools
     /// <summary>The tool's path, or an assertion that skips the test when it is not installed.</summary>
     private static string Need(string? path, string tool)
     {
-        if (path is null) Assert.Inconclusive($"{tool} not present.");
+        if (path is null)
+            Assert.Inconclusive($"{tool} not present.");
         return path;
     }
 
@@ -37,11 +38,16 @@ internal static class PwTools
         if (Environment.GetEnvironmentVariable(envKey) is { Length: > 0 } overridden)
             return File.Exists(overridden) ? overridden : null;
 
-        foreach (string dir in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
-                     .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        foreach (
+            string dir in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(
+                Path.PathSeparator,
+                StringSplitOptions.RemoveEmptyEntries
+            )
+        )
         {
             string candidate = Path.Combine(dir, tool);
-            if (File.Exists(candidate)) return candidate;
+            if (File.Exists(candidate))
+                return candidate;
         }
 
         return null;
@@ -60,7 +66,11 @@ internal static class PwTools
     }
 
     private static async Task<(int ExitCode, string Stdout, string Stderr)> RunAsync(
-        string exe, string[] args, CancellationToken ct, TimeSpan? timeout = null)
+        string exe,
+        string[] args,
+        CancellationToken ct,
+        TimeSpan? timeout = null
+    )
     {
         var psi = new ProcessStartInfo(exe)
         {
@@ -68,10 +78,11 @@ internal static class PwTools
             RedirectStandardError = true,
             UseShellExecute = false,
         };
-        foreach (string a in args) psi.ArgumentList.Add(a);
+        foreach (string a in args)
+            psi.ArgumentList.Add(a);
 
-        using Process proc = Process.Start(psi)
-            ?? throw new InvalidOperationException($"failed to start {exe}");
+        using Process proc =
+            Process.Start(psi) ?? throw new InvalidOperationException($"failed to start {exe}");
 
         Task<string> stdout = proc.StandardOutput.ReadToEndAsync(ct);
         Task<string> stderr = proc.StandardError.ReadToEndAsync(ct);
@@ -87,9 +98,16 @@ internal static class PwTools
             // Killed on any cancellation, not only the timeout. Leaving the child alive when the
             // caller's token fires is how ghost gst-launch and pw-loopback processes survive a run
             // and poison every test after it.
-            try { proc.Kill(entireProcessTree: true); } catch (InvalidOperationException) { /* already gone */ }
+            try
+            {
+                proc.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            { /* already gone */
+            }
 
-            if (ct.IsCancellationRequested) throw;
+            if (ct.IsCancellationRequested)
+                throw;
             throw new TimeoutException($"{exe} did not exit");
         }
 
@@ -103,8 +121,18 @@ internal static class PwTools
     /// </remarks>
     public static async Task SetNodeVolumeAsync(uint nodeId, float volume, CancellationToken ct)
     {
-        string pod = $"Props: {{ volume: {volume.ToString(System.Globalization.CultureInfo.InvariantCulture)} }}";
-        await RunAsync(Need(PwCli, "pw-cli"), ["set-param", nodeId.ToString(System.Globalization.CultureInfo.InvariantCulture), "Props", pod], ct);
+        string pod =
+            $"Props: {{ volume: {volume.ToString(System.Globalization.CultureInfo.InvariantCulture)} }}";
+        await RunAsync(
+            Need(PwCli, "pw-cli"),
+            [
+                "set-param",
+                nodeId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "Props",
+                pod,
+            ],
+            ct
+        );
     }
 
     /// <summary>Writes a metadata entry through pw-metadata.</summary>
@@ -113,7 +141,11 @@ internal static class PwTools
         if (PwMetadata is null)
             Assert.Inconclusive("pw-metadata not present.");
 
-        await RunAsync(Need(PwMetadata, "pw-metadata"), ["-n", "default", "0", key, value, "Spa:String"], ct);
+        await RunAsync(
+            Need(PwMetadata, "pw-metadata"),
+            ["-n", "default", "0", key, value, "Spa:String"],
+            ct
+        );
     }
 
     /// <summary>Clears every entry in a metadata store, from a process that is not us.</summary>
@@ -126,9 +158,15 @@ internal static class PwTools
         if (PwMetadata is null)
             Assert.Inconclusive("pw-metadata not present.");
 
-        (int code, _, string err) = await RunAsync(Need(PwMetadata, "pw-metadata"), ["-n", storeName, "-d"], ct);
+        (int code, _, string err) = await RunAsync(
+            Need(PwMetadata, "pw-metadata"),
+            ["-n", storeName, "-d"],
+            ct
+        );
         if (code != 0)
-            throw new InvalidOperationException($"pw-metadata -n {storeName} -d failed ({code}): {err}");
+            throw new InvalidOperationException(
+                $"pw-metadata -n {storeName} -d failed ({code}): {err}"
+            );
     }
 
     /// <summary>Links two ports by name, the way a user would from a terminal.</summary>
@@ -139,20 +177,31 @@ internal static class PwTools
     /// </remarks>
     public static async Task LinkAsync(string outputPort, string inputPort, CancellationToken ct)
     {
-        (int code, _, string err) = await RunAsync(Need(PwLink, "pw-link"), ["-w", outputPort, inputPort], ct);
-        if (code == 0) return;
+        (int code, _, string err) = await RunAsync(
+            Need(PwLink, "pw-link"),
+            ["-w", outputPort, inputPort],
+            ct
+        );
+        if (code == 0)
+            return;
 
         if (err.Contains("invalid option", StringComparison.Ordinal))
             (code, _, err) = await RunAsync(Need(PwLink, "pw-link"), [outputPort, inputPort], ct);
 
         if (code != 0)
-            throw new InvalidOperationException($"pw-link {outputPort} {inputPort} failed ({code}): {err}");
+            throw new InvalidOperationException(
+                $"pw-link {outputPort} {inputPort} failed ({code}): {err}"
+            );
     }
 
     /// <summary>Disconnects a link by its id.</summary>
     public static async Task DisconnectAsync(uint linkId, CancellationToken ct)
     {
-        (int code, _, string err) = await RunAsync(Need(PwLink, "pw-link"), ["-d", linkId.ToString()], ct);
+        (int code, _, string err) = await RunAsync(
+            Need(PwLink, "pw-link"),
+            ["-d", linkId.ToString()],
+            ct
+        );
         if (code != 0)
             throw new InvalidOperationException($"pw-link -d {linkId} failed ({code}): {err}");
     }
@@ -162,7 +211,9 @@ internal static class PwTools
     /// Parses the <c>-l -I</c> listing, whose shape is an output port line followed by indented
     /// <c>id |-&gt; id name</c> lines for each link leaving it.
     /// </remarks>
-    public static async Task<List<(uint Link, uint Output, uint Input)>> ListLinksAsync(CancellationToken ct)
+    public static async Task<List<(uint Link, uint Output, uint Input)>> ListLinksAsync(
+        CancellationToken ct
+    )
     {
         (_, string output, _) = await RunAsync(Need(PwLink, "pw-link"), ["-l", "-I"], ct);
 
@@ -172,42 +223,57 @@ internal static class PwTools
         foreach (string raw in output.Split('\n'))
         {
             string line = raw.TrimEnd();
-            if (line.Length == 0) continue;
+            if (line.Length == 0)
+                continue;
 
             string trimmed = line.TrimStart();
 
             // By the arrow, not by the indent. pw-link right-aligns ids to four columns, so matching
             // by indent misreads link lines as port lines once ids reach four digits.
-            bool isLink = trimmed.Contains("|->", StringComparison.Ordinal)
-                          || trimmed.Contains("|<-", StringComparison.Ordinal);
+            bool isLink =
+                trimmed.Contains("|->", StringComparison.Ordinal)
+                || trimmed.Contains("|<-", StringComparison.Ordinal);
 
             string[] parts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 0) continue;
+            if (parts.Length == 0)
+                continue;
 
             if (!isLink)
             {
                 // "  103 probe_a:monitor_FL" - the port whose links follow.
-                if (uint.TryParse(parts[0], out uint portId)) currentOutput = portId;
+                if (uint.TryParse(parts[0], out uint portId))
+                    currentOutput = portId;
                 continue;
             }
 
             // "   85   |->   92 probe_b:playback_FL"
-            if (!uint.TryParse(parts[0], out uint linkId)) continue;
+            if (!uint.TryParse(parts[0], out uint linkId))
+                continue;
             int arrow = Array.FindIndex(parts, p => p is "|->" or "|<-");
-            if (arrow < 0 || arrow + 1 >= parts.Length) continue;
-            if (!uint.TryParse(parts[arrow + 1], out uint peer)) continue;
+            if (arrow < 0 || arrow + 1 >= parts.Length)
+                continue;
+            if (!uint.TryParse(parts[arrow + 1], out uint peer))
+                continue;
 
             // Only record the outgoing view so each link appears once.
-            if (parts[arrow] == "|->") links.Add((linkId, currentOutput, peer));
+            if (parts[arrow] == "|->")
+                links.Add((linkId, currentOutput, peer));
         }
 
         return links;
     }
 
     /// <summary>Port ids by full <c>node:port</c> name, from the <c>-o</c>/<c>-i</c> listings.</summary>
-    public static async Task<Dictionary<string, uint>> ListPortsAsync(bool outputs, CancellationToken ct)
+    public static async Task<Dictionary<string, uint>> ListPortsAsync(
+        bool outputs,
+        CancellationToken ct
+    )
     {
-        (_, string text, _) = await RunAsync(Need(PwLink, "pw-link"), [outputs ? "-o" : "-i", "-I"], ct);
+        (_, string text, _) = await RunAsync(
+            Need(PwLink, "pw-link"),
+            [outputs ? "-o" : "-i", "-I"],
+            ct
+        );
 
         var ports = new Dictionary<string, uint>(StringComparer.Ordinal);
         foreach (string raw in text.Split('\n'))
@@ -222,7 +288,11 @@ internal static class PwTools
     /// <summary>Destroys any global by id, as an outside process would.</summary>
     public static async Task DestroyAsync(uint id, CancellationToken ct)
     {
-        (int code, _, string err) = await RunAsync(Need(PwCli, "pw-cli"), ["destroy", id.ToString()], ct);
+        (int code, _, string err) = await RunAsync(
+            Need(PwCli, "pw-cli"),
+            ["destroy", id.ToString()],
+            ct
+        );
         if (code != 0)
             throw new InvalidOperationException($"pw-cli destroy {id} failed ({code}): {err}");
     }
@@ -244,7 +314,8 @@ internal static class PwTools
         psi.ArgumentList.Add("-n");
         psi.ArgumentList.Add(name);
 
-        Process proc = Process.Start(psi)
+        Process proc =
+            Process.Start(psi)
             ?? throw new InvalidOperationException("failed to start pw-loopback");
 
         var loopback = new Loopback(proc, name);
@@ -276,7 +347,8 @@ internal static class PwTools
         {
             string stderr = await proc.StandardError.ReadToEndAsync(ct);
             throw new InvalidOperationException(
-                $"pw-loopback '{name}' exited immediately with {proc.ExitCode}: {stderr}");
+                $"pw-loopback '{name}' exited immediately with {proc.ExitCode}: {stderr}"
+            );
         }
         finally
         {
@@ -292,11 +364,17 @@ internal static class PwTools
         {
             try
             {
-                if (!proc.HasExited) proc.Kill(entireProcessTree: true);
+                if (!proc.HasExited)
+                    proc.Kill(entireProcessTree: true);
                 proc.WaitForExit(3000);
             }
-            catch (InvalidOperationException) { /* already gone */ }
-            finally { proc.Dispose(); }
+            catch (InvalidOperationException)
+            { /* already gone */
+            }
+            finally
+            {
+                proc.Dispose();
+            }
 
             return ValueTask.CompletedTask;
         }

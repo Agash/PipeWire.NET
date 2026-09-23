@@ -31,28 +31,49 @@ public sealed partial class PipeWireDeviceProxy : PipeWireParameterObject
         : base(ctx, id) => _logger = logger;
 
     internal static unsafe PipeWireDeviceProxy Bind(
-        PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger,
-        Action<uint, PipeWireProperties>? propertiesObserved = null)
+        PipeWireContext ctx,
+        pw_registry* registry,
+        uint id,
+        uint version,
+        ILogger logger,
+        Action<uint, PipeWireProperties>? propertiesObserved = null
+    )
     {
         // The observer is in place before the proxy is bound: the first info after a bind is the
         // only one that carries the object's properties (later ones set no PROPS in their change
         // mask, so their dictionary arrives empty), and it can arrive the moment the bind is sent.
         // Assigned after Bind returned, a fast daemon's first info found no observer and the
         // properties never reached the registry.
-        var control = new PipeWireDeviceProxy(ctx, id, logger) { PropertiesObserved = propertiesObserved };
-        control.Attach(BoundProxy.Bind(
-            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Device, version, NativeConstants.PW_VERSION_DEVICE,
-            sizeof(pw_device_events),
-            events =>
-            {
-                var table = (pw_device_events*)events;
-                table->version = NativeConstants.PW_VERSION_DEVICE_EVENTS;
-                table->info = &OnInfoCallback;
-                table->param = &OnParamCallback;
-            },
-            static (proxy, hook, events, data) => Native.pw_device_add_listener(
-                (pw_device*)proxy, (spa_hook*)hook, (pw_device_events*)events, (void*)data),
-            control));
+        var control = new PipeWireDeviceProxy(ctx, id, logger)
+        {
+            PropertiesObserved = propertiesObserved,
+        };
+        control.Attach(
+            BoundProxy.Bind(
+                ctx,
+                registry,
+                id,
+                PipeWireKeys.PW_TYPE_INTERFACE_Device,
+                version,
+                NativeConstants.PW_VERSION_DEVICE,
+                sizeof(pw_device_events),
+                events =>
+                {
+                    var table = (pw_device_events*)events;
+                    table->version = NativeConstants.PW_VERSION_DEVICE_EVENTS;
+                    table->info = &OnInfoCallback;
+                    table->param = &OnParamCallback;
+                },
+                static (proxy, hook, events, data) =>
+                    Native.pw_device_add_listener(
+                        (pw_device*)proxy,
+                        (spa_hook*)hook,
+                        (pw_device_events*)events,
+                        (void*)data
+                    ),
+                control
+            )
+        );
 
         return control;
     }
@@ -60,8 +81,8 @@ public sealed partial class PipeWireDeviceProxy : PipeWireParameterObject
     /// <summary>Every profile this device offers, such as the configurations of a sound card.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
     public Task<ImmutableArray<SpaObject>> EnumerateProfilesAsync(
-        CancellationToken cancellationToken = default) =>
-        EnumerateParametersAsync(SpaParamType.EnumProfile, cancellationToken);
+        CancellationToken cancellationToken = default
+    ) => EnumerateParametersAsync(SpaParamType.EnumProfile, cancellationToken);
 
     /// <summary>The profile the device is currently using, or <see langword="null"/> if it has none.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
@@ -95,27 +116,34 @@ public sealed partial class PipeWireDeviceProxy : PipeWireParameterObject
     /// </para>
     /// </remarks>
     public Task SetProfileAsync(
-        int index, bool save = false, CancellationToken cancellationToken = default) =>
+        int index,
+        bool save = false,
+        CancellationToken cancellationToken = default
+    ) =>
         SetParameterAsync(
             SpaParamType.Profile,
-            new SpaObject(SpaType.ObjectParamProfile, SpaParamType.Profile,
-            [
-                new SpaPodProperty(SpaParamProfile.Index, 0, new SpaInt(index)),
-                new SpaPodProperty(SpaParamProfile.Save, 0, new SpaBool(save)),
-            ]),
-            cancellationToken);
+            new SpaObject(
+                SpaType.ObjectParamProfile,
+                SpaParamType.Profile,
+                [
+                    new SpaPodProperty(SpaParamProfile.Index, 0, new SpaInt(index)),
+                    new SpaPodProperty(SpaParamProfile.Save, 0, new SpaBool(save)),
+                ]
+            ),
+            cancellationToken
+        );
 
     /// <summary>Every route the device offers: its jacks, speakers and microphones.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
     public Task<ImmutableArray<SpaObject>> EnumerateRoutesAsync(
-        CancellationToken cancellationToken = default) =>
-        EnumerateParametersAsync(SpaParamType.EnumRoute, cancellationToken);
+        CancellationToken cancellationToken = default
+    ) => EnumerateParametersAsync(SpaParamType.EnumRoute, cancellationToken);
 
     /// <summary>The routes currently in use, one per direction the profile provides.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
     public Task<ImmutableArray<SpaObject>> GetActiveRoutesAsync(
-        CancellationToken cancellationToken = default) =>
-        EnumerateParametersAsync(SpaParamType.Route, cancellationToken);
+        CancellationToken cancellationToken = default
+    ) => EnumerateParametersAsync(SpaParamType.Route, cancellationToken);
 
     /// <summary>
     /// Selects a route for one of the device's ports.
@@ -133,17 +161,24 @@ public sealed partial class PipeWireDeviceProxy : PipeWireParameterObject
     /// it: the daemon can still apply the change after this throws.
     /// </param>
     public Task SetRouteAsync(
-        int routeIndex, int devicePort, bool save = false,
-        CancellationToken cancellationToken = default) =>
+        int routeIndex,
+        int devicePort,
+        bool save = false,
+        CancellationToken cancellationToken = default
+    ) =>
         SetParameterAsync(
             SpaParamType.Route,
-            new SpaObject(SpaType.ObjectParamRoute, SpaParamType.Route,
-            [
-                new SpaPodProperty(SpaParamRoute.Index, 0, new SpaInt(routeIndex)),
-                new SpaPodProperty(SpaParamRoute.Device, 0, new SpaInt(devicePort)),
-                new SpaPodProperty(SpaParamRoute.Save, 0, new SpaBool(save)),
-            ]),
-            cancellationToken);
+            new SpaObject(
+                SpaType.ObjectParamRoute,
+                SpaParamType.Route,
+                [
+                    new SpaPodProperty(SpaParamRoute.Index, 0, new SpaInt(routeIndex)),
+                    new SpaPodProperty(SpaParamRoute.Device, 0, new SpaInt(devicePort)),
+                    new SpaPodProperty(SpaParamRoute.Save, 0, new SpaBool(save)),
+                ]
+            ),
+            cancellationToken
+        );
 
     /// <summary>
     /// Sets the hardware volume and mute of a route.
@@ -176,49 +211,78 @@ public sealed partial class PipeWireDeviceProxy : PipeWireParameterObject
         ReadOnlySpan<float> channelVolumes,
         bool muted,
         bool save = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         if (channelVolumes.IsEmpty)
-            throw new ArgumentException("at least one channel volume is required.", nameof(channelVolumes));
+            throw new ArgumentException(
+                "at least one channel volume is required.",
+                nameof(channelVolumes)
+            );
 
         var values = ImmutableArray.CreateBuilder<SpaValue>(channelVolumes.Length);
         foreach (float volume in channelVolumes)
         {
             if (float.IsNegative(volume) || float.IsNaN(volume))
-                throw new ArgumentException("a channel volume must be a non-negative number.", nameof(channelVolumes));
+                throw new ArgumentException(
+                    "a channel volume must be a non-negative number.",
+                    nameof(channelVolumes)
+                );
             values.Add(new SpaFloat(volume));
         }
 
         // The volume lives in a Props object nested inside the Route, because a route describes both
         // which jack is selected and what its mixer is set to.
-        var props = new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-        [
-            new SpaPodProperty(SpaProp.Mute, 0, new SpaBool(muted)),
-            new SpaPodProperty(SpaProp.ChannelVolumes, 0,
-                new SpaArray(SpaType.Float, values.MoveToImmutable())),
-        ]);
+        var props = new SpaObject(
+            SpaType.ObjectProps,
+            SpaParamType.Props,
+            [
+                new SpaPodProperty(SpaProp.Mute, 0, new SpaBool(muted)),
+                new SpaPodProperty(
+                    SpaProp.ChannelVolumes,
+                    0,
+                    new SpaArray(SpaType.Float, values.MoveToImmutable())
+                ),
+            ]
+        );
 
         return SetParameterAsync(
             SpaParamType.Route,
-            new SpaObject(SpaType.ObjectParamRoute, SpaParamType.Route,
-            [
-                new SpaPodProperty(SpaParamRoute.Index, 0, new SpaInt(routeIndex)),
-                new SpaPodProperty(SpaParamRoute.Device, 0, new SpaInt(devicePort)),
-                new SpaPodProperty(SpaParamRoute.Props, 0, props),
-                new SpaPodProperty(SpaParamRoute.Save, 0, new SpaBool(save)),
-            ]),
-            cancellationToken);
+            new SpaObject(
+                SpaType.ObjectParamRoute,
+                SpaParamType.Route,
+                [
+                    new SpaPodProperty(SpaParamRoute.Index, 0, new SpaInt(routeIndex)),
+                    new SpaPodProperty(SpaParamRoute.Device, 0, new SpaInt(devicePort)),
+                    new SpaPodProperty(SpaParamRoute.Props, 0, props),
+                    new SpaPodProperty(SpaParamRoute.Save, 0, new SpaBool(save)),
+                ]
+            ),
+            cancellationToken
+        );
     }
 
     private protected override unsafe int EnumParamsNative(
-        void* proxy, int seq, uint id, uint start, uint num, spa_pod* filter) =>
-        Native.pw_device_enum_params((pw_device*)proxy, seq, id, start, num, filter);
+        void* proxy,
+        int seq,
+        uint id,
+        uint start,
+        uint num,
+        spa_pod* filter
+    ) => Native.pw_device_enum_params((pw_device*)proxy, seq, id, start, num, filter);
 
-    private protected override unsafe int SetParamNative(void* proxy, uint id, uint flags, spa_pod* param) =>
-        Native.pw_device_set_param((pw_device*)proxy, id, flags, param);
+    private protected override unsafe int SetParamNative(
+        void* proxy,
+        uint id,
+        uint flags,
+        spa_pod* param
+    ) => Native.pw_device_set_param((pw_device*)proxy, id, flags, param);
 
-    private protected override unsafe int SubscribeParamsNative(void* proxy, uint* ids, uint count) =>
-        Native.pw_device_subscribe_params((pw_device*)proxy, ids, count);
+    private protected override unsafe int SubscribeParamsNative(
+        void* proxy,
+        uint* ids,
+        uint count
+    ) => Native.pw_device_subscribe_params((pw_device*)proxy, ids, count);
 
     private protected override void OnHandlerFaulted(Exception exception) =>
         LogHandlerFaulted(Id, exception);
@@ -244,7 +308,13 @@ public sealed partial class PipeWireDeviceProxy : PipeWireParameterObject
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnParamCallback(
-        void* data, int seq, uint id, uint index, uint next, spa_pod* param)
+        void* data,
+        int seq,
+        uint id,
+        uint index,
+        uint next,
+        spa_pod* param
+    )
     {
         try
         {
@@ -256,7 +326,10 @@ public sealed partial class PipeWireDeviceProxy : PipeWireParameterObject
         }
     }
 
-    [LoggerMessage(EventId = 33100, Level = LogLevel.Error,
-                   Message = "a ParameterChanged handler for device {DeviceId} threw")]
+    [LoggerMessage(
+        EventId = 33100,
+        Level = LogLevel.Error,
+        Message = "a ParameterChanged handler for device {DeviceId} threw"
+    )]
     private partial void LogHandlerFaulted(uint deviceId, Exception exception);
 }

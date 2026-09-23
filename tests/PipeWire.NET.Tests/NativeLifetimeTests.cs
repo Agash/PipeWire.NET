@@ -34,7 +34,10 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     }
 
     private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry, Func<PipeWireGraphSnapshot, bool> until, CancellationToken ct)
+        PipeWireRegistry registry,
+        Func<PipeWireGraphSnapshot, bool> until,
+        CancellationToken ct
+    )
     {
         await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(ct))
             if (until(graph))
@@ -55,22 +58,28 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         for (int i = 0; i < 4; i++)
-            await reg.CreateVirtualSink($"Owned {i}").WithName($"pwnet_nl_owned_{i}")
-                     .ExecuteAsync(cts.Token);
+            await reg.CreateVirtualSink($"Owned {i}")
+                .WithName($"pwnet_nl_owned_{i}")
+                .ExecuteAsync(cts.Token);
 
-        await ctx.DisposeAsync();     // core disconnected, proxies still owned
-        await reg.DisposeAsync();     // unwinds afterwards
+        await ctx.DisposeAsync(); // core disconnected, proxies still owned
+        await reg.DisposeAsync(); // unwinds afterwards
 
         // Surviving is necessary but not sufficient: prove the process can still reach the daemon,
         // which a corrupted connection or a damaged loop would prevent.
-        Assert.IsTrue(await CanStillConnectAsync(cts.Token),
-            "the process survived but can no longer talk to the daemon");
+        Assert.IsTrue(
+            await CanStillConnectAsync(cts.Token),
+            "the process survived but can no longer talk to the daemon"
+        );
     }
 
     /// <summary>Opens a fresh connection and reads the graph, as evidence the process is healthy.</summary>
     private static async Task<bool> CanStillConnectAsync(CancellationToken ct)
     {
-        await using var probe = new PipeWireContext("pwnet-nl-probe", ConsoleTestLoggerFactory.Instance);
+        await using var probe = new PipeWireContext(
+            "pwnet-nl-probe",
+            ConsoleTestLoggerFactory.Instance
+        );
         await probe.StartAsync(ct);
         await using var reg = new PipeWireRegistry(probe);
         await reg.WaitForInitialEnumerationAsync(ct);
@@ -93,8 +102,10 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
 
         await Task.Delay(500, cts.Token);
 
-        Assert.IsTrue(await CanStillConnectAsync(cts.Token),
-            "finalizing orphaned proxies left the process unable to reach the daemon");
+        Assert.IsTrue(
+            await CanStillConnectAsync(cts.Token),
+            "finalizing orphaned proxies left the process unable to reach the daemon"
+        );
     }
 
     [TestMethod]
@@ -117,13 +128,18 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
 
         await Task.Delay(500, cts.Token);
 
-        await using var observer = new PipeWireContext("pwnet-linger-finalize-obs", ConsoleTestLoggerFactory.Instance);
+        await using var observer = new PipeWireContext(
+            "pwnet-linger-finalize-obs",
+            ConsoleTestLoggerFactory.Instance
+        );
         await observer.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(observer);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        Assert.IsNotNull(registry.Current.GetNode(lingering),
-            "a lingering node did not survive its creator being finalized rather than disposed");
+        Assert.IsNotNull(
+            registry.Current.GetNode(lingering),
+            "a lingering node did not survive its creator being finalized rather than disposed"
+        );
 
         // And it is a real object, not a stale registry entry: another client can still take it down.
         await registry.DestroyGlobalAsync(lingering, cts.Token);
@@ -142,12 +158,16 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         // and a rooted object is never finalized: the release that frees the handle is waiting on
         // the handle being freed. A caller who forgets a using then leaks the control, its proxy and
         // its listener for the life of the process, and no descriptor or daemon-side count shows it.
-        await using var ctx = new PipeWireContext("pwnet-control-collect", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-control-collect",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await registry.CreateVirtualSink("Collect")
+        PipeWireNode node = await registry
+            .CreateVirtualSink("Collect")
             .WithName($"pwnet_collect_{Environment.ProcessId}_{Random.Shared.Next():x}")
             .ExecuteAsync(cts.Token);
 
@@ -158,15 +178,18 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         GC.Collect();
         GC.WaitForPendingFinalizers();
 
-        Assert.IsFalse(weak.IsAlive,
-            "a control dropped without disposing is still rooted, so it and its proxy never go away");
+        Assert.IsFalse(
+            weak.IsAlive,
+            "a control dropped without disposing is still rooted, so it and its proxy never go away"
+        );
 
         await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
     }
 
     /// <summary>Binds a control and returns only a weak reference to it.</summary>
     [System.Runtime.CompilerServices.MethodImpl(
-        System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        System.Runtime.CompilerServices.MethodImplOptions.NoInlining
+    )]
     private static WeakReference BindAndAbandon(PipeWireRegistry registry, uint nodeId)
     {
         PipeWireNodeProxy control = registry.BindNode(nodeId);
@@ -185,7 +208,10 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         // in the same process, that is still using PipeWire.
         for (int i = 0; i < 10; i++)
         {
-            await using var warm = new PipeWireContext($"pwnet-init-warm-{i}", ConsoleTestLoggerFactory.Instance);
+            await using var warm = new PipeWireContext(
+                $"pwnet-init-warm-{i}",
+                ConsoleTestLoggerFactory.Instance
+            );
             await warm.StartAsync(cts.Token);
         }
 
@@ -200,7 +226,10 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         const int Rounds = 100;
         for (int i = 0; i < Rounds; i++)
         {
-            await using var ctx = new PipeWireContext($"pwnet-init-{i}", ConsoleTestLoggerFactory.Instance);
+            await using var ctx = new PipeWireContext(
+                $"pwnet-init-{i}",
+                ConsoleTestLoggerFactory.Instance
+            );
             await ctx.StartAsync(cts.Token);
         }
 
@@ -214,12 +243,17 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
 
         Console.Error.WriteLine(
             $"{Rounds} contexts: fds {fdsBefore} -> {fdsAfter}, threads {threadsBefore} -> {threadsAfter}, "
-            + $"rss {rssBefore / 1024}KB -> {rssAfter / 1024}KB");
+                + $"rss {rssBefore / 1024}KB -> {rssAfter / 1024}KB"
+        );
 
-        Assert.IsTrue(fdsAfter <= fdsBefore + 2,
-            $"file descriptors grew {fdsBefore} -> {fdsAfter} over {Rounds} contexts");
-        Assert.IsTrue(threadsAfter <= threadsBefore + 1,
-            $"threads grew {threadsBefore} -> {threadsAfter}, so loop threads are being stranded");
+        Assert.IsTrue(
+            fdsAfter <= fdsBefore + 2,
+            $"file descriptors grew {fdsBefore} -> {fdsAfter} over {Rounds} contexts"
+        );
+        Assert.IsTrue(
+            threadsAfter <= threadsBefore + 1,
+            $"threads grew {threadsBefore} -> {threadsAfter}, so loop threads are being stranded"
+        );
 
         // Resident memory is the coarse backstop; the descriptor and thread counts above are the
         // precise ones, and they are exact. What this catches is a per-pw_init allocation never
@@ -231,8 +265,10 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         // A megabyte still fails a leak of 10KB a round, and stops a glibc upgrade reading as one.
         const long RetainedBound = 1024 * 1024;
 
-        Assert.IsTrue(rssAfter - rssBefore < RetainedBound,
-            $"resident memory grew {(rssAfter - rssBefore) / 1024}KB over {Rounds} contexts");
+        Assert.IsTrue(
+            rssAfter - rssBefore < RetainedBound,
+            $"resident memory grew {(rssAfter - rssBefore) / 1024}KB over {Rounds} contexts"
+        );
     }
 
     private static int OpenFileDescriptors() => Directory.GetFiles("/proc/self/fd").Length;
@@ -245,11 +281,13 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     {
         foreach (string line in File.ReadLines("/proc/self/status"))
         {
-            if (!line.StartsWith(key, StringComparison.Ordinal)) continue;
+            if (!line.StartsWith(key, StringComparison.Ordinal))
+                continue;
 
             ReadOnlySpan<char> rest = line.AsSpan(key.Length).Trim();
             int space = rest.IndexOf(' ');
-            if (space > 0) rest = rest[..space];
+            if (space > 0)
+                rest = rest[..space];
 
             return int.Parse(rest, System.Globalization.CultureInfo.InvariantCulture);
         }
@@ -259,16 +297,21 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
 
     /// <summary>Creates a lingering node and drops every managed reference without disposing.</summary>
     [System.Runtime.CompilerServices.MethodImpl(
-        System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        System.Runtime.CompilerServices.MethodImplOptions.NoInlining
+    )]
     private static async Task<uint> CreateLingeringAndAbandonAsync(CancellationToken ct)
     {
-        var context = new PipeWireContext("pwnet-linger-finalize", ConsoleTestLoggerFactory.Instance);
+        var context = new PipeWireContext(
+            "pwnet-linger-finalize",
+            ConsoleTestLoggerFactory.Instance
+        );
         await context.StartAsync(ct);
 
         var registry = new PipeWireRegistry(context);
         await registry.WaitForInitialEnumerationAsync(ct);
 
-        PipeWireNode node = await registry.CreateVirtualSink("LingerFinalize")
+        PipeWireNode node = await registry
+            .CreateVirtualSink("LingerFinalize")
             .WithName($"pwnet_linger_fin_{Environment.ProcessId}_{Random.Shared.Next():x}")
             .WithLinger()
             .ExecuteAsync(ct);
@@ -279,7 +322,10 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     }
 
     private static async Task WaitForRemovedAsync(
-        PipeWireRegistry registry, uint id, CancellationToken ct)
+        PipeWireRegistry registry,
+        uint id,
+        CancellationToken ct
+    )
     {
         while (registry.Current.GetNode(id) is not null)
         {
@@ -297,8 +343,9 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         await reg.WaitForInitialEnumerationAsync(ct);
 
         for (int i = 0; i < 3; i++)
-            await reg.CreateVirtualSink($"Abandoned {i}").WithName($"pwnet_nl_ab_{i}")
-                     .ExecuteAsync(ct);
+            await reg.CreateVirtualSink($"Abandoned {i}")
+                .WithName($"pwnet_nl_ab_{i}")
+                .ExecuteAsync(ct);
 
         await ctx.DisposeAsync();
     }
@@ -318,7 +365,8 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         PipeWireNode node = await reg.CreateVirtualSink("LoopRef")
-                                     .WithName("pwnet_nl_loopref").ExecuteAsync(cts.Token);
+            .WithName("pwnet_nl_loopref")
+            .ExecuteAsync(cts.Token);
         Assert.IsNotNull(reg.Current.GetNode(node.NodeId));
 
         await ctx.DisposeAsync();
@@ -327,8 +375,10 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         // would fault rather than throw.
         await reg.DisposeAsync();
 
-        Assert.IsTrue(await CanStillConnectAsync(cts.Token),
-            "tearing down proxies after the context left the process unusable");
+        Assert.IsTrue(
+            await CanStillConnectAsync(cts.Token),
+            "tearing down proxies after the context left the process unusable"
+        );
     }
 
     [TestMethod]
@@ -338,7 +388,10 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         PwTools.Require();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-nl-foreign", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-nl-foreign",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
@@ -346,10 +399,16 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         // A node published by another process. We hold no proxy for it, so our disposal must not
         // attempt pw_proxy_destroy against something we never created - the double-destruction
         // that an ownership abstraction hiding the distinction would cause.
-        await using PwTools.Loopback loop = await PwTools.StartLoopbackAsync("pwnet_nl_foreign", cts.Token);
+        await using PwTools.Loopback loop = await PwTools.StartLoopbackAsync(
+            "pwnet_nl_foreign",
+            cts.Token
+        );
 
         PipeWireGraphSnapshot graph = await WaitForAsync(
-            reg, g => g.Nodes.Any(n => n.NodeName == "input.pwnet_nl_foreign"), cts.Token);
+            reg,
+            g => g.Nodes.Any(n => n.NodeName == "input.pwnet_nl_foreign"),
+            cts.Token
+        );
 
         uint foreignId = graph.Nodes.First(n => n.NodeName == "input.pwnet_nl_foreign").NodeId;
         Assert.IsNotNull(reg.Current.GetNode(foreignId));
@@ -361,14 +420,22 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         // the assertion in proxy.c and abort.
         await reg.DisposeAsync();
 
-        Assert.IsTrue(await ForeignNodeStillPresentAsync("input.pwnet_nl_foreign", cts.Token),
-            "disposing our registry destroyed a node belonging to another process");
+        Assert.IsTrue(
+            await ForeignNodeStillPresentAsync("input.pwnet_nl_foreign", cts.Token),
+            "disposing our registry destroyed a node belonging to another process"
+        );
     }
 
     /// <summary>Re-reads the graph from a fresh connection to see whether a node survived.</summary>
-    private static async Task<bool> ForeignNodeStillPresentAsync(string nodeName, CancellationToken ct)
+    private static async Task<bool> ForeignNodeStillPresentAsync(
+        string nodeName,
+        CancellationToken ct
+    )
     {
-        await using var probe = new PipeWireContext("pwnet-nl-foreign-probe", ConsoleTestLoggerFactory.Instance);
+        await using var probe = new PipeWireContext(
+            "pwnet-nl-foreign-probe",
+            ConsoleTestLoggerFactory.Instance
+        );
         await probe.StartAsync(ct);
         await using var reg = new PipeWireRegistry(probe);
         await reg.WaitForInitialEnumerationAsync(ct);
@@ -388,15 +455,21 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         await ctx.StartAsync(cts.Token);
 
         var output = new PipeWireAudioOutput(ctx, "pwnet_nl_stream");
-        output.FillSamples += (_, s, _, _, _) => { s.Clear(); return s.Length; };
+        output.FillSamples += (_, s, _, _, _) =>
+        {
+            s.Clear();
+            return s.Length;
+        };
         output.Connect(autoConnect: false);
         await Task.Delay(300, cts.Token);
 
         await ctx.DisposeAsync();
         await output.DisposeAsync();
 
-        Assert.IsTrue(await CanStillConnectAsync(cts.Token),
-            "tearing the context down under a live stream left the process unusable");
+        Assert.IsTrue(
+            await CanStillConnectAsync(cts.Token),
+            "tearing the context down under a live stream left the process unusable"
+        );
     }
 
     [TestMethod]
@@ -416,7 +489,8 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
             await reg.WaitForInitialEnumerationAsync(cts.Token);
 
             PipeWireNode node = await reg.CreateVirtualSink("Outlive")
-                                         .WithName("pwnet_nl_outlive").ExecuteAsync(cts.Token);
+                .WithName("pwnet_nl_outlive")
+                .ExecuteAsync(cts.Token);
             nodeId = node.NodeId;
             held = await WaitForAsync(reg, g => g.GetPortsForNode(nodeId).Length == 4, cts.Token);
 
@@ -441,7 +515,10 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-nl-ordering", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-nl-ordering",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
@@ -456,18 +533,23 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
             PipeWireGraphSnapshot current = sender.Current;
 
             // Current is either this snapshot or a newer one, never an older one.
-            if (current.Version < snapshot.Version) Interlocked.Increment(ref violations);
+            if (current.Version < snapshot.Version)
+                Interlocked.Increment(ref violations);
         };
 
         PipeWireNode node = await reg.CreateVirtualSink("Order")
-                                     .WithName("pwnet_nl_order").ExecuteAsync(cts.Token);
+            .WithName("pwnet_nl_order")
+            .ExecuteAsync(cts.Token);
         await WaitForAsync(reg, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
         await reg.DestroyGlobalAsync(node.NodeId, cts.Token);
         await WaitForAsync(reg, g => g.GetNode(node.NodeId) is null, cts.Token);
 
         Assert.IsTrue(Volatile.Read(ref seen) > 0, "no GraphChanged fired, so nothing was checked");
-        Assert.AreEqual(0, Volatile.Read(ref violations),
-            "a handler observed Current older than the snapshot it was handed");
+        Assert.AreEqual(
+            0,
+            Volatile.Read(ref violations),
+            "a handler observed Current older than the snapshot it was handed"
+        );
     }
 
     [TestMethod]
@@ -475,7 +557,10 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-nl-burst", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-nl-burst",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         // Deliberately no WaitForInitialEnumerationAsync first. Creation has to work while the
@@ -484,7 +569,8 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         await using var reg = new PipeWireRegistry(ctx);
 
         Task<PipeWireNode> creation = reg.CreateVirtualSink("Burst")
-                                         .WithName("pwnet_nl_burst").ExecuteAsync(cts.Token);
+            .WithName("pwnet_nl_burst")
+            .ExecuteAsync(cts.Token);
         Task enumeration = reg.WaitForInitialEnumerationAsync(cts.Token);
 
         await Task.WhenAll(creation, enumeration);
@@ -493,7 +579,11 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         // The object must be complete, not half-built by a snapshot published mid-burst.
         PipeWireNode? live = reg.Current.GetNode(node.NodeId);
         Assert.IsNotNull(live, "a node created during the burst is missing from the graph");
-        Assert.AreEqual("pwnet_nl_burst", live!.NodeName, "the node arrived without its properties");
+        Assert.AreEqual(
+            "pwnet_nl_burst",
+            live!.NodeName,
+            "the node arrived without its properties"
+        );
         Assert.AreEqual("Audio/Sink", live.MediaClass);
 
         await reg.DestroyGlobalAsync(node.NodeId, cts.Token);
@@ -504,16 +594,22 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-nl-immediate", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-nl-immediate",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         // Create on the line after construction, before any global can have arrived.
         await using var reg = new PipeWireRegistry(ctx);
         PipeWireNode node = await reg.CreateVirtualSink("Immediate")
-                                     .WithName("pwnet_nl_immediate").ExecuteAsync(cts.Token);
+            .WithName("pwnet_nl_immediate")
+            .ExecuteAsync(cts.Token);
 
-        Assert.IsNotNull(reg.Current.GetNode(node.NodeId),
-            "creation must not depend on enumeration having finished");
+        Assert.IsNotNull(
+            reg.Current.GetNode(node.NodeId),
+            "creation must not depend on enumeration having finished"
+        );
 
         await reg.DestroyGlobalAsync(node.NodeId, cts.Token);
     }

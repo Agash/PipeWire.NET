@@ -28,8 +28,12 @@ public sealed unsafe class PipeWireFilterPort
     private readonly PipeWireDspFormat _format;
 
     internal PipeWireFilterPort(
-        PipeWireFilter owner, void* portData, PipeWirePortDirection direction, string name,
-        PipeWireDspFormat format)
+        PipeWireFilter owner,
+        void* portData,
+        PipeWirePortDirection direction,
+        string name,
+        PipeWireDspFormat format
+    )
     {
         _owner = owner;
         _portData = portData;
@@ -85,7 +89,8 @@ public sealed unsafe class PipeWireFilterPort
         // sequences get a typed accessor of their own when the sequence transport lands.
         if (_format is not PipeWireDspFormat.MonoAudio)
             throw new InvalidOperationException(
-                $"port '{Name}' carries {_format}, not audio; GetSamples is audio-only.");
+                $"port '{Name}' carries {_format}, not audio; GetSamples is audio-only."
+            );
 
         return DspBuffer(sampleCount);
     }
@@ -118,7 +123,8 @@ public sealed unsafe class PipeWireFilterPort
 
         if (_format is not PipeWireDspFormat.Rgba32FloatVideo)
             throw new InvalidOperationException(
-                $"port '{Name}' carries {_format}, not video; GetPixels is video-only.");
+                $"port '{Name}' carries {_format}, not video; GetPixels is video-only."
+            );
 
         return DspBuffer(checked(width * height * 4));
     }
@@ -146,7 +152,8 @@ public sealed unsafe class PipeWireFilterPort
     private Span<float> DspBuffer(uint floats)
     {
         pw_buffer* buf = Interop.Native.pw_filter_dequeue_buffer(_portData);
-        if (buf is null) return default;
+        if (buf is null)
+            return default;
 
         spa_buffer* sb = buf->buffer;
         if (sb is null || sb->n_datas == 0 || sb->datas is null || sb->datas[0].data is null)
@@ -194,22 +201,27 @@ public sealed unsafe class PipeWireFilterPort
         RequireSequencePort(nameof(ReadEvents));
 
         pw_buffer* buf = Interop.Native.pw_filter_dequeue_buffer(_portData);
-        if (buf is null) return null;
+        if (buf is null)
+            return null;
 
         try
         {
             spa_buffer* sb = buf->buffer;
-            if (sb is null || sb->n_datas == 0 || sb->datas is null) return null;
+            if (sb is null || sb->n_datas == 0 || sb->datas is null)
+                return null;
 
             spa_data* d = &sb->datas[0];
-            if (d->data is null || d->chunk is null) return null;
+            if (d->data is null || d->chunk is null)
+                return null;
 
             uint size = d->chunk->size;
-            if (size == 0 || size > d->maxsize) return null;
+            if (size == 0 || size > d->maxsize)
+                return null;
 
             var pod = new ReadOnlySpan<byte>((byte*)d->data + d->chunk->offset, checked((int)size));
 
-            return Spa.SpaPod.TryParse(pod, out Spa.SpaValue? parsed) && parsed is Spa.SpaSequence seq
+            return
+                Spa.SpaPod.TryParse(pod, out Spa.SpaValue? parsed) && parsed is Spa.SpaSequence seq
                 ? seq
                 : null;
         }
@@ -245,15 +257,18 @@ public sealed unsafe class PipeWireFilterPort
         RequireSequencePort(nameof(WriteEvents));
 
         pw_buffer* buf = Interop.Native.pw_filter_dequeue_buffer(_portData);
-        if (buf is null) return false;
+        if (buf is null)
+            return false;
 
         try
         {
             spa_buffer* sb = buf->buffer;
-            if (sb is null || sb->n_datas == 0 || sb->datas is null) return false;
+            if (sb is null || sb->n_datas == 0 || sb->datas is null)
+                return false;
 
             spa_data* d = &sb->datas[0];
-            if (d->data is null || d->chunk is null || d->maxsize == 0) return false;
+            if (d->data is null || d->chunk is null || d->maxsize == 0)
+                return false;
 
             var target = new Span<byte>(d->data, checked((int)d->maxsize));
             var sequence = new Spa.SpaSequence(0, [.. events]);
@@ -262,8 +277,9 @@ public sealed unsafe class PipeWireFilterPort
             {
                 throw new ArgumentException(
                     $"the events need {Spa.SpaPod.GetByteCount(sequence)} bytes, and the port's "
-                    + $"buffer holds {d->maxsize}.",
-                    nameof(events));
+                        + $"buffer holds {d->maxsize}.",
+                    nameof(events)
+                );
             }
 
             d->chunk->offset = 0;
@@ -284,6 +300,7 @@ public sealed unsafe class PipeWireFilterPort
             return;
 
         throw new InvalidOperationException(
-            $"port '{Name}' carries {_format}, not a sequence; {member} is for MIDI and control ports.");
+            $"port '{Name}' carries {_format}, not a sequence; {member} is for MIDI and control ports."
+        );
     }
 }

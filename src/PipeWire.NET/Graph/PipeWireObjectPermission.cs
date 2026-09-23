@@ -13,4 +13,7 @@ namespace PipeWire.NET.Graph;
 /// registry at all - it is hidden rather than refused, so a confined client observes a smaller graph
 /// instead of an erroring one.
 /// </remarks>
-public readonly record struct PipeWireObjectPermission(uint ObjectId, PipeWirePermissions Permissions);
+public readonly record struct PipeWireObjectPermission(
+    uint ObjectId,
+    PipeWirePermissions Permissions
+);

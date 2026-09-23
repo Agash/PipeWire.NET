@@ -37,9 +37,11 @@ internal static class DeviceIdNegotiation
 {
     private const string AvailableDevicesKey = "available-devices";
 
-    private static string NegotiationKey => Encoding.UTF8.GetString(NativeConstants.PW_CAPABILITY_DEVICE_ID_NEGOTIATION);
+    private static string NegotiationKey =>
+        Encoding.UTF8.GetString(NativeConstants.PW_CAPABILITY_DEVICE_ID_NEGOTIATION);
 
-    private static string DeviceIdsKey => Encoding.UTF8.GetString(NativeConstants.PW_CAPABILITY_DEVICE_IDS);
+    private static string DeviceIdsKey =>
+        Encoding.UTF8.GetString(NativeConstants.PW_CAPABILITY_DEVICE_IDS);
 
     /// <summary>The Capability param announcing negotiation, and the devices when a producer names them.</summary>
     /// <remarks><c>spa_param_dict_build_dict(b, SPA_PARAM_Capability, ...)</c>, field for field.</remarks>
@@ -60,7 +62,14 @@ internal static class DeviceIdNegotiation
         var dict = new SpaObject(
             SpaType.ObjectParamDict,
             SpaParamType.Capability,
-            [new SpaPodProperty(SpaParamDict.Info, SpaPodPropFlags.HintDict, new SpaStruct(fields.ToImmutable()))]);
+            [
+                new SpaPodProperty(
+                    SpaParamDict.Info,
+                    SpaPodPropFlags.HintDict,
+                    new SpaStruct(fields.ToImmutable())
+                ),
+            ]
+        );
 
         return SpaPod.ToBytes(dict);
     }
@@ -72,13 +81,17 @@ internal static class DeviceIdNegotiation
     /// </remarks>
     internal static unsafe PeerCapabilities Parse(spa_pod* param)
     {
-        if (param is null) return default;
+        if (param is null)
+            return default;
 
         uint size = ((uint*)param)[0];
-        if (size > SpaFormatPod.MaxParamPodBytes) return default;
+        if (size > SpaFormatPod.MaxParamPodBytes)
+            return default;
 
-        if (!SpaPod.TryParse(new ReadOnlySpan<byte>(param, 8 + (int)size), out SpaValue? value)
-            || value is not SpaObject { ObjectType: SpaType.ObjectPeerParam } peers)
+        if (
+            !SpaPod.TryParse(new ReadOnlySpan<byte>(param, 8 + (int)size), out SpaValue? value)
+            || value is not SpaObject { ObjectType: SpaType.ObjectPeerParam } peers
+        )
         {
             return default;
         }
@@ -89,19 +102,38 @@ internal static class DeviceIdNegotiation
         foreach (SpaPodProperty peer in peers.Properties)
         {
             // Keyed by peer id; the value is that peer's Capability ParamDict, or None.
-            if (peer.Value is not SpaObject { ObjectType: SpaType.ObjectParamDict } dict) continue;
+            if (peer.Value is not SpaObject { ObjectType: SpaType.ObjectParamDict } dict)
+                continue;
 
-            SpaPodProperty? info = dict.Properties.FirstOrDefault(p => p.Key == (SpaKey)SpaParamDict.Info);
-            if (info?.Value is not SpaStruct { Fields: var f } || f.Length < 1 || f[0] is not SpaInt) continue;
+            SpaPodProperty? info = dict.Properties.FirstOrDefault(p =>
+                p.Key == (SpaKey)SpaParamDict.Info
+            );
+            if (
+                info?.Value is not SpaStruct { Fields: var f }
+                || f.Length < 1
+                || f[0] is not SpaInt
+            )
+                continue;
 
             // spa_param_dict_info_parse: Int n, then n (String key, String value) pairs.
             for (int i = 1; i + 1 < f.Length; i += 2)
             {
-                if (f[i] is not SpaString { Value: var key } || f[i + 1] is not SpaString { Value: var text }) continue;
+                if (
+                    f[i] is not SpaString { Value: var key }
+                    || f[i + 1] is not SpaString { Value: var text }
+                )
+                    continue;
 
-                if (key == NegotiationKey
-                    && int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int version)
-                    && version >= 1)
+                if (
+                    key == NegotiationKey
+                    && int.TryParse(
+                        text,
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out int version
+                    )
+                    && version >= 1
+                )
                 {
                     negotiates = true;
                 }
@@ -145,12 +177,19 @@ internal static class DeviceIdNegotiation
     internal static byte[] WriteDeviceFormats(
         in PeerCapabilities peer,
         ReadOnlySpan<DmaBufDeviceOffer> offers,
-        PixelFormat format, uint width, uint height, uint frameRate, bool fixedSize,
+        PixelFormat format,
+        uint width,
+        uint height,
+        uint frameRate,
+        bool fixedSize,
         bool hostMemoryFallback,
-        out int count, out int deviceFormats)
+        out int count,
+        out int deviceFormats
+    )
     {
         int capacity = 1024;
-        foreach (DmaBufDeviceOffer offer in offers) capacity += 1024 + ((offer.Modifiers.Length + 1) * 8);
+        foreach (DmaBufDeviceOffer offer in offers)
+            capacity += 1024 + ((offer.Modifiers.Length + 1) * 8);
 
         byte[] buffer = new byte[capacity];
         int used = 0;
@@ -162,26 +201,53 @@ internal static class DeviceIdNegotiation
         {
             foreach (DmaBufDeviceOffer offer in offers)
             {
-                if (!peer.Accepts(offer.Device.Id)) continue;
+                if (!peer.Accepts(offer.Device.Id))
+                    continue;
 
-                used += Align(SpaFormatPod.WriteVideoFormat(buffer.AsSpan(used), formats,
-                    width, height, frameRate, fixedSize,
-                    modifiers: offer.Modifiers.AsSpan(), deviceId: offer.Device.Id));
+                used += Align(
+                    SpaFormatPod.WriteVideoFormat(
+                        buffer.AsSpan(used),
+                        formats,
+                        width,
+                        height,
+                        frameRate,
+                        fixedSize,
+                        modifiers: offer.Modifiers.AsSpan(),
+                        deviceId: offer.Device.Id
+                    )
+                );
                 count++;
                 deviceFormats++;
             }
         }
         else
         {
-            used += Align(SpaFormatPod.WriteVideoFormat(buffer.AsSpan(used), formats,
-                width, height, frameRate, fixedSize, modifiers: offers[0].Modifiers.AsSpan()));
+            used += Align(
+                SpaFormatPod.WriteVideoFormat(
+                    buffer.AsSpan(used),
+                    formats,
+                    width,
+                    height,
+                    frameRate,
+                    fixedSize,
+                    modifiers: offers[0].Modifiers.AsSpan()
+                )
+            );
             count++;
         }
 
         if (hostMemoryFallback)
         {
-            used += Align(SpaFormatPod.WriteVideoFormat(buffer.AsSpan(used), formats,
-                width, height, frameRate, fixedSize));
+            used += Align(
+                SpaFormatPod.WriteVideoFormat(
+                    buffer.AsSpan(used),
+                    formats,
+                    width,
+                    height,
+                    frameRate,
+                    fixedSize
+                )
+            );
             count++;
         }
 
@@ -199,12 +265,16 @@ internal static class DeviceIdNegotiation
     /// </exception>
     internal static void Validate(ReadOnlySpan<DmaBufDeviceOffer> offers, string paramName)
     {
-        if (offers.IsEmpty) throw new ArgumentException("At least one device must be offered.", paramName);
+        if (offers.IsEmpty)
+            throw new ArgumentException("At least one device must be offered.", paramName);
 
         for (int i = 0; i < offers.Length; i++)
         {
             if (offers[i].Modifiers.IsDefaultOrEmpty)
-                throw new ArgumentException($"The offer for {offers[i].Device} names no DRM modifiers.", paramName);
+                throw new ArgumentException(
+                    $"The offer for {offers[i].Device} names no DRM modifiers.",
+                    paramName
+                );
 
             for (int j = 0; j < i; j++)
             {
@@ -220,11 +290,13 @@ internal static class DeviceIdNegotiation
     /// </summary>
     internal static DrmDevice? Resolve(ulong? negotiated, ReadOnlySpan<DmaBufDeviceOffer> offers)
     {
-        if (negotiated is not { } id) return null;
+        if (negotiated is not { } id)
+            return null;
 
         foreach (DmaBufDeviceOffer offer in offers)
         {
-            if (offer.Device.Id == id) return offer.Device;
+            if (offer.Device.Id == id)
+                return offer.Device;
         }
 
         return new DrmDevice(id);
@@ -238,7 +310,8 @@ internal static class DeviceIdNegotiation
         {
             json.WriteStartObject();
             json.WriteStartArray(AvailableDevicesKey);
-            foreach (DrmDevice device in devices) json.WriteStringValue(EncodeDevice(device.Id));
+            foreach (DrmDevice device in devices)
+                json.WriteStringValue(EncodeDevice(device.Id));
             json.WriteEndArray();
             json.WriteEndObject();
         }
@@ -259,8 +332,12 @@ internal static class DeviceIdNegotiation
                 {
                     inDevices = reader.ValueTextEquals(AvailableDevicesKey);
                 }
-                else if (inDevices && reader.TokenType == JsonTokenType.String
-                         && reader.GetString() is { } hex && DecodeDevice(hex) is { } id)
+                else if (
+                    inDevices
+                    && reader.TokenType == JsonTokenType.String
+                    && reader.GetString() is { } hex
+                    && DecodeDevice(hex) is { } id
+                )
                 {
                     into.Add(id);
                 }
@@ -285,7 +362,8 @@ internal static class DeviceIdNegotiation
     /// <summary>The inverse of <see cref="EncodeDevice"/>, or null for anything that is not eight bytes of hex.</summary>
     internal static ulong? DecodeDevice(string hex)
     {
-        if (hex.Length != sizeof(ulong) * 2) return null;
+        if (hex.Length != sizeof(ulong) * 2)
+            return null;
 
         try
         {

@@ -43,7 +43,8 @@ public sealed class MetadataReconcilerTests : PipeWireTestBase
         public void Advance(TimeSpan by) => _now += (long)(TimestampFrequency * by.TotalSeconds);
     }
 
-    private static void Write(MetadataReconciler r, string? value) => r.NoteWrite(Subject, Key, Type, value);
+    private static void Write(MetadataReconciler r, string? value) =>
+        r.NoteWrite(Subject, Key, Type, value);
 
     /// <summary>True when the echo reaches the cache at all, raised or not.</summary>
     private static bool Echo(MetadataReconciler r, string? value) =>
@@ -114,8 +115,11 @@ public sealed class MetadataReconcilerTests : PipeWireTestBase
         MetadataReconciler r = NewReconciler();
         r.NoteWrite(Subject, Key, "Spa:String", "42");
 
-        Assert.AreEqual(MetadataReconciler.EchoAction.ApplyAndRaise, r.Classify(Subject, Key, "Spa:Int", "42"),
-            "state is (subject, key, type, value); the same text under another type is a different change");
+        Assert.AreEqual(
+            MetadataReconciler.EchoAction.ApplyAndRaise,
+            r.Classify(Subject, Key, "Spa:Int", "42"),
+            "state is (subject, key, type, value); the same text under another type is a different change"
+        );
     }
 
     [TestMethod]
@@ -141,7 +145,10 @@ public sealed class MetadataReconcilerTests : PipeWireTestBase
 
         r.Forget(Subject, Key, failed);
 
-        Assert.IsTrue(Echo(r, "A"), "a write that never landed must not suppress that value for ever");
+        Assert.IsTrue(
+            Echo(r, "A"),
+            "a write that never landed must not suppress that value for ever"
+        );
     }
 
     [TestMethod]
@@ -197,7 +204,8 @@ public sealed class MetadataReconcilerTests : PipeWireTestBase
         // A burst then a removal, with one older echo still in flight. Applying it would bring a
         // deleted entry back.
         MetadataReconciler r = NewReconciler();
-        for (int i = 0; i < 10; i++) Write(r, $"value-{i}");
+        for (int i = 0; i < 10; i++)
+            Write(r, $"value-{i}");
         Write(r, null);
 
         Assert.IsTrue(Echo(r, null), "the removal itself is the newest write");
@@ -230,7 +238,8 @@ public sealed class MetadataReconcilerTests : PipeWireTestBase
                     Assert.IsTrue(applied, $"step {step}: value '{value}' was never written here");
             }
 
-            if (random.Next(20) == 0) Advance(TimeSpan.FromSeconds(1));
+            if (random.Next(20) == 0)
+                Advance(TimeSpan.FromSeconds(1));
         }
     }
 
@@ -245,20 +254,34 @@ public sealed class MetadataReconcilerTests : PipeWireTestBase
 
         Task[] workers =
         [
-            .. Enumerable.Range(0, 8).Select(w => Task.Run(() =>
-            {
-                for (int i = 0; i < 4000; i++)
-                {
-                    string k = $"key-{i % 4}";
-                    MetadataReconciler.PendingWrite pending = reconciler.NoteWrite(Subject, k, Type, $"v{w}");
+            .. Enumerable
+                .Range(0, 8)
+                .Select(w =>
+                    Task.Run(() =>
+                    {
+                        for (int i = 0; i < 4000; i++)
+                        {
+                            string k = $"key-{i % 4}";
+                            MetadataReconciler.PendingWrite pending = reconciler.NoteWrite(
+                                Subject,
+                                k,
+                                Type,
+                                $"v{w}"
+                            );
 
-                    // The write must be visible to the classifier the instant it is recorded.
-                    if (reconciler.Classify(Subject, k, Type, $"v{w}") == MetadataReconciler.EchoAction.ApplyAndRaise)
-                        faults.Enqueue($"worker {w} step {i}: its own write was not recorded");
+                            // The write must be visible to the classifier the instant it is recorded.
+                            if (
+                                reconciler.Classify(Subject, k, Type, $"v{w}")
+                                == MetadataReconciler.EchoAction.ApplyAndRaise
+                            )
+                                faults.Enqueue(
+                                    $"worker {w} step {i}: its own write was not recorded"
+                                );
 
-                    reconciler.Forget(Subject, k, pending);
-                }
-            })),
+                            reconciler.Forget(Subject, k, pending);
+                        }
+                    })
+                ),
         ];
 
         Task.WaitAll(workers);
@@ -279,8 +302,11 @@ public sealed class MetadataReconcilerTests : PipeWireTestBase
 
         Advance(TimeSpan.FromSeconds(6));
 
-        Assert.AreEqual(MetadataReconciler.EchoAction.ApplyAndRaise, Classify(r, "A"),
-            "an echo arriving after the window is somebody else's change");
+        Assert.AreEqual(
+            MetadataReconciler.EchoAction.ApplyAndRaise,
+            Classify(r, "A"),
+            "an echo arriving after the window is somebody else's change"
+        );
         Assert.AreEqual(0, r.TrackedKeys, "the emptied bucket was left in the dictionary");
     }
 
@@ -295,8 +321,11 @@ public sealed class MetadataReconcilerTests : PipeWireTestBase
         Write(r, "A");
         Advance(TimeSpan.FromSeconds(600));
 
-        Assert.AreEqual(MetadataReconciler.EchoAction.AlreadyKnown, Classify(r, "A"),
-            "an unacknowledged write was expired on elapsed time alone");
+        Assert.AreEqual(
+            MetadataReconciler.EchoAction.AlreadyKnown,
+            Classify(r, "A"),
+            "an unacknowledged write was expired on elapsed time alone"
+        );
         Assert.AreEqual(1, r.TrackedKeys);
     }
 
@@ -310,12 +339,18 @@ public sealed class MetadataReconcilerTests : PipeWireTestBase
         r.Settle(Subject, Key);
 
         Advance(TimeSpan.FromSeconds(1));
-        Assert.AreEqual(MetadataReconciler.EchoAction.AlreadyKnown, Classify(r, "A"),
-            "the clock started before the acknowledgement");
+        Assert.AreEqual(
+            MetadataReconciler.EchoAction.AlreadyKnown,
+            Classify(r, "A"),
+            "the clock started before the acknowledgement"
+        );
 
         Advance(TimeSpan.FromSeconds(6));
-        Assert.AreEqual(MetadataReconciler.EchoAction.ApplyAndRaise, Classify(r, "A"),
-            "the record never expired after its acknowledgement");
+        Assert.AreEqual(
+            MetadataReconciler.EchoAction.ApplyAndRaise,
+            Classify(r, "A"),
+            "the record never expired after its acknowledgement"
+        );
     }
 
     [TestMethod]
@@ -334,10 +369,16 @@ public sealed class MetadataReconcilerTests : PipeWireTestBase
 
         Advance(TimeSpan.FromSeconds(2));
 
-        Assert.AreEqual(MetadataReconciler.EchoAction.ApplyAndRaise, Classify(r, "A"),
-            "A was acknowledged 6 seconds ago and the window is 5");
-        Assert.AreEqual(MetadataReconciler.EchoAction.AlreadyKnown, Classify(r, "B"),
-            "B was acknowledged 2 seconds ago and must still be recognised");
+        Assert.AreEqual(
+            MetadataReconciler.EchoAction.ApplyAndRaise,
+            Classify(r, "A"),
+            "A was acknowledged 6 seconds ago and the window is 5"
+        );
+        Assert.AreEqual(
+            MetadataReconciler.EchoAction.AlreadyKnown,
+            Classify(r, "B"),
+            "B was acknowledged 2 seconds ago and must still be recognised"
+        );
     }
 
     [TestMethod]

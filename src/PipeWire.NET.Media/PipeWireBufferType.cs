@@ -11,10 +11,13 @@ public enum PipeWireBufferType
 {
     /// <summary>Unknown / unmapped.</summary>
     Unknown,
+
     /// <summary>Plain host memory pointer (<c>SPA_DATA_MemPtr</c>) - read via the data span.</summary>
     MemPtr,
+
     /// <summary>Memory-mapped file descriptor (<c>SPA_DATA_MemFd</c>).</summary>
     MemFd,
+
     /// <summary>DMA-BUF file descriptor (<c>SPA_DATA_DmaBuf</c>) - import the fd for zero-copy.</summary>
     DmaBuf,
 }

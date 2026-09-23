@@ -22,8 +22,10 @@ public sealed class StreamProperties
     /// <param name="category">Capture or playback.</param>
     public StreamProperties(StreamMediaType mediaType, StreamCategory category)
     {
-        _props[PipeWireKeys.PW_KEY_MEDIA_TYPE]     = mediaType == StreamMediaType.Video ? "Video" : "Audio";
-        _props[PipeWireKeys.PW_KEY_MEDIA_CATEGORY] = category == StreamCategory.Capture ? "Capture" : "Playback";
+        _props[PipeWireKeys.PW_KEY_MEDIA_TYPE] =
+            mediaType == StreamMediaType.Video ? "Video" : "Audio";
+        _props[PipeWireKeys.PW_KEY_MEDIA_CATEGORY] =
+            category == StreamCategory.Capture ? "Capture" : "Playback";
     }
 
     /// <summary>Sets <c>media.role</c> (e.g. "Camera", "Music", "Screen").</summary>
@@ -90,7 +92,10 @@ public sealed class StreamProperties
         // native call leaves the daemon reading freed or reused memory. There are managed
         // allocations in between, and every one of those is a place a collection can happen.
         byte[] scratch = GC.AllocateUninitializedArray<byte>(bytes, pinned: true);
-        spa_dict_item[] items = GC.AllocateUninitializedArray<spa_dict_item>(_props.Count, pinned: true);
+        spa_dict_item[] items = GC.AllocateUninitializedArray<spa_dict_item>(
+            _props.Count,
+            pinned: true
+        );
 
         var builder = new SpaDictBuilder(scratch, items);
         foreach ((string key, string value) in _props)

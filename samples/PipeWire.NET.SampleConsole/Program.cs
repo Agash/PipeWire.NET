@@ -27,7 +27,11 @@ internal static class Program
         }
 
         using var cts = new CancellationTokenSource();
-        Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;
+            cts.Cancel();
+        };
 
         string command = args.Length > 0 ? args[0] : "list";
         string[] rest = args.Length > 1 ? args[1..] : [];
@@ -42,8 +46,12 @@ internal static class Program
                 "monitor" => await GraphCommands.MonitorAsync(cts.Token).ConfigureAwait(false),
                 "volume" => await GraphCommands.VolumeAsync(rest, cts.Token).ConfigureAwait(false),
                 "defaults" => await GraphCommands.DefaultsAsync(cts.Token).ConfigureAwait(false),
-                "capture-audio" => await StreamCommands.CaptureAudioAsync(rest, cts.Token).ConfigureAwait(false),
-                "capture-video" => await StreamCommands.CaptureVideoAsync(rest, cts.Token).ConfigureAwait(false),
+                "capture-audio" => await StreamCommands
+                    .CaptureAudioAsync(rest, cts.Token)
+                    .ConfigureAwait(false),
+                "capture-video" => await StreamCommands
+                    .CaptureVideoAsync(rest, cts.Token)
+                    .ConfigureAwait(false),
                 "filter" => await ServeCommands.FilterAsync(rest, cts.Token).ConfigureAwait(false),
                 "serve" => await ServeCommands.ServeAsync(cts.Token).ConfigureAwait(false),
                 "help" or "--help" or "-h" => Usage(),
@@ -60,11 +68,17 @@ internal static class Program
     {
         Console.WriteLine("Usage: PipeWire.NET.SampleConsole [command] [options]");
         Console.WriteLine("  list                         connect and print the graph (default)");
-        Console.WriteLine("  monitor                      print a line per graph change until Ctrl+C");
-        Console.WriteLine("  volume [target]              print volume and mute (default: default sink)");
+        Console.WriteLine(
+            "  monitor                      print a line per graph change until Ctrl+C"
+        );
+        Console.WriteLine(
+            "  volume [target]              print volume and mute (default: default sink)"
+        );
         Console.WriteLine("    --set 0..1                 set the volume; needs an explicit value");
         Console.WriteLine("    --mute | --unmute          flip the mute flag");
-        Console.WriteLine("  defaults                     default sink/source and graph clock settings");
+        Console.WriteLine(
+            "  defaults                     default sink/source and graph clock settings"
+        );
         Console.WriteLine("  capture-audio [--seconds N]  capture stats from the default source");
         Console.WriteLine("  capture-video [--seconds N]  capture stats from the default source");
         Console.WriteLine("  filter [--seconds N]         tone -> gain node -> default sink");
@@ -87,9 +101,16 @@ internal static class Program
             if (!string.Equals(args[i], "--seconds", StringComparison.Ordinal))
                 continue;
 
-            if (int.TryParse(args[i + 1], NumberStyles.Integer,
-                    CultureInfo.InvariantCulture, out int seconds)
-                && seconds > 0 && seconds <= 3600)
+            if (
+                int.TryParse(
+                    args[i + 1],
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out int seconds
+                )
+                && seconds > 0
+                && seconds <= 3600
+            )
                 return seconds;
 
             Console.Error.WriteLine($"Ignoring bad --seconds value '{args[i + 1]}'.");

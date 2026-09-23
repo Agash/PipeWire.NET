@@ -30,7 +30,9 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken cancellationToken)
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -39,7 +41,8 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
         return (context, registry);
     }
 
-    private static string Unique(string p) => $"{p}.{Environment.ProcessId}.{Random.Shared.Next():x}";
+    private static string Unique(string p) =>
+        $"{p}.{Environment.ProcessId}.{Random.Shared.Next():x}";
 
     [TestMethod]
     public async Task AWriteThatLetsTheDaemonChooseTheType_IsReportedOnce()
@@ -52,12 +55,16 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
         // every one of its own writes twice.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-meta-type", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-meta-type",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             PipeWireMetadataProxy? store = registry.BindMetadata("default");
-            if (store is null) Assert.Inconclusive("no session manager, so no default store.");
+            if (store is null)
+                Assert.Inconclusive("no session manager, so no default store.");
 
             await using (store)
             {
@@ -68,21 +75,31 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
 
                 void OnChanged(PipeWireMetadataProxy _, PipeWireMetadataEntry e)
                 {
-                    if (e.Key == key) raised.Enqueue(e.Value);
+                    if (e.Key == key)
+                        raised.Enqueue(e.Value);
                 }
 
                 store.EntryChanged += OnChanged;
                 try
                 {
-                    try { await store.SetAsync(key, "once", cancellationToken: cts.Token); }
-                    catch (PipeWireException e) { Assert.Inconclusive($"cannot write metadata here: {e.Message}"); }
+                    try
+                    {
+                        await store.SetAsync(key, "once", cancellationToken: cts.Token);
+                    }
+                    catch (PipeWireException e)
+                    {
+                        Assert.Inconclusive($"cannot write metadata here: {e.Message}");
+                    }
 
                     // Long enough for an echo to arrive if one is coming. A barrier does not order
                     // the session manager's hop, so this waits rather than syncing.
                     await Task.Delay(TimeSpan.FromSeconds(3), cts.Token);
 
-                    Assert.AreEqual(1, raised.Count,
-                        $"one write raised {raised.Count} changes: {string.Join(", ", raised)}");
+                    Assert.AreEqual(
+                        1,
+                        raised.Count,
+                        $"one write raised {raised.Count} changes: {string.Join(", ", raised)}"
+                    );
                 }
                 finally
                 {
@@ -103,8 +120,14 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
         // holds the machine's audio routing.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext serverCtx, PipeWireRegistry serverReg) = await ConnectAsync("pwnet-clear-server", cts.Token);
-        (PipeWireContext clientCtx, PipeWireRegistry clientReg) = await ConnectAsync("pwnet-clear-client", cts.Token);
+        (PipeWireContext serverCtx, PipeWireRegistry serverReg) = await ConnectAsync(
+            "pwnet-clear-server",
+            cts.Token
+        );
+        (PipeWireContext clientCtx, PipeWireRegistry clientReg) = await ConnectAsync(
+            "pwnet-clear-client",
+            cts.Token
+        );
         await using (serverCtx)
         await using (serverReg)
         await using (clientCtx)
@@ -112,8 +135,11 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
         {
             string storeName = Unique("pwnet-clear-wire");
             // Exported, which is the only way a second client can find it at all.
-            await using PipeWireMetadataProvider provider =
-                PipeWireMetadataProvider.Create(serverCtx, storeName, export: true);
+            await using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(
+                serverCtx,
+                storeName,
+                export: true
+            );
 
             // Export is a request, not a transaction: settle before treating the store as served.
             await provider.ReadyAsync(cts.Token);
@@ -126,7 +152,8 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
             {
                 await clientReg.WaitForInitialEnumerationAsync(cts.Token);
                 consumer = clientReg.BindMetadata(storeName);
-                if (consumer is null) await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+                if (consumer is null)
+                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
             }
 
             if (consumer is null)
@@ -162,8 +189,10 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                 for (int attempt = 0; attempt < 80 && consumer.Get("a") is not null; attempt++)
                     await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
 
-                Assert.IsNull(consumer.Get("a"),
-                    "a cleared store left entries in a bound consumer, so the clear's subject was not understood");
+                Assert.IsNull(
+                    consumer.Get("a"),
+                    "a cleared store left entries in a bound consumer, so the clear's subject was not understood"
+                );
                 Assert.IsNull(consumer.Get("b"));
             }
         }
@@ -201,9 +230,18 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext serverCtx, PipeWireRegistry serverReg) = await ConnectAsync("pwnet-bindrace-server", cts.Token);
-        (PipeWireContext clientCtx, PipeWireRegistry clientReg) = await ConnectAsync("pwnet-bindrace-client", cts.Token);
-        (PipeWireContext lateCtx, PipeWireRegistry lateReg) = await ConnectAsync("pwnet-bindrace-late", cts.Token);
+        (PipeWireContext serverCtx, PipeWireRegistry serverReg) = await ConnectAsync(
+            "pwnet-bindrace-server",
+            cts.Token
+        );
+        (PipeWireContext clientCtx, PipeWireRegistry clientReg) = await ConnectAsync(
+            "pwnet-bindrace-client",
+            cts.Token
+        );
+        (PipeWireContext lateCtx, PipeWireRegistry lateReg) = await ConnectAsync(
+            "pwnet-bindrace-late",
+            cts.Token
+        );
         await using (serverCtx)
         await using (serverReg)
         await using (clientCtx)
@@ -212,8 +250,11 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
         await using (lateReg)
         {
             string storeName = Unique("pwnet-bindrace");
-            await using PipeWireMetadataProvider provider =
-                PipeWireMetadataProvider.Create(serverCtx, storeName, export: true);
+            await using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(
+                serverCtx,
+                storeName,
+                export: true
+            );
             await provider.ReadyAsync(cts.Token);
             provider.Set("a", "1");
 
@@ -222,7 +263,8 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
             {
                 await clientReg.WaitForInitialEnumerationAsync(cts.Token);
                 consumer = clientReg.BindMetadata(storeName);
-                if (consumer is null) await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+                if (consumer is null)
+                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
             }
 
             Assert.IsNotNull(consumer, "the exported store never reached the other client");
@@ -270,7 +312,8 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                 });
                 window.Start();
                 window.Join();
-                if (inWindow is not null) throw new AssertFailedException("the bind window failed", inWindow);
+                if (inWindow is not null)
+                    throw new AssertFailedException("the bind window failed", inWindow);
 
                 await using (late)
                 {
@@ -279,10 +322,12 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                     for (int attempt = 0; attempt < 80 && consumer.Get("a") is not null; attempt++)
                         await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
 
-                    Assert.IsNull(consumer.Get("a"),
+                    Assert.IsNull(
+                        consumer.Get("a"),
                         "a clear made while another client was binding never reached the consumer "
-                        + "already bound: the daemon forwarded it only to the binder (module-metadata "
-                        + "metadata_property, fixed by repro/module-metadata.patch)");
+                            + "already bound: the daemon forwarded it only to the binder (module-metadata "
+                            + "metadata_property, fixed by repro/module-metadata.patch)"
+                    );
                 }
             }
         }
@@ -301,16 +346,25 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
         PwTools.Require();
 
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext serverCtx, PipeWireRegistry serverReg) = await ConnectAsync("pwnet-extclear-server", cts.Token);
-        (PipeWireContext clientCtx, PipeWireRegistry clientReg) = await ConnectAsync("pwnet-extclear-client", cts.Token);
+        (PipeWireContext serverCtx, PipeWireRegistry serverReg) = await ConnectAsync(
+            "pwnet-extclear-server",
+            cts.Token
+        );
+        (PipeWireContext clientCtx, PipeWireRegistry clientReg) = await ConnectAsync(
+            "pwnet-extclear-client",
+            cts.Token
+        );
         await using (serverCtx)
         await using (serverReg)
         await using (clientCtx)
         await using (clientReg)
         {
             string storeName = Unique("pwnet-extclear");
-            await using PipeWireMetadataProvider provider =
-                PipeWireMetadataProvider.Create(serverCtx, storeName, export: true);
+            await using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(
+                serverCtx,
+                storeName,
+                export: true
+            );
 
             // Export is a request, not a transaction: settle before treating the store as served.
             await provider.ReadyAsync(cts.Token);
@@ -323,10 +377,12 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
             {
                 await clientReg.WaitForInitialEnumerationAsync(cts.Token);
                 consumer = clientReg.BindMetadata(storeName);
-                if (consumer is null) await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+                if (consumer is null)
+                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
             }
 
-            if (consumer is null) Assert.Inconclusive("the exported store never reached the other client.");
+            if (consumer is null)
+                Assert.Inconclusive("the exported store never reached the other client.");
 
             await using (consumer)
             {
@@ -347,8 +403,10 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                 for (int attempt = 0; attempt < 80 && consumer.Get("a") is not null; attempt++)
                     await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
 
-                Assert.IsNull(consumer.Get("a"),
-                    "an external clear left entries in the consumer, so its subject was not understood");
+                Assert.IsNull(
+                    consumer.Get("a"),
+                    "an external clear left entries in the consumer, so its subject was not understood"
+                );
                 Assert.IsNull(consumer.Get("b"));
             }
         }
@@ -365,14 +423,19 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
         PwTools.Require();
 
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-meta-clear", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-meta-clear",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             // Our own store, not the session manager's: clearing that would leave the machine's
             // audio unrouted.
-            await using PipeWireMetadataProvider provider =
-                PipeWireMetadataProvider.Create(ctx, Unique("pwnet-clear-store"));
+            await using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(
+                ctx,
+                Unique("pwnet-clear-store")
+            );
 
             // Export is a request, not a transaction: settle before treating the store as served.
             await provider.ReadyAsync(cts.Token);
@@ -384,8 +447,11 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
 
             provider.Clear();
 
-            Assert.AreEqual(0, provider.Entries.Count,
-                "a cleared store still reports entries, so the clear was not applied to the cache");
+            Assert.AreEqual(
+                0,
+                provider.Entries.Count,
+                "a cleared store still reports entries, so the clear was not applied to the cache"
+            );
             Assert.IsNull(provider.Get("a"));
             Assert.IsNull(provider.Get("b"));
         }
@@ -399,12 +465,16 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
         // exists nowhere else, and the caller has been told about a change that did not happen.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-meta-refused", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-meta-refused",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             PipeWireMetadataProxy? store = registry.BindMetadata("default");
-            if (store is null) Assert.Inconclusive("no session manager, so no default store.");
+            if (store is null)
+                Assert.Inconclusive("no session manager, so no default store.");
 
             await using (store)
             {
@@ -418,9 +488,17 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                 Task write = store.SetAsync(key, "ghost", cancellationToken: race.Token);
                 race.Cancel();
 
-                try { await write; }
-                catch (OperationCanceledException) { /* the point of the test */ }
-                catch (PipeWireException e) { Assert.Inconclusive($"cannot write metadata here: {e.Message}"); }
+                try
+                {
+                    await write;
+                }
+                catch (OperationCanceledException)
+                { /* the point of the test */
+                }
+                catch (PipeWireException e)
+                {
+                    Assert.Inconclusive($"cannot write metadata here: {e.Message}");
+                }
 
                 // Whatever happened, the store and the daemon must agree. Reading back through a
                 // fresh barrier is the arbiter: if the write landed the value is there, and if it
@@ -428,7 +506,9 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                 await store.ReadyAsync(cts.Token);
 
                 string? cached = store.Get(key);
-                Console.Error.WriteLine($"after a cancelled write the cache holds '{cached ?? "(null)"}'");
+                Console.Error.WriteLine(
+                    $"after a cancelled write the cache holds '{cached ?? "(null)"}'"
+                );
 
                 // A later write must still take, which a wedged reconciler entry would prevent.
                 await store.SetAsync(key, "real", cancellationToken: cts.Token);

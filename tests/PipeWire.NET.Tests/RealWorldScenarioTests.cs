@@ -30,7 +30,9 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken cancellationToken)
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -44,7 +46,11 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
 
     /// <summary>Waits until a node has the ports it is expected to have.</summary>
     private static async Task<ImmutableArray<PipeWirePort>> PortsOfAsync(
-        PipeWireRegistry registry, uint nodeId, int expected, CancellationToken cancellationToken)
+        PipeWireRegistry registry,
+        uint nodeId,
+        int expected,
+        CancellationToken cancellationToken
+    )
     {
         while (true)
         {
@@ -52,7 +58,8 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             await registry.WaitForInitialEnumerationAsync(cancellationToken);
 
             ImmutableArray<PipeWirePort> ports = registry.Current.GetPortsForNode(nodeId);
-            if (ports.Length >= expected) return ports;
+            if (ports.Length >= expected)
+                return ports;
 
             await Task.Delay(TimeSpan.FromMilliseconds(25), cancellationToken);
         }
@@ -63,39 +70,65 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-scenario-mixer", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-scenario-mixer",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             // The shape a streaming app builds: several sources feeding one submix, each at its own
             // level, the submix at a master level.
             string submixName = Unique("pwnet_submix");
-            PipeWireNode submix = await registry.CreateVirtualSink("Submix")
-                .WithName(submixName).ExecuteAsync(cts.Token);
+            PipeWireNode submix = await registry
+                .CreateVirtualSink("Submix")
+                .WithName(submixName)
+                .ExecuteAsync(cts.Token);
 
             var sources = new List<PipeWireNode>();
             for (int i = 0; i < 3; i++)
             {
-                sources.Add(await registry.CreateVirtualSink($"Source{i}")
-                    .WithName(Unique($"pwnet_src{i}")).ExecuteAsync(cts.Token));
+                sources.Add(
+                    await registry
+                        .CreateVirtualSink($"Source{i}")
+                        .WithName(Unique($"pwnet_src{i}"))
+                        .ExecuteAsync(cts.Token)
+                );
             }
 
             // Every source's monitor ports feed the submix's playback ports. A sink's monitor is how
             // its output is tapped, which is the part that is easy to get backwards.
-            ImmutableArray<PipeWirePort> submixIn = await PortsOfAsync(registry, submix.NodeId, 4, cts.Token);
-            PipeWirePort[] submixInputs = [.. submixIn.Where(p => p.IsDataInput).OrderBy(p => p.PortName)];
+            ImmutableArray<PipeWirePort> submixIn = await PortsOfAsync(
+                registry,
+                submix.NodeId,
+                4,
+                cts.Token
+            );
+            PipeWirePort[] submixInputs =
+            [
+                .. submixIn.Where(p => p.IsDataInput).OrderBy(p => p.PortName),
+            ];
             Assert.AreEqual(2, submixInputs.Length, "a stereo sink has two playback ports");
 
             var links = new List<uint>();
             foreach (PipeWireNode source in sources)
             {
-                ImmutableArray<PipeWirePort> ports = await PortsOfAsync(registry, source.NodeId, 4, cts.Token);
-                PipeWirePort[] monitors = [.. ports.Where(p => p.IsDataOutput).OrderBy(p => p.PortName)];
+                ImmutableArray<PipeWirePort> ports = await PortsOfAsync(
+                    registry,
+                    source.NodeId,
+                    4,
+                    cts.Token
+                );
+                PipeWirePort[] monitors =
+                [
+                    .. ports.Where(p => p.IsDataOutput).OrderBy(p => p.PortName),
+                ];
                 Assert.AreEqual(2, monitors.Length, "a stereo sink exposes two monitor ports");
 
                 for (int channel = 0; channel < 2; channel++)
                 {
-                    PipeWireLink link = await registry.CreateLink(monitors[channel], submixInputs[channel])
+                    PipeWireLink link = await registry
+                        .CreateLink(monitors[channel], submixInputs[channel])
                         .ExecuteAsync(cts.Token);
                     links.Add(link.LinkId);
                 }
@@ -103,13 +136,19 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
 
             // The graph now says what was built, from both ends.
             PipeWireGraphSnapshot graph = registry.Current;
-            Assert.AreEqual(6, graph.GetLinksForNode(submix.NodeId).Count(),
-                "three stereo sources make six links into the submix");
+            Assert.AreEqual(
+                6,
+                graph.GetLinksForNode(submix.NodeId).Count(),
+                "three stereo sources make six links into the submix"
+            );
 
             foreach (PipeWireNode source in sources)
             {
-                Assert.AreEqual(2, graph.GetLinksForNode(source.NodeId).Count(),
-                    $"source {source.NodeId} should have two links out");
+                Assert.AreEqual(
+                    2,
+                    graph.GetLinksForNode(source.NodeId).Count(),
+                    $"source {source.NodeId} should have two links out"
+                );
             }
 
             // Levels: each source quieter than the last, the submix at master level.
@@ -140,8 +179,11 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             foreach (uint link in links)
                 await registry.DestroyGlobalAsync(link, cts.Token);
 
-            Assert.AreEqual(0, registry.Current.GetLinksForNode(submix.NodeId).Count(),
-                "every link must be gone");
+            Assert.AreEqual(
+                0,
+                registry.Current.GetLinksForNode(submix.NodeId).Count(),
+                "every link must be gone"
+            );
 
             foreach (PipeWireNode source in sources)
                 await registry.DestroyGlobalAsync(source.NodeId, cts.Token);
@@ -159,19 +201,37 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-scenario-cascade", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-scenario-cascade",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode a = await registry.CreateVirtualSink("CascadeA")
-                .WithName(Unique("pwnet_casc_a")).ExecuteAsync(cts.Token);
-            PipeWireNode b = await registry.CreateVirtualSink("CascadeB")
-                .WithName(Unique("pwnet_casc_b")).ExecuteAsync(cts.Token);
+            PipeWireNode a = await registry
+                .CreateVirtualSink("CascadeA")
+                .WithName(Unique("pwnet_casc_a"))
+                .ExecuteAsync(cts.Token);
+            PipeWireNode b = await registry
+                .CreateVirtualSink("CascadeB")
+                .WithName(Unique("pwnet_casc_b"))
+                .ExecuteAsync(cts.Token);
 
-            ImmutableArray<PipeWirePort> aPorts = await PortsOfAsync(registry, a.NodeId, 4, cts.Token);
-            ImmutableArray<PipeWirePort> bPorts = await PortsOfAsync(registry, b.NodeId, 4, cts.Token);
+            ImmutableArray<PipeWirePort> aPorts = await PortsOfAsync(
+                registry,
+                a.NodeId,
+                4,
+                cts.Token
+            );
+            ImmutableArray<PipeWirePort> bPorts = await PortsOfAsync(
+                registry,
+                b.NodeId,
+                4,
+                cts.Token
+            );
 
-            await registry.CreateLink(aPorts.First(p => p.IsDataOutput), bPorts.First(p => p.IsDataInput))
+            await registry
+                .CreateLink(aPorts.First(p => p.IsDataOutput), bPorts.First(p => p.IsDataInput))
                 .ExecuteAsync(cts.Token);
 
             Assert.AreEqual(1, registry.Current.GetLinksForNode(b.NodeId).Count());
@@ -183,15 +243,27 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
 
             PipeWireGraphSnapshot graph = registry.Current;
             Assert.IsNull(graph.GetNode(a.NodeId));
-            Assert.AreEqual(0, graph.GetPortsForNode(a.NodeId).Length, "its ports must be gone too");
-            Assert.AreEqual(0, graph.GetLinksForNode(b.NodeId).Count(), "the link must have gone with it");
+            Assert.AreEqual(
+                0,
+                graph.GetPortsForNode(a.NodeId).Length,
+                "its ports must be gone too"
+            );
+            Assert.AreEqual(
+                0,
+                graph.GetLinksForNode(b.NodeId).Count(),
+                "the link must have gone with it"
+            );
 
             foreach (PipeWireLink link in graph.Links)
             {
-                Assert.IsNotNull(graph.GetNode(link.OutputNodeId),
-                    $"link {link.LinkId} points at output node {link.OutputNodeId}, which is not in the graph");
-                Assert.IsNotNull(graph.GetNode(link.InputNodeId),
-                    $"link {link.LinkId} points at input node {link.InputNodeId}, which is not in the graph");
+                Assert.IsNotNull(
+                    graph.GetNode(link.OutputNodeId),
+                    $"link {link.LinkId} points at output node {link.OutputNodeId}, which is not in the graph"
+                );
+                Assert.IsNotNull(
+                    graph.GetNode(link.InputNodeId),
+                    $"link {link.LinkId} points at input node {link.InputNodeId}, which is not in the graph"
+                );
             }
 
             await registry.DestroyGlobalAsync(b.NodeId, cts.Token);
@@ -203,18 +275,28 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-scenario-insert", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-scenario-insert",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             // The classic insert: source -> filter -> sink, with the filter doing the work. This is
             // the arrangement an equaliser or a noise gate lives in.
-            PipeWireNode source = await registry.CreateVirtualSink("InsertSrc")
-                .WithName(Unique("pwnet_insert_src")).ExecuteAsync(cts.Token);
-            PipeWireNode sink = await registry.CreateVirtualSink("InsertSink")
-                .WithName(Unique("pwnet_insert_sink")).ExecuteAsync(cts.Token);
+            PipeWireNode source = await registry
+                .CreateVirtualSink("InsertSrc")
+                .WithName(Unique("pwnet_insert_src"))
+                .ExecuteAsync(cts.Token);
+            PipeWireNode sink = await registry
+                .CreateVirtualSink("InsertSink")
+                .WithName(Unique("pwnet_insert_sink"))
+                .ExecuteAsync(cts.Token);
 
-            await using PipeWireFilter filter = PipeWireFilter.Create(ctx, Unique("pwnet_insert_filter"));
+            await using PipeWireFilter filter = PipeWireFilter.Create(
+                ctx,
+                Unique("pwnet_insert_filter")
+            );
             PipeWireFilterPort input = filter.AddAudioPort(PipeWirePortDirection.In, "input_FL");
             PipeWireFilterPort output = filter.AddAudioPort(PipeWirePortDirection.Out, "output_FL");
 
@@ -233,8 +315,13 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
                 // may legitimately be empty on a cycle the graph did not give this filter a buffer.
                 if (!to.IsEmpty)
                 {
-                    if (from.IsEmpty) to.Clear();
-                    else { from.CopyTo(to); Interlocked.Increment(ref copied); }
+                    if (from.IsEmpty)
+                        to.Clear();
+                    else
+                    {
+                        from.CopyTo(to);
+                        Interlocked.Increment(ref copied);
+                    }
                     ran.TrySetResult();
                 }
             };
@@ -242,17 +329,38 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             await filter.ConnectAsync(cancellationToken: cts.Token);
             uint filterNode = await filter.WaitForNodeIdAsync(cts.Token);
 
-            ImmutableArray<PipeWirePort> filterPorts = await PortsOfAsync(registry, filterNode, 2, cts.Token);
-            ImmutableArray<PipeWirePort> sourcePorts = await PortsOfAsync(registry, source.NodeId, 4, cts.Token);
-            ImmutableArray<PipeWirePort> sinkPorts = await PortsOfAsync(registry, sink.NodeId, 4, cts.Token);
+            ImmutableArray<PipeWirePort> filterPorts = await PortsOfAsync(
+                registry,
+                filterNode,
+                2,
+                cts.Token
+            );
+            ImmutableArray<PipeWirePort> sourcePorts = await PortsOfAsync(
+                registry,
+                source.NodeId,
+                4,
+                cts.Token
+            );
+            ImmutableArray<PipeWirePort> sinkPorts = await PortsOfAsync(
+                registry,
+                sink.NodeId,
+                4,
+                cts.Token
+            );
 
-            await registry.CreateLink(
-                sourcePorts.First(p => p.IsDataOutput),
-                filterPorts.First(p => p.IsDataInput)).ExecuteAsync(cts.Token);
+            await registry
+                .CreateLink(
+                    sourcePorts.First(p => p.IsDataOutput),
+                    filterPorts.First(p => p.IsDataInput)
+                )
+                .ExecuteAsync(cts.Token);
 
-            await registry.CreateLink(
-                filterPorts.First(p => p.IsDataOutput),
-                sinkPorts.First(p => p.IsDataInput)).ExecuteAsync(cts.Token);
+            await registry
+                .CreateLink(
+                    filterPorts.First(p => p.IsDataOutput),
+                    sinkPorts.First(p => p.IsDataInput)
+                )
+                .ExecuteAsync(cts.Token);
 
             await ran.Task.WaitAsync(TimeSpan.FromSeconds(15), cts.Token);
 
@@ -260,8 +368,11 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
 
             // And the graph shows the filter sitting between the two, with a link on each side.
             PipeWireGraphSnapshot graph = registry.Current;
-            Assert.AreEqual(2, graph.GetLinksForNode(filterNode).Count(),
-                "the filter must be linked on both sides");
+            Assert.AreEqual(
+                2,
+                graph.GetLinksForNode(filterNode).Count(),
+                "the filter must be linked on both sides"
+            );
 
             await registry.DestroyGlobalAsync(source.NodeId, cts.Token);
             await registry.DestroyGlobalAsync(sink.NodeId, cts.Token);
@@ -275,7 +386,10 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
         GstTestSource.RequireGStreamer();
 
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-scenario-gst", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-scenario-gst",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -283,9 +397,11 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             // choose. Everything below is what a mixer would do on discovering one.
             string name = Unique("pwnet_gst_audio");
             await using GstTestSource gst = await GstTestSource.StartAsync(
-                ctx, name,
+                ctx,
+                name,
                 "audiotestsrc is-live=true ! audioconvert ! audio/x-raw,format=F32LE,channels=2,rate=48000",
-                "Stream/Output/Audio");
+                "Stream/Output/Audio"
+            );
 
             await registry.WaitForInitialEnumerationAsync(cts.Token);
 
@@ -305,27 +421,44 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             // the node, and capability is answered from them - so waiting for them comes first.
             Assert.AreEqual(PipeWireMediaKind.Audio, produced!.Media);
 
-            ImmutableArray<PipeWirePort> ports = await PortsOfAsync(registry, produced.NodeId, 1, cts.Token);
+            ImmutableArray<PipeWirePort> ports = await PortsOfAsync(
+                registry,
+                produced.NodeId,
+                1,
+                cts.Token
+            );
             Assert.IsTrue(ports.Any(p => p.IsDataOutput), "a producer must expose an output port");
-            Assert.IsTrue(registry.Current.CanCaptureFrom(produced),
-                "a producer with an output port must be something the graph can capture from");
+            Assert.IsTrue(
+                registry.Current.CanCaptureFrom(produced),
+                "a producer with an output port must be something the graph can capture from"
+            );
 
             // And its parameters are readable, which is the part that needs the binding to work
             // against a node this library never created.
             await using PipeWireNodeProxy control = registry.BindNode(produced.NodeId);
             await control.ReadyAsync(cts.Token);
 
-            Assert.IsTrue(control.Parameters.Length > 0, "a real producer must describe its parameters");
-            Assert.IsTrue(control.CanRead(SpaParamType.Format) || control.CanRead(SpaParamType.EnumFormat),
-                "a producer must describe the format it is producing");
+            Assert.IsTrue(
+                control.Parameters.Length > 0,
+                "a real producer must describe its parameters"
+            );
+            Assert.IsTrue(
+                control.CanRead(SpaParamType.Format) || control.CanRead(SpaParamType.EnumFormat),
+                "a producer must describe the format it is producing"
+            );
 
-            ImmutableArray<SpaObject> formats =
-                await control.EnumerateParametersAsync(SpaParamType.EnumFormat, cts.Token);
+            ImmutableArray<SpaObject> formats = await control.EnumerateParametersAsync(
+                SpaParamType.EnumFormat,
+                cts.Token
+            );
 
             Assert.IsTrue(formats.Length > 0, "the producer must offer at least one format");
             Assert.IsTrue(
-                formats.Any(f => f[SpaFormat.MediaType] is SpaId id && id.Value == (uint)SpaMediaType.Audio),
-                "the offered formats must be audio");
+                formats.Any(f =>
+                    f[SpaFormat.MediaType] is SpaId id && id.Value == (uint)SpaMediaType.Audio
+                ),
+                "the offered formats must be audio"
+            );
         }
     }
 
@@ -334,14 +467,18 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-scenario-device", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-scenario-device",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             PipeWireGraphSnapshot graph = registry.Current;
 
-            PipeWireDevice? card = graph.Devices
-                .FirstOrDefault(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal));
+            PipeWireDevice? card = graph.Devices.FirstOrDefault(d =>
+                string.Equals(d.Api, "alsa", StringComparison.Ordinal)
+            );
             if (card is null)
                 Assert.Inconclusive("this session has no ALSA card.");
 
@@ -370,14 +507,16 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
                 for (int i = 0; i < 50 && sinkName is null; i++)
                 {
                     sinkName = defaults.DefaultAudioSink?.NameValue;
-                    if (sinkName is null) await Task.Delay(100, cts.Token);
+                    if (sinkName is null)
+                        await Task.Delay(100, cts.Token);
                 }
 
                 if (sinkName is null)
                     Assert.Inconclusive("this session has no default sink set.");
 
-                PipeWireNode? defaultSink = registry.Current.Nodes
-                    .FirstOrDefault(n => n.NodeName == sinkName);
+                PipeWireNode? defaultSink = registry.Current.Nodes.FirstOrDefault(n =>
+                    n.NodeName == sinkName
+                );
 
                 // When the session is coherent. Whether the session manager's default points at
                 // a live node is the session manager's business, not this library's: a session
@@ -386,17 +525,22 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
                 if (defaultSink is null)
                     Assert.Inconclusive(
                         $"the session's default sink is '{sinkName}', which is not a node in "
-                        + "the graph. The session manager's state is inconsistent, which says "
-                        + "nothing about the value this store read.");
+                            + "the graph. The session manager's state is inconsistent, which says "
+                            + "nothing about the value this store read."
+                    );
                 Assert.AreEqual(PipeWireMediaKind.Audio, defaultSink!.Media);
-                Assert.IsTrue(registry.Current.CanSendTo(defaultSink),
-                    "the default sink must be something audio can be sent to");
+                Assert.IsTrue(
+                    registry.Current.CanSendTo(defaultSink),
+                    "the default sink must be something audio can be sent to"
+                );
 
                 // And it is controllable, which is what a volume slider needs.
                 await using PipeWireNodeProxy control = registry.BindNode(defaultSink.NodeId);
                 await control.ReadyAsync(cts.Token);
-                Assert.IsTrue(control.CanWrite(SpaParamType.Props),
-                    "the default sink must accept a volume change");
+                Assert.IsTrue(
+                    control.CanWrite(SpaParamType.Props),
+                    "the default sink must accept a volume change"
+                );
             }
         }
     }
@@ -406,7 +550,10 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-scenario-ui", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-scenario-ui",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -417,8 +564,10 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             var created = new List<uint>();
             for (int i = 0; i < 4; i++)
             {
-                PipeWireNode node = await registry.CreateVirtualSink($"Ui{i}")
-                    .WithName(Unique($"pwnet_ui{i}")).ExecuteAsync(cts.Token);
+                PipeWireNode node = await registry
+                    .CreateVirtualSink($"Ui{i}")
+                    .WithName(Unique($"pwnet_ui{i}"))
+                    .ExecuteAsync(cts.Token);
                 created.Add(node.NodeId);
             }
 
@@ -427,7 +576,10 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             foreach (uint id in created)
                 Assert.IsNull(held.GetNode(id), "a snapshot must not gain nodes created after it");
 
-            Assert.IsTrue(registry.Current.Nodes.Length > nodesWhenTaken, "the live graph did move on");
+            Assert.IsTrue(
+                registry.Current.Nodes.Length > nodesWhenTaken,
+                "the live graph did move on"
+            );
             Assert.IsTrue(registry.Current.Version > held.Version, "and its version advanced");
 
             foreach (uint id in created)
@@ -437,7 +589,9 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             // handle on anything native.
             Assert.AreEqual(nodesWhenTaken, held.Nodes.Length);
             foreach (PipeWireNode node in held.Nodes)
-                Assert.IsNotNull(node.NodeId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                Assert.IsNotNull(
+                    node.NodeId.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                );
         }
     }
 
@@ -448,7 +602,10 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
     /// session and reliable on a busy one.
     /// </remarks>
     private static async Task<float> SettledVolumeAsync(
-        PipeWireNodeProxy node, float want, CancellationToken cancellationToken)
+        PipeWireNodeProxy node,
+        float want,
+        CancellationToken cancellationToken
+    )
     {
         // Generous on purpose: a write returns when the daemon has processed it, not when the
         // node has applied it, and on a session busy retrying dead ALSA devices that lag is
@@ -456,8 +613,10 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
         float last = float.NaN;
         for (int attempt = 0; attempt < 80; attempt++)
         {
-            last = (await node.GetVolumeAsync(cancellationToken).ConfigureAwait(false)) ?? float.NaN;
-            if (Math.Abs(last - want) <= 0.01f) return last;
+            last =
+                (await node.GetVolumeAsync(cancellationToken).ConfigureAwait(false)) ?? float.NaN;
+            if (Math.Abs(last - want) <= 0.01f)
+                return last;
             await Task.Delay(50, cancellationToken).ConfigureAwait(false);
         }
 
@@ -466,16 +625,20 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
 
     /// <inheritdoc cref="SettledVolumeAsync"/>
     private static async Task<float> SettledChannelVolumeAsync(
-        PipeWireNodeProxy node, float want, CancellationToken cancellationToken)
+        PipeWireNodeProxy node,
+        float want,
+        CancellationToken cancellationToken
+    )
     {
         float last = float.NaN;
         for (int attempt = 0; attempt < 80; attempt++)
         {
-            ImmutableArray<float> volumes =
-                await node.GetChannelVolumesAsync(cancellationToken).ConfigureAwait(false);
+            ImmutableArray<float> volumes = await node.GetChannelVolumesAsync(cancellationToken)
+                .ConfigureAwait(false);
 
             last = volumes.IsDefaultOrEmpty ? float.NaN : volumes[0];
-            if (Math.Abs(last - want) <= 0.01f) return last;
+            if (Math.Abs(last - want) <= 0.01f)
+                return last;
             await Task.Delay(50, cancellationToken).ConfigureAwait(false);
         }
 

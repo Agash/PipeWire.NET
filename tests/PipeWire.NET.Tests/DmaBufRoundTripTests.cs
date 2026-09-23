@@ -28,9 +28,13 @@ public sealed class DmaBufRoundTripTests : PipeWireTestBase
     public async Task DmaBufProducer_ToConsumer_DeliversDmaBufFrames()
     {
         if (!File.Exists("/dev/dri/renderD128"))
-            Assert.Inconclusive("No GPU render node (/dev/dri/renderD128) - skipping dmabuf round-trip.");
+            Assert.Inconclusive(
+                "No GPU render node (/dev/dri/renderD128) - skipping dmabuf round-trip."
+            );
 
-        const int width = 320, height = 240, poolCap = 8;
+        const int width = 320,
+            height = 240,
+            poolCap = 8;
         GbmAllocator gbm;
         try
         {
@@ -50,14 +54,24 @@ public sealed class DmaBufRoundTripTests : PipeWireTestBase
 
             long modifier = (long)GbmAllocator.LinearModifier;
             bool streaming = false;
-            int framesConsumed = 0, dmaBufConsumed = 0;
+            int framesConsumed = 0,
+                dmaBufConsumed = 0;
             long firstFd = -1;
 
-            await using var output = new PipeWireVideoOutput(ctx, "stx-dmabuf-roundtrip", width, height, PixelFormat.Bgra, 30);
+            await using var output = new PipeWireVideoOutput(
+                ctx,
+                "stx-dmabuf-roundtrip",
+                width,
+                height,
+                PixelFormat.Bgra,
+                30
+            );
             output.AllocateDmaBuf += (_, index, w, h, _, _, planes) =>
             {
-                if (index >= poolCap) return 0;
-                while (buffers.Count <= index) buffers.Add(gbm.CreateBgra(width, height));
+                if (index >= poolCap)
+                    return 0;
+                while (buffers.Count <= index)
+                    buffers.Add(gbm.CreateBgra(width, height));
                 GbmAllocator.Buffer b = buffers[index];
                 planes[0] = new VideoPlane(b.Fd, b.Offset, b.Stride, b.Size);
                 return 1;
@@ -70,7 +84,8 @@ public sealed class DmaBufRoundTripTests : PipeWireTestBase
             for (int i = 0; i < 50 && nodeId is null; i++)
             {
                 nodeId = output.NodeId;
-                if (nodeId is null) await Task.Delay(50);
+                if (nodeId is null)
+                    await Task.Delay(50);
             }
 
             Assert.IsNotNull(nodeId, "producer node should be assigned an id");
@@ -93,13 +108,19 @@ public sealed class DmaBufRoundTripTests : PipeWireTestBase
 
             await Task.Delay(TimeSpan.FromSeconds(4));
 
-            Assert.IsTrue(dmaBufConsumed >= 10,
-                $"expected >=10 DMA-BUF frames through the dmabuf path, got {dmaBufConsumed} dmabuf of {framesConsumed} total");
-            Assert.IsTrue(firstFd >= 0, "a delivered DMA-BUF frame must expose a valid fd for zero-copy import");
+            Assert.IsTrue(
+                dmaBufConsumed >= 10,
+                $"expected >=10 DMA-BUF frames through the dmabuf path, got {dmaBufConsumed} dmabuf of {framesConsumed} total"
+            );
+            Assert.IsTrue(
+                firstFd >= 0,
+                "a delivered DMA-BUF frame must expose a valid fd for zero-copy import"
+            );
         }
         finally
         {
-            foreach (GbmAllocator.Buffer b in buffers) b.Dispose();
+            foreach (GbmAllocator.Buffer b in buffers)
+                b.Dispose();
             gbm.Dispose();
         }
     }

@@ -35,7 +35,8 @@ public static class PipeWireGraphExtensions
         {
             ArgumentNullException.ThrowIfNull(graph);
 
-            if (!graph.TryGetObject(held.Id, out IPipeWireObject? current)) return false;
+            if (!graph.TryGetObject(held.Id, out IPipeWireObject? current))
+                return false;
             if (held.ObjectSerial is { } mine && current.ObjectSerial is { } theirs)
                 return mine == theirs;
 
@@ -55,11 +56,13 @@ public static class PipeWireGraphExtensions
         /// than being refused. Picking "the first input port" is the normal way to find a link
         /// endpoint, and it has to not find that one.
         /// </remarks>
-        public bool IsDataInput => port.PortDirection is PipeWirePortDirection.In && !port.IsControl;
+        public bool IsDataInput =>
+            port.PortDirection is PipeWirePortDirection.In && !port.IsControl;
 
         /// <summary>True for a port that carries media out of its node.</summary>
         /// <remarks>Excludes control ports, for the reason on the data input above.</remarks>
-        public bool IsDataOutput => port.PortDirection is PipeWirePortDirection.Out && !port.IsControl;
+        public bool IsDataOutput =>
+            port.PortDirection is PipeWirePortDirection.Out && !port.IsControl;
 
         /// <summary>True for a notification port (<c>port.direction=notify</c>).</summary>
         public bool IsNotify => port.PortDirection is PipeWirePortDirection.Notify;
@@ -84,7 +87,10 @@ public static class PipeWireGraphExtensions
     extension(PipeWireGraphSnapshot graph)
     {
         /// <summary>The ports of a node, in the given direction.</summary>
-        public IEnumerable<PipeWirePort> GetPortsForNode(uint nodeId, PipeWirePortDirection direction)
+        public IEnumerable<PipeWirePort> GetPortsForNode(
+            uint nodeId,
+            PipeWirePortDirection direction
+        )
         {
             foreach (PipeWirePort port in graph.GetPortsForNode(nodeId))
                 if (port.PortDirection == direction)
@@ -110,7 +116,8 @@ public static class PipeWireGraphExtensions
         {
             ArgumentNullException.ThrowIfNull(node);
             foreach (PipeWirePort port in graph.GetPortsForNode(node.NodeId))
-                if (port.IsDataOutput) return true;
+                if (port.IsDataOutput)
+                    return true;
             return false;
         }
 
@@ -119,7 +126,8 @@ public static class PipeWireGraphExtensions
         {
             ArgumentNullException.ThrowIfNull(node);
             foreach (PipeWirePort port in graph.GetPortsForNode(node.NodeId))
-                if (port.IsDataInput) return true;
+                if (port.IsDataInput)
+                    return true;
             return false;
         }
 
@@ -130,11 +138,19 @@ public static class PipeWireGraphExtensions
         /// it in a loop.
         /// </remarks>
         public ImmutableArray<PipeWireNode> GetVideoSources() =>
-            [.. graph.Nodes.Where(n => n.Media is PipeWireMediaKind.Video && graph.CanCaptureFrom(n))];
+            [
+                .. graph.Nodes.Where(n =>
+                    n.Media is PipeWireMediaKind.Video && graph.CanCaptureFrom(n)
+                ),
+            ];
 
         /// <summary>Nodes carrying audio that media can actually be read from.</summary>
         /// <remarks>Includes sinks, which are readable through their monitor ports.</remarks>
         public ImmutableArray<PipeWireNode> GetAudioSources() =>
-            [.. graph.Nodes.Where(n => n.Media is PipeWireMediaKind.Audio && graph.CanCaptureFrom(n))];
+            [
+                .. graph.Nodes.Where(n =>
+                    n.Media is PipeWireMediaKind.Audio && graph.CanCaptureFrom(n)
+                ),
+            ];
     }
 }

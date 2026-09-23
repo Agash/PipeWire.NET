@@ -4,23 +4,23 @@ namespace PipeWire.NET;
 public sealed class PipeWireInteropException : PipeWireException
 {
     /// <inheritdoc cref="PipeWireException(string, int, uint?, string?)"/>
-    public PipeWireInteropException(string operation, int result, uint? objectId = null, string? daemonMessage = null)
-        : base(operation, result, objectId, daemonMessage)
-    {
-    }
+    public PipeWireInteropException(
+        string operation,
+        int result,
+        uint? objectId = null,
+        string? daemonMessage = null
+    )
+        : base(operation, result, objectId, daemonMessage) { }
 
     /// <inheritdoc/>
-    public PipeWireInteropException() : base()
-    {
-    }
+    public PipeWireInteropException()
+        : base() { }
 
     /// <inheritdoc/>
-    public PipeWireInteropException(string message) : base(message)
-    {
-    }
+    public PipeWireInteropException(string message)
+        : base(message) { }
 
     /// <inheritdoc/>
-    public PipeWireInteropException(string message, Exception innerException) : base(message, innerException)
-    {
-    }
+    public PipeWireInteropException(string message, Exception innerException)
+        : base(message, innerException) { }
 }

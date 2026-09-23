@@ -1,8 +1,8 @@
-using Microsoft.Win32.SafeHandles;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.Win32.SafeHandles;
 using PipeWire.NET.Interop;
 using PipeWire.NET.Media;
 using PipeWire.NET.Spa;
@@ -37,7 +37,10 @@ public sealed unsafe class NativeHelperTests : PipeWireTestBase
 
         Assert.AreEqual(
             NativeConstants.SPA_ASYNC_SEQ_MASK,
-            Native.SPA_RESULT_ASYNC_SEQ(NativeConstants.SPA_ASYNC_BIT | NativeConstants.SPA_ASYNC_SEQ_MASK));
+            Native.SPA_RESULT_ASYNC_SEQ(
+                NativeConstants.SPA_ASYNC_BIT | NativeConstants.SPA_ASYNC_SEQ_MASK
+            )
+        );
     }
 
     [TestMethod]
@@ -69,8 +72,10 @@ public sealed unsafe class NativeHelperTests : PipeWireTestBase
 
             Assert.IsTrue(a->link.next == &c->link, "a must now point past the removed hook");
             Assert.IsTrue(c->link.prev == &a->link, "c must now point back past it");
-            Assert.IsTrue(b->link.next is null && b->link.prev is null,
-                "the removed hook must not still reference the list");
+            Assert.IsTrue(
+                b->link.next is null && b->link.prev is null,
+                "the removed hook must not still reference the list"
+            );
         }
         finally
         {
@@ -128,7 +133,8 @@ public sealed unsafe class NativeHelperTests : PipeWireTestBase
     [TestMethod]
     public void RemovingANullHook_IsANoOp() => Native.spa_hook_remove(null);
 
-    private static spa_hook* Alloc() => (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
+    private static spa_hook* Alloc() =>
+        (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
 
     private static void Link(spa_hook* from, spa_hook* to)
     {
@@ -159,10 +165,17 @@ public sealed unsafe class NativeHelperTests : PipeWireTestBase
             using SafeDescriptorHandle copy = plane.DuplicateFd();
 
             Assert.IsFalse(copy.IsInvalid, "dup of a live descriptor failed");
-            Assert.AreNotEqual((int)fd, copy.Descriptor, "dup returned the descriptor it was given");
+            Assert.AreNotEqual(
+                (int)fd,
+                copy.Descriptor,
+                "dup returned the descriptor it was given"
+            );
 
             file.Dispose();
-            Assert.IsTrue(Fcntl(copy.Descriptor, FGetFd) >= 0, "the copy did not outlive the original");
+            Assert.IsTrue(
+                Fcntl(copy.Descriptor, FGetFd) >= 0,
+                "the copy did not outlive the original"
+            );
         }
         finally
         {
@@ -225,30 +238,59 @@ public sealed unsafe class NativeHelperTests : PipeWireTestBase
             Assert.Inconclusive("descriptors are a Linux concept here.");
 
         string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        using (var listening = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified))
+        using (
+            var listening = new Socket(
+                AddressFamily.Unix,
+                SocketType.Stream,
+                ProtocolType.Unspecified
+            )
+        )
         {
             listening.Bind(new UnixDomainSocketEndPoint(path));
             listening.Listen(1);
-            Assert.IsTrue(FdInterop.IsListeningSocket((int)listening.SafeHandle.DangerousGetHandle()),
-                "a listening socket must read as one, or the constants are wrong for this architecture");
+            Assert.IsTrue(
+                FdInterop.IsListeningSocket((int)listening.SafeHandle.DangerousGetHandle()),
+                "a listening socket must read as one, or the constants are wrong for this architecture"
+            );
         }
         File.Delete(path);
 
-        using (var unbound = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified))
+        using (
+            var unbound = new Socket(
+                AddressFamily.Unix,
+                SocketType.Stream,
+                ProtocolType.Unspecified
+            )
+        )
         {
-            Assert.IsFalse(FdInterop.IsListeningSocket((int)unbound.SafeHandle.DangerousGetHandle()),
-                "a socket that never listened is not a listening socket");
+            Assert.IsFalse(
+                FdInterop.IsListeningSocket((int)unbound.SafeHandle.DangerousGetHandle()),
+                "a socket that never listened is not a listening socket"
+            );
         }
 
         string file = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        using (var stream = new FileStream(file, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1,
-                                           FileOptions.DeleteOnClose))
+        using (
+            var stream = new FileStream(
+                file,
+                FileMode.CreateNew,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                1,
+                FileOptions.DeleteOnClose
+            )
+        )
         {
-            Assert.IsFalse(FdInterop.IsListeningSocket((int)stream.SafeFileHandle.DangerousGetHandle()),
-                "a regular file is not a socket at all");
+            Assert.IsFalse(
+                FdInterop.IsListeningSocket((int)stream.SafeFileHandle.DangerousGetHandle()),
+                "a regular file is not a socket at all"
+            );
         }
 
-        Assert.IsFalse(FdInterop.IsListeningSocket(-1), "a descriptor that cannot exist is not listening");
+        Assert.IsFalse(
+            FdInterop.IsListeningSocket(-1),
+            "a descriptor that cannot exist is not listening"
+        );
     }
 
     private const int FGetFd = 1;

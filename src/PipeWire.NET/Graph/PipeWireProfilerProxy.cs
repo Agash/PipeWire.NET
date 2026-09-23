@@ -42,7 +42,12 @@ public sealed partial class PipeWireProfilerProxy : IDisposable, IAsyncDisposabl
     public event Action<PipeWireProfilerProxy, SpaObject>? ProfileReceived;
 
     internal static unsafe PipeWireProfilerProxy Bind(
-        PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger)
+        PipeWireContext ctx,
+        pw_registry* registry,
+        uint id,
+        uint version,
+        ILogger logger
+    )
     {
         // The profiler's protocol marshal lives in a module the client loads for itself; without
         // it pw_proxy_new has nothing to build the proxy with and the bind returns null. Neither
@@ -51,7 +56,12 @@ public sealed partial class PipeWireProfilerProxy : IDisposable, IAsyncDisposabl
 
         var reader = new PipeWireProfilerProxy(id, logger);
         reader._bound = BoundProxy.Bind(
-            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Profiler, version, NativeConstants.PW_VERSION_PROFILER,
+            ctx,
+            registry,
+            id,
+            PipeWireKeys.PW_TYPE_INTERFACE_Profiler,
+            version,
+            NativeConstants.PW_VERSION_PROFILER,
             sizeof(pw_profiler_events),
             events =>
             {
@@ -59,9 +69,15 @@ public sealed partial class PipeWireProfilerProxy : IDisposable, IAsyncDisposabl
                 table->version = NativeConstants.PW_VERSION_PROFILER_EVENTS;
                 table->profile = &OnProfileCallback;
             },
-            (proxy, hook, events, data) => Native.pw_profiler_add_listener(
-                (void*)proxy, (spa_hook*)hook, (pw_profiler_events*)events, (void*)data),
-            reader);
+            (proxy, hook, events, data) =>
+                Native.pw_profiler_add_listener(
+                    (void*)proxy,
+                    (spa_hook*)hook,
+                    (pw_profiler_events*)events,
+                    (void*)data
+                ),
+            reader
+        );
 
         reader._bound.Removed = reader.RaiseRemoved;
 
@@ -82,13 +98,18 @@ public sealed partial class PipeWireProfilerProxy : IDisposable, IAsyncDisposabl
     private void RaiseRemoved()
     {
         Action? handler = Removed;
-        if (handler is null) return;
+        if (handler is null)
+            return;
 
         // A native callback frame, so nothing may escape it.
-        try { handler(); }
-        catch (Exception) { /* a subscriber that throws must not reach the daemon */ }
+        try
+        {
+            handler();
+        }
+        catch (Exception)
+        { /* a subscriber that throws must not reach the daemon */
+        }
     }
-
 
     /// <summary>Loads the profiler extension module into this context, once.</summary>
     /// <remarks>Loading it twice is harmless; the module refcounts.</remarks>
@@ -105,11 +126,13 @@ public sealed partial class PipeWireProfilerProxy : IDisposable, IAsyncDisposabl
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnProfileCallback(void* data, spa_pod* pod)
     {
-        if (data is null || pod is null) return;
+        if (data is null || pod is null)
+            return;
         PipeWireProfilerProxy? self;
         try
         {
-            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireProfilerProxy found) return;
+            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireProfilerProxy found)
+                return;
             self = found;
         }
         catch (Exception)
@@ -118,7 +141,8 @@ public sealed partial class PipeWireProfilerProxy : IDisposable, IAsyncDisposabl
             return;
         }
 
-        if (self._disposed) return;
+        if (self._disposed)
+            return;
 
         try
         {
@@ -153,12 +177,14 @@ public sealed partial class PipeWireProfilerProxy : IDisposable, IAsyncDisposabl
     internal static unsafe bool TryParseReport(
         spa_pod* pod,
         out ImmutableArray<SpaObject> reports,
-        out int size)
+        out int size
+    )
     {
         reports = [];
         size = 0;
 
-        if (pod is null) return false;
+        if (pod is null)
+            return false;
 
         // Checked before the cast. A size near uint.MaxValue casts to a negative length, and
         // the span constructor is the one place that would not tell us so.
@@ -171,7 +197,8 @@ public sealed partial class PipeWireProfilerProxy : IDisposable, IAsyncDisposabl
         size = 8 + (int)pod->size;
         var bytes = new ReadOnlySpan<byte>(pod, size);
 
-        if (!SpaPod.TryParse(bytes, out SpaValue? value)) return false;
+        if (!SpaPod.TryParse(bytes, out SpaValue? value))
+            return false;
 
         switch (value)
         {
@@ -180,8 +207,7 @@ public sealed partial class PipeWireProfilerProxy : IDisposable, IAsyncDisposabl
                 return true;
 
             case SpaStruct outer:
-                ImmutableArray<SpaObject> found =
-                    [.. outer.Fields.OfType<SpaObject>()];
+                ImmutableArray<SpaObject> found = [.. outer.Fields.OfType<SpaObject>()];
                 reports = found;
                 return found.Length > 0;
 
@@ -207,21 +233,32 @@ public sealed partial class PipeWireProfilerProxy : IDisposable, IAsyncDisposabl
 
     private void DisposeCore()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
 
         _bound?.Dispose();
         _bound = null;
     }
 
-    [LoggerMessage(EventId = 34000, Level = LogLevel.Warning,
-                   Message = "a profiler report of {Size} bytes did not parse as an object")]
+    [LoggerMessage(
+        EventId = 34000,
+        Level = LogLevel.Warning,
+        Message = "a profiler report of {Size} bytes did not parse as an object"
+    )]
     private partial void LogUnparsedReport(int size);
 
-    [LoggerMessage(EventId = 34001, Level = LogLevel.Error, Message = "dispatching a profiler report failed")]
+    [LoggerMessage(
+        EventId = 34001,
+        Level = LogLevel.Error,
+        Message = "dispatching a profiler report failed"
+    )]
     private partial void LogProfileDispatchFailed(Exception ex);
 
-    [LoggerMessage(EventId = 34002, Level = LogLevel.Error,
-                   Message = "a ProfileReceived handler for profiler {ProfilerId} threw")]
+    [LoggerMessage(
+        EventId = 34002,
+        Level = LogLevel.Error,
+        Message = "a ProfileReceived handler for profiler {ProfilerId} threw"
+    )]
     private partial void LogHandlerFaulted(uint profilerId, Exception ex);
 }

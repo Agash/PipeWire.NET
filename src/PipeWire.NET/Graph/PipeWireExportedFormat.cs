@@ -16,7 +16,12 @@ namespace PipeWire.NET.Graph;
 [SupportedOSPlatform("linux")]
 public sealed class PipeWireExportedFormat
 {
-    private PipeWireExportedFormat(int rate, int channels, SpaAudioFormat sampleFormat, int bytesPerSample)
+    private PipeWireExportedFormat(
+        int rate,
+        int channels,
+        SpaAudioFormat sampleFormat,
+        int bytesPerSample
+    )
     {
         Rate = rate;
         Channels = channels;
@@ -95,7 +100,12 @@ public sealed class PipeWireExportedFormat
             //
             // The offered values lead each choice, so they stay the preferred answer, and whatever
             // the peer settles on comes back through port_set_param and is recorded there.
-            b.AddChoiceEnum(SpaFormat.AudioFormat, SampleFormat, SpaAudioFormat.F32Le, SpaAudioFormat.S16Le);
+            b.AddChoiceEnum(
+                SpaFormat.AudioFormat,
+                SampleFormat,
+                SpaAudioFormat.F32Le,
+                SpaAudioFormat.S16Le
+            );
             b.AddChoiceRangeInt(SpaFormat.AudioRate, Rate, 1, MaxRate);
             b.AddChoiceRangeInt(SpaFormat.AudioChannels, Channels, 1, MaxChannels);
         }
@@ -136,16 +146,26 @@ public sealed class PipeWireExportedFormat
     /// </remarks>
     internal static PipeWireExportedFormat? FromPod(ReadOnlySpan<byte> pod)
     {
-        if (!SpaPod.TryParse(pod, out SpaValue? value) || value is not SpaObject format) return null;
+        if (!SpaPod.TryParse(pod, out SpaValue? value) || value is not SpaObject format)
+            return null;
 
-        if (Fixed(format, SpaFormat.MediaType) is not SpaId mediaType
-            || mediaType.Value != (uint)SpaMediaType.Audio) return null;
-        if (Fixed(format, SpaFormat.MediaSubtype) is not SpaId subtype
-            || subtype.Value != (uint)SpaMediaSubtype.Raw) return null;
+        if (
+            Fixed(format, SpaFormat.MediaType) is not SpaId mediaType
+            || mediaType.Value != (uint)SpaMediaType.Audio
+        )
+            return null;
+        if (
+            Fixed(format, SpaFormat.MediaSubtype) is not SpaId subtype
+            || subtype.Value != (uint)SpaMediaSubtype.Raw
+        )
+            return null;
 
-        if (Fixed(format, SpaFormat.AudioFormat) is not SpaId sampleFormat) return null;
-        if (Fixed(format, SpaFormat.AudioRate) is not SpaInt rate) return null;
-        if (Fixed(format, SpaFormat.AudioChannels) is not SpaInt channels) return null;
+        if (Fixed(format, SpaFormat.AudioFormat) is not SpaId sampleFormat)
+            return null;
+        if (Fixed(format, SpaFormat.AudioRate) is not SpaInt rate)
+            return null;
+        if (Fixed(format, SpaFormat.AudioChannels) is not SpaInt channels)
+            return null;
 
         // Only what WriteFormat offers. Anything else is a format this node never said it could make.
         var settled = (SpaAudioFormat)sampleFormat.Value;
@@ -156,17 +176,20 @@ public sealed class PipeWireExportedFormat
             _ => 0,
         };
 
-        if (bytesPerSample == 0) return null;
-        if (rate.Value is < 1 or > MaxRate || channels.Value is < 1 or > MaxChannels) return null;
+        if (bytesPerSample == 0)
+            return null;
+        if (rate.Value is < 1 or > MaxRate || channels.Value is < 1 or > MaxChannels)
+            return null;
 
         return new PipeWireExportedFormat(rate.Value, channels.Value, settled, bytesPerSample);
 
-        static SpaValue? Fixed(SpaObject o, SpaKey key) => o.Find(key)?.Value switch
-        {
-            SpaChoice { Kind: SpaChoiceType.None } choice when !choice.Alternatives.IsDefaultOrEmpty
-                => choice.Alternatives[0],
-            var v => v,
-        };
+        static SpaValue? Fixed(SpaObject o, SpaKey key) =>
+            o.Find(key)?.Value switch
+            {
+                SpaChoice { Kind: SpaChoiceType.None } choice
+                    when !choice.Alternatives.IsDefaultOrEmpty => choice.Alternatives[0],
+                var v => v,
+            };
     }
 
     /// <summary>
@@ -218,7 +241,12 @@ public sealed class PipeWireExportedFormat
         b.PushObject(SpaType.ObjectParamBuffers, SpaParamType.Buffers);
         b.AddChoiceRangeInt(SpaParamBuffers.Buffers, 2, 1, 32);
         b.AddInt(SpaParamBuffers.Blocks, 1);
-        b.AddChoiceRangeInt(SpaParamBuffers.Size, quantum * BytesPerFrame, BytesPerFrame, int.MaxValue);
+        b.AddChoiceRangeInt(
+            SpaParamBuffers.Size,
+            quantum * BytesPerFrame,
+            BytesPerFrame,
+            int.MaxValue
+        );
         b.AddInt(SpaParamBuffers.Stride, BytesPerFrame);
         b.Pop();
 

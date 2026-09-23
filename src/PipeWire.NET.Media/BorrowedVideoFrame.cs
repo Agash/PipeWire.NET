@@ -67,7 +67,8 @@ public readonly struct BorrowedVideoFrame
         long? streamPositionNs,
         long delayNs,
         VideoRegion? crop,
-        SpaMetaVideotransformValue transform)
+        SpaMetaVideotransformValue transform
+    )
     {
         PlaneCount = Math.Min(planes.Length, BorrowedPlaneArray.MaxPlanes);
         for (int i = 0; i < PlaneCount; i++)

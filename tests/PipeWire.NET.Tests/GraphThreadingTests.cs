@@ -32,7 +32,9 @@ public sealed class GraphThreadingTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken cancellationToken)
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -42,7 +44,10 @@ public sealed class GraphThreadingTests : PipeWireTestBase
     }
 
     private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry, Func<PipeWireGraphSnapshot, bool> until, CancellationToken cancellationToken)
+        PipeWireRegistry registry,
+        Func<PipeWireGraphSnapshot, bool> until,
+        CancellationToken cancellationToken
+    )
     {
         await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
             if (until(graph))
@@ -56,7 +61,10 @@ public sealed class GraphThreadingTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-reentrant", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-reentrant",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
@@ -73,14 +81,26 @@ public sealed class GraphThreadingTests : PipeWireTestBase
                     int nodes = snapshot.Nodes.Length;
                     int ports = sender.Current.Ports.Length;
                     int forNode = sender.Current.GetPortsForNode(1).Length;
-                    if (nodes < 0 || ports < 0 || forNode < 0) throw new InvalidOperationException("impossible");
+                    if (nodes < 0 || ports < 0 || forNode < 0)
+                        throw new InvalidOperationException("impossible");
                     Interlocked.Increment(ref readsFromHandler);
                 }
-                catch (Exception ex) { faulted ??= ex; }
+                catch (Exception ex)
+                {
+                    faulted ??= ex;
+                }
             };
 
-            PipeWireNode node = await registry.CreateVirtualSinkAsync("RE", "pwnet_reentrant", cts.Token);
-            await WaitForAsync(registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync(
+                "RE",
+                "pwnet_reentrant",
+                cts.Token
+            );
+            await WaitForAsync(
+                registry,
+                g => g.GetPortsForNode(node.NodeId).Length == 4,
+                cts.Token
+            );
 
             Assert.IsNull(faulted, $"reading the graph from a handler threw: {faulted}");
             Assert.IsTrue(Volatile.Read(ref readsFromHandler) > 0, "no handler ever ran");
@@ -92,7 +112,10 @@ public sealed class GraphThreadingTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-threadid", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-threadid",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
@@ -102,14 +125,27 @@ public sealed class GraphThreadingTests : PipeWireTestBase
 
             registry.PortAdded += _ => handlerThreads.Add(Environment.CurrentManagedThreadId);
 
-            PipeWireNode node = await registry.CreateVirtualSinkAsync("TI", "pwnet_threadid", cts.Token);
-            await WaitForAsync(registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync(
+                "TI",
+                "pwnet_threadid",
+                cts.Token
+            );
+            await WaitForAsync(
+                registry,
+                g => g.GetPortsForNode(node.NodeId).Length == 4,
+                cts.Token
+            );
 
             Assert.IsFalse(handlerThreads.IsEmpty, "no PortAdded handler ran");
-            Assert.IsFalse(handlerThreads.Contains(callerThread),
-                "handlers must not run on the caller's thread; consumers marshal off the loop themselves");
-            Assert.AreEqual(1, handlerThreads.Distinct().Count(),
-                "every callback must arrive on the one loop thread");
+            Assert.IsFalse(
+                handlerThreads.Contains(callerThread),
+                "handlers must not run on the caller's thread; consumers marshal off the loop themselves"
+            );
+            Assert.AreEqual(
+                1,
+                handlerThreads.Distinct().Count(),
+                "every callback must arrive on the one loop thread"
+            );
         }
     }
 
@@ -118,7 +154,10 @@ public sealed class GraphThreadingTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-throwing", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-throwing",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
@@ -127,18 +166,43 @@ public sealed class GraphThreadingTests : PipeWireTestBase
             // swallow it at the boundary. Surviving is necessary but not sufficient: the loop must
             // still deliver everything afterwards.
             var seen = 0;
-            registry.PortAdded += _ => { Interlocked.Increment(ref seen); throw new InvalidOperationException("boom"); };
+            registry.PortAdded += _ =>
+            {
+                Interlocked.Increment(ref seen);
+                throw new InvalidOperationException("boom");
+            };
 
-            PipeWireNode first = await registry.CreateVirtualSinkAsync("T1", "pwnet_throw_1", cts.Token);
-            await WaitForAsync(registry, g => g.GetPortsForNode(first.NodeId).Length == 4, cts.Token);
+            PipeWireNode first = await registry.CreateVirtualSinkAsync(
+                "T1",
+                "pwnet_throw_1",
+                cts.Token
+            );
+            await WaitForAsync(
+                registry,
+                g => g.GetPortsForNode(first.NodeId).Length == 4,
+                cts.Token
+            );
 
-            PipeWireNode second = await registry.CreateVirtualSinkAsync("T2", "pwnet_throw_2", cts.Token);
+            PipeWireNode second = await registry.CreateVirtualSinkAsync(
+                "T2",
+                "pwnet_throw_2",
+                cts.Token
+            );
             PipeWireGraphSnapshot after = await WaitForAsync(
-                registry, g => g.GetPortsForNode(second.NodeId).Length == 4, cts.Token);
+                registry,
+                g => g.GetPortsForNode(second.NodeId).Length == 4,
+                cts.Token
+            );
 
-            Assert.AreEqual(4, after.GetPortsForNode(second.NodeId).Length,
-                "events after a throwing handler must still be delivered");
-            Assert.IsTrue(Volatile.Read(ref seen) >= 8, $"expected at least 8 port events, saw {seen}");
+            Assert.AreEqual(
+                4,
+                after.GetPortsForNode(second.NodeId).Length,
+                "events after a throwing handler must still be delivered"
+            );
+            Assert.IsTrue(
+                Volatile.Read(ref seen) >= 8,
+                $"expected at least 8 port events, saw {seen}"
+            );
         }
     }
 
@@ -147,7 +211,10 @@ public sealed class GraphThreadingTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-race", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-race",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
@@ -162,34 +229,60 @@ public sealed class GraphThreadingTests : PipeWireTestBase
             // thread injection instead of the daemon. On a four-core runner that alone spends the
             // whole budget. Yielding each pass keeps the loop thread schedulable against the
             // oversubscription that is the point of the test.
-            Task[] readers = [.. Enumerable.Range(0, 8).Select(_ => Task.Factory.StartNew(() =>
-            {
-                try
-                {
-                    while (!stop.IsCancellationRequested)
-                    {
-                        PipeWireGraphSnapshot g = registry.Current;
+            Task[] readers =
+            [
+                .. Enumerable
+                    .Range(0, 8)
+                    .Select(_ =>
+                        Task.Factory.StartNew(
+                            () =>
+                            {
+                                try
+                                {
+                                    while (!stop.IsCancellationRequested)
+                                    {
+                                        PipeWireGraphSnapshot g = registry.Current;
 
-                        // Every index must agree with the arrays inside one snapshot, whatever the
-                        // writer is doing concurrently.
-                        foreach (PipeWirePort port in g.Ports)
-                            if (g.GetPort(port.PortId) is null)
-                                throw new InvalidOperationException($"port {port.PortId} missing from its own index");
+                                        // Every index must agree with the arrays inside one snapshot, whatever the
+                                        // writer is doing concurrently.
+                                        foreach (PipeWirePort port in g.Ports)
+                                            if (g.GetPort(port.PortId) is null)
+                                                throw new InvalidOperationException(
+                                                    $"port {port.PortId} missing from its own index"
+                                                );
 
-                        foreach (PipeWireLink link in g.Links)
-                            if (!g.GetOutputLinksForPort(link.OutputPortId).Contains(link))
-                                throw new InvalidOperationException($"link {link.LinkId} missing from its own index");
+                                        foreach (PipeWireLink link in g.Links)
+                                            if (
+                                                !g.GetOutputLinksForPort(link.OutputPortId)
+                                                    .Contains(link)
+                                            )
+                                                throw new InvalidOperationException(
+                                                    $"link {link.LinkId} missing from its own index"
+                                                );
 
-                        Interlocked.Increment(ref reads);
-                        Thread.Yield();
-                    }
-                }
-                catch (Exception ex) { faulted ??= ex; }
-            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default))];
+                                        Interlocked.Increment(ref reads);
+                                        Thread.Yield();
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    faulted ??= ex;
+                                }
+                            },
+                            CancellationToken.None,
+                            TaskCreationOptions.LongRunning,
+                            TaskScheduler.Default
+                        )
+                    ),
+            ];
 
             for (int i = 0; i < 20; i++)
             {
-                PipeWireNode n = await registry.CreateVirtualSinkAsync($"R{i}", $"pwnet_race_{i}", cts.Token);
+                PipeWireNode n = await registry.CreateVirtualSinkAsync(
+                    $"R{i}",
+                    $"pwnet_race_{i}",
+                    cts.Token
+                );
                 await registry.DestroyGlobalAsync(n.NodeId, cts.Token);
             }
 
@@ -197,7 +290,10 @@ public sealed class GraphThreadingTests : PipeWireTestBase
             await Task.WhenAll(readers);
 
             Assert.IsNull(faulted, $"a reader saw an inconsistent graph: {faulted}");
-            Assert.IsTrue(Volatile.Read(ref reads) > 100, $"readers barely ran ({reads} reads); the race was not exercised");
+            Assert.IsTrue(
+                Volatile.Read(ref reads) > 100,
+                $"readers barely ran ({reads} reads); the race was not exercised"
+            );
         }
     }
 
@@ -210,7 +306,10 @@ public sealed class GraphThreadingTests : PipeWireTestBase
         // and 1.0.5 answers with a hang followed by a dead daemon.
         SessionGates.RequireDaemonAtLeast(1, 6, 8);
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-nested", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-nested",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
@@ -218,27 +317,39 @@ public sealed class GraphThreadingTests : PipeWireTestBase
             // Issuing a request from a handler means taking the loop lock while already holding it.
             // pw_thread_loop uses a recursive mutex, so this is legal; awaiting the *result* from
             // the loop thread would not be, which is why the handler fires and forgets.
-            var issued = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var issued = new TaskCompletionSource<bool>(
+                TaskCreationOptions.RunContinuationsAsynchronously
+            );
             var once = 0;
 
             registry.NodeAdded += node =>
             {
-                if (node.NodeName != "pwnet_nested_trigger") return;
-                if (Interlocked.Exchange(ref once, 1) != 0) return;
+                if (node.NodeName != "pwnet_nested_trigger")
+                    return;
+                if (Interlocked.Exchange(ref once, 1) != 0)
+                    return;
 
                 try
                 {
                     _ = registry.DestroyGlobalAsync(node.NodeId, CancellationToken.None);
                     issued.TrySetResult(true);
                 }
-                catch (Exception ex) { issued.TrySetException(ex); }
+                catch (Exception ex)
+                {
+                    issued.TrySetException(ex);
+                }
             };
 
             PipeWireNode trigger = await registry.CreateVirtualSinkAsync(
-                "Nested", "pwnet_nested_trigger", cts.Token);
+                "Nested",
+                "pwnet_nested_trigger",
+                cts.Token
+            );
 
-            Assert.IsTrue(await issued.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token),
-                "the handler never issued its request");
+            Assert.IsTrue(
+                await issued.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token),
+                "the handler never issued its request"
+            );
 
             await WaitForAsync(registry, g => g.GetNode(trigger.NodeId) is null, cts.Token);
         }
@@ -249,7 +360,10 @@ public sealed class GraphThreadingTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-multiwatch", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-multiwatch",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
@@ -257,23 +371,39 @@ public sealed class GraphThreadingTests : PipeWireTestBase
             using var stop = new CancellationTokenSource();
             var counts = new int[6];
 
-            Task[] watchers = [.. Enumerable.Range(0, 6).Select(i => Task.Run(async () =>
-            {
-                try
-                {
-                    await foreach (PipeWireGraphSnapshot _ in registry.WatchAsync(stop.Token))
-                        Interlocked.Increment(ref counts[i]);
-                }
-                catch (OperationCanceledException)
-                {
-                    // The expected end: `stop` was cancelled. Any other exception fails the task,
-                    // and Task.WhenAll below surfaces it.
-                }
-            }, CancellationToken.None))];
+            Task[] watchers =
+            [
+                .. Enumerable
+                    .Range(0, 6)
+                    .Select(i =>
+                        Task.Run(
+                            async () =>
+                            {
+                                try
+                                {
+                                    await foreach (
+                                        PipeWireGraphSnapshot _ in registry.WatchAsync(stop.Token)
+                                    )
+                                        Interlocked.Increment(ref counts[i]);
+                                }
+                                catch (OperationCanceledException)
+                                {
+                                    // The expected end: `stop` was cancelled. Any other exception fails the task,
+                                    // and Task.WhenAll below surfaces it.
+                                }
+                            },
+                            CancellationToken.None
+                        )
+                    ),
+            ];
 
             for (int i = 0; i < 10; i++)
             {
-                PipeWireNode n = await registry.CreateVirtualSinkAsync($"MW{i}", $"pwnet_mw_{i}", cts.Token);
+                PipeWireNode n = await registry.CreateVirtualSinkAsync(
+                    $"MW{i}",
+                    $"pwnet_mw_{i}",
+                    cts.Token
+                );
                 await registry.DestroyGlobalAsync(n.NodeId, cts.Token);
             }
 
@@ -281,7 +411,10 @@ public sealed class GraphThreadingTests : PipeWireTestBase
             await Task.WhenAll(watchers);
 
             for (int i = 0; i < counts.Length; i++)
-                Assert.IsTrue(counts[i] > 0, $"watcher {i} received nothing; a slow consumer starved it");
+                Assert.IsTrue(
+                    counts[i] > 0,
+                    $"watcher {i} received nothing; a slow consumer starved it"
+                );
         }
     }
 
@@ -290,7 +423,10 @@ public sealed class GraphThreadingTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-dispose-race", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-dispose-race",
+            cts.Token
+        );
 
         await using (context)
         {
@@ -300,36 +436,49 @@ public sealed class GraphThreadingTests : PipeWireTestBase
             // iteration threw, which would mean the disposal never raced anything.
             int churned = 0;
             Exception? churnEnded = null;
-            Task churn = Task.Run(async () =>
-            {
-                try
+            Task churn = Task.Run(
+                async () =>
                 {
-                    for (int i = 0; i < 30; i++)
+                    try
                     {
-                        PipeWireNode n = await registry.CreateVirtualSinkAsync($"DR{i}", $"pwnet_dr_{i}", cts.Token);
-                        await registry.DestroyGlobalAsync(n.NodeId, cts.Token);
-                        Interlocked.Increment(ref churned);
+                        for (int i = 0; i < 30; i++)
+                        {
+                            PipeWireNode n = await registry.CreateVirtualSinkAsync(
+                                $"DR{i}",
+                                $"pwnet_dr_{i}",
+                                cts.Token
+                            );
+                            await registry.DestroyGlobalAsync(n.NodeId, cts.Token);
+                            Interlocked.Increment(ref churned);
+                        }
                     }
-                }
-                catch (Exception ex) when (ex is ObjectDisposedException or OperationCanceledException)
-                {
-                    churnEnded = ex;      // the expected way for disposal to stop the loop
-                }
-            }, CancellationToken.None);
+                    catch (Exception ex)
+                        when (ex is ObjectDisposedException or OperationCanceledException)
+                    {
+                        churnEnded = ex; // the expected way for disposal to stop the loop
+                    }
+                },
+                CancellationToken.None
+            );
 
             await Task.Delay(150, cts.Token);
             await Task.Run(async () => await registry.DisposeAsync(), CancellationToken.None);
             await churn;
 
-            Assert.IsTrue(Volatile.Read(ref churned) > 0,
-                "the churn loop never completed an iteration, so disposal raced nothing");
-            Assert.IsTrue(churnEnded is not null || Volatile.Read(ref churned) == 30,
-                $"the churn stopped after {churned} iterations without a disposal-related exception");
+            Assert.IsTrue(
+                Volatile.Read(ref churned) > 0,
+                "the churn loop never completed an iteration, so disposal raced nothing"
+            );
+            Assert.IsTrue(
+                churnEnded is not null || Volatile.Read(ref churned) == 30,
+                $"the churn stopped after {churned} iterations without a disposal-related exception"
+            );
 
             // Reaching here without an abort is the point, but assert the registry is actually shut
             // so a disposal that silently did nothing cannot pass.
-            Assert.ThrowsExactly<ObjectDisposedException>(
-                () => registry.DestroyGlobalAsync(1, CancellationToken.None));
+            Assert.ThrowsExactly<ObjectDisposedException>(() =>
+                registry.DestroyGlobalAsync(1, CancellationToken.None)
+            );
         }
     }
 }

@@ -20,7 +20,8 @@ public sealed record PipeWireCore : IPipeWireObject
         string? CoreVersion,
         string? HostName,
         string? UserName,
-        PipeWireProperties? Properties = null)
+        PipeWireProperties? Properties = null
+    )
     {
         this.Properties = Properties ?? PipeWireProperties.Empty;
         this.ObjectSerial = this.Properties.Serial;

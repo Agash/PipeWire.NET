@@ -46,7 +46,10 @@ public sealed class RegistryRefusalTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-registry-refusal", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-registry-refusal",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
@@ -62,18 +65,21 @@ public sealed class RegistryRefusalTests : PipeWireTestBase
         Assert.ThrowsExactly<ArgumentException>(() => reg.BindProfiler(Nothing));
         Assert.ThrowsExactly<ArgumentException>(() => reg.BindSecurityContext(Nothing));
 
-        await Assert.ThrowsExactlyAsync<ArgumentException>(
-            async () => await reg.ReadModuleDetailsAsync(Nothing, cts.Token));
+        await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+            await reg.ReadModuleDetailsAsync(Nothing, cts.Token)
+        );
 
         // A link needs two ports, and neither being real is refused before anything is sent.
-        await Assert.ThrowsExactlyAsync<ArgumentException>(
-            async () => await reg.CreateLinkAsync(Nothing, Nothing, cts.Token));
+        await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+            await reg.CreateLinkAsync(Nothing, Nothing, cts.Token)
+        );
 
         // By name rather than by id: absent is null, because asking for a store that is simply not
         // running is a question with an answer, not a mistake.
         Assert.IsNull(
             reg.BindMetadata("pwnet-no-such-store"),
-            "a metadata store that does not exist was reported as bound");
+            "a metadata store that does not exist was reported as bound"
+        );
 
         Assert.ThrowsExactly<ArgumentException>(() => reg.BindMetadata(string.Empty));
         Assert.ThrowsExactly<ArgumentNullException>(() => reg.BindMetadata((string)null!));
@@ -91,7 +97,10 @@ public sealed class RegistryRefusalTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-registry-disposed", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-registry-disposed",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         var reg = new PipeWireRegistry(ctx);
@@ -103,21 +112,26 @@ public sealed class RegistryRefusalTests : PipeWireTestBase
         Assert.ThrowsExactly<ObjectDisposedException>(() => reg.BindNode(1));
         Assert.ThrowsExactly<ObjectDisposedException>(() => reg.BindMetadata("settings"));
 
-        await Assert.ThrowsExactlyAsync<ObjectDisposedException>(
-            async () => await reg.WaitForInitialEnumerationAsync(cts.Token));
+        await Assert.ThrowsExactlyAsync<ObjectDisposedException>(async () =>
+            await reg.WaitForInitialEnumerationAsync(cts.Token)
+        );
 
-        await Assert.ThrowsExactlyAsync<ObjectDisposedException>(
-            async () => await reg.CreateVirtualSinkAsync("pwnet gone", cancellationToken: cts.Token));
+        await Assert.ThrowsExactlyAsync<ObjectDisposedException>(async () =>
+            await reg.CreateVirtualSinkAsync("pwnet gone", cancellationToken: cts.Token)
+        );
 
         var seen = 0;
         await foreach (PipeWireGraphSnapshot _ in reg.WatchAsync(cts.Token))
         {
             seen++;
-            if (seen > 2) break;
+            if (seen > 2)
+                break;
         }
 
         Assert.AreEqual(
-            0, seen,
-            "a disposed registry kept yielding snapshots instead of ending its stream");
+            0,
+            seen,
+            "a disposed registry kept yielding snapshots instead of ending its stream"
+        );
     }
 }

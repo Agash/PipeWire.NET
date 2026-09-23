@@ -94,7 +94,12 @@ public static class SpaPod
 
     // - Parsing -
 
-    private static bool TryParseValue(ReadOnlySpan<byte> pod, int depth, out SpaValue? value, out int consumed)
+    private static bool TryParseValue(
+        ReadOnlySpan<byte> pod,
+        int depth,
+        out SpaValue? value,
+        out int consumed
+    )
     {
         value = null;
         consumed = 0;
@@ -118,12 +123,25 @@ public static class SpaPod
         int unpadded = 8 + (int)size;
         int padded = Pad(unpadded);
 
-        if (padded <= pod.Length) { consumed = padded; return true; }
-        if (unpadded <= pod.Length) { consumed = unpadded; return true; }
+        if (padded <= pod.Length)
+        {
+            consumed = padded;
+            return true;
+        }
+        if (unpadded <= pod.Length)
+        {
+            consumed = unpadded;
+            return true;
+        }
         return false;
     }
 
-    private static bool TryParseBody(SpaType type, ReadOnlySpan<byte> body, int depth, out SpaValue? value)
+    private static bool TryParseBody(
+        SpaType type,
+        ReadOnlySpan<byte> body,
+        int depth,
+        out SpaValue? value
+    )
     {
         value = null;
 
@@ -134,32 +152,38 @@ public static class SpaPod
                 return true;
 
             case SpaType.Bool:
-                if (body.Length < 4) return false;
+                if (body.Length < 4)
+                    return false;
                 value = new SpaBool(MemoryMarshal.Read<int>(body) != 0);
                 return true;
 
             case SpaType.Id:
-                if (body.Length < 4) return false;
+                if (body.Length < 4)
+                    return false;
                 value = new SpaId(MemoryMarshal.Read<uint>(body));
                 return true;
 
             case SpaType.Int:
-                if (body.Length < 4) return false;
+                if (body.Length < 4)
+                    return false;
                 value = new SpaInt(MemoryMarshal.Read<int>(body));
                 return true;
 
             case SpaType.Long:
-                if (body.Length < 8) return false;
+                if (body.Length < 8)
+                    return false;
                 value = new SpaLong(MemoryMarshal.Read<long>(body));
                 return true;
 
             case SpaType.Float:
-                if (body.Length < 4) return false;
+                if (body.Length < 4)
+                    return false;
                 value = new SpaFloat(MemoryMarshal.Read<float>(body));
                 return true;
 
             case SpaType.Double:
-                if (body.Length < 8) return false;
+                if (body.Length < 8)
+                    return false;
                 value = new SpaDouble(MemoryMarshal.Read<double>(body));
                 return true;
 
@@ -179,17 +203,21 @@ public static class SpaPod
                 return true;
 
             case SpaType.Rectangle:
-                if (body.Length < 8) return false;
+                if (body.Length < 8)
+                    return false;
                 value = new SpaRectangle(
                     MemoryMarshal.Read<uint>(body),
-                    MemoryMarshal.Read<uint>(body[4..]));
+                    MemoryMarshal.Read<uint>(body[4..])
+                );
                 return true;
 
             case SpaType.Fraction:
-                if (body.Length < 8) return false;
+                if (body.Length < 8)
+                    return false;
                 value = new SpaFraction(
                     MemoryMarshal.Read<uint>(body),
-                    MemoryMarshal.Read<uint>(body[4..]));
+                    MemoryMarshal.Read<uint>(body[4..])
+                );
                 return true;
 
             case SpaType.Bitmap:
@@ -197,18 +225,21 @@ public static class SpaPod
                 return true;
 
             case SpaType.Fd:
-                if (body.Length < 8) return false;
+                if (body.Length < 8)
+                    return false;
                 value = new SpaFd(MemoryMarshal.Read<long>(body));
                 return true;
 
             case SpaType.Pointer:
             {
                 // [uint32 type][uint32 padding][pointer], the pointer being native-word sized.
-                if (body.Length < 8 + IntPtr.Size) return false;
+                if (body.Length < 8 + IntPtr.Size)
+                    return false;
                 var pointerType = (SpaType)MemoryMarshal.Read<uint>(body);
-                ulong address = IntPtr.Size == 8
-                    ? MemoryMarshal.Read<ulong>(body[8..])
-                    : MemoryMarshal.Read<uint>(body[8..]);
+                ulong address =
+                    IntPtr.Size == 8
+                        ? MemoryMarshal.Read<ulong>(body[8..])
+                        : MemoryMarshal.Read<uint>(body[8..]);
                 value = new SpaPointer(pointerType, address);
                 return true;
             }
@@ -247,7 +278,8 @@ public static class SpaPod
     private static bool TryParseArray(ReadOnlySpan<byte> body, int depth, out SpaValue? value)
     {
         value = null;
-        if (body.Length < 8) return false;
+        if (body.Length < 8)
+            return false;
 
         uint childSize = MemoryMarshal.Read<uint>(body);
         var childType = (SpaType)MemoryMarshal.Read<uint>(body[4..]);
@@ -256,9 +288,7 @@ public static class SpaPod
         // A zero child size with a non-empty body would loop forever; an empty array is legal.
         if (childSize == 0)
         {
-            value = items.IsEmpty
-                ? new SpaArray(childType, [])
-                : null;
+            value = items.IsEmpty ? new SpaArray(childType, []) : null;
             return items.IsEmpty;
         }
 
@@ -266,8 +296,10 @@ public static class SpaPod
         // int.MaxValue negative, which makes the item count negative, and the builder is then asked
         // for a negative capacity: an exception out of a parser whose whole contract is to return
         // false. Nothing legitimate is anywhere near this large.
-        if (childSize > int.MaxValue || childSize > (uint)items.Length) return false;
-        if (!ChildrenTileExactly(childSize, childType, items.Length)) return false;
+        if (childSize > int.MaxValue || childSize > (uint)items.Length)
+            return false;
+        if (!ChildrenTileExactly(childSize, childType, items.Length))
+            return false;
 
         int count = items.Length / (int)childSize;
 
@@ -294,7 +326,8 @@ public static class SpaPod
     /// </remarks>
     private static bool ChildrenTileExactly(uint childSize, SpaType childType, int itemsLength)
     {
-        if ((uint)itemsLength % childSize != 0) return false;
+        if ((uint)itemsLength % childSize != 0)
+            return false;
 
         int fixedSize = FixedBodySize(childType);
         return fixedSize < 0 || childSize == (uint)fixedSize;
@@ -308,9 +341,13 @@ public static class SpaPod
         int offset = 0;
         while (offset + 8 <= body.Length)
         {
-            if (!TryParseValue(body[offset..], depth + 1, out SpaValue? field, out int consumed) || field is null)
+            if (
+                !TryParseValue(body[offset..], depth + 1, out SpaValue? field, out int consumed)
+                || field is null
+            )
                 return false;
-            if (consumed <= 0) return false;
+            if (consumed <= 0)
+                return false;
             fields.Add(field);
             offset += consumed;
         }
@@ -318,7 +355,8 @@ public static class SpaPod
         // Same rule as an object: the loop stops when fewer than a header remains, so a remainder is
         // a body that ended mid-field. Accepting it dropped the tail and reported success, which
         // reads downstream as a producer that simply sent fewer fields.
-        if (offset != body.Length) return false;
+        if (offset != body.Length)
+            return false;
 
         value = new SpaStruct(fields.ToImmutable());
         return true;
@@ -327,7 +365,8 @@ public static class SpaPod
     private static bool TryParseObject(ReadOnlySpan<byte> body, int depth, out SpaValue? value)
     {
         value = null;
-        if (body.Length < 8) return false;
+        if (body.Length < 8)
+            return false;
 
         var objectType = (SpaType)MemoryMarshal.Read<uint>(body);
         var objectId = (SpaParamType)MemoryMarshal.Read<uint>(body[4..]);
@@ -339,8 +378,16 @@ public static class SpaPod
             uint key = MemoryMarshal.Read<uint>(body[offset..]);
             var flags = (SpaPodPropFlags)MemoryMarshal.Read<uint>(body[(offset + 4)..]);
 
-            if (!TryParseValue(body[(offset + 8)..], depth + 1, out SpaValue? propertyValue, out int consumed)
-                || propertyValue is null || consumed <= 0)
+            if (
+                !TryParseValue(
+                    body[(offset + 8)..],
+                    depth + 1,
+                    out SpaValue? propertyValue,
+                    out int consumed
+                )
+                || propertyValue is null
+                || consumed <= 0
+            )
             {
                 return false;
             }
@@ -352,7 +399,8 @@ public static class SpaPod
         // The loop stops as soon as fewer than a property header remains, so anything left over is
         // a body that ended mid-property. Accepting it returned an object missing its last property
         // and reported success, which reads downstream as a producer that simply did not offer it.
-        if (offset != body.Length) return false;
+        if (offset != body.Length)
+            return false;
 
         value = new SpaObject(objectType, objectId, properties.ToImmutable());
         return true;
@@ -361,7 +409,8 @@ public static class SpaPod
     private static bool TryParseChoice(ReadOnlySpan<byte> body, int depth, out SpaValue? value)
     {
         value = null;
-        if (body.Length < 16) return false;
+        if (body.Length < 16)
+            return false;
 
         var kind = (SpaChoiceType)MemoryMarshal.Read<uint>(body);
         uint childSize = MemoryMarshal.Read<uint>(body[8..]);
@@ -370,7 +419,8 @@ public static class SpaPod
 
         if (childSize == 0)
         {
-            if (!items.IsEmpty) return false;
+            if (!items.IsEmpty)
+                return false;
             value = new SpaChoice(kind, childType, []);
             return true;
         }
@@ -379,8 +429,10 @@ public static class SpaPod
         // int.MaxValue negative, which makes the item count negative, and the builder is then asked
         // for a negative capacity: an exception out of a parser whose whole contract is to return
         // false. Nothing legitimate is anywhere near this large.
-        if (childSize > int.MaxValue || childSize > (uint)items.Length) return false;
-        if (!ChildrenTileExactly(childSize, childType, items.Length)) return false;
+        if (childSize > int.MaxValue || childSize > (uint)items.Length)
+            return false;
+        if (!ChildrenTileExactly(childSize, childType, items.Length))
+            return false;
 
         int count = items.Length / (int)childSize;
 
@@ -395,7 +447,8 @@ public static class SpaPod
         int required = SpaChoice.RequiredCount(kind);
         if (required > 0)
         {
-            if (count < required) return false;
+            if (count < required)
+                return false;
             count = required;
         }
 
@@ -415,7 +468,8 @@ public static class SpaPod
     private static bool TryParseSequence(ReadOnlySpan<byte> body, int depth, out SpaValue? value)
     {
         value = null;
-        if (body.Length < 8) return false;
+        if (body.Length < 8)
+            return false;
 
         uint unit = MemoryMarshal.Read<uint>(body);
         var controls = ImmutableArray.CreateBuilder<SpaControl>();
@@ -426,8 +480,16 @@ public static class SpaPod
             uint controlOffset = MemoryMarshal.Read<uint>(body[offset..]);
             uint controlType = MemoryMarshal.Read<uint>(body[(offset + 4)..]);
 
-            if (!TryParseValue(body[(offset + 8)..], depth + 1, out SpaValue? controlValue, out int consumed)
-                || controlValue is null || consumed <= 0)
+            if (
+                !TryParseValue(
+                    body[(offset + 8)..],
+                    depth + 1,
+                    out SpaValue? controlValue,
+                    out int consumed
+                )
+                || controlValue is null
+                || consumed <= 0
+            )
             {
                 return false;
             }
@@ -436,7 +498,8 @@ public static class SpaPod
             offset += 8 + consumed;
         }
 
-        if (offset != body.Length) return false;
+        if (offset != body.Length)
+            return false;
 
         value = new SpaSequence(unit, controls.ToImmutable());
         return true;
@@ -450,24 +513,28 @@ public static class SpaPod
     /// reaches a new byte[] and a span slice as a negative length, throwing something nobody
     /// documented from a method whose whole contract is a byte count.
     /// </remarks>
-    private static int BodySize(SpaValue value) => checked(value switch
-    {
-        SpaNone => 0,
-        SpaBool or SpaId or SpaInt or SpaFloat => 4,
-        SpaLong or SpaDouble or SpaFd or SpaRectangle or SpaFraction => 8,
-        SpaString s => Encoding.UTF8.GetByteCount(s.Value) + 1,
-        SpaBytes b => b.Value.Length,
-        SpaBitmap b => b.Bits.Length,
-        SpaPointer => 8 + IntPtr.Size,
-        SpaArray a => 8 + (a.Items.Length * ChildSize(a.ChildType, a.Items)),
-        SpaChoice c => 16 + (c.Alternatives.Length * ChildSize(c.ChildType, c.Alternatives)),
-        SpaStruct s => SumPadded(s.Fields),
-        SpaObject o => 8 + SumProperties(o.Properties),
-        SpaSequence s => 8 + SumControls(s.Controls),
-        SpaNestedPod p => Pad(8 + BodySize(p.Value)),
-        SpaUnknown u => u.Body.Length,
-        _ => 0,
-    });
+    private static int BodySize(SpaValue value) =>
+        checked(
+            value switch
+            {
+                SpaNone => 0,
+                SpaBool or SpaId or SpaInt or SpaFloat => 4,
+                SpaLong or SpaDouble or SpaFd or SpaRectangle or SpaFraction => 8,
+                SpaString s => Encoding.UTF8.GetByteCount(s.Value) + 1,
+                SpaBytes b => b.Value.Length,
+                SpaBitmap b => b.Bits.Length,
+                SpaPointer => 8 + IntPtr.Size,
+                SpaArray a => 8 + (a.Items.Length * ChildSize(a.ChildType, a.Items)),
+                SpaChoice c => 16
+                    + (c.Alternatives.Length * ChildSize(c.ChildType, c.Alternatives)),
+                SpaStruct s => SumPadded(s.Fields),
+                SpaObject o => 8 + SumProperties(o.Properties),
+                SpaSequence s => 8 + SumControls(s.Controls),
+                SpaNestedPod p => Pad(8 + BodySize(p.Value)),
+                SpaUnknown u => u.Body.Length,
+                _ => 0,
+            }
+        );
 
     // Array and choice children are stored bare, so every child must agree on one size. The
     // declared child type decides it; a value that disagrees is written truncated or padded to fit,
@@ -484,14 +551,15 @@ public static class SpaPod
         return max;
     }
 
-    private static int FixedBodySize(SpaType type) => type switch
-    {
-        SpaType.None => 0,
-        SpaType.Bool or SpaType.Id or SpaType.Int or SpaType.Float => 4,
-        SpaType.Long or SpaType.Double or SpaType.Fd
-            or SpaType.Rectangle or SpaType.Fraction => 8,
-        _ => -1,
-    };
+    private static int FixedBodySize(SpaType type) =>
+        type switch
+        {
+            SpaType.None => 0,
+            SpaType.Bool or SpaType.Id or SpaType.Int or SpaType.Float => 4,
+            SpaType.Long or SpaType.Double or SpaType.Fd or SpaType.Rectangle or SpaType.Fraction =>
+                8,
+            _ => -1,
+        };
 
     private static int SumPadded(ImmutableArray<SpaValue> values)
     {
@@ -670,7 +738,11 @@ public static class SpaPod
         }
     }
 
-    private static void WriteChildren(ImmutableArray<SpaValue> children, int childSize, Span<byte> destination)
+    private static void WriteChildren(
+        ImmutableArray<SpaValue> children,
+        int childSize,
+        Span<byte> destination
+    )
     {
         int offset = 0;
         foreach (SpaValue child in children)

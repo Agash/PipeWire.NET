@@ -97,27 +97,30 @@ internal unsafe ref struct SpaDictBuilder
     /// The completed dictionary, pointing into the caller's buffers and valid only while they are
     /// in scope.
     /// </summary>
-    public readonly spa_dict Build() => new()
-    {
-        // Must be zero: SPA_DICT_FLAG_SORTED is bit 0, and a stray set bit tells PipeWire the items
-        // are sorted, after which it may binary-search an unsorted array and miss properties.
-        flags = 0,
-        n_items = (uint)_count,
+    public readonly spa_dict Build() =>
+        new()
+        {
+            // Must be zero: SPA_DICT_FLAG_SORTED is bit 0, and a stray set bit tells PipeWire the items
+            // are sorted, after which it may binary-search an unsorted array and miss properties.
+            flags = 0,
+            n_items = (uint)_count,
 
-        // An empty dictionary gets a null array rather than the address of a buffer holding
-        // nothing. Native code is entitled to look at the pointer before the count, and the address
-        // of an empty span is whatever the storage behind it happens to be - live stack, in the
-        // stackalloc case, which outlives nothing.
-        items = _count == 0
-            ? null
-            : (spa_dict_item*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_items)),
-    };
+            // An empty dictionary gets a null array rather than the address of a buffer holding
+            // nothing. Native code is entitled to look at the pointer before the count, and the address
+            // of an empty span is whatever the storage behind it happens to be - live stack, in the
+            // stackalloc case, which outlives nothing.
+            items =
+                _count == 0
+                    ? null
+                    : (spa_dict_item*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_items)),
+        };
 
     private void Append(sbyte* key, sbyte* value)
     {
         if (_count == _items.Length)
             throw new InvalidOperationException(
-                $"SpaDictBuilder item buffer holds {_items.Length} entries; size it to the property count.");
+                $"SpaDictBuilder item buffer holds {_items.Length} entries; size it to the property count."
+            );
         _items[_count++] = new spa_dict_item { key = key, value = value };
     }
 
@@ -129,7 +132,8 @@ internal unsafe ref struct SpaDictBuilder
         {
             throw new ArgumentException(
                 "a property reaches native code as a C string, so it cannot contain a NUL.",
-                nameof(utf8));
+                nameof(utf8)
+            );
         }
 
         Span<byte> dst = Reserve(utf8.Length + 1);
@@ -147,7 +151,8 @@ internal unsafe ref struct SpaDictBuilder
         {
             throw new ArgumentException(
                 "a property value reaches native code as a C string, so it cannot contain a NUL.",
-                nameof(value));
+                nameof(value)
+            );
         }
 
         Span<byte> dst = Reserve(Encoding.UTF8.GetByteCount(value) + 1);
@@ -168,7 +173,8 @@ internal unsafe ref struct SpaDictBuilder
     {
         if (_scratch.Length - _used < bytes)
             throw new InvalidOperationException(
-                $"SpaDictBuilder scratch buffer of {_scratch.Length} bytes is exhausted; enlarge it.");
+                $"SpaDictBuilder scratch buffer of {_scratch.Length} bytes is exhausted; enlarge it."
+            );
         Span<byte> slice = _scratch.Slice(_used, bytes);
         _used += bytes;
         return slice;
