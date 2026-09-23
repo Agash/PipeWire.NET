@@ -2,10 +2,11 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- The runtime pack is what a self-contained/AOT publish resolves, and the graph flags any
          10.0.10 or older. Pin the serviced patch so the sample does not carry a known advisory. -->
     <RuntimeFrameworkVersion Condition="'$(TargetFramework)' == 'net10.0'"
-      >10.0.11</RuntimeFrameworkVersion>
+      >10.0.12</RuntimeFrameworkVersion>
     <RuntimeIdentifiers>linux-x64;linux-arm64</RuntimeIdentifiers>
     <IsPackable>false</IsPackable>
     <!-- Same analyzer gate as the libraries: the sample must stay trim- and AOT-clean because

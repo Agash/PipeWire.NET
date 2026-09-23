@@ -9,7 +9,7 @@ dotnet build PipeWire.NET.slnx
 dotnet test --filter "TestCategory!=Integration"
 ```
 
-The build treats warnings as errors and targets .NET 10 (and .NET 11 preview).
+The build treats warnings as errors and targets .NET 10 and .NET 11.
 
 Integration tests need a running PipeWire daemon on Linux. Some use GStreamer to produce real
 sources; install `gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good

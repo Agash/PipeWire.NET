@@ -148,17 +148,6 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
     }
 
     /// <summary>
-    /// Starts <paramref name="context"/> over <paramref name="handle"/>, reporting whether the
-    /// native connect went through instead of requiring it to.
-    /// </summary>
-    /// <remarks>
-    /// Whether a connect over a descriptor that is not a PipeWire socket succeeds is a native
-    /// detail that has differed between releases - PipeWire wraps a fd its epoll refuses in an
-    /// idle source, so on some versions the connect completes and only a later protocol exchange
-    /// fails. The ownership contract these tests pin holds on both outcomes, so neither is
-    /// treated as the expected one.
-    /// </remarks>
-    /// <summary>
     /// How long a connect over a descriptor that is not a daemon socket is given before it is
     /// treated as one that never completes.
     /// </summary>
@@ -170,6 +159,17 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
     /// </remarks>
     private static readonly TimeSpan ConnectBudget = TimeSpan.FromSeconds(15);
 
+    /// <summary>
+    /// Starts <paramref name="context"/> over <paramref name="handle"/>, reporting whether the
+    /// native connect went through instead of requiring it to.
+    /// </summary>
+    /// <remarks>
+    /// Whether a connect over a descriptor that is not a PipeWire socket succeeds is a native
+    /// detail that has differed between releases - PipeWire wraps a fd its epoll refuses in an
+    /// idle source, so on some versions the connect completes and only a later protocol exchange
+    /// fails. The ownership contract these tests pin holds on both outcomes, so neither is
+    /// treated as the expected one.
+    /// </remarks>
     private static async Task<bool> TryStartOverAsync(PipeWireContext context, SafeHandle handle)
     {
         using var bounded = new CancellationTokenSource(ConnectBudget);
@@ -211,7 +211,7 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
         [LibraryImport("libc", StringMarshalling = StringMarshalling.Utf8)]
         private static partial int unsetenv(string name);
 
-        /// <summary>The value <paramref name="name"/> held before the override; null when absent.</summary>
+        /// <summary>The value the variable held before the override; null when absent.</summary>
         private readonly string? _saved;
 
         private readonly string _name;

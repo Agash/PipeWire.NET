@@ -23,10 +23,12 @@ internal sealed class Session : IAsyncDisposable
     public static Task<Session> ConnectAsync(string name, CancellationToken cancellationToken) =>
         ConnectAsync(name, null, cancellationToken);
 
+    /// <param name="name">The client name the daemon sees.</param>
     /// <param name="onConnectionLost">
     /// Cancelled when the daemon goes away, for the commands that run until Ctrl+C. Without it
     /// `monitor` and `serve` sit waiting on a connection that is never coming back.
     /// </param>
+    /// <param name="cancellationToken">Cancels the connect.</param>
     public static async Task<Session> ConnectAsync(
         string name,
         CancellationTokenSource? onConnectionLost,

@@ -64,6 +64,7 @@ public sealed class AvSyncTests
     /// <summary>
     /// Publishes audio and video from this process and captures both, over a real streaming window.
     /// </summary>
+    /// <param name="name">Client name, also the prefix of both published streams.</param>
     /// <param name="videoOffsetNs">
     /// Null to let both outputs stamp the current stream time themselves. Otherwise both stamp from
     /// one publisher clock - the way a transport republishing media supplies times it already has -
@@ -71,6 +72,7 @@ public sealed class AvSyncTests
     /// crosses the daemon: no audio converter or mixer copies <c>spa_meta_header.pts</c>, so an audio
     /// consumer is handed the graph's cycle time whatever the producer stamped.
     /// </param>
+    /// <param name="ct">Cancels the capture.</param>
     private static async Task<Capture> CaptureBothLegsAsync(
         string name,
         long? videoOffsetNs,
