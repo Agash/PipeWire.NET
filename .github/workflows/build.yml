@@ -2,6 +2,11 @@ name: build
 
 on:
   workflow_dispatch:
+    inputs:
+      run_skew:
+        description: Also run the daemon version skew jobs
+        type: boolean
+        default: false
   push:
     branches: [main]
     tags: ["v*"]
@@ -16,7 +21,11 @@ env:
 jobs:
   build_and_test:
     name: Build, Test, and Pack
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: that is still 24.04, whose PipeWire is 1.0.5, and the upstream PPA only
+    # reaches 1.0.7 there. 26.04 ships 1.6.2, which is the series these bindings are generated
+    # against. Anything older is refused at pw_init rather than hanging, so a runner that drifts
+    # back says so immediately.
+    runs-on: ubuntu-26.04
 
     permissions:
       contents: read
@@ -24,24 +33,41 @@ jobs:
       # because attestation needs more than the read-only default.
       id-token: write
       attestations: write
+
+    # Trace-level registry logs are tens of megabytes per daemon leg and crash the web log
+    # renderer; state transitions and warnings still show on failure.
+    env:
+      PWNET_TEST_LOG_LEVEL: Information
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0   # MinVer needs full history
 
-      - name: Install PipeWire runtime + dev headers + libclang
+      - name: Install PipeWire, session tools, dev headers, libclang
+        # One update and one install for everything this job needs later: the dev headers for
+        # the build and binding check, the daemon plus session manager plus GStreamer sinks for
+        # the test legs. Installing the daemons early starts nothing; each leg starts its own
+        # throwaway session through build/session.sh.
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             libpipewire-0.3-0 \
             libpipewire-0.3-dev \
             libclang-dev \
-            pkg-config
+            pkg-config \
+            dbus \
+            pipewire wireplumber pipewire-bin \
+            gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pipewire             elfutils
 
-      - uses: actions/setup-dotnet@v6
+      - name: Report the PipeWire that was installed
+        run: |
+          echo "libpipewire: $(pkg-config --modversion libpipewire-0.3 2>/dev/null || echo unknown)"
+          echo "pinned:      $(tr -d '[:space:]' < generate/HEADER-VERSION)"
+
+      - uses: actions/setup-dotnet@v5
         with:
           # net11.0 target requires the .NET 11 preview SDK alongside the .NET 10 SDK.
-          # global.json (rollForward latestMajor, allowPrerelease) then selects the 11 SDK,
+          # global.json (rollForward latestFeature, allowPrerelease) then selects the 11 SDK,
           # which builds both the net10.0 and net11.0 target frameworks.
           dotnet-version: |
             10.0.x
@@ -54,7 +80,7 @@ jobs:
         run: dotnet build PipeWire.NET.slnx --no-restore -c Release
 
       - name: Test (non-integration on host runner)
-        run: dotnet test PipeWire.NET.slnx --no-build -c Release -- --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+        run: dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
              --filter "TestCategory!=Integration"
 
       - name: Summarize coverage
@@ -78,7 +104,8 @@ jobs:
           def pct(attr):
               return float(root.get(attr) or 0) * 100
 
-          print('### Coverage\n')
+          print('### Coverage (unit tests only)\n')
+          print('_The daemon-backed legs run separately and are not counted here._\n')
           print('| Metric | Covered | Total | Rate |')
           print('| --- | ---: | ---: | ---: |')
           print(f"| Lines | {root.get('lines-covered')} | {root.get('lines-valid')} | {pct('line-rate'):.1f}% |")
@@ -121,6 +148,29 @@ jobs:
 
       - name: Verify generated bindings are up to date
         run: |
+          # The committed bindings are generated against one PipeWire version, recorded in
+          # generate/HEADER-VERSION. Regenerating against a different one produces a diff that says
+          # nothing about whether the bindings are current, only that the runner's distribution is
+          # on another release, so the comparison is only run when the runner can actually provide
+          # the pinned headers. Skipping loudly beats failing for a reason nobody can act on.
+          PINNED="$(tr -d '[:space:]' < generate/HEADER-VERSION)"
+          HAVE="$(pkg-config --modversion libpipewire-0.3 2>/dev/null || echo unknown)"
+
+          if [ "$PINNED" != "$HAVE" ]; then
+            echo "::notice::Skipping the binding check: pinned to PipeWire $PINNED, this runner has $HAVE."
+            echo "Regenerate on a machine with $PINNED, or move the pin with --allow-version-change."
+
+            # Pin rot. A skip that can never fail turns a green check into "never checked", so the
+            # one case that is not a runner accident is called out: a pin older than what every
+            # runner offers means nobody has regenerated for at least a release.
+            OLDEST="$(printf '%s\n%s\n' "$PINNED" "$HAVE" | sort -V | head -n1)"
+            if [ "$OLDEST" = "$PINNED" ] && [ "$PINNED" != "$HAVE" ]; then
+              echo "::warning::The binding pin ($PINNED) is older than this runner's PipeWire ($HAVE)."
+            fi
+
+            exit 0
+          fi
+
           bash generate/generate.sh
           if ! git diff --quiet -- src/PipeWire.NET/generated/; then
             echo "::error::Generated bindings are out of date."
@@ -130,34 +180,142 @@ jobs:
           fi
 
       - name: Run Linux integration tests (against installed runtime, no daemon required)
-        run: dotnet test PipeWire.NET.slnx --no-build -c Release
-             --filter "TestCategory=Integration&TestCategory!=RequiresDaemon"
+        # Bounded, and traced. A test that hangs here produces no output at all - the runner shows
+        # a step that has been running for hours and the log ends at the command echo - so the
+        # timeout turns that into a failure, and PWNET_TEST_TRACE names the test it died in. A
+        # connect over a descriptor that is not a daemon socket is the way this happened: whether
+        # it completes, is refused, or waits for a handshake that never comes depends on the
+        # runner's PipeWire version, which is older than the one this repository is developed on.
+        env:
+          PWNET_TEST_TRACE: ${{ runner.temp }}/no-daemon.trace
+          PIPEWIRE_DEBUG: "3"
+          PIPEWIRE_LOG: ${{ runner.temp }}/pw-native-nodaemon.log
+        timeout-minutes: 10
+        run: dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release
+             --filter "TestCategory=Integration&TestCategory!=RequiresDaemon&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon" --max-parallel-test-modules 1
 
-      - name: Daemon end-to-end tests (headless PipeWire + GStreamer real sources)
-        # Non-gating: these exercise a real GStreamer -> PipeWire graph and pass in a proper
-        # PipeWire session (e.g. a desktop or WSL), but GitHub's headless runners cannot
-        # reliably host pipewiresink producers, so frames never arrive and the tests time out.
-        # Kept for signal; run locally for authoritative end-to-end validation.
+      - name: Name the test that hung
+        if: failure()
+        # The last START with no outcome after it is the one that was running.
+        run: |
+          echo "::group::no-daemon trace (tail)"
+          tail -40 "$RUNNER_TEMP/no-daemon.trace" 2>/dev/null || echo "(no trace was written)"
+          echo "::endgroup::"
+          echo "::group::libpipewire native log (tail)"
+          tail -120 "$RUNNER_TEMP/pw-native-nodaemon.log" 2>/dev/null || echo "(no native log)"
+          echo "::endgroup::"
+
+      - name: Graph tests against a real daemon
+        # Gating. Registry enumeration, object creation and linking need only the daemon and the
+        # SPA support plugins, both of which a headless runner hosts reliably.
+        env:
+          # The image installs pipewire-bin, so a missing pw-cli or wpctl here is a broken image,
+          # not a machine without the tools. Fail instead of quietly skipping the category.
+          PWNET_REQUIRE_TOOLS: "1"
+        run: |
+          source build/session.sh
+          pwnet_session_start
+          pwnet_session_run dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
+            --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon" --max-parallel-test-modules 1
+          exit $PWNET_LAST_RC
+
+      - name: Session diagnostics
+        if: failure()
+        # "test timed out" is not diagnosable from a log. This is the state the daemon was in.
+        run: |
+          echo "::group::pipewire.log";    tail -300 "$RUNNER_TEMP/pipewire.log"    2>/dev/null || true; echo "::endgroup::"
+          echo "::group::wireplumber.log"; tail -300 "$RUNNER_TEMP/wireplumber.log" 2>/dev/null || true; echo "::endgroup::"
+          echo "::group::pw-dump"; pw-dump 2>&1 | head -400 || true; echo "::endgroup::"
+          echo "::group::wpctl status"; wpctl status 2>&1 || true; echo "::endgroup::"
+          echo "::group::links"; pw-link -l -I 2>&1 || true; echo "::endgroup::"
+          echo "::group::clients"; pw-cli ls Client 2>&1 || true; echo "::endgroup::"
+          echo "::group::metadata"; pw-metadata -n default 2>&1 || true; echo "::endgroup::"
+
+      - name: Native AOT publish and run
+        timeout-minutes: 20
+        env:
+          # The library's own log, at debug. The sample builds no logger, so without this there is
+          # nothing between "connected to daemon" and the point it stops.
+          PIPEWIRE_DEBUG: "3"
+          PIPEWIRE_LOG: ${{ runner.temp }}/pw-native.log
+        # IsAotCompatible is an analyzer switch. This is the only thing that proves the graph
+        # actually links and that the published binary can talk to a daemon.
+        run: |
+          dotnet publish samples/PipeWire.NET.SampleConsole/PipeWire.NET.SampleConsole.csproj             -f net11.0 -r linux-x64 -c Release -p:PublishAot=true -o "$RUNNER_TEMP/aot"
+
+          BIN="$RUNNER_TEMP/aot/PipeWire.NET.SampleConsole"
+          test -x "$BIN"
+          ldd "$BIN" | grep -q libcoreclr && { echo "not a native AOT binary"; exit 1; }
+
+          source build/session.sh
+          pwnet_session_start
+
+          # Exit 1 is the sample's "no video source", which a headless runner has. Connecting and
+          # enumerating is what is being checked. Output goes through a file: a command
+          # substitution would run the helper in a subshell and lose PWNET_LAST_RC.
+          # Bounded, and the output is shown whichever way it goes. If the binary is still alive
+          # when the budget runs out, its stack is dumped before it is killed: the sample connects
+          # and then stops, and where it stops is the only thing that says why.
+          run_with_stack() {
+            "$BIN" >"$RUNNER_TEMP/aot-output.txt" 2>&1 &
+            local pid=$!
+            local waited=0
+            while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 60 ]; do
+              sleep 2; waited=$((waited + 2))
+            done
+
+            if kill -0 "$pid" 2>/dev/null; then
+              echo "::group::stack of the hung sample (pid $pid)"
+              eu-stack -p "$pid" 2>&1 | head -80 || cat /proc/$pid/task/*/stack 2>/dev/null || true
+              echo "::endgroup::"
+              kill -9 "$pid" 2>/dev/null || true
+              wait "$pid" 2>/dev/null || true
+              return 124
+            fi
+
+            wait "$pid"
+          }
+
+          pwnet_session_run run_with_stack || true
+          OUT=$(cat "$RUNNER_TEMP/aot-output.txt")
+          echo "::group::sample output"
+          echo "$OUT"
+          echo "::endgroup::"
+
+          echo "$OUT" | grep -q "connected to daemon" || { echo "AOT binary did not reach the daemon"; exit 1; }
+          test $PWNET_LAST_RC -le 1
+
+      - name: DMA-BUF lifetime tests (no GPU required)
+        # The zero-copy path is excluded from every daemon leg by TestCategory!=RequiresGpu, so the
+        # shipped ConnectDmaBuf surface rides on nothing in CI. The lifetime assertions - buffer
+        # index reuse, descriptors returned on teardown - need a daemon and not a GPU, so they can
+        # run here; the import itself still cannot.
         continue-on-error: true
         run: |
-          sudo apt-get install -y --no-install-recommends \
-            pipewire wireplumber pipewire-bin \
-            gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pipewire
-          export XDG_RUNTIME_DIR="$(mktemp -d)"
-          pipewire &           PW_PID=$!
-          wireplumber &        WP_PID=$!
-          for i in $(seq 1 40); do pw-cli info 0 >/dev/null 2>&1 && break; sleep 0.25; done
-          set +e
-          dotnet test PipeWire.NET.slnx --no-build -c Release \
-            --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu"
-          RC=$?
-          set -e
-          kill $WP_PID $PW_PID 2>/dev/null || true
-          exit $RC
+          source build/session.sh
+          pwnet_session_start
+          pwnet_session_run dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
+            --filter "TestCategory=RequiresGpu&TestCategory!=RequiresGStreamer" --max-parallel-test-modules 1
+          echo "::notice::DMA-BUF leg exit $PWNET_LAST_RC (non-gating: a hosted runner has no GPU to import with)"
+
+      - name: Daemon end-to-end tests (GStreamer real sources)
+        # Non-gating, and now actually so. These exercise a real GStreamer to PipeWire graph and
+        # pass in a proper session, but GitHub's headless runners cannot reliably host a
+        # pipewiresink producer, so frames never arrive and the tests time out. Kept for signal;
+        # run locally for authoritative end-to-end validation.
+        continue-on-error: true
+        run: |
+          source build/session.sh
+          pwnet_session_start
+          pwnet_session_run dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
+            --filter "TestCategory=RequiresGStreamer&TestCategory!=RequiresGpu&TestCategory!=PenTest" --max-parallel-test-modules 1
+          exit $PWNET_LAST_RC
 
       - name: Pack
         if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
-        run: dotnet pack src/PipeWire.NET/PipeWire.NET.csproj --no-build -c Release -o ${{ env.NuGetDirectory }}
+        run: |
+          dotnet pack src/PipeWire.NET/PipeWire.NET.csproj --no-build -c Release -o ${{ env.NuGetDirectory }}
+          dotnet pack src/PipeWire.NET.Media/PipeWire.NET.Media.csproj --no-build -c Release -o ${{ env.NuGetDirectory }}
 
       - name: Attest build provenance
         # Records, in a signed statement GitHub hosts, which workflow and which commit produced these
@@ -176,12 +334,231 @@ jobs:
           retention-days: 1
           path: ${{ env.NuGetDirectory }}/*.nupkg
 
+  windows_unit:
+    name: Unit tests on Windows
+    # Nothing here touches libpipewire: the SPA pod layer, the value model, the ABI layout checks
+    # and the surface baseline are all managed. Running them on Windows is what catches a test that
+    # reaches the daemon without a runtime guard, which the SupportedOSPlatform attribute cannot -
+    # it is an analyzer hint, and the Linux legs never exercise the other branch.
+    runs-on: windows-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - name: Build
+        run: dotnet build PipeWire.NET.slnx -c Release
+
+      - name: Unit tests
+        run: dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release --filter "TestCategory!=Integration"
+
+  aot_arm64:
+    name: Native AOT and ABI on arm64
+    # The reason to run arm64 at all is that the parts most likely to differ are the parts nothing
+    # else checks: struct offsets, function-pointer calling convention, and whether the AOT compiler
+    # can lay out the interop surface without the x64 assumptions. The daemon tests would mostly
+    # re-run what the x64 job already proved, so this runs the ABI tests and the AOT publish.
+    #
+    # The ABI tests are the cheap half and need no daemon, so they run on pull requests too: struct
+    # offsets and calling convention are exactly what a pull request can break and nothing else
+    # checks. The AOT publish, which needs a session, stays off pull requests.
+    runs-on: ubuntu-26.04-arm
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install PipeWire runtime and headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends             libpipewire-0.3-0 libpipewire-0.3-dev pipewire wireplumber pipewire-bin elfutils
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - name: Build
+        run: dotnet build PipeWire.NET.slnx -c Release
+
+      - name: ABI and unit tests
+        # The struct layouts and enum widths are what arm64 is here to disagree about, and these
+        # need no daemon.
+        run: |
+          dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release             --filter "TestCategory!=Integration"
+
+      - name: Native AOT publish and run
+        timeout-minutes: 20
+        env:
+          # The library's own log, at debug. The sample builds no logger, so without this there is
+          # nothing between "connected to daemon" and the point it stops.
+          PIPEWIRE_DEBUG: "3"
+          PIPEWIRE_LOG: ${{ runner.temp }}/pw-native.log
+        # Not on pull requests: it needs a session, and an arm64 runner for every push buys little
+        # against how rarely the interop layout moves.
+        if: github.event_name != 'pull_request'
+        run: |
+          dotnet publish samples/PipeWire.NET.SampleConsole/PipeWire.NET.SampleConsole.csproj             -f net11.0 -r linux-arm64 -c Release -p:PublishAot=true -o "$RUNNER_TEMP/aot"
+
+          BIN="$RUNNER_TEMP/aot/PipeWire.NET.SampleConsole"
+          test -x "$BIN"
+          ldd "$BIN" | grep -q libcoreclr && { echo "not a native AOT binary"; exit 1; }
+          file "$BIN" | grep -q "ARM aarch64" || { echo "not an arm64 binary"; exit 1; }
+
+          source build/session.sh
+          pwnet_session_start
+
+          # Through a file, not a command substitution: the helper's exit code would not
+          # survive the subshell.
+          # Bounded, and the output is shown whichever way it goes. If the binary is still alive
+          # when the budget runs out, its stack is dumped before it is killed: the sample connects
+          # and then stops, and where it stops is the only thing that says why.
+          run_with_stack() {
+            "$BIN" >"$RUNNER_TEMP/aot-output.txt" 2>&1 &
+            local pid=$!
+            local waited=0
+            while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 60 ]; do
+              sleep 2; waited=$((waited + 2))
+            done
+
+            if kill -0 "$pid" 2>/dev/null; then
+              echo "::group::stack of the hung sample (pid $pid)"
+              eu-stack -p "$pid" 2>&1 | head -80 || cat /proc/$pid/task/*/stack 2>/dev/null || true
+              echo "::endgroup::"
+              kill -9 "$pid" 2>/dev/null || true
+              wait "$pid" 2>/dev/null || true
+              return 124
+            fi
+
+            wait "$pid"
+          }
+
+          pwnet_session_run run_with_stack || true
+          OUT=$(cat "$RUNNER_TEMP/aot-output.txt")
+          echo "::group::sample output"
+          echo "$OUT"
+          echo "::endgroup::"
+
+          echo "$OUT" | grep -q "connected to daemon" || { echo "AOT binary did not reach the daemon"; exit 1; }
+          test $PWNET_LAST_RC -le 1
+
+  daemon_version_skew:
+    name: Daemon skew (PipeWire ${{ matrix.os }})
+    # Opt-in. What each daemon version supports does not change because this repository changed,
+    # so the answer is re-checked when a version moves at either end, not on every push.
+    if: inputs.run_skew
+    # Explicitly non-gating, and separate from the required job for that reason: the bindings are
+    # generated against whatever headers were installed, so an older daemon is expected to lack
+    # interfaces this library binds. What this job is for is knowing which ones, deliberately,
+    # instead of finding out from a user on an older distribution.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+
+    # Same reason as the main job: per-global registry traces dominate daemon-leg logs.
+    env:
+      PWNET_TEST_LOG_LEVEL: Information
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - name: Install a headless PipeWire session
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends dbus pipewire wireplumber pipewire-bin
+
+      - name: Report the versions under test
+        run: |
+          PW="$(pipewire --version 2>&1 | head -1)"
+          WP="$(wireplumber --version 2>&1 | head -1)"
+          echo "$PW"; echo "$WP"
+
+          # Written to the run summary, not just the log. This job is non-gating, so its result is
+          # only useful if somebody can see at a glance which daemon versions were exercised and
+          # how each did; a red X buried in a collapsed log tells nobody anything.
+          {
+            echo "### Daemon skew: ${{ matrix.os }}"
+            echo ""
+            echo "- pinned headers: \`$(tr -d '[:space:]' < generate/HEADER-VERSION)\`"
+            echo "- daemon: \`$PW\`"
+            echo "- session manager: \`$WP\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Graph tests against this daemon
+        run: |
+          source build/session.sh
+          pwnet_session_start
+          pwnet_session_run dotnet test PipeWire.NET.slnx --settings tests.runsettings -c Release             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon"             --max-parallel-test-modules 1
+
+          if [ $PWNET_LAST_RC -eq 0 ]; then
+            echo "- result: passed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- result: **failed** (this job is non-gating)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # A daemon that dies partway fails every remaining test with the same connect error, so
+          # the failure count says how far into the leg it got and nothing about interface skew.
+          # Saying so on the summary is the difference between a diagnosis and a wall of red.
+          if [ "${PWNET_SESSION_DIED:-0}" -eq 1 ]; then
+            echo "- **the daemon did not survive the leg**: failures after that point are all the" >> "$GITHUB_STEP_SUMMARY"
+            echo "  same dead session, not separate results" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "- note: tests tagged \`RequiresPipeWire168\` self-skip below PipeWire 1.6.8" >> "$GITHUB_STEP_SUMMARY"
+          echo "  (racy destroy-during-create aborts older daemons, and a few behaviors changed;" >> "$GITHUB_STEP_SUMMARY"
+          echo "  unrelated to interface skew)" >> "$GITHUB_STEP_SUMMARY"
+
+          exit $PWNET_LAST_RC
+
+      - name: Session diagnostics
+        if: failure()
+        run: |
+          echo "::group::pipewire.log";    tail -300 "$RUNNER_TEMP/pipewire.log"    2>/dev/null || true; echo "::endgroup::"
+          echo "::group::wireplumber.log"; tail -300 "$RUNNER_TEMP/wireplumber.log" 2>/dev/null || true; echo "::endgroup::"
+          echo "::group::pw-dump"; pw-dump 2>&1 | head -400 || true; echo "::endgroup::"
+          echo "::group::wpctl status"; wpctl status 2>&1 || true; echo "::endgroup::"
+
   publish_nuget:
     name: Publish NuGet Packages
     needs: [build_and_test]
-    # Publishing runs only when a GitHub release is published (or manually dispatched), matching
-    # the other Agash packages. Requires a NuGet.org trusted-publishing policy for this package.
-    if: (github.event_name == 'release' && github.event.action == 'published') || github.event_name == 'workflow_dispatch'
+    # Publishing runs only when a GitHub release is published, matching the other Agash packages.
+    # Requires a NuGet.org trusted-publishing policy for this package.
+    #
+    # A manual dispatch may publish too, but only from main or a version tag. It used to publish
+    # from whatever ref it was dispatched on, so dispatching the workflow to check CI on a feature
+    # branch pushed that branch's build to nuget.org - and nuget.org has no delete, only unlist.
+    # Running the workflow and releasing a package are different intentions; the ref is what
+    # separates them.
+    if: >-
+      (github.event_name == 'release' && github.event.action == 'published')
+      || (github.event_name == 'workflow_dispatch'
+          && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
     runs-on: ubuntu-latest
     # Declaring an environment is what makes GitHub record a deployment, which is what
     # surfaces the Deployments tab and the package link on the repo home page.
@@ -199,7 +576,7 @@ jobs:
           name: nuget-package
           path: ${{ env.NuGetDirectory }}
 
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@v5
 
       - name: NuGet login (OIDC)
         id: login

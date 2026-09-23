@@ -9,9 +9,11 @@
 #pragma warning disable CA1720 // Identifiers should not contain type names
 #pragma warning disable CA1815 // Override Equals and operator equals on value types
 
-namespace PipeWire.NET.Generated;
+using PipeWire.NET.Media;
 
-public unsafe partial struct pw_stream_events
+namespace PipeWire.NET.Interop;
+
+internal unsafe partial struct pw_stream_events
 {
     [NativeTypeName("uint32_t")]
     public uint version;
@@ -20,7 +22,7 @@ public unsafe partial struct pw_stream_events
     public delegate* unmanaged[Cdecl]<void*, void> destroy;
 
     [NativeTypeName("void (*)(void *, enum pw_stream_state, enum pw_stream_state, const char *)")]
-    public delegate* unmanaged[Cdecl]<void*, pw_stream_state, pw_stream_state, sbyte*, void> state_changed;
+    public delegate* unmanaged[Cdecl]<void*, PipeWireStreamState, PipeWireStreamState, sbyte*, void> state_changed;
 
     [NativeTypeName("void (*)(void *, uint32_t, const struct pw_stream_control *)")]
     public delegate* unmanaged[Cdecl]<void*, uint, pw_stream_control*, void> control_info;

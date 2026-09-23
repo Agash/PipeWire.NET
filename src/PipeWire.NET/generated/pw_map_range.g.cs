@@ -9,9 +9,9 @@
 #pragma warning disable CA1720 // Identifiers should not contain type names
 #pragma warning disable CA1815 // Override Equals and operator equals on value types
 
-namespace PipeWire.NET.Generated;
+namespace PipeWire.NET.Interop;
 
-public partial struct pw_map_range
+internal partial struct pw_map_range
 {
     [NativeTypeName("uint32_t")]
     public uint start;

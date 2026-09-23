@@ -15,6 +15,16 @@ nuget/
 
 # VS/Rider per-user launch profiles
 **/Properties/launchSettings.json
+# IDEA Platform configurations
+.idea/
 
 # Test run output (coverage reports)
 TestResults/
+
+# Upstream sources kept locally for reference only: PipeWire, WirePlumber, GStreamer
+# and anything else worth reading while working on the bindings. Cloned by
+# build/fetch-upstream.sh, never committed - the pin that matters is generate/HEADER-VERSION.
+external/
+
+# Reproduction programs for upstream bugs; scratch, not part of the library.
+repro/

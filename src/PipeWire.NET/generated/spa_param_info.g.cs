@@ -11,9 +11,9 @@
 
 using System.Runtime.CompilerServices;
 
-namespace PipeWire.NET.Generated;
+namespace PipeWire.NET.Interop;
 
-public partial struct spa_param_info
+internal partial struct spa_param_info
 {
     [NativeTypeName("uint32_t")]
     public uint id;

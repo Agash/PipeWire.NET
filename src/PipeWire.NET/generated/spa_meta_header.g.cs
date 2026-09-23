@@ -9,9 +9,9 @@
 #pragma warning disable CA1720 // Identifiers should not contain type names
 #pragma warning disable CA1815 // Override Equals and operator equals on value types
 
-namespace PipeWire.NET.Generated;
+namespace PipeWire.NET.Interop;
 
-public partial struct spa_meta_header
+internal partial struct spa_meta_header
 {
     [NativeTypeName("uint32_t")]
     public uint flags;
@@ -20,11 +20,11 @@ public partial struct spa_meta_header
     public uint offset;
 
     [NativeTypeName("int64_t")]
-    public nint pts;
+    public long pts;
 
     [NativeTypeName("int64_t")]
-    public nint dts_offset;
+    public long dts_offset;
 
     [NativeTypeName("uint64_t")]
-    public nuint seq;
+    public ulong seq;
 }

@@ -1,0 +1,231 @@
+#!/usr/bin/env bash
+#
+# Starts a private PipeWire session and waits for it to answer, or fails saying why.
+#
+#   source build/session.sh
+#   pwnet_session_start          # exports XDG_*, starts the daemons, waits
+#   ...run tests...
+#   pwnet_session_stop           # kills them; safe to call twice
+#
+# A private session, not just a private socket. WirePlumber persists default nodes, saved routes
+# and profiles under XDG_STATE_HOME, so sharing it lets one run's writes decide the next run's
+# starting state.
+#
+# The daemons' own output goes to files from the moment they start. Collecting it only after a
+# failure misses everything they said while coming up, which is exactly when it matters.
+
+PWNET_SESSION_LOG_DIR="${PWNET_SESSION_LOG_DIR:-${RUNNER_TEMP:-/tmp}}"
+
+pwnet_session_start() {
+  local attempts="${1:-40}"
+
+  export XDG_RUNTIME_DIR="$(mktemp -d)"
+  export XDG_CONFIG_HOME="$(mktemp -d)"
+  export XDG_STATE_HOME="$(mktemp -d)"
+  export XDG_DATA_HOME="$(mktemp -d)"
+
+  # WirePlumber 0.4.x treats a missing D-Bus session bus as fatal and exits within
+  # milliseconds, leaving a session that answers pw-cli but links nothing (every streaming
+  # test then hangs). Headless runners have no bus, so bring a private one when none is set.
+  # No --fork: this dbus-daemon vintage rejects --print-pid, and a backgrounded foreground
+  # process hands out a usable pid either way.
+  if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && command -v dbus-daemon >/dev/null 2>&1; then
+    local bus_addr_file="$PWNET_SESSION_LOG_DIR/dbus-address"
+    rm -f "$bus_addr_file"
+    dbus-daemon --session --print-address > "$bus_addr_file" 2>/dev/null &
+    PWNET_DBUS_PID=$!
+
+    local bus_wait
+    for ((bus_wait = 1; bus_wait <= 40; bus_wait++)); do
+      if [ -s "$bus_addr_file" ]; then break; fi
+      sleep 0.25
+    done
+
+    DBUS_SESSION_BUS_ADDRESS="$(head -1 "$bus_addr_file" 2>/dev/null)"
+    if [ -n "$DBUS_SESSION_BUS_ADDRESS" ]; then
+      export DBUS_SESSION_BUS_ADDRESS
+    else
+      echo "::warning::could not start a private D-Bus session bus; WirePlumber 0.4.x will not stay up"
+      kill "$PWNET_DBUS_PID" 2>/dev/null || true
+      unset PWNET_DBUS_PID
+    fi
+  fi
+
+  # A session sharing a machine with a desktop session cannot have its sound cards: the desktop
+  # holds them, and WirePlumber answers that by retrying the open in a loop that starves the whole
+  # session, not just audio. PWNET_SESSION_NO_HARDWARE gives this session a profile with no
+  # hardware at all, so the tests that need a card skip for a true reason and the rest run clean.
+  if [ "${PWNET_SESSION_NO_HARDWARE:-0}" = "1" ]; then
+    mkdir -p "$XDG_CONFIG_HOME/wireplumber/wireplumber.conf.d"
+    cat > "$XDG_CONFIG_HOME/wireplumber/wireplumber.conf.d/50-pwnet-no-hardware.conf" <<'PWNETCONF'
+wireplumber.profiles = {
+  pwnet-no-hardware = {
+    inherits = [ base ]
+    metadata.sm-settings = required
+    metadata.sm-objects = required
+    policy.standard = required
+    hardware.audio = disabled
+    hardware.bluetooth = disabled
+    # Cameras are not contended the way sound cards are - nothing holds a v4l2 device while
+    # idle - and the local-v4l2 tests provision their own loopback camera, so the v4l2 monitor
+    # stays on. With nothing to find it costs nothing.
+    hardware.video-capture = required
+  }
+}
+PWNETCONF
+    PWNET_WP_ARGS="--profile pwnet-no-hardware"
+  else
+    PWNET_WP_ARGS=""
+  fi
+
+  # A session without its sound cards has no audio devices at all, so every test that needs a
+  # default sink or source skips. PWNET_SESSION_NULL_AUDIO gives it two null adapters to make
+  # default instead, without touching the hardware.
+  if [ "${PWNET_SESSION_NULL_AUDIO:-0}" = "1" ]; then
+    mkdir -p "$XDG_CONFIG_HOME/pipewire/pipewire.conf.d"
+    cat > "$XDG_CONFIG_HOME/pipewire/pipewire.conf.d/50-pwnet-null.conf" <<'PWNETCONF'
+context.objects = [
+  { factory = adapter
+    args = {
+      factory.name   = support.null-audio-sink
+      node.name      = "pwnet-null-sink"
+      media.class    = Audio/Sink
+      object.linger  = true
+      audio.position = [ FL FR ]
+    }
+  }
+  { factory = adapter
+    args = {
+      factory.name   = support.null-audio-sink
+      node.name      = "pwnet-null-source"
+      media.class    = "Audio/Source/Virtual"
+      object.linger  = true
+      audio.position = [ FL FR ]
+    }
+  }
+]
+PWNETCONF
+  fi
+
+  # PWNET_SESSION_PW_DEBUG sets the daemon's log level (a PIPEWIRE_DEBUG value, topics allowed)
+  # without touching the clients', whose own PIPEWIRE_DEBUG is whatever the caller exported.
+  if [ -n "${PWNET_SESSION_PW_DEBUG:-}" ]; then
+    PIPEWIRE_DEBUG="$PWNET_SESSION_PW_DEBUG" pipewire > "$PWNET_SESSION_LOG_DIR/pipewire.log" 2>&1 &
+  else
+    pipewire > "$PWNET_SESSION_LOG_DIR/pipewire.log" 2>&1 &
+  fi
+  PWNET_PW_PID=$!
+
+  local i
+  for ((i = 1; i <= attempts; i++)); do
+    if pw-cli info 0 >/dev/null 2>&1; then
+      echo "session up after $i attempt(s): $(pipewire --version 2>&1 | head -1)"
+      break
+    fi
+
+    # A daemon that died is not going to answer, so stop waiting for it.
+    if ! kill -0 "$PWNET_PW_PID" 2>/dev/null; then
+      echo "::error::pipewire exited while starting up"
+      pwnet_session_dump
+      pwnet_session_stop
+      return 1
+    fi
+
+    sleep 0.25
+  done
+
+  if ! pw-cli info 0 >/dev/null 2>&1; then
+    echo "::error::pipewire did not answer pw-cli within $attempts attempts"
+    pwnet_session_dump
+    pwnet_session_stop
+    return 1
+  fi
+
+  # The suite quarantines a few tests on daemons with known bugs (CrashesOldDaemons runs
+  # only where the daemon survives it). The version comes from here because the registry
+  # never sees it: the daemon reports it in core info, not in global props.
+  PWNET_DAEMON_VERSION="$(pipewire --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+  export PWNET_DAEMON_VERSION
+
+  # Only now, with the socket proven to answer. WirePlumber exits rather than retries when it
+  # cannot reach PipeWire at startup, so starting the two together is a race the loaded machine
+  # loses: "Failed to connect to PipeWire" and a session that answers pw-cli but manages nothing.
+  # Unquoted on purpose: empty must expand to no argument at all, not to one empty argument.
+  # shellcheck disable=SC2086
+  # PWNET_SESSION_WP_DEBUG does the same for WirePlumber (a WIREPLUMBER_DEBUG value).
+  if [ -n "${PWNET_SESSION_WP_DEBUG:-}" ]; then
+    WIREPLUMBER_DEBUG="$PWNET_SESSION_WP_DEBUG" wireplumber $PWNET_WP_ARGS > "$PWNET_SESSION_LOG_DIR/wireplumber.log" 2>&1 &
+  else
+    wireplumber $PWNET_WP_ARGS > "$PWNET_SESSION_LOG_DIR/wireplumber.log" 2>&1 &
+  fi
+  PWNET_WP_PID=$!
+
+  # pipewire answering is only half the session: the tests need WirePlumber managing it
+  # (linking streams, default metadata), and a WirePlumber that died on startup looks
+  # exactly like a healthy one to pw-cli. Wait for its client global instead.
+  for ((i = 1; i <= 80; i++)); do
+    # Prefix, not an exact match: WirePlumber appends the profile name when one is selected, so
+    # a session started with --profile reports "WirePlumber (name)" here.
+    if pw-dump 2>/dev/null | grep -q '"application.name": "WirePlumber'; then
+      echo "wireplumber up after $i attempt(s)"
+      return 0
+    fi
+
+    if ! kill -0 "$PWNET_WP_PID" 2>/dev/null; then
+      echo "::error::wireplumber exited while starting up"
+      pwnet_session_dump
+      pwnet_session_stop
+      return 1
+    fi
+
+    sleep 0.25
+  done
+
+  echo "::error::wireplumber never appeared in pw-dump within 80 attempts"
+  pwnet_session_dump
+  pwnet_session_stop
+  return 1
+}
+
+pwnet_session_dump() {
+  echo "::group::pipewire.log";    tail -200 "$PWNET_SESSION_LOG_DIR/pipewire.log"    2>/dev/null || true; echo "::endgroup::"
+  echo "::group::wireplumber.log"; tail -200 "$PWNET_SESSION_LOG_DIR/wireplumber.log" 2>/dev/null || true; echo "::endgroup::"
+}
+
+pwnet_session_stop() {
+  # Defaulted, not bare: the function documents itself as safe to call twice, and the second
+  # call runs after the unset below - which is an error, not a no-op, under `set -u`.
+  kill "${PWNET_WP_PID:-}" "${PWNET_PW_PID:-}" "${PWNET_DBUS_PID:-}" 2>/dev/null || true
+  # A second session in the same shell must bring its own bus: the socket this one used
+  # is gone with it. Only ours, never a pre-existing address we did not set.
+  if [ -n "${PWNET_DBUS_PID:-}" ]; then
+    unset DBUS_SESSION_BUS_ADDRESS
+  fi
+  unset PWNET_WP_PID PWNET_PW_PID PWNET_DBUS_PID
+}
+
+# Runs one test leg inside an already-started session, stops the session afterwards, and
+# leaves the exit code in PWNET_LAST_RC. Always returns success itself, so callers under
+# `set -e` need no set +e dance: `pwnet_session_run dotnet test ...` then read the variable.
+#
+# PWNET_SESSION_DIED is set when the daemon did not survive the leg. A daemon that dies partway
+# fails every test after it with the same ENOENT from pw_context_connect, which reads as hundreds
+# of independent failures and is one: the difference matters enough to state rather than leave to
+# whoever opens the log. Observed on PipeWire 0.3.48, where racy destroy-during-create traffic
+# aborts the daemon (a use-after-free fixed upstream since).
+pwnet_session_run() {
+  set +e
+  "$@"
+  PWNET_LAST_RC=$?
+  set -e
+
+  PWNET_SESSION_DIED=0
+  if ! kill -0 "${PWNET_PW_PID:-}" 2>/dev/null || ! pw-cli info 0 >/dev/null 2>&1; then
+    PWNET_SESSION_DIED=1
+    echo "::error::the PipeWire daemon did not survive this leg; failures after the point it"
+    echo "::error::died are downstream of that, not independent results"
+    pwnet_session_dump
+  fi
+
+  pwnet_session_stop
+}

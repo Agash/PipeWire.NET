@@ -1,0 +1,205 @@
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Text;
+using Microsoft.Extensions.Logging;
+using PipeWire.NET.Interop;
+using PipeWire.NET.Spa;
+
+namespace PipeWire.NET.Graph;
+
+/// <summary>
+/// Creates sandboxed connection points on the daemon's security context.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Hands a sandbox a connection it cannot escape. The caller passes a listening socket and a
+/// lifetime descriptor. Clients connecting through that socket get the permissions named here, not
+/// the creator's, and the daemon drops them all when the lifetime descriptor closes.
+/// </para>
+/// <para>
+/// The descriptors stay the caller's. The daemon duplicates what it needs, so closing the lifetime
+/// one is how you end a sandbox.
+/// </para>
+/// </remarks>
+[SupportedOSPlatform("linux")]
+public sealed partial class PipeWireSecurityContextProxy : IDisposable, IAsyncDisposable
+{
+    private readonly PipeWireContext _ctx;
+    private readonly ILogger _logger;
+    private BoundProxy? _bound;
+    private volatile bool _disposed;
+
+    private PipeWireSecurityContextProxy(PipeWireContext ctx, uint id, ILogger logger)
+    {
+        _ctx = ctx;
+        Id = id;
+        _logger = logger;
+    }
+
+    /// <summary>The security context's global id.</summary>
+    public uint Id { get; }
+
+    internal static unsafe PipeWireSecurityContextProxy Bind(
+        PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger)
+    {
+        var control = new PipeWireSecurityContextProxy(ctx, id, logger);
+
+        // No events are subscribed: the interface's only event is a lifecycle signal this type has
+        // no use for, and the zeroed table keeps the binding shape the same as every other.
+        control._bound = BoundProxy.Bind(
+            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_SecurityContext, version, NativeConstants.PW_VERSION_SECURITY_CONTEXT,
+            sizeof(pw_security_context_events),
+            events => ((pw_security_context_events*)events)->version = 0,
+            static (_, _, _, _) => 0,
+            control);
+
+        control._bound.Removed = control.RaiseRemoved;
+
+        return control;
+    }
+
+    /// <summary>Raised on the loop thread when the daemon destroys the object behind this proxy.</summary>
+    /// <remarks>
+    /// A bound object can go at any time. The proxy survives as a zombie and every call through it
+    /// fails from here on, so this is the signal to stop using it. A caller watching the whole graph
+    /// sees the same thing through the registry; one holding only this proxy has nothing else.
+    /// </remarks>
+    public event Action? Removed;
+
+    /// <summary>Whether the daemon has destroyed the object behind this proxy.</summary>
+    public bool IsRemoved => _bound?.IsRemoved ?? false;
+
+    private void RaiseRemoved()
+    {
+        Action? handler = Removed;
+        if (handler is null) return;
+
+        // A native callback frame, so nothing may escape it.
+        try { handler(); }
+        catch (Exception) { /* a subscriber that throws must not reach the daemon */ }
+    }
+
+
+    /// <summary>
+    /// Opens a sandboxed connection point.
+    /// </summary>
+    /// <param name="listenFd">A listening socket the daemon accepts sandboxed clients on.</param>
+    /// <param name="closeFd">Closing this tells the daemon the sandbox is gone.</param>
+    /// <param name="properties">
+    /// The properties every client connecting through <paramref name="listenFd"/> is given, such as
+    /// <c>pipewire.access</c> and <c>pipewire.sec.engine</c>.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Abandons the wait. The request is already on its way, so cancelling does not recall
+    /// it: the daemon can still apply the change after this throws.
+    /// </param>
+    /// <exception cref="ArgumentNullException">A handle is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">
+    /// A handle is invalid, or <paramref name="listenFd"/> is not a listening socket.
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">This control has been disposed.</exception>
+    /// <exception cref="PipeWireException">The daemon refused the request.</exception>
+    public Task CreateAsync(
+        SafeHandle listenFd,
+        SafeHandle closeFd,
+        IReadOnlyDictionary<string, string> properties,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(listenFd);
+        ArgumentNullException.ThrowIfNull(closeFd);
+        if (listenFd.IsInvalid)
+            throw new ArgumentException("the handle does not carry a valid descriptor", nameof(listenFd));
+        if (closeFd.IsInvalid)
+            throw new ArgumentException("the handle does not carry a valid descriptor", nameof(closeFd));
+
+        // Held for the whole round trip, not just the call that starts it: the daemon receives
+        // copies over the socket and closes those, never these.
+        return FdInterop.BorrowAsync(listenFd, closeFd,
+            (listen, close) => CreateAsync(listen, close, properties, cancellationToken));
+    }
+
+    /// <summary>
+    /// Raw-descriptor counterpart of
+    /// <see cref="CreateAsync(SafeHandle, SafeHandle, IReadOnlyDictionary{string, string}, CancellationToken)"/>.
+    /// </summary>
+    /// <remarks>
+    /// Not public: a caller holding the numbers is responsible for keeping them open across the
+    /// call, which a handle does on its own.
+    /// </remarks>
+    internal async Task CreateAsync(
+        int listenFd,
+        int closeFd,
+        IReadOnlyDictionary<string, string> properties,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        ArgumentOutOfRangeException.ThrowIfNegative(listenFd);
+        ArgumentOutOfRangeException.ThrowIfNegative(closeFd);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // The daemon does not check this and cannot recover: it ends up calling accept4 on
+        // whatever it was given, forever, which costs the whole session.
+        if (!FdInterop.IsListeningSocket(listenFd))
+            throw new ArgumentException(
+                "the descriptor must be a listening socket", nameof(listenFd));
+
+        await CoreSync.RoundTripAsync(_ctx, () => Create(listenFd, closeFd, properties), cancellationToken)
+            .ConfigureAwait(false);
+
+        LogCreated(Id, properties.Count);
+    }
+
+    private unsafe int Create(int listenFd, int closeFd, IReadOnlyDictionary<string, string> properties)
+    {
+        int bytes = 0;
+        foreach ((string key, string value) in properties)
+            bytes += Encoding.UTF8.GetByteCount(key) + Encoding.UTF8.GetByteCount(value) + 2;
+
+        // A stackalloc cannot move; a heap fallback can, and this array's address goes to native
+        // code, so the fallback has to be pinned.
+        Span<byte> scratch = bytes <= 512
+            ? stackalloc byte[512]
+            : GC.AllocateUninitializedArray<byte>(bytes, pinned: true);
+        Span<spa_dict_item> items = properties.Count <= 16
+            ? stackalloc spa_dict_item[16]
+            : GC.AllocateUninitializedArray<spa_dict_item>(properties.Count, pinned: true);
+
+        var builder = new SpaDictBuilder(scratch, items);
+        foreach ((string key, string value) in properties)
+            builder.Add(key, value);
+
+        if (!_bound!.TryUse(out BoundProxy.Use proxy))
+            throw new ObjectDisposedException(nameof(PipeWireSecurityContextProxy));
+
+        using (proxy)
+        using (_ctx.Lock())
+        {
+            spa_dict dict = builder.Build();
+            return Native.pw_security_context_create(proxy.Object, listenFd, closeFd, &dict);
+        }
+    }
+
+    /// <inheritdoc/>
+    public void Dispose() => DisposeCore();
+
+    /// <inheritdoc/>
+    public ValueTask DisposeAsync()
+    {
+        DisposeCore();
+        return ValueTask.CompletedTask;
+    }
+
+    private void DisposeCore()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        _bound?.Dispose();
+        _bound = null;
+    }
+
+    [LoggerMessage(EventId = 34100, Level = LogLevel.Information,
+                   Message = "security context {ContextId} opened a sandbox with {PropertyCount} propertie(s)")]
+    private partial void LogCreated(uint contextId, int propertyCount);
+}

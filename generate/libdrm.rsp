@@ -1,0 +1,50 @@
+# ClangSharpPInvokeGenerator response file for the libdrm and kernel-uapi DRM constants.
+#
+# One of three macro passes, split by the library each one speaks for; see pipewire-constants.rsp
+# for why macros generate apart from the ABI pass at all. The 200-odd DRM_FORMAT_* fourcc codes are
+# the bulk of what these passes emit and none of them are PipeWire's, which is what made a single
+# NativeConstants class misleading about where its contents came from.
+#
+# --file is deliberately absent: generate.sh supplies the composite root.
+
+# DRM_SYNCOBJ_*: the flags the libdrm syncobj timeline calls take (WAIT_FOR_SUBMIT, ...).
+# DRM_CAP_SYNCOBJ_TIMELINE: what drmGetCap is asked before explicit sync is used at all.
+--traverse
+/usr/include/libdrm/drm.h
+
+# DRM formats and modifiers. Kernel uapi, so the values are stable ABI. Generated to avoid
+# hand-transcribing 300 fourcc codes, not because they drift.
+--traverse
+/usr/include/libdrm/drm_fourcc.h
+
+--include
+DRM_FORMAT_*
+--include
+DRM_SYNCOBJ_*
+--include
+DRM_CAP_SYNCOBJ_TIMELINE
+
+# The libdrm entry points themselves (drmSyncobj*, drmGetCap) are deliberately NOT generated and
+# stay hand-written as [LibraryImport] in Interop/NativeLibdrm.Imports.cs, for the same errno
+# reason libc.rsp gives. Their constants come from this pass.
+
+--include-directory
+/usr/include/libdrm
+--include-directory
+/usr/include
+
+--namespace
+PipeWire.NET.Interop
+--method-class-name
+NativeLibdrm
+
+--with-access-specifier
+*=Internal
+
+--generate
+macro-bindings
+
+--config
+file=multi
+codegen=preview
+types=unix

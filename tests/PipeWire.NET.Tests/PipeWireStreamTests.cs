@@ -1,13 +1,15 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using PipeWire.NET.Generated;
-using PipeWire.NET.Spa;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PipeWire.NET.Graph;
+using PipeWire.NET.Interop;
+using PipeWire.NET.Spa;
+using PipeWire.NET.Media;
 
 namespace PipeWire.NET.Tests;
 
 [TestClass]
-public sealed class SpaPodBuilderTests
+public sealed class SpaPodBuilderTests : PipeWireTestBase
 {
     [TestMethod]
     public void Build_FormatObject_RoundtripsThroughReader()
@@ -16,14 +18,13 @@ public sealed class SpaPodBuilderTests
         var builder = new SpaPodBuilder(buf);
 
         // No fluent chaining - each call mutates `builder` directly. Chaining on a
-        // ref struct invokes subsequent calls on a returned copy (see TryReadProperty
-        // failures committed in the previous revision).
-        builder.PushObject(SpaType.ObjectFormat, SpaParam.EnumFormat);
-        builder.AddId(SpaFormatVideo.MediaType,    SpaMediaType.Video);
-        builder.AddId(SpaFormatVideo.MediaSubtype, SpaMediaSubtype.Raw);
-        builder.AddId(SpaFormatVideo.Format,       SpaVideoFormat.BGRA);
-        builder.AddRectangle(SpaFormatVideo.Size,  1920, 1080);
-        builder.AddFraction(SpaFormatVideo.Framerate, 30, 1);
+        // ref struct invokes subsequent calls on a returned copy.
+        builder.PushObject(SpaType.ObjectFormat, SpaParamType.EnumFormat);
+        builder.AddId(SpaFormat.MediaType,    SpaMediaType.Video);
+        builder.AddId(SpaFormat.MediaSubtype, SpaMediaSubtype.Raw);
+        builder.AddId(SpaFormat.VideoFormat,       SpaVideoFormat.Bgra);
+        builder.AddRectangle(SpaFormat.VideoSize,  1920, 1080);
+        builder.AddFraction(SpaFormat.VideoFramerate, 30, 1);
 
         ReadOnlySpan<byte> pod = builder.GetPod();
         Assert.IsTrue(pod.Length >= 8 + 8);
@@ -31,28 +32,28 @@ public sealed class SpaPodBuilderTests
 
         var reader = new SpaPodReader(pod);
         Assert.IsTrue(reader.EnterObject(out uint objType, out _, out _));
-        Assert.AreEqual(SpaType.ObjectFormat, objType);
+        Assert.AreEqual(SpaType.ObjectFormat, (SpaType)objType);
 
         bool sawMediaType = false, sawSize = false, sawFramerate = false;
 
-        while (reader.TryReadProperty(out uint key, out var value))
+        while (reader.TryReadProperty(out SpaKey key, out var value))
         {
-            switch (key)
+            switch (key.As<SpaFormat>())
             {
-                case SpaFormatVideo.MediaType:
-                    Assert.AreEqual(SpaMediaType.Video, value.ReadId());
+                case SpaFormat.MediaType:
+                    Assert.AreEqual(SpaMediaType.Video, value.ReadId().As<SpaMediaType>());
                     sawMediaType = true;
                     break;
-                case SpaFormatVideo.Format:
-                    Assert.AreEqual(SpaVideoFormat.BGRA, value.ReadId());
+                case SpaFormat.VideoFormat:
+                    Assert.AreEqual(SpaVideoFormat.Bgra, value.ReadId().As<SpaVideoFormat>());
                     break;
-                case SpaFormatVideo.Size:
+                case SpaFormat.VideoSize:
                     var (w, h) = value.ReadRectangle();
                     Assert.AreEqual(1920u, w);
                     Assert.AreEqual(1080u, h);
                     sawSize = true;
                     break;
-                case SpaFormatVideo.Framerate:
+                case SpaFormat.VideoFramerate:
                     var (n, d) = value.ReadFraction();
                     Assert.AreEqual(30u, n);
                     Assert.AreEqual(1u, d);
@@ -71,17 +72,17 @@ public sealed class SpaPodBuilderTests
     {
         Span<byte> buf = stackalloc byte[256];
         var builder = new SpaPodBuilder(buf);
-        builder.PushObject(SpaType.ObjectFormat, SpaParam.EnumFormat);
-        builder.AddChoiceEnum(SpaFormatVideo.Format,
-            SpaVideoFormat.BGRA, SpaVideoFormat.RGBA);
+        builder.PushObject(SpaType.ObjectFormat, SpaParamType.EnumFormat);
+        builder.AddChoiceEnum(SpaFormat.VideoFormat,
+            SpaVideoFormat.Bgra, SpaVideoFormat.Rgba);
 
         var reader = new SpaPodReader(builder.GetPod());
         Assert.IsTrue(reader.EnterObject(out _, out _, out _));
-        Assert.IsTrue(reader.TryReadProperty(out uint key, out var value));
-        Assert.AreEqual(SpaFormatVideo.Format, key);
+        Assert.IsTrue(reader.TryReadProperty(out SpaKey key, out var value));
+        Assert.AreEqual(SpaFormat.VideoFormat, key);
 
         Assert.IsTrue(value.TryUnwrapChoice(out var firstChoice));
-        Assert.AreEqual(SpaVideoFormat.BGRA, firstChoice.ReadId());
+        Assert.AreEqual(SpaVideoFormat.Bgra, firstChoice.ReadId());
     }
 
     [TestMethod]
@@ -89,14 +90,14 @@ public sealed class SpaPodBuilderTests
     {
         Span<byte> buf = stackalloc byte[256];
         var b = new SpaPodBuilder(buf);
-        b.PushObject(SpaType.ObjectFormat, SpaParam.Format);
-        b.AddId(SpaFormatVideo.MediaType, SpaMediaType.Video);
+        b.PushObject(SpaType.ObjectFormat, SpaParamType.Format);
+        b.AddId(SpaFormat.MediaType, SpaMediaType.Video);
         Assert.AreEqual(0, b.GetPod().Length & 7);
     }
 }
 
 [TestClass]
-public sealed class VideoFrameTests
+public sealed class VideoFrameTests : PipeWireTestBase
 {
     [TestMethod]
     public void Ctor_PreservesAllFields()
@@ -109,12 +110,12 @@ public sealed class VideoFrameTests
         Assert.AreEqual(4, frame.Height);
         Assert.AreEqual(PixelFormat.Bgra, frame.Format);
         Assert.AreEqual(42UL, frame.SequenceNumber);
-        Assert.AreEqual(16, frame.Data.Length);
+        Assert.AreEqual(16, frame.Pixels.Length);
     }
 }
 
 [TestClass]
-public sealed class GeneratedAbiTests
+public sealed class GeneratedAbiTests : PipeWireTestBase
 {
     // Hand-verified against libpipewire-0.3-dev 1.0.5 on x86_64 Linux.
     // If PipeWire bumps any of these struct sizes, regenerate bindings and update these.
@@ -149,12 +150,12 @@ public sealed class GeneratedAbiTests
     {
         // Convert.To* reads the underlying value at runtime, so these verify the generated
         // enum constants rather than comparing two compile-time constants.
-        Assert.AreEqual(0u, Convert.ToUInt32(spa_direction.SPA_DIRECTION_INPUT));
-        Assert.AreEqual(1u, Convert.ToUInt32(spa_direction.SPA_DIRECTION_OUTPUT));
+        Assert.AreEqual(0u, Convert.ToUInt32(SpaDirection.Input));
+        Assert.AreEqual(1u, Convert.ToUInt32(SpaDirection.Output));
 
-        Assert.AreEqual(-1, Convert.ToInt32(pw_stream_state.PW_STREAM_STATE_ERROR));
-        Assert.AreEqual(0, Convert.ToInt32(pw_stream_state.PW_STREAM_STATE_UNCONNECTED));
-        Assert.AreEqual(3, Convert.ToInt32(pw_stream_state.PW_STREAM_STATE_STREAMING));
+        Assert.AreEqual(-1, Convert.ToInt32(PipeWireStreamState.Error));
+        Assert.AreEqual(0, Convert.ToInt32(PipeWireStreamState.Unconnected));
+        Assert.AreEqual(3, Convert.ToInt32(PipeWireStreamState.Streaming));
     }
 
     [TestMethod]
@@ -166,55 +167,54 @@ public sealed class GeneratedAbiTests
 }
 
 [TestClass]
-public sealed class MetadataMappingTests
+public sealed class MetadataMappingTests : PipeWireTestBase
 {
     [TestMethod]
     public void ColorMappers_MapSpaValuesCorrectly()
     {
         // SPA numbering is non-contiguous with our public enums; mapping is explicit.
         Assert.AreEqual(VideoColorRange.Limited_16_235,
-            SpaFormat.MapColorRange((uint)spa_video_color_range.SPA_VIDEO_COLOR_RANGE_16_235));
+            SpaFormatPod.MapColorRange(SpaVideoColorRange.Limited));
         Assert.AreEqual(VideoColorMatrix.Bt709,
-            SpaFormat.MapColorMatrix((uint)spa_video_color_matrix.SPA_VIDEO_COLOR_MATRIX_BT709));
+            SpaFormatPod.MapColorMatrix(SpaVideoColorMatrix.Bt709));
         Assert.AreEqual(VideoColorMatrix.Bt2020,
-            SpaFormat.MapColorMatrix((uint)spa_video_color_matrix.SPA_VIDEO_COLOR_MATRIX_BT2020));
+            SpaFormatPod.MapColorMatrix(SpaVideoColorMatrix.Bt2020));
         Assert.AreEqual(VideoTransferFunction.Srgb,
-            SpaFormat.MapTransfer((uint)spa_video_transfer_function.SPA_VIDEO_TRANSFER_SRGB));
+            SpaFormatPod.MapTransfer(SpaVideoTransferFunction.Srgb));
         Assert.AreEqual(VideoColorPrimaries.Bt2020,
-            SpaFormat.MapPrimaries((uint)spa_video_color_primaries.SPA_VIDEO_COLOR_PRIMARIES_BT2020));
-        Assert.AreEqual(VideoColorMatrix.Unknown, SpaFormat.MapColorMatrix(9999));
+            SpaFormatPod.MapPrimaries(SpaVideoColorPrimaries.Bt2020));
+        Assert.AreEqual(VideoColorMatrix.Unknown, SpaFormatPod.MapColorMatrix((SpaVideoColorMatrix)9999));
     }
 
     [TestMethod]
     public void ToBufferType_MapsDataTypes()
     {
-        Assert.AreEqual(PipeWireBufferType.MemPtr, SpaFormat.ToBufferType((uint)spa_data_type.SPA_DATA_MemPtr));
-        Assert.AreEqual(PipeWireBufferType.MemFd,  SpaFormat.ToBufferType((uint)spa_data_type.SPA_DATA_MemFd));
-        Assert.AreEqual(PipeWireBufferType.DmaBuf, SpaFormat.ToBufferType((uint)spa_data_type.SPA_DATA_DmaBuf));
-        Assert.AreEqual(PipeWireBufferType.Unknown, SpaFormat.ToBufferType(9999));
+        Assert.AreEqual(PipeWireBufferType.MemPtr, SpaFormatPod.ToBufferType(SpaDataType.MemPtr));
+        Assert.AreEqual(PipeWireBufferType.MemFd,  SpaFormatPod.ToBufferType(SpaDataType.MemFd));
+        Assert.AreEqual(PipeWireBufferType.DmaBuf, SpaFormatPod.ToBufferType(SpaDataType.DmaBuf));
+        Assert.AreEqual(PipeWireBufferType.Unknown, SpaFormatPod.ToBufferType((SpaDataType)9999));
     }
 
     [TestMethod]
     public unsafe void ParseVideoFormat_ReadsColorMetadata()
     {
-        // Build a Format object carrying color props, then parse it back.
         Span<byte> buf = stackalloc byte[512];
         var b = new SpaPodBuilder(buf);
-        b.PushObject(SpaType.ObjectFormat, SpaParam.Format);
-        b.AddId(SpaFormatVideo.MediaType,    SpaMediaType.Video);
-        b.AddId(SpaFormatVideo.MediaSubtype, SpaMediaSubtype.Raw);
-        b.AddId(SpaFormatVideo.Format,       SpaVideoFormat.BGRA);
-        b.AddRectangle(SpaFormatVideo.Size,  1920, 1080);
-        b.AddId(SpaFormatVideo.ColorRange,       (uint)spa_video_color_range.SPA_VIDEO_COLOR_RANGE_16_235);
-        b.AddId(SpaFormatVideo.ColorMatrix,      (uint)spa_video_color_matrix.SPA_VIDEO_COLOR_MATRIX_BT709);
-        b.AddId(SpaFormatVideo.TransferFunction, (uint)spa_video_transfer_function.SPA_VIDEO_TRANSFER_SRGB);
-        b.AddId(SpaFormatVideo.ColorPrimaries,   (uint)spa_video_color_primaries.SPA_VIDEO_COLOR_PRIMARIES_BT709);
+        b.PushObject(SpaType.ObjectFormat, SpaParamType.Format);
+        b.AddId(SpaFormat.MediaType,    SpaMediaType.Video);
+        b.AddId(SpaFormat.MediaSubtype, SpaMediaSubtype.Raw);
+        b.AddId(SpaFormat.VideoFormat,       SpaVideoFormat.Bgra);
+        b.AddRectangle(SpaFormat.VideoSize,  1920, 1080);
+        b.AddId(SpaFormat.VideoColorRange,       SpaVideoColorRange.Limited);
+        b.AddId(SpaFormat.VideoColorMatrix,      SpaVideoColorMatrix.Bt709);
+        b.AddId(SpaFormat.VideoTransferFunction, SpaVideoTransferFunction.Srgb);
+        b.AddId(SpaFormat.VideoColorPrimaries,   SpaVideoColorPrimaries.Bt709);
         ReadOnlySpan<byte> pod = b.GetPod();
 
-        SpaFormat.VideoFormatInfo info;
+        SpaFormatPod.VideoFormatInfo info;
         fixed (byte* p = pod)
-            info = SpaFormat.ParseVideoFormat((spa_pod*)p,
-                new SpaFormat.VideoFormatInfo(PixelFormat.Bgra, 0, 0, VideoColorInfo.Unknown));
+            info = SpaFormatPod.ParseVideoFormat((spa_pod*)p,
+                new SpaFormatPod.VideoFormatInfo(PixelFormat.Bgra, 0, 0, VideoColorInfo.Unknown));
 
         Assert.AreEqual(PixelFormat.Bgra, info.Format);
         Assert.AreEqual(1920, info.Width);
@@ -231,23 +231,23 @@ public sealed class MetadataMappingTests
         // The capture must offer SPA_DATA_DmaBuf (plus host memory) so a GPU producer can hand
         // us zero-copy buffers. Verify the pod we send actually carries that flag - headless.
         Span<byte> buf = stackalloc byte[256];
-        int len = SpaFormat.WriteVideoBuffersParam(buf, size: 1920 * 1080 * 4, stride: 1920 * 4,
-            dataTypes: SpaFormat.VideoCaptureDataTypeMask);
+        int len = SpaFormatPod.WriteVideoBuffersParam(buf, size: 1920 * 1080 * 4, stride: 1920 * 4,
+            dataTypes: SpaFormatPod.VideoCaptureDataTypeMask);
 
         var reader = new SpaPodReader(buf[..len]);
         Assert.IsTrue(reader.EnterObject(out uint objType, out _, out _));
-        Assert.AreEqual(SpaType.ObjectParamBuffers, objType);
+        Assert.AreEqual(SpaType.ObjectParamBuffers, (SpaType)objType);
 
         int? dataTypeMask = null;
-        while (reader.TryReadProperty(out uint key, out var value))
+        while (reader.TryReadProperty(out SpaKey key, out var value))
         {
             if (key == SpaParamBuffers.DataType)
                 dataTypeMask = value.TryUnwrapChoice(out var inner) ? inner.ReadInt() : value.ReadInt();
         }
 
         Assert.IsNotNull(dataTypeMask, "buffers param must contain a dataType property");
-        int dmaBufBit = 1 << (int)spa_data_type.SPA_DATA_DmaBuf;
-        int memPtrBit = 1 << (int)spa_data_type.SPA_DATA_MemPtr;
+        int dmaBufBit = 1 << (int)SpaDataType.DmaBuf;
+        int memPtrBit = 1 << (int)SpaDataType.MemPtr;
         Assert.AreEqual(dmaBufBit, dataTypeMask!.Value & dmaBufBit, "must advertise DMA-BUF");
         Assert.AreEqual(memPtrBit, dataTypeMask!.Value & memPtrBit, "must also advertise host memory fallback");
     }
@@ -258,19 +258,19 @@ public sealed class MetadataMappingTests
         ReadOnlySpan<byte> px = stackalloc byte[16];
         var frame = new VideoFrame(px, 64, 4, 4, PixelFormat.Bgra, 7,
             bufferType: PipeWireBufferType.DmaBuf, fd: 42, mapOffset: 0,
-            presentationTimeNs: 123_456,
+            presentationTimestampNs: 123_456,
             color: new VideoColorInfo(VideoColorRange.Full_0_255, VideoColorMatrix.Rgb,
                                       VideoTransferFunction.Srgb, VideoColorPrimaries.Bt709));
         Assert.AreEqual(PipeWireBufferType.DmaBuf, frame.BufferType);
         Assert.IsTrue(frame.IsFdBacked);
         Assert.AreEqual(42, frame.Fd);
-        Assert.AreEqual(123_456, frame.PresentationTimeNs);
+        Assert.AreEqual(123_456, frame.PresentationTimestampNs);
         Assert.AreEqual(VideoColorMatrix.Rgb, frame.Color.Matrix);
     }
 }
 
 [TestClass]
-public sealed class ModifierNegotiationTests
+public sealed class ModifierNegotiationTests : PipeWireTestBase
 {
     // Two sample DRM format modifiers (values are opaque 64-bit tokens; the test only checks the wire
     // round-trip, not their meaning). Linear plus an AMD GFX9 tiled-ish token exercise multi-value.
@@ -283,27 +283,27 @@ public sealed class ModifierNegotiationTests
         Span<byte> buf = stackalloc byte[512];
         ReadOnlySpan<PixelFormat> fmts = stackalloc[] { PixelFormat.Yuv420 };
         ReadOnlySpan<long> mods = stackalloc[] { ModTiled, ModLinear };
-        int len = SpaFormat.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false, modifiers: mods);
+        int len = SpaFormatPod.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false, modifiers: mods);
 
         var reader = new SpaPodReader(buf[..len]);
         Assert.IsTrue(reader.EnterObject(out _, out _, out _));
 
         bool sawModifier = false;
-        while (reader.TryReadProperty(out uint key, out uint flags, out var value))
+        while (reader.TryReadProperty(out SpaKey key, out SpaPodPropFlags flags, out var value))
         {
-            if (key != SpaFormatVideo.Modifier) continue;
+            if (key != SpaFormat.VideoModifier) continue;
             sawModifier = true;
 
             // First pass MUST advertise MANDATORY|DONT_FIXATE so the producer narrows the modifier
             // set to what it supports without collapsing it to a single value (the two-step handshake).
-            Assert.AreEqual(SpaPodPropFlag.Mandatory, flags & SpaPodPropFlag.Mandatory, "MANDATORY must be set");
-            Assert.AreEqual(SpaPodPropFlag.DontFixate, flags & SpaPodPropFlag.DontFixate, "DONT_FIXATE must be set");
+            Assert.AreEqual(SpaPodPropFlags.Mandatory, flags & SpaPodPropFlags.Mandatory, "MANDATORY must be set");
+            Assert.AreEqual(SpaPodPropFlags.DontFixate, flags & SpaPodPropFlags.DontFixate, "DONT_FIXATE must be set");
 
             Assert.IsTrue(value.TryReadModifier(out long first, out int count));
             // SPA Choice Enum body is { default, ...allowed }: the first value is the default AND must also
             // appear in the allowed set, so the preferred modifier is written twice. For [Tiled, Linear] the
-            // wire is [Tiled(default), Tiled, Linear] = 3 longs. (A single modifier written once would leave
-            // the allowed set empty - the consumer then has nothing to select, the dmabuf negotiation bug.)
+            // wire is [Tiled(default), Tiled, Linear] = 3 longs. A single modifier written once would leave
+            // the allowed set empty and the consumer with nothing to select.
             Assert.AreEqual(3, count, "default is repeated into the allowed set, then both modifiers follow");
             Assert.AreEqual(ModTiled, first, "the first offered modifier is the preferred one (the default)");
         }
@@ -316,18 +316,18 @@ public sealed class ModifierNegotiationTests
         Span<byte> buf = stackalloc byte[512];
         ReadOnlySpan<PixelFormat> fmts = stackalloc[] { PixelFormat.Yuv420 };
         ReadOnlySpan<long> mods = stackalloc[] { ModTiled };
-        int len = SpaFormat.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false,
+        int len = SpaFormatPod.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false,
             modifiers: mods, fixateModifier: true);
 
         var reader = new SpaPodReader(buf[..len]);
         Assert.IsTrue(reader.EnterObject(out _, out _, out _));
-        while (reader.TryReadProperty(out uint key, out uint flags, out _))
+        while (reader.TryReadProperty(out SpaKey key, out SpaPodPropFlags flags, out _))
         {
-            if (key != SpaFormatVideo.Modifier) continue;
+            if (key != SpaFormat.VideoModifier) continue;
             // The fixate pass keeps MANDATORY but drops DONT_FIXATE, telling the producer to settle
             // on the single modifier we now offer.
-            Assert.AreEqual(SpaPodPropFlag.Mandatory, flags & SpaPodPropFlag.Mandatory);
-            Assert.AreEqual(0u, flags & SpaPodPropFlag.DontFixate, "fixate pass must NOT set DONT_FIXATE");
+            Assert.AreEqual(SpaPodPropFlags.Mandatory, flags & SpaPodPropFlags.Mandatory);
+            Assert.AreEqual(SpaPodPropFlags.None, flags & SpaPodPropFlags.DontFixate, "fixate pass must NOT set DONT_FIXATE");
         }
     }
 
@@ -337,12 +337,12 @@ public sealed class ModifierNegotiationTests
         Span<byte> buf = stackalloc byte[512];
         ReadOnlySpan<PixelFormat> fmts = stackalloc[] { PixelFormat.Yuv420 };
         ReadOnlySpan<long> mods = stackalloc[] { ModTiled, ModLinear };
-        int len = SpaFormat.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false, modifiers: mods);
+        int len = SpaFormatPod.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false, modifiers: mods);
 
-        SpaFormat.VideoFormatInfo info;
+        SpaFormatPod.VideoFormatInfo info;
         fixed (byte* p = buf)
-            info = SpaFormat.ParseVideoFormat((spa_pod*)p,
-                new SpaFormat.VideoFormatInfo(PixelFormat.Yuv420, 0, 0, VideoColorInfo.Unknown));
+            info = SpaFormatPod.ParseVideoFormat((spa_pod*)p,
+                new SpaFormatPod.VideoFormatInfo(PixelFormat.Yuv420, 0, 0, VideoColorInfo.Unknown));
 
         Assert.AreEqual((ulong)ModTiled, info.Modifier, "preferred modifier is the first offered");
         Assert.IsTrue(info.ModifierNeedsFixation, "more than one modifier => still needs fixation");
@@ -354,13 +354,13 @@ public sealed class ModifierNegotiationTests
         Span<byte> buf = stackalloc byte[512];
         ReadOnlySpan<PixelFormat> fmts = stackalloc[] { PixelFormat.Yuv420 };
         ReadOnlySpan<long> mods = stackalloc[] { ModTiled };
-        int len = SpaFormat.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false,
+        int len = SpaFormatPod.WriteVideoFormat(buf, fmts, 1920, 1080, 30, fixedSize: false,
             modifiers: mods, fixateModifier: true);
 
-        SpaFormat.VideoFormatInfo info;
+        SpaFormatPod.VideoFormatInfo info;
         fixed (byte* p = buf)
-            info = SpaFormat.ParseVideoFormat((spa_pod*)p,
-                new SpaFormat.VideoFormatInfo(PixelFormat.Yuv420, 0, 0, VideoColorInfo.Unknown));
+            info = SpaFormatPod.ParseVideoFormat((spa_pod*)p,
+                new SpaFormatPod.VideoFormatInfo(PixelFormat.Yuv420, 0, 0, VideoColorInfo.Unknown));
 
         Assert.AreEqual((ulong)ModTiled, info.Modifier);
         Assert.IsFalse(info.ModifierNeedsFixation, "a single modifier is already fixated");
@@ -387,23 +387,23 @@ public sealed class ModifierNegotiationTests
 }
 
 [TestClass]
-public sealed class DmaBufOutputTests
+public sealed class DmaBufOutputTests : PipeWireTestBase
 {
     [TestMethod]
     public void PlaneCount_MatchesFormatLayout()
     {
-        Assert.AreEqual(1, SpaFormat.PlaneCount(PixelFormat.Bgra));
-        Assert.AreEqual(1, SpaFormat.PlaneCount(PixelFormat.Yuyv));
-        Assert.AreEqual(2, SpaFormat.PlaneCount(PixelFormat.Nv12), "NV12 = Y + interleaved UV");
-        Assert.AreEqual(3, SpaFormat.PlaneCount(PixelFormat.Yuv420), "I420 = Y + U + V");
+        Assert.AreEqual(1, SpaFormatPod.PlaneCount(PixelFormat.Bgra));
+        Assert.AreEqual(1, SpaFormatPod.PlaneCount(PixelFormat.Yuyv));
+        Assert.AreEqual(2, SpaFormatPod.PlaneCount(PixelFormat.Nv12), "NV12 = Y + interleaved UV");
+        Assert.AreEqual(3, SpaFormatPod.PlaneCount(PixelFormat.Yuv420), "I420 = Y + U + V");
     }
 
     [TestMethod]
     public void Nv12_RoundtripsThroughSpaFormat()
     {
-        uint spa = SpaFormat.ToSpaVideoFormat(PixelFormat.Nv12);
-        Assert.AreEqual(SpaVideoFormat.NV12, spa);
-        Assert.AreEqual(PixelFormat.Nv12, SpaFormat.FromSpaVideoFormat(spa));
+        SpaVideoFormat spa = SpaFormatPod.ToSpaVideoFormat(PixelFormat.Nv12);
+        Assert.AreEqual(SpaVideoFormat.Nv12, spa);
+        Assert.AreEqual(PixelFormat.Nv12, SpaFormatPod.FromSpaVideoFormat(spa));
     }
 
     [TestMethod]
@@ -411,19 +411,19 @@ public sealed class DmaBufOutputTests
     {
         // A dmabuf producer for NV12 must request one block per plane (2) so each plane gets its own
         // spa_data (fd/offset/stride), and advertise the DMA-BUF data type only.
-        int blocks = SpaFormat.PlaneCount(PixelFormat.Nv12);
+        int blocks = SpaFormatPod.PlaneCount(PixelFormat.Nv12);
         Span<byte> buf = stackalloc byte[256];
-        int len = SpaFormat.WriteVideoBuffersParam(buf,
-            size: SpaFormat.VideoImageSize(PixelFormat.Nv12, 1920, 1080),
-            stride: SpaFormat.VideoStride(PixelFormat.Nv12, 1920),
-            dataTypes: 1 << (int)SpaType.DataDmaBuf, blocks: blocks);
+        int len = SpaFormatPod.WriteVideoBuffersParam(buf,
+            size: SpaFormatPod.VideoImageSize(PixelFormat.Nv12, 1920, 1080),
+            stride: SpaFormatPod.VideoStride(PixelFormat.Nv12, 1920),
+            dataTypes: 1 << (int)SpaDataType.DmaBuf, blocks: blocks);
 
         var reader = new SpaPodReader(buf[..len]);
         Assert.IsTrue(reader.EnterObject(out uint objType, out _, out _));
-        Assert.AreEqual(SpaType.ObjectParamBuffers, objType);
+        Assert.AreEqual(SpaType.ObjectParamBuffers, (SpaType)objType);
 
         int? sawBlocks = null, sawDataType = null;
-        while (reader.TryReadProperty(out uint key, out var value))
+        while (reader.TryReadProperty(out SpaKey key, out var value))
         {
             if (key == SpaParamBuffers.Blocks)
                 sawBlocks = value.TryUnwrapChoice(out var i) ? i.ReadInt() : value.ReadInt();
@@ -432,7 +432,7 @@ public sealed class DmaBufOutputTests
         }
 
         Assert.AreEqual(2, sawBlocks, "NV12 dmabuf must request 2 blocks");
-        int dmaBufBit = 1 << (int)spa_data_type.SPA_DATA_DmaBuf;
+        int dmaBufBit = 1 << (int)SpaDataType.DmaBuf;
         Assert.IsNotNull(sawDataType);
         Assert.AreEqual(dmaBufBit, sawDataType!.Value & dmaBufBit, "must advertise DMA-BUF");
     }
@@ -442,7 +442,7 @@ public sealed class DmaBufOutputTests
 // These P/Invoke into libpipewire, so they can only run on Linux. SupportedOSPlatform is a
 // compile-time hint and does not stop the runner, so state the runtime condition too.
 [OSCondition(OperatingSystems.Linux)]
-public sealed class NativeLibraryResolutionTests
+public sealed class NativeLibraryResolutionTests : PipeWireTestBase
 {
     [TestMethod]
     [TestCategory("Integration")]
@@ -523,8 +523,18 @@ public sealed class NativeLibraryResolutionTests
         // virtual audio source, capture it back, and assert real buffers flow with
         // negotiated format. Exercises pw_stream_new/connect, format negotiation,
         // the process callback, and buffer dequeue/queue on both directions.
+        //
+        // The output is targeted at a virtual sink this test owns, not autoconnected: a
+        // session-manager default route needs a coherent session, and this test is about the
+        // streams, not about WirePlumber policy. The capture binds the source by name, which
+        // is equally explicit.
         await using var ctx = new PipeWireContext();
         await ctx.StartAsync();
+        await using var registry = new PipeWireRegistry(ctx);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+        PipeWireNode sink = await registry.CreateVirtualSinkAsync(
+            "RoundTripSink", "pwnet_roundtrip_sink", cts.Token);
 
         const int rate = 48000, channels = 2;
         await using var output = new PipeWireAudioOutput(ctx, "PipeWire.NET.Test.Source",
@@ -537,7 +547,7 @@ public sealed class NativeLibraryResolutionTests
             Interlocked.Increment(ref produced);
             return samples.Length;
         };
-        output.Connect();
+        output.Connect(targetObjectName: sink.NodeName, autoConnect: false);
 
         // AudioFrame is a ref struct and can't be a TResult - capture scalar facts.
         var captured = new TaskCompletionSource<(int Rate, int Channels)>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -551,6 +561,19 @@ public sealed class NativeLibraryResolutionTests
         Assert.IsTrue(produced > 0, "output stream should have been pulled for samples");
         Assert.AreEqual(channels, got.Channels);
         Assert.AreEqual(rate, got.Rate);
+
+        // Both streams are flowing here, so the streaming wait returns at once and the
+        // control lookup goes through on a live stream (an unknown id reports nothing).
+        using var live = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await output.WaitForStreamingAsync(live.Token);
+        await capture.WaitForStreamingAsync(live.Token);
+        Assert.IsNull(output.GetControl(0x7FFF_FFFF));
+        Assert.IsNull(capture.GetControl(0x7FFF_FFFF));
+
+        // A control write is fire-and-forget at the protocol level: the daemon applies or
+        // drops it, and either way the call itself must go through on a live stream.
+        output.SetControl(7, [0.5f]);
+        capture.SetControl(7, [0.5f, 0.25f]);
     }
 
     [TestMethod]
@@ -569,6 +592,11 @@ public sealed class NativeLibraryResolutionTests
 
         await using var ctx = new PipeWireContext();
         await ctx.StartAsync();
+        await using var registry = new PipeWireRegistry(ctx);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+        PipeWireNode sink = await registry.CreateVirtualSinkAsync(
+            "RoundTripVideoSink", "pwnet_roundtrip_vsink", cts.Token);
 
         await using var output = new PipeWireVideoOutput(ctx, "PipeWire.NET.Test.VideoSource",
             width: width, height: height, format: PixelFormat.Bgra, frameRate: 30);
@@ -580,7 +608,7 @@ public sealed class NativeLibraryResolutionTests
             Interlocked.Increment(ref produced);
             return true;
         };
-        output.Connect();
+        output.Connect(targetObjectName: sink.NodeName, autoConnect: false);
 
         // Copy enough captured bytes out of the ref-struct frame to verify content.
         var captured = new TaskCompletionSource<(int W, int H, PixelFormat Fmt, PipeWireBufferType Buf, byte[] Head)>(
@@ -589,8 +617,8 @@ public sealed class NativeLibraryResolutionTests
         capture.FrameReady += (_, frame) =>
         {
             // Ignore the initial empty/black frames some negotiations emit; wait for real data.
-            if (frame.Data.Length < 256) return;
-            byte[] head = frame.Data[..256].ToArray();
+            if (frame.Pixels.Length < 256) return;
+            byte[] head = frame.Pixels[..256].ToArray();
             captured.TrySetResult((frame.Width, frame.Height, frame.Format, frame.BufferType, head));
         };
         capture.Connect(preferredFormats: stackalloc[] { PixelFormat.Bgra },
@@ -604,9 +632,30 @@ public sealed class NativeLibraryResolutionTests
         Assert.AreEqual(PixelFormat.Bgra, got.Fmt);
         Assert.AreNotEqual(PipeWireBufferType.Unknown, got.Buf);
 
-        // The load-bearing assertion: every sampled byte equals the marker we produced.
         foreach (byte b in got.Head)
             Assert.AreEqual(marker, b, "captured pixel data must match the produced marker byte-for-byte");
+
+        // Both streams are flowing here, so the streaming wait returns at once and the
+        // control lookup goes through on a live stream (an unknown id reports nothing).
+        using var live = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await output.WaitForStreamingAsync(live.Token);
+        await capture.WaitForStreamingAsync(live.Token);
+        Assert.IsNull(output.GetControl(0x7FFF_FFFF));
+        Assert.IsNull(capture.GetControl(0x7FFF_FFFF));
+
+        // A control write is fire-and-forget at the protocol level: the daemon applies or
+        // drops it, and either way the call itself must go through on a live stream.
+        output.SetControl(7, [0.5f]);
+        capture.SetControl(7, [0.5f, 0.25f]);
+
+        // A stream no daemon told about controls reports none rather than failing, and an empty
+        // control write is refused before anything reaches the daemon. Waiting for the streaming
+        // state is deliberately not asserted here: WirePlumber may error the output after frames
+        // flowed (a stale "no target" arriving late), and that error is the daemon's business.
+        Assert.AreEqual(0, output.Controls.Length);
+
+        // Empty is a caller mistake, refused before anything reaches the daemon.
+        Assert.ThrowsExactly<ArgumentException>(() => output.SetControl(0, []));
     }
 
     [TestMethod]
@@ -644,8 +693,8 @@ public sealed class NativeLibraryResolutionTests
         await using var capture = new PipeWireVideoCapture(ctx, "PipeWire.NET.Test.AlphaSink");
         capture.FrameReady += (_, frame) =>
         {
-            if (frame.Data.Length < 4) return;
-            captured.TrySetResult(frame.Data[..4].ToArray());
+            if (frame.Pixels.Length < 4) return;
+            captured.TrySetResult(frame.Pixels[..4].ToArray());
         };
         capture.Connect(preferredFormats: stackalloc[] { PixelFormat.Bgra },
             targetObjectName: "PipeWire.NET.Test.AlphaSource");
@@ -655,5 +704,211 @@ public sealed class NativeLibraryResolutionTests
         CollectionAssert.AreEqual(pixel, firstPixel,
             "BGRA pixel including the 0x80 alpha byte must survive the round-trip");
         Assert.AreEqual(0x80, firstPixel[3], "alpha channel must be preserved (not forced opaque)");
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task DisposingAStreamFromItsOwnCallback_IsRefused()
+    {
+        // The callback's frame is still on the stack: destroying the stream underneath it would
+        // requeue a buffer onto freed memory once the handler returns.
+        const int rate = 48000, channels = 2;
+        await using var ctx = new PipeWireContext();
+        await ctx.StartAsync();
+
+        await using var output = new PipeWireAudioOutput(ctx, "PipeWire.NET.Test.Suicidal",
+            sampleRate: rate, channels: channels, format: AudioSampleFormat.F32Le);
+
+        var refused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        output.FillSamples += (_, samples, _, _, _) =>
+        {
+            try
+            {
+                // Not awaited: the guard refuses synchronously, before any teardown starts, so
+                // there is nothing to wait for when the rule holds.
+                _ = output.DisposeAsync().AsTask();
+            }
+            catch (InvalidOperationException)
+            {
+                refused.TrySetResult();
+            }
+
+            samples.Clear();
+            return samples.Length;
+        };
+        output.Connect();
+
+        var flowed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var capture = new PipeWireAudioCapture(ctx, "PipeWire.NET.Test.SuicidalSink");
+        capture.FrameReady += (_, _) => flowed.TrySetResult();
+        capture.Connect(sampleRate: rate, channels: channels, format: AudioSampleFormat.F32Le,
+            targetObjectName: "PipeWire.NET.Test.Suicidal");
+
+        await refused.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await flowed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task AThrowingStateChangedHandler_DoesNotStopTheStream()
+    {
+        // State transitions are reported, not load-bearing: a subscriber that throws is logged
+        // and the stream keeps flowing.
+        const int rate = 48000, channels = 2;
+        await using var ctx = new PipeWireContext();
+        await ctx.StartAsync();
+
+        await using var output = new PipeWireAudioOutput(ctx, "PipeWire.NET.Test.StateThrow",
+            sampleRate: rate, channels: channels, format: AudioSampleFormat.F32Le);
+        output.FillSamples += (_, samples, _, _, _) =>
+        {
+            samples.Clear();
+            return samples.Length;
+        };
+        output.StateChanged += (_, _, _) => throw new InvalidOperationException("deliberate");
+        output.Connect();
+
+        var flowed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var capture = new PipeWireAudioCapture(ctx, "PipeWire.NET.Test.StateThrowSink");
+        capture.FrameReady += (_, _) => flowed.TrySetResult();
+        capture.Connect(sampleRate: rate, channels: channels, format: AudioSampleFormat.F32Le,
+            targetObjectName: "PipeWire.NET.Test.StateThrow");
+
+        await flowed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+}
+
+[TestClass]
+public sealed class StreamGuardTests : PipeWireTestBase
+{
+    // Every guard on the stream wrappers answers from local state: none of these reach the
+    // daemon, so all of them are checked against streams that were never connected.
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task AnUnconnectedVideoCapture_RefusesWorkWithClearErrors()
+    {
+        await using var ctx = new PipeWireContext();
+        await ctx.StartAsync();
+
+        await using var capture = new PipeWireVideoCapture(ctx, "PipeWire.NET.Test.GuardVideo");
+        Assert.IsNull(capture.NodeId);
+        Assert.AreEqual(DrmFormatModifier.Invalid, capture.NegotiatedModifier);
+        Assert.AreEqual(0, capture.Controls.Length);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        Assert.ThrowsExactly<InvalidOperationException>(() => capture.WaitForStreamingAsync(cts.Token));
+        Assert.ThrowsExactly<ArgumentException>(() => capture.SetControl(0, []));
+        Assert.ThrowsExactly<ArgumentNullException>(() => capture.Connect(null!));
+        Assert.ThrowsExactly<ArgumentException>(() => capture.Connect(
+            modifiers: new long[] { 1 },
+            preferredFormats: new[] { PixelFormat.Bgra, PixelFormat.Rgba }));
+
+        // The source overload forwards to the id overload once the null check passes. It starts
+        // a real negotiation, so the node it targets is torn down again immediately after.
+        await using var registry = new PipeWireRegistry(ctx);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+        PipeWireNode node = await registry.CreateVirtualSinkAsync("GuardSrc", "pwnet_guard_src", cts.Token);
+        await using PipeWireNodeProxy nodeControl = registry.BindNode(node.NodeId);
+        Assert.AreEqual(2, (await nodeControl.GetChannelMapAsync(cts.Token)).Length);
+        await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task AnUnconnectedAudioCapture_RefusesWorkWithClearErrors()
+    {
+        await using var ctx = new PipeWireContext();
+        await ctx.StartAsync();
+
+        await using var capture = new PipeWireAudioCapture(ctx, "PipeWire.NET.Test.GuardAudio");
+        Assert.IsNull(capture.NodeId);
+        Assert.AreEqual(0, capture.Controls.Length);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        Assert.ThrowsExactly<InvalidOperationException>(() => capture.WaitForStreamingAsync(cts.Token));
+        Assert.ThrowsExactly<ArgumentException>(() => capture.SetControl(0, []));
+        Assert.ThrowsExactly<ArgumentNullException>(() => capture.Connect(null!));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => capture.Connect(sampleRate: 0, channels: 2, format: AudioSampleFormat.F32Le));
+
+        await using var registry = new PipeWireRegistry(ctx);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+        PipeWireNode node = await registry.CreateVirtualSinkAsync("GuardAudioSrc", "pwnet_guard_asrc", cts.Token);
+        await using PipeWireNodeProxy nodeControl = registry.BindNode(node.NodeId);
+        Assert.AreEqual(2, (await nodeControl.GetChannelMapAsync(cts.Token)).Length);
+        await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task AnUnconnectedVideoOutput_RefusesWorkWithClearErrors()
+    {
+        await using var ctx = new PipeWireContext();
+        await ctx.StartAsync();
+
+        await using var output = new PipeWireVideoOutput(ctx, "PipeWire.NET.Test.GuardVideoOut",
+            width: 320, height: 240, format: PixelFormat.Bgra, frameRate: 30);
+        Assert.AreEqual(0, output.Controls.Length);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        Assert.ThrowsExactly<InvalidOperationException>(() => output.WaitForStreamingAsync(cts.Token));
+        Assert.ThrowsExactly<ArgumentException>(() => output.SetControl(0, []));
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task AnUnconnectedAudioOutput_RefusesWorkWithClearErrors()
+    {
+        await using var ctx = new PipeWireContext();
+        await ctx.StartAsync();
+
+        await using var output = new PipeWireAudioOutput(ctx, "PipeWire.NET.Test.GuardAudioOut",
+            sampleRate: 48000, channels: 2, format: AudioSampleFormat.F32Le);
+        Assert.AreEqual(0, output.Controls.Length);
+        Assert.IsNull(output.GetControl(0));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        Assert.ThrowsExactly<InvalidOperationException>(() => output.WaitForStreamingAsync(cts.Token));
+        Assert.ThrowsExactly<ArgumentException>(() => output.SetControl(0, []));
+    }
+
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task ConnectingOnADisposedContext_IsRefusedAndLeavesNothingBehind()
+    {
+        // A connect whose loop is already gone must refuse rather than half-construct: the
+        // failure path disposes the core before assigning it, so the object reports itself
+        // unconnected and nothing leaks on either side.
+        await using var ctx = new PipeWireContext();
+        await ctx.StartAsync();
+        await ctx.DisposeAsync();
+
+        await using var output = new PipeWireAudioOutput(ctx, "PipeWire.NET.Test.RefusedSource",
+            sampleRate: 48000, channels: 2, format: AudioSampleFormat.F32Le);
+        Assert.ThrowsExactly<ObjectDisposedException>(() => output.Connect());
+        Assert.IsNull(output.NodeId);
+
+        await using var capture = new PipeWireAudioCapture(ctx, "PipeWire.NET.Test.RefusedSink");
+        Assert.ThrowsExactly<ObjectDisposedException>(() => capture.Connect());
+        Assert.IsNull(capture.NodeId);
+
+        await using var video = new PipeWireVideoOutput(ctx, "PipeWire.NET.Test.RefusedVideo",
+            width: 320, height: 240, format: PixelFormat.Bgra, frameRate: 30);
+        Assert.ThrowsExactly<ObjectDisposedException>(() => video.Connect());
+        Assert.IsNull(video.NodeId);
     }
 }

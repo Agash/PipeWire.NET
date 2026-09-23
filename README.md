@@ -4,41 +4,63 @@
 [![build](https://github.com/Agash/PipeWire.NET/actions/workflows/build.yml/badge.svg)](https://github.com/Agash/PipeWire.NET/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-.NET bindings for [PipeWire](https://pipewire.org) on Linux. Capture and publish video and audio
-through the local media graph, with an API that stays close to PipeWire while feeling natural in C#.
+.NET bindings for [PipeWire](https://pipewire.org), the audio and video graph on modern Linux
+desktops. Read and route the graph, control volumes and devices, capture and publish audio and
+video, run DSP inside the graph, or publish virtual devices of your own.
 
-> **Alpha.** Early and working, but largely untested in the wild and rough in places. Try it and file
-> issues; expect breaking changes before 1.0.
+> **Alpha.** Early and working, but largely untested in the wild and rough in places. Try it and
+> file issues; expect breaking changes before 1.0.
+
+## Install
+
+```sh
+dotnet add package PipeWire.NET          # graph, control, serving, SPA pods
+dotnet add package PipeWire.NET.Media    # audio and video streams
+```
+
+## Hello, graph
 
 ```csharp
 await using var ctx = new PipeWireContext();
 await ctx.StartAsync();
 
-await using var camera = new PipeWireVideoCapture(ctx);
-camera.FrameReady += (_, frame) =>
-    Console.WriteLine($"{frame.Width}x{frame.Height} {frame.Format}");
-camera.Connect();                       // auto-selects the default video source
+await using var registry = new PipeWireRegistry(ctx);
+await registry.WaitForInitialEnumerationAsync();
 
-await Task.Delay(TimeSpan.FromSeconds(5));
+foreach (PipeWireNode node in registry.Nodes)
+    Console.WriteLine($"[{node.NodeId}] {node.Description} ({node.MediaClass})");
 ```
 
-## What you get
+A `PipeWireContext` is one connection and one event loop thread; a `PipeWireRegistry` keeps a live
+snapshot of what the daemon has.
 
-- Capture and publish, for both video and audio.
-- Source discovery through the registry (cameras, microphones, virtual nodes).
-- Frame timestamps on a shared clock, so audio and video can be kept in sync.
-- Efficient buffers: frames are read straight from shared memory with no copy, and DMA-BUF file
-  descriptors are exposed for GPU import on the capture side.
-- NativeAOT friendly: source-generated P/Invoke, no reflection.
+**New here?** [docs/quickstart.md](docs/quickstart.md) takes you from an empty project to reading the
+graph, changing a volume, capturing audio and publishing a node, picking up the concepts on the way.
+[docs/pipewire-concepts.md](docs/pipewire-concepts.md) is the model on its own.
+
+## What you can do
+
+| | Start here |
+|---|---|
+| List what exists, watch it change | `PipeWireRegistry`, below |
+| Set a volume, switch a card profile, read session defaults | [one object at a time](#acting-on-one-object) |
+| Capture or publish audio and video | [streams](#streaming), [docs/streaming.md](docs/streaming.md) |
+| Run DSP in the graph, publish a virtual device | [docs/serving.md](docs/serving.md) |
+| Work out which type you want | [docs/choosing-a-type.md](docs/choosing-a-type.md) |
+
+The rule the API turns on: are you *reading somebody else's* object, or *being* one? Those are
+different types with different suffixes, and picking wrong compiles and then does nothing you
+wanted. [docs/choosing-a-type.md](docs/choosing-a-type.md) is one table per case.
 
 ## Requirements
 
-| | |
-|---|---|
-| OS | Linux (x64 / arm64) |
-| Runtime | `libpipewire-0.3.so.0` (ships with any PipeWire install) |
-| Daemon | A running PipeWire daemon plus a session manager such as WirePlumber |
-| .NET | .NET 10, or .NET 11 (preview) |
+|          |                                                                      |
+| -------- | -------------------------------------------------------------------- |
+| OS       | Linux (x64 / arm64)                                                  |
+| Runtime  | `libpipewire-0.3.so.0` (ships with any PipeWire install)             |
+| PipeWire | Bindings generated against 1.6.8; see [version policy](#pipewire-version-policy) |
+| Daemon   | A running PipeWire daemon plus a session manager such as WirePlumber |
+| .NET     | .NET 10, or .NET 11 (preview)                                        |
 
 ```sh
 sudo apt-get install pipewire wireplumber     # Debian / Ubuntu
@@ -46,138 +68,254 @@ sudo dnf install pipewire wireplumber          # Fedora
 sudo pacman -S pipewire wireplumber            # Arch
 ```
 
-## Install
+Both packages are Native AOT compatible, and CI publishes and runs the sample as AOT on every build.
 
-```sh
-dotnet add package PipeWire.NET
-```
+## Reading the graph
 
-## Usage
-
-### Discover sources
+`registry.Current` is an immutable snapshot: nodes, ports, links, devices, clients, metadata. Read
+it for point queries, or consume `WatchAsync` for one snapshot per change.
 
 ```csharp
-await using var registry = new PipeWireRegistry(ctx);
-await registry.WaitForInitialEnumerationAsync();
-
-foreach (var source in registry.Sources.Where(s => s.IsVideoSource))
-    Console.WriteLine($"[{source.NodeId}] {source.Description} ({source.Class})");
+await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
+{
+    foreach (PipeWireNode node in graph.Nodes)
+        Console.WriteLine($"[{graph.Version}] [{node.NodeId}] {node.Description}");
+}
 ```
 
-### Capture video
+### Connecting over a portal fd
+
+A sandboxed client may not see the daemon socket. xdg-desktop-portal's ScreenCast
+`OpenPipeWireRemote` returns a socket fd already connected to the daemon, restricted to what the
+user granted. The handle is borrowed: the library duplicates it close-on-exec, as PipeWire does
+itself, and yours stays open.
+
+`StartAsync` takes a `SafeHandle`, so wrap the descriptor the reply carries:
 
 ```csharp
-await using var capture = new PipeWireVideoCapture(ctx);
+using Microsoft.Win32.SafeHandles;
 
+// rawFd: the descriptor from the OpenPipeWireRemote reply's UnixFdList
+using var handle = new SafeFileHandle((IntPtr)rawFd, ownsHandle: true);
+
+await using var ctx = new PipeWireContext();
+await ctx.StartAsync(handle, cancellationToken);
+```
+
+## Acting on one object
+
+Bind a proxy to act on one object: volumes and mutes on nodes, profiles and routes on devices,
+permissions on clients, defaults and clock on metadata. A proxy is used with `await using` and
+reports readiness through `ReadyAsync`.
+
+```csharp
+await using PipeWireNodeProxy node = registry.BindNode(nodeId);
+await node.ReadyAsync(cancellationToken);
+
+float? volume = await node.GetVolumeAsync(cancellationToken);
+bool? muted = await node.GetMutedAsync(cancellationToken);
+Console.WriteLine($"volume {volume}, muted {muted}");
+
+await node.SetVolumeAsync(0.5f, cancellationToken);
+await node.SetMutedAsync(false, cancellationToken);
+```
+
+Device routes and profiles work the same way through `registry.BindDevice`:
+
+```csharp
+await using PipeWireDeviceProxy device = registry.BindDevice(deviceId);
+await device.ReadyAsync(cancellationToken);
+
+foreach (SpaObject route in await device.EnumerateRoutesAsync(cancellationToken))
+    Console.WriteLine(route);
+```
+
+The session defaults - default sink and source, graph clock rate and quantum - live in the `default`
+metadata store, which is absent on a session with no session manager running:
+
+```csharp
+PipeWireMetadataProxy? store = registry.BindMetadata("default");
+if (store is not null)
+{
+    await using (store)
+    {
+        await store.ReadyAsync(cancellationToken);
+        Console.WriteLine($"sink: {store.DefaultAudioSink?.NameValue}");
+        Console.WriteLine($"source: {store.DefaultAudioSource?.NameValue}");
+        Console.WriteLine($"clock: {store.ClockRate} Hz / quantum {store.ClockQuantum}");
+    }
+}
+```
+
+## Linking
+
+```csharp
+// Output port first, input port second.
+PipeWireLink link = await registry.CreateLink(outputPortId, inputPortId)
+    .ExecuteAsync(cancellationToken);
+
+await registry.RemoveLinkAsync(link.LinkId, cancellationToken);
+```
+
+`WithPassive()` makes a link follow the graph without forcing the nodes active. Most applications
+never call this: routing is the session manager's job, as
+[docs/pipewire-concepts.md](docs/pipewire-concepts.md) explains.
+
+## Streaming
+
+Capture reads from a node; output publishes one. Both take a target node id or name, or let the
+session manager choose.
+
+```csharp
+await using var capture = new PipeWireAudioCapture(ctx);
 capture.FrameReady += (_, frame) =>
-{
-    // frame.Data is valid only inside this handler. Do not store it.
-    Process(frame.Data, frame.Stride);
-};
+    Console.WriteLine($"{frame.SampleRate} Hz {frame.Channels}ch {frame.Format}");
 
-capture.Connect(source, preferredFormats: [PixelFormat.Bgra, PixelFormat.Rgba]);
+capture.Connect();
 ```
 
-### Publish a virtual camera
-
 ```csharp
-await using var output = new PipeWireVideoOutput(ctx, "My Virtual Camera",
-    width: 1280, height: 720, format: PixelFormat.Bgra, frameRate: 30);
-
-output.FillFrame += (_, pixels, stride, w, h, format) =>
+await using var output = new PipeWireAudioOutput(ctx, "sample_synth");
+output.FillSamples += (_, samples, sampleRate, channels, format) =>
 {
-    RenderInto(pixels, stride, w, h);   // write straight into the buffer
-    return true;
+    // The byte count written; 0 publishes silence.
+    return WriteTone(samples, sampleRate, channels);
 };
 
 output.Connect();
 ```
 
-On Linux this is how you feed a tool like OBS: publish a node here, then add a PipeWire video
-source in OBS and it reads the feed. It is the Linux counterpart to Spout on Windows or Syphon
-on macOS.
-
-### Capture and publish audio
+Video is the same shape:
 
 ```csharp
-await using var mic = new PipeWireAudioCapture(ctx);
-mic.FrameReady += (_, frame) =>
-    Mix(frame.Samples, frame.SampleRate, frame.Channels, frame.Format);
-mic.Connect();
+await using var camera = new PipeWireVideoCapture(ctx);
+camera.FrameReady += (_, frame) =>
+    Console.WriteLine($"{frame.Width}x{frame.Height} {frame.Format}");
 
-await using var synth = new PipeWireAudioOutput(ctx, "Synth",
-    sampleRate: 48000, channels: 2, format: AudioSampleFormat.F32Le);
-synth.FillSamples += (_, buffer, rate, channels, format) => Synthesize(buffer);
-synth.Connect();
+camera.Connect();   // auto-selects the default video source
 ```
 
-Both capture types accept a `targetObjectName` to bind to a specific node by name instead of
-relying on the session manager's default routing.
+```csharp
+await using var screen = new PipeWireVideoOutput(ctx, "sample_screen", 1280, 720);
+screen.FillFrame += (_, pixels, stride, width, height, format) =>
+{
+    Render(pixels, stride, width, height);
+    return true;          // false publishes nothing this cycle
+};
 
-## Frames
+screen.Connect();
+```
 
-`VideoFrame` and `AudioFrame` are `ref struct`s delivered on the loop thread; their data is valid
-only for the duration of the handler.
+Frames are `ref struct`s delivered on the loop thread and valid only for the handler; `Clone` what
+must outlive it. They carry the pixels or samples, the negotiated format, the backing memory and
+four timestamps. Fill callbacks write straight into the daemon's buffer, so there is no intermediate
+copy, and capture can take DMA-BUF buffers for GPU sources.
 
-`VideoFrame` carries the pixels (`Data`, `Stride`, `Width`, `Height`, `Format`), the negotiated
-`Color` info, the backing memory (`BufferType`, `Fd`, `MapOffset`), and timing (see below). For a
-DMA-BUF frame it also exposes the DRM format `Modifier` and the per-plane layout (`Planes`: fd,
-offset, stride, size per plane, e.g. two planes for `Nv12`), so a multi-plane tiled surface can be
-imported correctly. `AudioFrame` carries `Samples`, `SampleRate`, `Channels`, `Format`,
-`FrameCount`, and timing.
+[docs/streaming.md](docs/streaming.md) covers timestamps and A/V sync, DMA-BUF, explicit sync and
+multi-GPU device negotiation.
 
-### Timing and A/V sync
+### Screen capture on Wayland
 
-Every stream runs off one graph clock. Each frame carries:
+This library does not talk to Wayland. Screen capture goes through the
+`org.freedesktop.portal.ScreenCast` portal, which returns a node id after the user grants
+permission; pass it to `PipeWireVideoCapture.Connect(nodeId)` and it behaves like any other source.
 
-- `CaptureClockNs`: the monotonic graph time of the cycle that delivered it. It is the same clock
-  for every stream, so align audio against video on this value to keep them in sync.
-- `MediaClockNs` and `DelayNs`: the stream's media position and its latency, for
-  sample-accurate timestamping.
+## Serving
 
-`PresentationTimeNs` is the content timestamp from the buffer header. Video sources provide it;
-PipeWire audio does not, so for audio it is `-1`. Use `CaptureClockNs` for sync.
+Publishing something other clients use - a virtual sink, a DSP node, a device, a metadata store - is
+its own guide: [docs/serving.md](docs/serving.md). The shortest example is a sink other applications
+can play into, which needs no callbacks at all:
 
-### Zero copy
+```csharp
+PipeWireNode sink = await registry.CreateVirtualSinkAsync("My mix", cancellationToken: cancellationToken);
+```
 
-On capture, `frame.Data` points straight into the daemon's mapped buffer, so reading is free.
-Capture also accepts DMA-BUF buffers, so a GPU source can hand frames over without touching the
-CPU; `frame.BufferType` and `frame.Fd` expose the descriptor for GPU import.
+## SPA pods
 
-On publish, `FillFrame` and `FillSamples` give you a span over the daemon's buffer, so you write
-the frame once with no intermediate copy.
+Everything configurable on a node, port or device is a parameter, and every parameter is a SPA pod.
+`SpaPod` parses and writes the value model (`SpaInt`, `SpaString`, `SpaObject`, `SpaChoice` and the
+rest); [docs/parameters-and-pods.md](docs/parameters-and-pods.md) covers reading a device's routes,
+what a `SpaChoice` means during negotiation, and writing one back.
 
-For a fully GPU-resident publish, `PipeWireVideoOutput.ConnectDmaBuf(modifiers)` advertises a set of
-DRM format modifiers, negotiates one with the consumer, and backs the stream with DMA-BUF buffers you
-own. Allocate your GPU surfaces in the `AllocateDmaBuf` callback (export each once, e.g. via
-`vkGetMemoryFdKHR`) and write the chosen buffer in `FillDmaBuf`; `ReleaseDmaBuf` tears them down. The
-producer can self-pace with `TriggerFrame`, and `NodeId` lets a consumer target the node directly.
-This is the path a VAAPI/Vulkan pipeline uses to feed OBS with no CPU round-trip.
+```csharp
+byte[] bytes = SpaPod.ToBytes(new SpaInt(48000));
+if (SpaPod.TryParse(bytes, out SpaValue? value) && value is SpaInt rate)
+    Console.WriteLine(rate.Value);
+```
 
-## Screen capture on Wayland
+## Sample app
 
-This library does not deal with Wayland directly. Screen capture goes through the
-`org.freedesktop.portal.ScreenCast` portal, which after the user grants permission returns a
-PipeWire node id. Pass that id to `PipeWireVideoCapture.Connect(nodeId)` and it behaves like any
-other source. Drive the portal with any D-Bus library; this library takes it from the node id on.
+`samples/PipeWire.NET.SampleConsole` is a small CLI over both packages, and the quickest way to see
+whether your machine is set up.
+
+```sh
+dotnet run --project samples/PipeWire.NET.SampleConsole -- list
+dotnet run --project samples/PipeWire.NET.SampleConsole -- monitor
+dotnet run --project samples/PipeWire.NET.SampleConsole -- volume alsa_output.pci --set 0.5
+dotnet run --project samples/PipeWire.NET.SampleConsole -- defaults
+dotnet run --project samples/PipeWire.NET.SampleConsole -- capture-audio --seconds 5
+dotnet run --project samples/PipeWire.NET.SampleConsole -- capture-video --seconds 5
+dotnet run --project samples/PipeWire.NET.SampleConsole -- filter --seconds 8
+dotnet run --project samples/PipeWire.NET.SampleConsole -- serve
+```
+
+`filter` plays a quiet generated tone through a gain node into the default sink; `serve` publishes a
+virtual source until Ctrl+C.
+
+## Documentation
+
+**Start here**
+
+| | |
+|---|---|
+| [quickstart.md](docs/quickstart.md) | empty project to working program, with the concepts as you need them |
+| [pipewire-concepts.md](docs/pipewire-concepts.md) | the graph model in ten minutes, if PipeWire is new to you |
+| [choosing-a-type.md](docs/choosing-a-type.md) | which type to reach for, per task, with upstream's name for each |
+| [troubleshooting.md](docs/troubleshooting.md) | symptoms and what they usually mean |
+
+**Going further**
+
+| | |
+|---|---|
+| [threading-and-lifetimes.md](docs/threading-and-lifetimes.md) | callback threading, the realtime contract, disposal, lingering objects |
+| [parameters-and-pods.md](docs/parameters-and-pods.md) | reading and writing parameters: routes, profiles, formats |
+| [streaming.md](docs/streaming.md) | frame timing, A/V sync, DMA-BUF, explicit sync |
+| [serving.md](docs/serving.md) | publishing nodes, devices, filters and metadata |
+| [pipewire-roles.md](docs/pipewire-roles.md) | consuming versus being an object, and what serving costs |
+| [running-tests.md](docs/running-tests.md) | the test categories and what each one needs |
+
+Upstream's own [Overview](https://docs.pipewire.org/page_overview.html) and
+[API tutorial](https://docs.pipewire.org/page_tutorial.html) are the reference for the C API these
+bindings cover.
 
 ## How it is built
 
 The low-level bindings in `src/PipeWire.NET/generated/` are produced by
 [ClangSharpPInvokeGenerator](https://github.com/dotnet/ClangSharp) from the installed PipeWire
-headers and committed to the repo, so consumers never run the generator. The hand-written
-high-level types (`PipeWireContext`, the four stream classes, `PipeWireRegistry`) and the SPA pod
-helpers sit on top.
+headers and committed, so consumers never run the generator. Four passes produce them: the ABI
+(`pipewire.rsp`) and one per library whose macros are needed (`pipewire-constants.rsp`, `libc.rsp`,
+`libdrm.rsp`). The hand-written types on top - context, registry, proxies, providers, streams,
+filters, the SPA pod codec - are ordinary C#.
 
-To regenerate after a PipeWire version bump (on Linux, with `libpipewire-0.3-dev` and
-`libclang-dev`):
+To regenerate after a PipeWire version bump, on Linux with `libpipewire-0.3-dev` and `libclang-dev`:
 
 ```sh
 dotnet tool install --global ClangSharpPInvokeGenerator --version 21.1.8.3
 bash generate/generate.sh
 ```
 
-CI runs the generator on every build and fails if the committed output drifts.
+CI regenerates on every build and fails if the committed output drifts.
+
+### PipeWire version policy
+
+The bindings are generated from the headers of one specific release, recorded in
+`generate/HEADER-VERSION` and enforced by the generator. That release is what the committed bindings
+describe and what the gating test job runs against.
+
+Older daemons are not rejected and should mostly work: the library binds a small, long-stable part
+of the protocol. What an older daemon can lack is usually a whole interface, and binding one that is
+not there fails at the bind rather than silently misbehaving. If you need a specific older release
+supported, open an issue with the version.
 
 ## Testing
 
@@ -186,22 +324,8 @@ dotnet test --filter "TestCategory!=Integration"     # pure logic, runs anywhere
 dotnet test --filter "TestCategory=Integration"      # needs a running daemon
 ```
 
-Integration tests run against a live daemon. Some start real producers through GStreamer
-(`videotestsrc`, `audiotestsrc`) and check capture across formats, registry discovery, real frame
-content, alpha preservation, timestamps, and audio/video sharing one clock. Tests tagged
-`RequiresGpu` cover DMA-BUF capture and run on a host with a GPU; everything else runs on CI
-against a headless PipeWire.
-
-## Scope
-
-This library is the PipeWire layer: it delivers correctly formatted, correctly timed frames and
-samples in and out. Encoding and network transport live above it.
-
-DMA-BUF is supported on **both** directions: capture imports DMA-BUF frames, and publish can hand out
-GPU-resident DMA-BUF buffers (`PipeWireVideoOutput.ConnectDmaBuf`, with DRM format-modifier
-negotiation, see "Zero copy"). A zero-copy GPU producer (e.g. a VAAPI/Vulkan pipeline) thus feeds a
-GPU consumer like OBS with no CPU round-trip; host-memory output (`Connect` + `FillFrame`) remains for
-sources already in CPU memory.
+Integration tests run against a live daemon, some of them driving real producers through GStreamer.
+[docs/running-tests.md](docs/running-tests.md) lists every category and what it needs.
 
 ## License
 

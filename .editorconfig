@@ -13,6 +13,12 @@ trim_trailing_whitespace = true
 generated_code = true
 
 [*.cs]
+# Unused private members are dead code; the compiler only catches the field case (CS0414).
+# Internal members are not covered by these rules by design - Roslyn cannot know what an
+# InternalsVisibleTo consumer uses - so those need the external sweep recorded in HANDOFF.
+dotnet_diagnostic.IDE0051.severity = warning
+dotnet_diagnostic.IDE0052.severity = warning
+
 csharp_new_line_before_open_brace = all
 csharp_new_line_before_else = true
 csharp_new_line_before_catch = true

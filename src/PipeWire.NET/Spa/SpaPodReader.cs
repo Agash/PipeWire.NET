@@ -15,7 +15,7 @@ namespace PipeWire.NET.Spa;
 /// </summary>
 /// <remarks>
 /// Use one of the static <c>Read*</c> helpers to extract a single value, or call
-/// <see cref="EnterObject"/> + <see cref="TryReadProperty(out uint, out SpaPodReader)"/> in a loop
+/// <see cref="EnterObject"/> + <see cref="TryReadProperty(out SpaKey, out SpaPodReader)"/> in a loop
 /// to walk an object.
 /// </remarks>
 internal ref struct SpaPodReader
@@ -47,45 +47,66 @@ internal ref struct SpaPodReader
     public bool EnterObject(out uint objectType, out uint objectId, out uint bodySize)
     {
         objectType = 0; objectId = 0; bodySize = 0;
-        if (!TryReadHeader(out uint size, out uint type)) return false;
+        if (!TryReadHeader(out uint size, out SpaType type)) return false;
         if (type != SpaType.Object) return false;
+
+        // An object body always carries at least its type and id. Without this check `size - 8`
+        // underflows for a malformed pod and reports a body of nearly 4GB.
+        if (size < 8) return false;
+
         if (!TryReadU32(out objectType)) return false;
         if (!TryReadU32(out objectId))   return false;
         bodySize = size - 8; // size includes the object-type + object-id 8 bytes already consumed
+
+        // Property iteration stops at the object's own end, not the buffer's. An object nested in a
+        // struct is followed by its siblings, and without this the walk reads them as further
+        // properties of this object.
+        _objectEnd = _pos + (int)bodySize;
         return true;
     }
+
+    // Where the object entered by EnterObject ends. Null until one is entered, in which case the
+    // whole buffer is the bound - a reader handed a single value pod has no object to be inside of.
+    private int? _objectEnd;
 
     /// <summary>
     /// Reads the next property in the current object.
     /// </summary>
-    /// <param name="key">SPA property key (e.g. <see cref="SpaFormatVideo.Format"/>).</param>
+    /// <param name="key">The property key, comparable against any of the SPA key enums.</param>
     /// <param name="value">Reader positioned at the property's value pod.</param>
     /// <returns><see langword="false"/> when no more properties remain in the current object body.</returns>
-    public bool TryReadProperty(out uint key, out SpaPodReader value) =>
+    public bool TryReadProperty(out SpaKey key, out SpaPodReader value) =>
         TryReadProperty(out key, out _, out value);
 
     /// <summary>
     /// Reads the next property and also reports its <c>spa_pod_prop</c> flags (e.g.
-    /// <see cref="SpaPodPropFlag.DontFixate"/> on an unfixated modifier choice).
+    /// <see cref="SpaPodPropFlags.DontFixate"/> on an unfixated modifier choice).
     /// </summary>
-    public bool TryReadProperty(out uint key, out uint flags, out SpaPodReader value)
+    public bool TryReadProperty(out SpaKey key, out SpaPodPropFlags flags, out SpaPodReader value)
     {
-        key = 0;
+        key = default;
         flags = 0;
         value = default;
 
         // spa_pod_prop header = [uint32 key][uint32 flags][value pod...]
-        if (_pos + 8 > _buf.Length) return false;
-        if (!TryReadU32(out key))    return false;
-        if (!TryReadU32(out flags))  return false; // flags
+        int end = _objectEnd ?? _buf.Length;
+        if (_pos + 8 > end) return false;
+        if (!TryReadU32(out uint rawKey)) return false;
+        key = SpaKey.FromRaw(rawKey);
+        if (!TryReadU32(out uint rawFlags)) return false;
+        flags = (SpaPodPropFlags)rawFlags;
 
         // The value pod sits at the current offset. Peek its size.
-        if (_pos + 8 > _buf.Length) return false;
+        if (_pos + 8 > end) return false;
+        // Checked against what is left before any arithmetic. Casting first and checking after is
+        // not enough: a size of uint.MaxValue casts to -1 and passes the bounds test, and one near
+        // int.MaxValue overflows the addition to a negative length that then throws out of Slice -
+        // from a parser whose whole contract is that malformed input returns false.
         uint vSize = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
+        if (vSize > (uint)(end - _pos - 8)) return false;
+
         int valueLen = 8 + (int)vSize;          // pod header + body
         int valueLenAligned = (valueLen + 7) & ~7;
-
-        if (_pos + valueLen > _buf.Length) return false;
 
         value = new SpaPodReader(_buf.Slice(_pos, valueLen));
         _pos += valueLenAligned;
@@ -134,12 +155,12 @@ internal ref struct SpaPodReader
         return v != 0;
     }
 
-    public uint ReadId()
+    public SpaIdValue ReadId()
     {
         ReadHeaderOrThrow(SpaType.Id, expectedSize: 4);
         uint v = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
         _pos += 4; AlignTo8();
-        return v;
+        return SpaIdValue.FromRaw(v);
     }
 
     public (uint Width, uint Height) ReadRectangle()
@@ -158,6 +179,36 @@ internal ref struct SpaPodReader
         return (n, d);
     }
 
+    /// <summary>Reads a bytes value pod, such as a format's <c>deviceId</c>, in place.</summary>
+    /// <returns><see langword="false"/> when the value is not a bytes pod.</returns>
+    public bool TryReadBytes(out ReadOnlySpan<byte> bytes)
+    {
+        bytes = default;
+
+        // A choice's child: the body is the value, its type carried out of band. This is the shape a
+        // negotiated Bytes property arrives in, because spa_pod_filter_prop writes every result as a
+        // Choice (None for a single match).
+        if (_synthesizedType is { } synthesized)
+        {
+            if (synthesized != SpaType.Bytes) return false;
+            bytes = _buf[_pos..];
+            _pos = _buf.Length;
+            return true;
+        }
+
+        int savedPos = _pos;
+        if (!TryReadHeader(out uint size, out SpaType type) || type != SpaType.Bytes)
+        {
+            _pos = savedPos;
+            return false;
+        }
+
+        bytes = _buf.Slice(_pos, (int)size);
+        _pos += (int)size;
+        AlignTo8();
+        return true;
+    }
+
     /// <summary>
     /// Reads a DRM format modifier value pod: either a plain <c>Long</c> or a Choice(Enum) of
     /// <c>Long</c>s. Returns the first (preferred) modifier in <paramref name="first"/> and how many
@@ -171,7 +222,7 @@ internal ref struct SpaPodReader
         first = 0;
         count = 0;
         int savedPos = _pos;
-        if (!TryReadHeader(out uint size, out uint type)) { _pos = savedPos; return false; }
+        if (!TryReadHeader(out uint size, out SpaType type)) { _pos = savedPos; return false; }
 
         if (type == SpaType.Long)
         {
@@ -186,16 +237,36 @@ internal ref struct SpaPodReader
 
         // spa_pod_choice_body: [choiceType][flags][childSize][childType], then the values.
         if (_pos + 16 > _buf.Length) { _pos = savedPos; return false; }
-        if (!TryReadU32(out _))               { _pos = savedPos; return false; } // choiceType
+        if (!TryReadU32(out uint choiceType))  { _pos = savedPos; return false; }
         if (!TryReadU32(out _))               { _pos = savedPos; return false; } // flags
         if (!TryReadU32(out uint childSize))  { _pos = savedPos; return false; }
         if (!TryReadU32(out uint childType))  { _pos = savedPos; return false; }
-        if (childType != SpaType.Long || childSize != 8) { _pos = savedPos; return false; }
+        if ((SpaType)childType != SpaType.Long || childSize != 8) { _pos = savedPos; return false; }
 
-        // The choice body length (size) covers the 16-byte header + N child values. We only need the
-        // first value and the count, so read the first in place and skip the rest - nothing allocated.
-        int valuesBytes = (int)size - 16;
-        if (valuesBytes < 8 || _pos + valuesBytes > _buf.Length) { _pos = savedPos; return false; }
+        // Which kind of choice it is decides what the values mean. Enum is { default, alt... } and
+        // None is a single value; Range is { default, min, max } and Step adds a stride, and reading
+        // either of those as a modifier set reports a minimum and a maximum as two modifiers on
+        // offer. Only the two kinds whose children are all modifiers are accepted.
+        if ((SpaChoiceType)choiceType is not (SpaChoiceType.Enum or SpaChoiceType.None))
+        {
+            _pos = savedPos;
+            return false;
+        }
+
+        // The choice body length (size) covers the 16-byte header + N child values. Compared
+        // unsigned before the cast, like every other bound in this file: size is the producer's
+        // word, and casting first is what turns a large one into a negative length.
+        if (size < 16 + 8u) { _pos = savedPos; return false; }
+        uint valuesLen = size - 16;
+        if (valuesLen % 8 != 0 || valuesLen > (uint)(_buf.Length - _pos))
+        {
+            _pos = savedPos;
+            return false;
+        }
+
+        // We only need the first value and the count, so read the first in place and skip the rest -
+        // nothing allocated.
+        int valuesBytes = (int)valuesLen;
         first = MemoryMarshal.Read<long>(_buf.Slice(_pos, 8));
         count = valuesBytes / 8;
         _pos += valuesBytes;
@@ -213,60 +284,91 @@ internal ref struct SpaPodReader
         // Peek the header non-destructively: a plain (non-choice) value must be left
         // untouched so the caller can fall back to ReadId()/ReadRectangle()/etc.
         int savedPos = _pos;
-        if (!TryReadHeader(out uint size, out uint type) || type != SpaType.Choice)
+        if (!TryReadHeader(out _, out SpaType type) || type != SpaType.Choice)
         {
             _pos = savedPos;
             return false;
         }
 
-        // Skip 4xu32 choice header (choiceType, flags, childSize, childType)
-        if (_pos + 16 > _buf.Length) return false;
-        if (!TryReadU32(out _)) return false; // choiceType
-        if (!TryReadU32(out _)) return false; // flags
-        if (!TryReadU32(out uint childSize)) return false;
-        if (!TryReadU32(out uint childType)) return false;
+        // Every exit below restores the position. The caller falls back to a plain typed read on
+        // this same reader when a choice is declined, so leaving the position moved does not fail,
+        // it silently reads the wrong bytes as the value.
+        if (_pos + 16 > _buf.Length
+            || !TryReadU32(out _)                    // choiceType
+            || !TryReadU32(out _)                    // flags
+            || !TryReadU32(out uint childSize)
+            || !TryReadU32(out uint childType))
+        {
+            _pos = savedPos;
+            return false;
+        }
 
         // Rebuild a synthetic pod header so the returned reader can call ReadXxx directly.
-        // Allocate a tiny stack span and pre-populate [childSize][childType][body].
+        // Compared against the bytes that are left, unsigned, the way every other check in this
+        // file does it. Casting first and then adding overflows int for a childSize near its
+        // maximum, and the sum wraps negative so the comparison passes: Slice then throws where
+        // this contract says it returns false, and the caller's catch does not expect that type.
+        if (childSize > (uint)(_buf.Length - _pos))
+        {
+            _pos = savedPos;
+            return false;
+        }
+
         int bodyLen = (int)childSize;
-        if (_pos + bodyLen > _buf.Length) return false;
 
         ReadOnlySpan<byte> body = _buf.Slice(_pos, bodyLen);
-        // Caller cannot mutate ReadOnlySpan; we re-emit a new pod into a buffer the caller owns.
-        // For now expose the body via a child-only reader and let the caller call typed ReadXxx
-        // - but ReadXxx expects a full pod header. The simpler contract: return a reader whose
-        // ReadXxx assumes a "headerless" body and pass childType so the caller knows.
-        first = new SpaPodReader(body) { _synthesizedType = childType };
+        // The caller cannot mutate a ReadOnlySpan, so the body is exposed through a child reader
+        // that carries its type out of band rather than re-emitting a pod header into it.
+        first = new SpaPodReader(body) { _synthesizedType = (SpaType)childType };
         return true;
     }
 
-    private uint _synthesizedType;
+    // Nullable rather than a zero sentinel: zero is SpaType.Start, a real member, so "unset"
+    // has no spare value to borrow.
+    private SpaType? _synthesizedType;
 
     // - Header parsing -
 
-    private bool TryReadHeader(out uint size, out uint type)
+    private bool TryReadHeader(out uint size, out SpaType type)
     {
         size = 0; type = 0;
         if (_pos + 8 > _buf.Length) return false;
-        size = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
-        type = MemoryMarshal.Read<uint>(_buf.Slice(_pos + 4, 4));
+
+        uint declared = MemoryMarshal.Read<uint>(_buf.Slice(_pos, 4));
+        uint declaredType = MemoryMarshal.Read<uint>(_buf.Slice(_pos + 4, 4));
+
+        // The size field is attacker- or bug-controlled, so a pod claiming more body than the
+        // buffer holds is rejected here rather than handed on as a length someone slices with.
+        if (declared > (uint)(_buf.Length - _pos - 8)) return false;
+
+        size = declared;
+        type = (SpaType)declaredType;
         _pos += 8;
         return true;
     }
 
-    private void ReadHeaderOrThrow(uint expectedType, uint expectedSize)
+    private void ReadHeaderOrThrow(SpaType expectedType, uint expectedSize)
     {
         // When TryUnwrapChoice synthesized this reader, there is no embedded header
         // - the type is carried out-of-band via _synthesizedType.
-        if (_synthesizedType != 0)
+        if (_synthesizedType is { } synthesized)
         {
-            if (_synthesizedType != expectedType)
+            if (synthesized != expectedType)
                 throw new InvalidOperationException(
-                    $"SPA pod type mismatch: expected {expectedType}, got synthesized {_synthesizedType}");
+                    $"SPA pod type mismatch: expected {expectedType}, got synthesized {synthesized}");
+
+            // The body came from a choice's childSize, which the producer chose. A short one -
+            // an Id choice declaring one byte per child - would otherwise reach the Slice in the
+            // reader below and throw ArgumentOutOfRangeException out of a callback whose catch
+            // only names InvalidOperationException, which ends the process rather than the frame.
+            if ((uint)(_buf.Length - _pos) < expectedSize)
+                throw new InvalidOperationException(
+                    $"SPA pod size mismatch: expected {expectedSize}, "
+                    + $"synthesized body holds {_buf.Length - _pos}");
             return;
         }
 
-        if (!TryReadHeader(out uint size, out uint type))
+        if (!TryReadHeader(out uint size, out SpaType type))
             throw new InvalidOperationException("Truncated SPA pod.");
         if (type != expectedType)
             throw new InvalidOperationException(

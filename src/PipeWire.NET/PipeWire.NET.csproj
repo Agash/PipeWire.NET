@@ -1,23 +1,28 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <!-- net11.0 requires the .NET 11 preview SDK. global.json (rollForward latestMajor,
+    <!-- net11.0 requires the .NET 11 preview SDK. global.json (rollForward latestFeature,
          allowPrerelease) selects it when installed; CI installs it explicitly. Building with
          only the .NET 10 SDK errors with NETSDK1045 - install the 11 preview SDK to target it. -->
     <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- IsAotCompatible only runs the analyzers on this project; this also checks that everything
+         it references is annotated compatible. -->
+    <VerifyReferenceAotCompatibility>true</VerifyReferenceAotCompatibility>
     <AssemblyName>PipeWire.NET</AssemblyName>
     <RootNamespace>PipeWire.NET</RootNamespace>
     <PackageId>PipeWire.NET</PackageId>
-    <Description>.NET P/Invoke bindings for libpipewire-0.3 on Linux. Open video capture streams from V4L2 devices, PipeWire virtual cameras, and screen capture sources. Receive raw RGBA/BGRA frames with low-overhead zero-copy buffer management using the PipeWire stream API and SPA buffer protocol.</Description>
+    <Description>.NET bindings for libpipewire-0.3 on Linux: connect to the daemon, mirror the object graph as immutable snapshots, and read and write node, device, client and metadata state. Includes a full SPA POD reader/writer and the native interop layer. Audio and video streaming live in the PipeWire.NET.Media package.</Description>
     <PackageTags>pipewire;linux;video;capture;v4l2;wayland;camera;native;interop;dotnet;spa;libpipewire</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <EnablePackageValidation>true</EnablePackageValidation>
+    <!-- Baseline the public surface against the last release so a break has to be declared in
+         CompatibilitySuppressions.xml rather than shipping unnoticed. -->
+    <PackageValidationBaselineVersion>0.2.3-alpha</PackageValidationBaselineVersion>
     <MinVerTagPrefix>v</MinVerTagPrefix>
     <IsPackable>true</IsPackable>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <NoWarn>CA1515;CA1050</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,4 +35,13 @@
     <None Include="..\..\LICENSE" Pack="true" PackagePath="" />
     <None Include="..\..\README.md" Pack="true" PackagePath="" />
   </ItemGroup>
+  <!-- The library's own layers. Namespaces follow folders, and a project referring to its own
+       layers through global usings keeps every file's using block about external dependencies. -->
+  <ItemGroup>
+    <Using Include="PipeWire.NET" />
+    <Using Include="PipeWire.NET.Interop" />
+    <Using Include="PipeWire.NET.Spa" />
+    <Using Include="PipeWire.NET.Graph" />
+  </ItemGroup>
+
 </Project>

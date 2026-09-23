@@ -9,9 +9,9 @@
 #pragma warning disable CA1720 // Identifiers should not contain type names
 #pragma warning disable CA1815 // Override Equals and operator equals on value types
 
-namespace PipeWire.NET.Generated;
+namespace PipeWire.NET.Interop;
 
-public unsafe partial struct pw_loop
+internal unsafe partial struct pw_loop
 {
     [NativeTypeName("struct spa_system *")]
     public spa_system* system;
@@ -24,4 +24,7 @@ public unsafe partial struct pw_loop
 
     [NativeTypeName("struct spa_loop_utils *")]
     public spa_loop_utils* utils;
+
+    [NativeTypeName("const char *")]
+    public sbyte* name;
 }

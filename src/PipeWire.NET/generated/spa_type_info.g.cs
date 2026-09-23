@@ -9,9 +9,9 @@
 #pragma warning disable CA1720 // Identifiers should not contain type names
 #pragma warning disable CA1815 // Override Equals and operator equals on value types
 
-namespace PipeWire.NET.Generated;
+namespace PipeWire.NET.Interop;
 
-public unsafe partial struct spa_type_info
+internal unsafe partial struct spa_type_info
 {
     [NativeTypeName("uint32_t")]
     public uint type;

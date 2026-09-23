@@ -6,7 +6,10 @@
          ContinuousIntegrationBuild for every CI provider it recognises, and publishes the
          repository URL, branch and commit into the nuspec. Source Link itself ships in the
          SDK. Deterministic is already the SDK default. -->
-    <LangVersion>latest</LangVersion>
+    <!-- Pinned, not "latest". global.json rolls forward to a newer feature band, and "latest"
+         would then quietly compile against a different language version on a machine that has one.
+         Raise this deliberately. -->
+    <LangVersion>14.0</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>

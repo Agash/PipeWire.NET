@@ -1,113 +1,123 @@
+using System.Globalization;
 using System.Runtime.Versioning;
-using PipeWire.NET;
 
-// Console demo:
-//   1. Connect to the local PipeWire daemon
-//   2. Enumerate visible nodes via the registry (cameras, virtual cameras, mics)
-//   3. Pick the first video source and stream its frames for 10 seconds
-//   4. Log FPS, byte rate, and the negotiated format/resolution
-//
-// Requires:
-//   - Linux with libpipewire-0.3-0 installed and the daemon running
-//     (pipewire.service + wireplumber.service)
+namespace PipeWire.NET.SampleConsole;
 
-if (!OperatingSystem.IsLinux())
+// Command-driven explorer for both packages: graph inspection and control on one side,
+// streaming and in-graph DSP on the other. With no arguments it connects and lists the
+// graph, which is also what CI runs headless: connecting and enumerating must always work,
+// while anything that makes sound or changes state needs an explicit command.
+internal static class Program
 {
-    Console.Error.WriteLine("This sample is Linux-only (PipeWire is a Linux daemon).");
-    return 1;
-}
+    internal const int Ok = 0;
 
-return await RunAsync().ConfigureAwait(false);
+    /// <summary>The command ran, and what it needed was not there: no default sink, no session
+    /// manager, a producer that never appeared, or a Ctrl+C before it finished.</summary>
+    internal const int NothingToDo = 1;
 
-[SupportedOSPlatform("linux")]
-static async Task<int> RunAsync()
-{
-    Console.WriteLine("Initialising PipeWire context...");
-    await using var ctx = new PipeWireContext();
-    await ctx.StartAsync().ConfigureAwait(false);
-    Console.WriteLine("  connected to daemon.");
+    internal const int UsageError = 2;
 
-    // - Discover sources -
-    Console.WriteLine("Enumerating sources via the registry...");
-    await using var registry = new PipeWireRegistry(ctx);
-
-    using var initCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-    try
+    [SupportedOSPlatform("linux")]
+    public static async Task<int> Main(string[] args)
     {
-        await registry.WaitForInitialEnumerationAsync(cancellationToken: initCts.Token).ConfigureAwait(false);
-    }
-    catch (OperationCanceledException)
-    {
-        Console.WriteLine("  (no globals reported in 2s - graph may be empty)");
-    }
+        if (!OperatingSystem.IsLinux())
+        {
+            Console.Error.WriteLine("This sample is Linux-only (PipeWire is a Linux daemon).");
+            return UsageError;
+        }
 
-    var sources = registry.Sources;
-    Console.WriteLine($"  found {sources.Count} node(s):");
-    foreach (var s in sources)
-        Console.WriteLine($"    id={s.NodeId,4}  class={s.MediaClass ?? "?",-24}  {s.Description ?? s.NodeName ?? "<no name>"}");
+        using var cts = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
-    var pick = sources.FirstOrDefault(s => s.IsVideoSource && (s.NodeName?.Contains("gst") ?? true));
-    if (pick is null)
-    {
-        Console.Error.WriteLine();
-        Console.Error.WriteLine("No video source found. Plug in a camera or run `pw-loopback` first.");
-        return 1;
-    }
+        string command = args.Length > 0 ? args[0] : "list";
+        string[] rest = args.Length > 1 ? args[1..] : [];
 
-    // - Stream from the picked source -
-    Console.WriteLine();
-    Console.WriteLine($"Streaming from id={pick.NodeId} ({pick.Description ?? pick.NodeName})...");
-
-    await using var stream = new PipeWireVideoCapture(ctx, name: "PipeWire.NET.SampleConsole");
-
-    int frameCount = 0;
-    long byteCount = 0;
-    PipeWireStreamState lastState = PipeWireStreamState.Unconnected;
-
-    stream.StateChanged += (_, oldState, newState) =>
-    {
-        lastState = newState;
-        Console.WriteLine($"  state: {oldState} -> {newState}");
-    };
-
-    stream.FrameReady += (sender, frame) =>
-    {
-        Interlocked.Increment(ref frameCount);
-        Interlocked.Add(ref byteCount, frame.Data.Length);
-    };
-
-    stream.Connect(pick);
-
-    using var cts = new CancellationTokenSource();
-    Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
-
-    var deadline = DateTime.UtcNow.AddSeconds(10);
-    var lastTick = DateTime.UtcNow;
-    int lastCount = 0;
-    long lastBytes = 0;
-
-    while (DateTime.UtcNow < deadline && !cts.IsCancellationRequested)
-    {
-        try { await Task.Delay(1000, cts.Token).ConfigureAwait(false); }
-        catch (OperationCanceledException) { break; }
-
-        int currentCount = Volatile.Read(ref frameCount);
-        long currentBytes = Volatile.Read(ref byteCount);
-        var now = DateTime.UtcNow;
-        double seconds = (now - lastTick).TotalSeconds;
-        double fps     = (currentCount - lastCount) / seconds;
-        double mbps    = (currentBytes - lastBytes) / 1024.0 / 1024.0 / seconds;
-
-        Console.WriteLine(
-            $"  {now:HH:mm:ss}  state={lastState,-12}  frames={currentCount,5}  " +
-            $"fps={fps,5:F1}  rate={mbps,6:F2} MB/s");
-
-        lastTick  = now;
-        lastCount = currentCount;
-        lastBytes = currentBytes;
+        // Ctrl+C during setup (connect, link, wait) surfaces as cancellation from library
+        // awaits. The per-second loops handle it themselves; this is the backstop for the rest.
+        try
+        {
+            return command switch
+            {
+                "list" => await GraphCommands.ListAsync(cts.Token).ConfigureAwait(false),
+                "monitor" => await GraphCommands.MonitorAsync(cts.Token).ConfigureAwait(false),
+                "volume" => await GraphCommands.VolumeAsync(rest, cts.Token).ConfigureAwait(false),
+                "defaults" => await GraphCommands.DefaultsAsync(cts.Token).ConfigureAwait(false),
+                "capture-audio" => await StreamCommands.CaptureAudioAsync(rest, cts.Token).ConfigureAwait(false),
+                "capture-video" => await StreamCommands.CaptureVideoAsync(rest, cts.Token).ConfigureAwait(false),
+                "filter" => await ServeCommands.FilterAsync(rest, cts.Token).ConfigureAwait(false),
+                "serve" => await ServeCommands.ServeAsync(cts.Token).ConfigureAwait(false),
+                "help" or "--help" or "-h" => Usage(),
+                _ => Unknown(command),
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            return NothingToDo;
+        }
     }
 
-    Console.WriteLine();
-    Console.WriteLine($"Done. Total frames received: {frameCount}, total bytes: {byteCount:N0}");
-    return 0;
+    private static int Usage()
+    {
+        Console.WriteLine("Usage: PipeWire.NET.SampleConsole [command] [options]");
+        Console.WriteLine("  list                         connect and print the graph (default)");
+        Console.WriteLine("  monitor                      print a line per graph change until Ctrl+C");
+        Console.WriteLine("  volume [target]              print volume and mute (default: default sink)");
+        Console.WriteLine("    --set 0..1                 set the volume; needs an explicit value");
+        Console.WriteLine("    --mute | --unmute          flip the mute flag");
+        Console.WriteLine("  defaults                     default sink/source and graph clock settings");
+        Console.WriteLine("  capture-audio [--seconds N]  capture stats from the default source");
+        Console.WriteLine("  capture-video [--seconds N]  capture stats from the default source");
+        Console.WriteLine("  filter [--seconds N]         tone -> gain node -> default sink");
+        Console.WriteLine("  serve                        publish a virtual source until Ctrl+C");
+        Console.WriteLine("Targets are node ids or name fragments. Ctrl+C stops any command.");
+        return Ok;
+    }
+
+    private static int Unknown(string command)
+    {
+        Console.Error.WriteLine($"Unknown command '{command}'. Try 'help'.");
+        return UsageError;
+    }
+
+    // --seconds N, defaulting when absent or unparsable. Never throws on user input.
+    internal static int Seconds(string[] args, int fallback)
+    {
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (!string.Equals(args[i], "--seconds", StringComparison.Ordinal))
+                continue;
+
+            if (int.TryParse(args[i + 1], NumberStyles.Integer,
+                    CultureInfo.InvariantCulture, out int seconds)
+                && seconds > 0 && seconds <= 3600)
+                return seconds;
+
+            Console.Error.WriteLine($"Ignoring bad --seconds value '{args[i + 1]}'.");
+            return fallback;
+        }
+
+        return fallback;
+    }
+
+    internal static bool HasFlag(string[] args, string flag)
+    {
+        foreach (string arg in args)
+        {
+            if (string.Equals(arg, flag, StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
+
+    internal static string? OptionValue(string[] args, string option)
+    {
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (string.Equals(args[i], option, StringComparison.Ordinal))
+                return args[i + 1];
+        }
+
+        return null;
+    }
 }

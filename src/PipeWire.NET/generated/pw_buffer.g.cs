@@ -9,9 +9,9 @@
 #pragma warning disable CA1720 // Identifiers should not contain type names
 #pragma warning disable CA1815 // Override Equals and operator equals on value types
 
-namespace PipeWire.NET.Generated;
+namespace PipeWire.NET.Interop;
 
-public unsafe partial struct pw_buffer
+internal unsafe partial struct pw_buffer
 {
     [NativeTypeName("struct spa_buffer *")]
     public spa_buffer* buffer;
@@ -19,11 +19,11 @@ public unsafe partial struct pw_buffer
     public void* user_data;
 
     [NativeTypeName("uint64_t")]
-    public nuint size;
+    public ulong size;
 
     [NativeTypeName("uint64_t")]
-    public nuint requested;
+    public ulong requested;
 
     [NativeTypeName("uint64_t")]
-    public nuint time;
+    public ulong time;
 }

@@ -1,0 +1,261 @@
+using Microsoft.Win32.SafeHandles;
+using System.Net.Sockets;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PipeWire.NET.Interop;
+using PipeWire.NET.Media;
+using PipeWire.NET.Spa;
+
+namespace PipeWire.NET.Tests;
+
+/// <summary>
+/// The hand-written half of the interop: the SPA macros and the one list operation this library
+/// reimplements rather than binds.
+/// </summary>
+/// <remarks>
+/// These are C macros and static inlines, so ClangSharp emits nothing for them and there is no
+/// native symbol to call through. Getting one wrong is silent - a sequence compared against the
+/// wrong mask matches nothing, and a hook unlinked wrongly corrupts a list the daemon walks.
+/// </remarks>
+[TestClass]
+[SupportedOSPlatform("linux")]
+public sealed unsafe class NativeHelperTests : PipeWireTestBase
+{
+    [TestMethod]
+    public void AnAsyncResult_IsRecognisedAndItsSequenceExtracted()
+    {
+        // A method that queued its work returns SPA_ASYNC_BIT | seq; one that completed returns a
+        // status. Telling them apart is how a caller knows whether to wait for an answer.
+        for (int seq = 0; seq < 8; seq++)
+        {
+            int result = NativeConstants.SPA_ASYNC_BIT | seq;
+
+            Assert.IsTrue(Native.SPA_RESULT_IS_ASYNC(result), $"seq {seq} must read as async");
+            Assert.AreEqual(seq, Native.SPA_RESULT_ASYNC_SEQ(result));
+        }
+
+        Assert.AreEqual(
+            NativeConstants.SPA_ASYNC_SEQ_MASK,
+            Native.SPA_RESULT_ASYNC_SEQ(NativeConstants.SPA_ASYNC_BIT | NativeConstants.SPA_ASYNC_SEQ_MASK));
+    }
+
+    [TestMethod]
+    public void ASynchronousResult_IsNotMistakenForAQueuedOne()
+    {
+        // Zero is the common one: destroying a global and updating permissions both return it, and
+        // reading either as a queued request waits for a reply that is never sent.
+        Assert.IsFalse(Native.SPA_RESULT_IS_ASYNC(0));
+        Assert.IsFalse(Native.SPA_RESULT_IS_ASYNC(-13));
+        Assert.IsFalse(Native.SPA_RESULT_IS_ASYNC(1));
+    }
+
+    [TestMethod]
+    public void RemovingAHookFromTheMiddle_LeavesItsNeighboursJoined()
+    {
+        // The list is circular and the daemon walks it, so a wrong unlink either drops the entries
+        // after the removed one or leaves it reachable and dispatching into freed memory.
+        spa_hook* a = Alloc();
+        spa_hook* b = Alloc();
+        spa_hook* c = Alloc();
+
+        try
+        {
+            Link(a, b);
+            Link(b, c);
+            Link(c, a);
+
+            Native.spa_hook_remove(b);
+
+            Assert.IsTrue(a->link.next == &c->link, "a must now point past the removed hook");
+            Assert.IsTrue(c->link.prev == &a->link, "c must now point back past it");
+            Assert.IsTrue(b->link.next is null && b->link.prev is null,
+                "the removed hook must not still reference the list");
+        }
+        finally
+        {
+            NativeMemory.Free(a);
+            NativeMemory.Free(b);
+            NativeMemory.Free(c);
+        }
+    }
+
+    [TestMethod]
+    public void RemovingAHookTwice_DoesNotTouchTheListAgain()
+    {
+        // Upstream leaves both pointers dangling after an unlink and relies on callers not doing
+        // this; nulling them makes the second call a no-op for the list instead of an unlink
+        // through stale pointers.
+        spa_hook* a = Alloc();
+        spa_hook* b = Alloc();
+
+        try
+        {
+            Link(a, b);
+            Link(b, a);
+
+            Native.spa_hook_remove(b);
+            Native.spa_hook_remove(b);
+
+            Assert.IsTrue(a->link.next == &a->link, "the survivor must be a list of one");
+            Assert.IsTrue(a->link.prev == &a->link);
+        }
+        finally
+        {
+            NativeMemory.Free(a);
+            NativeMemory.Free(b);
+        }
+    }
+
+    [TestMethod]
+    public void AHookThatWasNeverAttached_IsRemovedWithoutDereferencingAnything()
+    {
+        spa_hook* hook = Alloc();
+
+        try
+        {
+            Native.spa_hook_remove(hook);
+
+            Assert.IsTrue(hook->link.next is null);
+            Assert.IsTrue(hook->link.prev is null);
+        }
+        finally
+        {
+            NativeMemory.Free(hook);
+        }
+    }
+
+    [TestMethod]
+    public void RemovingANullHook_IsANoOp() => Native.spa_hook_remove(null);
+
+    private static spa_hook* Alloc() => (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
+
+    private static void Link(spa_hook* from, spa_hook* to)
+    {
+        from->link.next = &to->link;
+        to->link.prev = &from->link;
+    }
+
+    // ------------------------------------------------------------------ descriptor duplication
+
+    [TestMethod]
+    public void DuplicatingAPlaneDescriptor_GivesADistinctOneThatOutlivesTheOriginal()
+    {
+        // A frame's descriptors are borrowed for the handler's duration. Planes of a planar format
+        // may be backed by different ones, so an importer taking ownership of each needs a copy of
+        // each; the frame's own DuplicateFd covers only the first.
+        if (!OperatingSystem.IsLinux())
+            Assert.Inconclusive("dup is a libc call, and descriptors are a Linux concept here.");
+
+        string path = Path.Combine(Path.GetTempPath(), $"pwnet-dup-{Environment.ProcessId}");
+        File.WriteAllText(path, "x");
+
+        try
+        {
+            using SafeFileHandle file = File.OpenHandle(path);
+            long fd = file.DangerousGetHandle();
+
+            var plane = new VideoPlane(fd, Offset: 0, Stride: 4, Size: 1);
+            using SafeDescriptorHandle copy = plane.DuplicateFd();
+
+            Assert.IsFalse(copy.IsInvalid, "dup of a live descriptor failed");
+            Assert.AreNotEqual((int)fd, copy.Descriptor, "dup returned the descriptor it was given");
+
+            file.Dispose();
+            Assert.IsTrue(Fcntl(copy.Descriptor, FGetFd) >= 0, "the copy did not outlive the original");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public void DuplicatingAPlaneThatIsNotFdBacked_ReportsThatRatherThanThrowing()
+    {
+        // Host-memory frames carry -1, and a caller looping over planes should not have to
+        // special-case them before asking.
+        using SafeDescriptorHandle none = new VideoPlane(-1, 0, 0, 0).DuplicateFd();
+        Assert.IsTrue(none.IsInvalid);
+    }
+
+    [TestMethod]
+    public void DuplicatingADescriptorOutsideIntRange_IsRefusedBeforeTheNarrowingCast()
+    {
+        // A value outside int range did not come from the kernel; truncating it would name a
+        // different file. No libc call happens on this path, so this runs everywhere.
+        Assert.ThrowsExactly<IOException>(() => Descriptors.Duplicate((long)int.MaxValue + 1));
+    }
+
+    [TestMethod]
+    public void DuplicatingAClosedDescriptor_ReportsTheKernelRefusal()
+    {
+        if (!OperatingSystem.IsLinux())
+            Assert.Inconclusive("dup is a libc call, and descriptors are a Linux concept here.");
+
+        string path = Path.Combine(Path.GetTempPath(), $"pwnet-dupdead-{Environment.ProcessId}");
+        File.WriteAllText(path, "x");
+
+        long fd;
+        using (SafeFileHandle file = File.OpenHandle(path))
+            fd = file.DangerousGetHandle();
+
+        // Closed when the handle above disposes, so dup fails EBADF rather than returning.
+        try
+        {
+            IOException thrown = Assert.ThrowsExactly<IOException>(() => Descriptors.Duplicate(fd));
+            StringAssert.Contains(thrown.Message, "dup of descriptor");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// <c>SO_ACCEPTCONN</c> and <c>SOL_SOCKET</c> are hardcoded numbers, and a wrong one fails
+    /// closed: getsockopt errors, every descriptor reads as not listening, and the security
+    /// context refuses sockets that are perfectly good. Runs on both architectures the build
+    /// targets, which is the point of checking it here rather than against a daemon.
+    /// </summary>
+    [TestMethod]
+    public void IsListeningSocket_TellsListeningSocketsFromEverythingElse()
+    {
+        if (!OperatingSystem.IsLinux())
+            Assert.Inconclusive("descriptors are a Linux concept here.");
+
+        string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        using (var listening = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified))
+        {
+            listening.Bind(new UnixDomainSocketEndPoint(path));
+            listening.Listen(1);
+            Assert.IsTrue(FdInterop.IsListeningSocket((int)listening.SafeHandle.DangerousGetHandle()),
+                "a listening socket must read as one, or the constants are wrong for this architecture");
+        }
+        File.Delete(path);
+
+        using (var unbound = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified))
+        {
+            Assert.IsFalse(FdInterop.IsListeningSocket((int)unbound.SafeHandle.DangerousGetHandle()),
+                "a socket that never listened is not a listening socket");
+        }
+
+        string file = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        using (var stream = new FileStream(file, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1,
+                                           FileOptions.DeleteOnClose))
+        {
+            Assert.IsFalse(FdInterop.IsListeningSocket((int)stream.SafeFileHandle.DangerousGetHandle()),
+                "a regular file is not a socket at all");
+        }
+
+        Assert.IsFalse(FdInterop.IsListeningSocket(-1), "a descriptor that cannot exist is not listening");
+    }
+
+    private const int FGetFd = 1;
+
+    [DllImport("libc", EntryPoint = "fcntl", SetLastError = true)]
+    private static extern int Fcntl(int fd, int cmd);
+
+    [DllImport("libc", EntryPoint = "close", SetLastError = true)]
+    private static extern int Close(int fd);
+}

@@ -11,9 +11,9 @@
 
 using System.Runtime.CompilerServices;
 
-namespace PipeWire.NET.Generated;
+namespace PipeWire.NET.Interop;
 
-public unsafe partial struct pw_memmap
+internal unsafe partial struct pw_memmap
 {
     [NativeTypeName("struct pw_memblock *")]
     public pw_memblock* block;
