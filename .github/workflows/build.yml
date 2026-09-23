@@ -85,7 +85,7 @@ jobs:
         run: dotnet build PipeWire.NET.slnx --no-restore -c Release
 
       - name: Test (non-integration on host runner)
-        run: dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+        run: dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
              --filter "TestCategory!=Integration"
 
       - name: Summarize coverage
@@ -196,7 +196,7 @@ jobs:
           PIPEWIRE_DEBUG: "3"
           PIPEWIRE_LOG: ${{ runner.temp }}/pw-native-nodaemon.log
         timeout-minutes: 10
-        run: dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release
+        run: dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release
              --filter "TestCategory=Integration&TestCategory!=RequiresDaemon&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon" --max-parallel-test-modules 1
 
       - name: Name the test that hung
@@ -220,7 +220,7 @@ jobs:
         run: |
           source build/session.sh
           pwnet_session_start
-          pwnet_session_run dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
+          pwnet_session_run dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon" --max-parallel-test-modules 1
           exit $PWNET_LAST_RC
 
@@ -299,7 +299,7 @@ jobs:
         run: |
           source build/session.sh
           pwnet_session_start
-          pwnet_session_run dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
+          pwnet_session_run dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
             --filter "TestCategory=RequiresGpu&TestCategory!=RequiresGStreamer" --max-parallel-test-modules 1
           echo "::notice::DMA-BUF leg exit $PWNET_LAST_RC (non-gating: a hosted runner has no GPU to import with)"
 
@@ -312,7 +312,7 @@ jobs:
         run: |
           source build/session.sh
           pwnet_session_start
-          pwnet_session_run dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
+          pwnet_session_run dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
             --filter "TestCategory=RequiresGStreamer&TestCategory!=RequiresGpu&TestCategory!=PenTest" --max-parallel-test-modules 1
           exit $PWNET_LAST_RC
 
@@ -365,7 +365,7 @@ jobs:
         run: dotnet build PipeWire.NET.slnx -c Release
 
       - name: Unit tests
-        run: dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release --filter "TestCategory!=Integration"
+        run: dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release --filter "TestCategory!=Integration"
 
   aot_arm64:
     name: Native AOT and ABI on arm64
@@ -404,7 +404,7 @@ jobs:
         # The struct layouts and enum widths are what arm64 is here to disagree about, and these
         # need no daemon.
         run: |
-          dotnet test PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release             --filter "TestCategory!=Integration"
+          dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release             --filter "TestCategory!=Integration"
 
       - name: Native AOT publish and run
         timeout-minutes: 20
@@ -519,7 +519,7 @@ jobs:
         run: |
           source build/session.sh
           pwnet_session_start
-          pwnet_session_run dotnet test PipeWire.NET.slnx --settings tests.runsettings -c Release             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon"             --max-parallel-test-modules 1
+          pwnet_session_run dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings -c Release             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon"             --max-parallel-test-modules 1
 
           if [ $PWNET_LAST_RC -eq 0 ]; then
             echo "- result: passed" >> "$GITHUB_STEP_SUMMARY"
