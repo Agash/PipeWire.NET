@@ -39,7 +39,8 @@ public sealed record OwnedVideoFrame(
     long? QueuedTimeNs,
     long? GraphTimeNs,
     long? StreamPositionNs,
-    long DelayNs)
+    long DelayNs
+)
 {
     // By content, not by array identity. A record compares its members with
     // EqualityComparer{T}.Default, and for ImmutableArray{T} that compares the wrapped array by

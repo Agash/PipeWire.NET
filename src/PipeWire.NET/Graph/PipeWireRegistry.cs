@@ -91,9 +91,11 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         internal TaskCompletionSource<IPipeWireObject> Add()
         {
             var waiter = new TaskCompletionSource<IPipeWireObject>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
+                TaskCreationOptions.RunContinuationsAsynchronously
+            );
 
-            lock (_waiters) _waiters.Add(waiter);
+            lock (_waiters)
+                _waiters.Add(waiter);
             return waiter;
         }
 
@@ -121,26 +123,31 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
         private TaskCompletionSource<IPipeWireObject>[] Snapshot()
         {
-            lock (_waiters) return [.. _waiters];
+            lock (_waiters)
+                return [.. _waiters];
         }
     }
 
     private PipeWireGraphSnapshot _current = PipeWireGraphSnapshot.Empty;
     private long _version;
 
-    private PipeWireProxyHandle?       _registryOwner;
+    private PipeWireProxyHandle? _registryOwner;
     private unsafe pw_registry_events* _events;
+
     // Unmanaged, not a field: pw_registry_add_listener retains this pointer and a `fixed` block only
     // pins for its own duration. Same reasoning as PipeWireStreamCore.
-    private unsafe spa_hook*    _hook;
-    private GCHandle            _selfHandle;
+    private unsafe spa_hook* _hook;
+    private GCHandle _selfHandle;
     private bool _listenerOwned;
-    private volatile bool       _disposed;
+    private volatile bool _disposed;
 
     /// <summary>Signature for <see cref="GraphChanged"/>.</summary>
     /// <param name="sender">The registry that published the snapshot.</param>
     /// <param name="snapshot">The graph as it stands after the change.</param>
-    public delegate void GraphChangedHandler(PipeWireRegistry sender, PipeWireGraphSnapshot snapshot);
+    public delegate void GraphChangedHandler(
+        PipeWireRegistry sender,
+        PipeWireGraphSnapshot snapshot
+    );
 
     /// <summary>
     /// Raised after every graph change, carrying the snapshot that reflects it.
@@ -196,8 +203,11 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             // get_registry / add_listener touch loop-owned objects -> hold the loop lock.
             using (_ctx.Lock())
             {
-                pw_registry* registry =
-                    Native.pw_core_get_registry(_ctx.CoreHandle, NativeConstants.PW_VERSION_REGISTRY, 0);
+                pw_registry* registry = Native.pw_core_get_registry(
+                    _ctx.CoreHandle,
+                    NativeConstants.PW_VERSION_REGISTRY,
+                    0
+                );
 
                 // The registry is a proxy like any other, so it gets the same owner: that keeps the
                 // core and context alive long enough to destroy it properly rather than having it
@@ -205,13 +215,17 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                 // pointer lives, so the two cannot disagree about whether it is still valid.
                 if (registry is not null)
                     _registryOwner = new PipeWireProxyHandle(
-                        (pw_proxy*)registry, _ctx.LoopOwner, _ctx.CoreOwner);
+                        (pw_proxy*)registry,
+                        _ctx.LoopOwner,
+                        _ctx.CoreOwner
+                    );
                 if (registry is null)
                     throw new PipeWireInteropException("pw_core_get_registry", -NativeLibc.ENOMEM);
 
-                _events = (pw_registry_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_registry_events));
-                _events->version       = NativeConstants.PW_VERSION_REGISTRY_EVENTS;
-                _events->global        = &OnGlobal;
+                _events = (pw_registry_events*)
+                    NativeMemory.AllocZeroed((nuint)sizeof(pw_registry_events));
+                _events->version = NativeConstants.PW_VERSION_REGISTRY_EVENTS;
+                _events->global = &OnGlobal;
                 _events->global_remove = &OnGlobalRemove;
 
                 _hook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
@@ -223,8 +237,12 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                 _registryOwner!.OwnListener(_events, _hook, _selfHandle);
                 _listenerOwned = true;
 
-                int rc = Native.pw_registry_add_listener(registry, _hook, _events,
-                    (void*)GCHandle.ToIntPtr(_selfHandle));
+                int rc = Native.pw_registry_add_listener(
+                    registry,
+                    _hook,
+                    _events,
+                    (void*)GCHandle.ToIntPtr(_selfHandle)
+                );
                 if (rc < 0)
                     throw new PipeWireInteropException("pw_registry_add_listener", rc);
             }
@@ -248,8 +266,12 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         foreach (uint id in _awaitingPublish.Keys)
         {
             if (_awaitingPublish.TryRemove(id, out PublishWaiters? waiters))
-                waiters.FailAll(new ObjectDisposedException(nameof(PipeWireRegistry),
-                    $"the registry was disposed while object {id} was being created."));
+                waiters.FailAll(
+                    new ObjectDisposedException(
+                        nameof(PipeWireRegistry),
+                        $"the registry was disposed while object {id} was being created."
+                    )
+                );
         }
 
         // Safe in either disposal order. The handle chain - proxy holds core holds context holds
@@ -269,9 +291,12 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // and handing them over, and nothing else would ever free them.
         if (!_listenerOwned)
         {
-            if (_hook is not null) NativeMemory.Free(_hook);
-            if (_events is not null) NativeMemory.Free(_events);
-            if (_selfHandle.IsAllocated) _selfHandle.Free();
+            if (_hook is not null)
+                NativeMemory.Free(_hook);
+            if (_events is not null)
+                NativeMemory.Free(_events);
+            if (_selfHandle.IsAllocated)
+                _selfHandle.Free();
         }
 
         _hook = null;
@@ -376,25 +401,33 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     // Collects rather than raises: the granular removals are announced only after Publish, so a
     // handler inspecting Current already sees the snapshot the event describes. Raising first
     // inverts that contract - the port or link is still indexed while its removal is announced.
-    private void CascadeRemove(uint nodeId, out List<uint> removedLinks, out List<uint> removedPorts)
+    private void CascadeRemove(
+        uint nodeId,
+        out List<uint> removedLinks,
+        out List<uint> removedPorts
+    )
     {
         removedLinks = [];
         removedPorts = [];
 
         foreach ((uint portId, PipeWirePort port) in _ports)
         {
-            if (port.NodeId != nodeId) continue;
+            if (port.NodeId != nodeId)
+                continue;
 
             foreach ((uint linkId, PipeWireLink link) in _links)
             {
-                if (link.OutputPortId != portId && link.InputPortId != portId) continue;
-                if (!_links.TryRemove(linkId, out _)) continue;
+                if (link.OutputPortId != portId && link.InputPortId != portId)
+                    continue;
+                if (!_links.TryRemove(linkId, out _))
+                    continue;
 
                 LogRemoved("link", linkId);
                 removedLinks.Add(linkId);
             }
 
-            if (!_ports.TryRemove(portId, out _)) continue;
+            if (!_ports.TryRemove(portId, out _))
+                continue;
 
             LogRemoved("port", portId);
             removedPorts.Add(portId);
@@ -437,8 +470,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     {
         if (_awaitingPublish.TryRemove(id, out PublishWaiters? waiters))
         {
-            waiters.FailAll(new PipeWireInteropException(
-                "bind", -NativeLibc.EINVAL, id, reason));
+            waiters.FailAll(new PipeWireInteropException("bind", -NativeLibc.EINVAL, id, reason));
         }
     }
 
@@ -447,11 +479,16 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// published. Falls back to the live collections when the object arrived first.
     /// </summary>
     private async Task<T> AwaitPublishedAsync<T>(
-        uint id, Func<uint, T?> lookup, CancellationToken cancellationToken) where T : class, IPipeWireObject
+        uint id,
+        Func<uint, T?> lookup,
+        CancellationToken cancellationToken
+    )
+        where T : class, IPipeWireObject
     {
         // A connection already known to be gone cannot announce anything, so waiting on it is a
         // hang with extra steps. The refusal names the fault that ended it.
-        if (_ctx.ConnectionFault is { } dead) throw dead;
+        if (_ctx.ConnectionFault is { } dead)
+            throw dead;
 
         // A registry that is already gone will never publish anything, and `bound` can arrive after
         // disposal, so this has to be checked here rather than only when disposal runs.
@@ -477,26 +514,42 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
         // Cancels this caller's wait and nobody else's. The context shutdown also ends the wait
         // by surfacing an error: a publish that depends on a stopped loop never arrives.
-        using (cancellationToken.UnsafeRegister(
-            static s => ((TaskCompletionSource<IPipeWireObject>)s!).TrySetCanceled(), waiter))
-        using (_ctx.Shutdown.UnsafeRegister(
-            static s => ((TaskCompletionSource<IPipeWireObject>)s!).TrySetException(
-                new ObjectDisposedException(nameof(PipeWireContext),
-                    "the context was disposed while an object publish was in flight.")), waiter))
+        using (
+            cancellationToken.UnsafeRegister(
+                static s => ((TaskCompletionSource<IPipeWireObject>)s!).TrySetCanceled(),
+                waiter
+            )
+        )
+        using (
+            _ctx.Shutdown.UnsafeRegister(
+                static s =>
+                    ((TaskCompletionSource<IPipeWireObject>)s!).TrySetException(
+                        new ObjectDisposedException(
+                            nameof(PipeWireContext),
+                            "the context was disposed while an object publish was in flight."
+                        )
+                    ),
+                waiter
+            )
+        )
         {
             try
             {
                 IPipeWireObject published = await waiter.Task.ConfigureAwait(false);
-                if (published is T typed) return typed;
+                if (published is T typed)
+                    return typed;
 
                 // Ids recycle. Between the daemon answering with this id and the global arriving,
                 // the object can be destroyed and the number handed to something else, so the
                 // publish that satisfies this waiter is not always what was created. That is a
                 // lost race rather than a broken invariant, and it is reported as one.
                 throw new PipeWireException(
-                    "create", -NativeLibc.ENOENT, id,
+                    "create",
+                    -NativeLibc.ENOENT,
+                    id,
                     $"global {id} arrived as {published.Kind} rather than {typeof(T).Name}; "
-                    + "the id was reused before the new object was observed");
+                        + "the id was reused before the new object was observed"
+                );
             }
             finally
             {
@@ -507,9 +560,13 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
     /// <summary>Drops one waiter, and the id's entry once it was the last.</summary>
     private void Unregister(
-        uint id, PublishWaiters waiters, TaskCompletionSource<IPipeWireObject> waiter)
+        uint id,
+        PublishWaiters waiters,
+        TaskCompletionSource<IPipeWireObject> waiter
+    )
     {
-        if (!waiters.Remove(waiter)) return;
+        if (!waiters.Remove(waiter))
+            return;
 
         // Conditional on identity: a waiter that registered after this one emptied the list holds a
         // different instance, and removing by key alone would strand it.
@@ -519,7 +576,8 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// <summary>Resolves the instance a native callback belongs to, or null if it is gone.</summary>
     private static unsafe PipeWireRegistry? FromData(void* data)
     {
-        if (data is null) return null;
+        if (data is null)
+            return null;
 
         try
         {
@@ -582,16 +640,20 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// </para>
     /// </remarks>
     public async IAsyncEnumerable<PipeWireGraphSnapshot> WatchAsync(
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [System.Runtime.CompilerServices.EnumeratorCancellation]
+            CancellationToken cancellationToken = default
+    )
     {
         var channel = System.Threading.Channels.Channel.CreateBounded<PipeWireGraphSnapshot>(
             new System.Threading.Channels.BoundedChannelOptions(1)
             {
                 FullMode = System.Threading.Channels.BoundedChannelFullMode.DropOldest,
                 SingleReader = true,
-            });
+            }
+        );
 
-        void Forward(PipeWireRegistry _, PipeWireGraphSnapshot snapshot) => channel.Writer.TryWrite(snapshot);
+        void Forward(PipeWireRegistry _, PipeWireGraphSnapshot snapshot) =>
+            channel.Writer.TryWrite(snapshot);
         void Finish() => channel.Writer.TryComplete();
 
         GraphChanged += Forward;
@@ -601,7 +663,8 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         Disposing += Finish;
         try
         {
-            if (_disposed) yield break;
+            if (_disposed)
+                yield break;
 
             // A publish between subscribing above and this first yield lands in the channel AND is
             // what Current now reads, so yielding both would deliver the same version twice. Track
@@ -609,10 +672,14 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             // stale duplicate is the only disorder possible, never a gap filled from behind.
             long lastYielded = Current.Version;
             yield return Current;
-            await foreach (PipeWireGraphSnapshot snapshot in
-                           channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (
+                PipeWireGraphSnapshot snapshot in channel
+                    .Reader.ReadAllAsync(cancellationToken)
+                    .ConfigureAwait(false)
+            )
             {
-                if (snapshot.Version <= lastYielded) continue;
+                if (snapshot.Version <= lastYielded)
+                    continue;
                 lastYielded = snapshot.Version;
                 yield return snapshot;
             }
@@ -689,10 +756,16 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         lock (_publishGate)
         {
             long revision = Interlocked.Read(ref _revision);
-            if (revision == Interlocked.Read(ref _builtRevision)) return Volatile.Read(ref _current);
+            if (revision == Interlocked.Read(ref _builtRevision))
+                return Volatile.Read(ref _current);
 
             var snapshot = new PipeWireGraphSnapshot(
-                ++_version, _sources.Values, _ports.Values, _links.Values, _objects.Values);
+                ++_version,
+                _sources.Values,
+                _ports.Values,
+                _links.Values,
+                _objects.Values
+            );
 
             Volatile.Write(ref _current, snapshot);
             Interlocked.Exchange(ref _builtRevision, revision);
@@ -706,14 +779,16 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // subscribed - the whole of the initial enumeration, since a caller subscribes after
         // construction - there is nothing to build it for.
         GraphChangedHandler? handlers = GraphChanged;
-        if (handlers is null) return;
+        if (handlers is null)
+            return;
 
         PipeWireGraphSnapshot snapshot = Current;
         SafeCallback.Raise(
             handlers,
             (Registry: this, Snapshot: snapshot),
             static (h, s) => h(s.Registry, s.Snapshot),
-            static (s, ex) => s.Registry.LogHandlerFaulted(nameof(GraphChanged), ex));
+            static (s, ex) => s.Registry.LogHandlerFaulted(nameof(GraphChanged), ex)
+        );
     }
 
     /// <summary>
@@ -759,8 +834,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// </para>
     /// </remarks>
     public Task<PipeWireNode> CreateVirtualSinkAsync(
-        string description, string? name = null, CancellationToken cancellationToken = default) =>
-        CreateVirtualSink(description, name).ExecuteAsync(cancellationToken);
+        string description,
+        string? name = null,
+        CancellationToken cancellationToken = default
+    ) => CreateVirtualSink(description, name).ExecuteAsync(cancellationToken);
 
     /// <summary>
     /// Describes a virtual sink for creation, so options can be chained before it is made.
@@ -795,8 +872,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// clients somewhere to read from.
     /// </remarks>
     public Task<PipeWireNode> CreateVirtualSourceAsync(
-        string description, string? name = null, CancellationToken cancellationToken = default) =>
-        CreateVirtualSource(description, name).ExecuteAsync(cancellationToken);
+        string description,
+        string? name = null,
+        CancellationToken cancellationToken = default
+    ) => CreateVirtualSource(description, name).ExecuteAsync(cancellationToken);
 
     /// <summary>
     /// Describes a virtual audio source: a node other clients capture from, rather than play into.
@@ -811,22 +890,33 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         CreateVirtualSink(description, name).WithMediaClass("Audio/Source");
 
     internal async Task<PipeWireNode> ExecuteNodeCreationAsync(
-        string description, string? name, PipeWireObjectOptions options, CancellationToken cancellationToken)
+        string description,
+        string? name,
+        PipeWireObjectOptions options,
+        CancellationToken cancellationToken
+    )
     {
         name ??= Guid.NewGuid().ToString();
 
         Task<PipeWireNode>? published = null;
 
         (uint id, PipeWireProxyHandle proxy) = await CreateObjectAsync(
-            isLink: false, description, name, default, default, options,
-            boundId =>
-            {
-                // Marked before anything can be awaited, so a removal arriving while the graph
-                // catches up has somewhere to record itself.
-                _creating[boundId] = false;
-                published = AwaitPublishedAsync(boundId, GetNodeOrNull, cancellationToken);
-            },
-            cancellationToken).ConfigureAwait(false);
+                isLink: false,
+                description,
+                name,
+                default,
+                default,
+                options,
+                boundId =>
+                {
+                    // Marked before anything can be awaited, so a removal arriving while the graph
+                    // catches up has somewhere to record itself.
+                    _creating[boundId] = false;
+                    published = AwaitPublishedAsync(boundId, GetNodeOrNull, cancellationToken);
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
 
         try
         {
@@ -854,8 +944,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// the message.
     /// </exception>
     public Task<PipeWireLink> CreateLinkAsync(
-        PipeWirePort output, PipeWirePort input, CancellationToken cancellationToken = default) =>
-        CreateLink(output, input).ExecuteAsync(cancellationToken);
+        PipeWirePort output,
+        PipeWirePort input,
+        CancellationToken cancellationToken = default
+    ) => CreateLink(output, input).ExecuteAsync(cancellationToken);
 
     /// <summary>
     /// Describes a link for creation, so options can be chained before it is made.
@@ -872,9 +964,15 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         ArgumentNullException.ThrowIfNull(input);
 
         if (output.PortDirection != PipeWirePortDirection.Out)
-            throw new ArgumentException($"Port {output.PortId} is not an output port.", nameof(output));
+            throw new ArgumentException(
+                $"Port {output.PortId} is not an output port.",
+                nameof(output)
+            );
         if (input.PortDirection != PipeWirePortDirection.In)
-            throw new ArgumentException($"Port {input.PortId} is not an input port.", nameof(input));
+            throw new ArgumentException(
+                $"Port {input.PortId} is not an input port.",
+                nameof(input)
+            );
 
         return new PipeWireLinkBuilder(this, output, input, default);
     }
@@ -901,13 +999,19 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
         PipeWireGraphSnapshot graph = Current;
 
-        PipeWirePort output = graph.GetPort(outputPortId)
+        PipeWirePort output =
+            graph.GetPort(outputPortId)
             ?? throw new ArgumentException(
-                $"{outputPortId} is not a port in the current graph.", nameof(outputPortId));
+                $"{outputPortId} is not a port in the current graph.",
+                nameof(outputPortId)
+            );
 
-        PipeWirePort input = graph.GetPort(inputPortId)
+        PipeWirePort input =
+            graph.GetPort(inputPortId)
             ?? throw new ArgumentException(
-                $"{inputPortId} is not a port in the current graph.", nameof(inputPortId));
+                $"{inputPortId} is not a port in the current graph.",
+                nameof(inputPortId)
+            );
 
         return CreateLink(output, input);
     }
@@ -924,23 +1028,35 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// </exception>
     /// <exception cref="PipeWireException">The daemon refused the request.</exception>
     public Task<PipeWireLink> CreateLinkAsync(
-        uint outputPortId, uint inputPortId, CancellationToken cancellationToken = default) =>
-        CreateLink(outputPortId, inputPortId).ExecuteAsync(cancellationToken);
+        uint outputPortId,
+        uint inputPortId,
+        CancellationToken cancellationToken = default
+    ) => CreateLink(outputPortId, inputPortId).ExecuteAsync(cancellationToken);
 
     internal async Task<PipeWireLink> ExecuteLinkCreationAsync(
-        PipeWirePort output, PipeWirePort input, PipeWireObjectOptions options,
-        CancellationToken cancellationToken)
+        PipeWirePort output,
+        PipeWirePort input,
+        PipeWireObjectOptions options,
+        CancellationToken cancellationToken
+    )
     {
         Task<PipeWireLink>? published = null;
 
         (uint id, PipeWireProxyHandle proxy) = await CreateObjectAsync(
-            isLink: true, null, null, output, input, options,
-            boundId =>
-            {
-                _creating[boundId] = false;
-                published = AwaitPublishedAsync(boundId, GetLinkOrNull, cancellationToken);
-            },
-            cancellationToken).ConfigureAwait(false);
+                isLink: true,
+                null,
+                null,
+                output,
+                input,
+                options,
+                boundId =>
+                {
+                    _creating[boundId] = false;
+                    published = AwaitPublishedAsync(boundId, GetLinkOrNull, cancellationToken);
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
 
         try
         {
@@ -994,8 +1110,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // is a race, not a caller mistake, and the daemon's answer is the honest one.
         if (id == NativeConstants.PW_ID_CORE)
         {
-            throw new ArgumentOutOfRangeException(nameof(id),
-                "the core is the connection itself and cannot be destroyed; dispose the context instead.");
+            throw new ArgumentOutOfRangeException(
+                nameof(id),
+                "the core is the connection itself and cannot be destroyed; dispose the context instead."
+            );
         }
 
         // An object this client created is destroyed through the proxy it was created with, which
@@ -1007,7 +1125,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // its proxy unbinds it and reports success while the object lives on. Those go through
         // the registry destroy below like objects this client never owned, and the filed proxy is
         // left for the removal handler, exactly as if someone else had destroyed them.
-        if (_ownedProxies.TryGetValue(id, out PipeWireProxyHandle? owned) && !_lingering.ContainsKey(id))
+        if (
+            _ownedProxies.TryGetValue(id, out PipeWireProxyHandle? owned)
+            && !_lingering.ContainsKey(id)
+        )
         {
             _ownedProxies.TryRemove(id, out _);
             owned.Dispose();
@@ -1025,7 +1146,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // Issued through the round-trip so the listener is already attached: sending it first and
         // subscribing afterwards loses any refusal the daemon answered in between.
         return CoreSync.RoundTripAsync(
-            _ctx, () => Native.pw_registry_destroy_global(RegistryHandle, id), cancellationToken);
+            _ctx,
+            () => Native.pw_registry_destroy_global(RegistryHandle, id),
+            cancellationToken
+        );
     }
 
     /// <summary>
@@ -1066,13 +1190,16 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
                 // The core is never a destroy target, and ids recycle: without dedupe one id
                 // could go out twice, the second answer landing on an object that is not ours.
-                if (id == NativeConstants.PW_ID_CORE || !seen.Add(id)) continue;
+                if (id == NativeConstants.PW_ID_CORE || !seen.Add(id))
+                    continue;
 
                 // Owned proxies go through their own destruction, exactly as the single path
                 // does (its lock is recursive on this thread); everything else is issued
                 // without watching for its answer.
-                if (_ownedProxies.TryRemove(id, out PipeWireProxyHandle? owned)
-                    && !_lingering.ContainsKey(id))
+                if (
+                    _ownedProxies.TryRemove(id, out PipeWireProxyHandle? owned)
+                    && !_lingering.ContainsKey(id)
+                )
                 {
                     owned.Dispose();
                     continue;
@@ -1091,9 +1218,15 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     }
 
     private unsafe Task<(uint Id, PipeWireProxyHandle Proxy)> CreateObjectAsync(
-        bool isLink, string? description, string? name,
-        PipeWirePort? output, PipeWirePort? input, PipeWireObjectOptions options,
-        Action<uint> onBound, CancellationToken cancellationToken)
+        bool isLink,
+        string? description,
+        string? name,
+        PipeWirePort? output,
+        PipeWirePort? input,
+        PipeWireObjectOptions options,
+        Action<uint> onBound,
+        CancellationToken cancellationToken
+    )
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -1104,7 +1237,8 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             ? []
             : options.Properties;
 
-        int needed = FixedPropertyBytes
+        int needed =
+            FixedPropertyBytes
             + (name is null ? 0 : Encoding.UTF8.GetByteCount(name) + 1)
             + (description is null ? 0 : Encoding.UTF8.GetByteCount(description) + 1);
 
@@ -1114,18 +1248,20 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // Pinned rather than pooled. The array's address is handed to native code, and a pooled
         // array is an ordinary movable one: a collection between Build and the native call would
         // leave the daemon reading whatever replaced it.
-        byte[]? rented = needed > StackScratchBytes
-            ? GC.AllocateUninitializedArray<byte>(needed, pinned: true)
-            : null;
+        byte[]? rented =
+            needed > StackScratchBytes
+                ? GC.AllocateUninitializedArray<byte>(needed, pinned: true)
+                : null;
         try
         {
             Span<byte> scratch = rented ?? stackalloc byte[StackScratchBytes];
 
             // Eight covers everything the library sets itself; the caller's properties are on top
             // of that, and the count is theirs to decide.
-            Span<spa_dict_item> items = extra.Length <= 8
-                ? stackalloc spa_dict_item[16]
-                : GC.AllocateUninitializedArray<spa_dict_item>(8 + extra.Length, pinned: true);
+            Span<spa_dict_item> items =
+                extra.Length <= 8
+                    ? stackalloc spa_dict_item[16]
+                    : GC.AllocateUninitializedArray<spa_dict_item>(8 + extra.Length, pinned: true);
 
             // spa_dict_lookup walks the items and returns the FIRST match, so a repeated key is not
             // an override, it is a value that never gets read. The caller's properties therefore go
@@ -1135,14 +1271,16 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             {
                 foreach ((string k, _) in extra)
                 {
-                    if (string.Equals(k, key, StringComparison.Ordinal)) return true;
+                    if (string.Equals(k, key, StringComparison.Ordinal))
+                        return true;
                 }
 
                 return false;
             }
             var dict = new SpaDictBuilder(scratch, items);
 
-            foreach ((string key, string value) in extra) dict.Add(key, value);
+            foreach ((string key, string value) in extra)
+                dict.Add(key, value);
 
             if (options.Linger && !Supplied(PipeWireKeys.PW_KEY_OBJECT_LINGER))
                 dict.Add(NativeConstants.PW_KEY_OBJECT_LINGER, PipeWireValues.True);
@@ -1160,25 +1298,41 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                     dict.Add(NativeConstants.PW_KEY_LINK_PASSIVE, PipeWireValues.True);
 
                 return NativeObjectCreation.CreateAsync(
-                    _ctx, PipeWireValues.LinkFactory, NativeConstants.PW_TYPE_INTERFACE_Link,
-                    NativeConstants.PW_VERSION_LINK, dict.Build(), cancellationToken, onBound);
+                    _ctx,
+                    PipeWireValues.LinkFactory,
+                    NativeConstants.PW_TYPE_INTERFACE_Link,
+                    NativeConstants.PW_VERSION_LINK,
+                    dict.Build(),
+                    cancellationToken,
+                    onBound
+                );
             }
 
             // The factory is what kind of object this is rather than a property of it, so it is
             // not overridable.
             dict.Add(NativeConstants.PW_KEY_FACTORY_NAME, PipeWireValues.NullAudioSink);
 
-            if (!Supplied(PipeWireKeys.PW_KEY_NODE_NAME)) dict.Add(NativeConstants.PW_KEY_NODE_NAME, name!);
-            if (!Supplied(PipeWireKeys.PW_KEY_NODE_DESCRIPTION)) dict.Add(NativeConstants.PW_KEY_NODE_DESCRIPTION, description!);
+            if (!Supplied(PipeWireKeys.PW_KEY_NODE_NAME))
+                dict.Add(NativeConstants.PW_KEY_NODE_NAME, name!);
+            if (!Supplied(PipeWireKeys.PW_KEY_NODE_DESCRIPTION))
+                dict.Add(NativeConstants.PW_KEY_NODE_DESCRIPTION, description!);
 
             // Defaults, and only defaults: a stereo sink is the useful shape for a virtual device,
             // and a caller naming either key gets theirs instead.
-            if (!Supplied(PipeWireKeys.PW_KEY_MEDIA_CLASS)) dict.Add(NativeConstants.PW_KEY_MEDIA_CLASS, PipeWireValues.AudioSink);
-            if (!Supplied(PipeWireKeys.SPA_KEY_AUDIO_POSITION)) dict.Add(NativeConstants.SPA_KEY_AUDIO_POSITION, PipeWireValues.StereoPosition);
+            if (!Supplied(PipeWireKeys.PW_KEY_MEDIA_CLASS))
+                dict.Add(NativeConstants.PW_KEY_MEDIA_CLASS, PipeWireValues.AudioSink);
+            if (!Supplied(PipeWireKeys.SPA_KEY_AUDIO_POSITION))
+                dict.Add(NativeConstants.SPA_KEY_AUDIO_POSITION, PipeWireValues.StereoPosition);
 
             return NativeObjectCreation.CreateAsync(
-                _ctx, PipeWireValues.Adapter, NativeConstants.PW_TYPE_INTERFACE_Node,
-                NativeConstants.PW_VERSION_NODE, dict.Build(), cancellationToken, onBound);
+                _ctx,
+                PipeWireValues.Adapter,
+                NativeConstants.PW_TYPE_INTERFACE_Node,
+                NativeConstants.PW_VERSION_NODE,
+                dict.Build(),
+                cancellationToken,
+                onBound
+            );
         }
         finally
         {
@@ -1202,17 +1356,27 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// linger and passive. Doubled for headroom, because exhausting it fails a creation that would
     /// otherwise have worked and the scratch is transient either way.
     /// </remarks>
-    private static readonly int FixedPropertyBytes = 2 * (
-        NativeConstants.PW_KEY_LINK_OUTPUT_NODE.Length + NativeConstants.PW_KEY_LINK_OUTPUT_PORT.Length
-        + NativeConstants.PW_KEY_LINK_INPUT_NODE.Length + NativeConstants.PW_KEY_LINK_INPUT_PORT.Length
-        + (4 * 11)                                              // one uint32 per endpoint key
-        + NativeConstants.PW_KEY_OBJECT_LINGER.Length + NativeConstants.PW_KEY_LINK_PASSIVE.Length
-        + NativeConstants.PW_KEY_FACTORY_NAME.Length + PipeWireValues.NullAudioSink.Length
-        + NativeConstants.PW_KEY_NODE_NAME.Length + NativeConstants.PW_KEY_NODE_DESCRIPTION.Length
-        + NativeConstants.PW_KEY_MEDIA_CLASS.Length + PipeWireValues.AudioSink.Length
-        + NativeConstants.SPA_KEY_AUDIO_POSITION.Length + PipeWireValues.StereoPosition.Length
-        + PipeWireValues.True.Length
-        + 32);                                                  // one NUL per key and value
+    private static readonly int FixedPropertyBytes =
+        2
+        * (
+            NativeConstants.PW_KEY_LINK_OUTPUT_NODE.Length
+            + NativeConstants.PW_KEY_LINK_OUTPUT_PORT.Length
+            + NativeConstants.PW_KEY_LINK_INPUT_NODE.Length
+            + NativeConstants.PW_KEY_LINK_INPUT_PORT.Length
+            + (4 * 11) // one uint32 per endpoint key
+            + NativeConstants.PW_KEY_OBJECT_LINGER.Length
+            + NativeConstants.PW_KEY_LINK_PASSIVE.Length
+            + NativeConstants.PW_KEY_FACTORY_NAME.Length
+            + PipeWireValues.NullAudioSink.Length
+            + NativeConstants.PW_KEY_NODE_NAME.Length
+            + NativeConstants.PW_KEY_NODE_DESCRIPTION.Length
+            + NativeConstants.PW_KEY_MEDIA_CLASS.Length
+            + PipeWireValues.AudioSink.Length
+            + NativeConstants.SPA_KEY_AUDIO_POSITION.Length
+            + PipeWireValues.StereoPosition.Length
+            + PipeWireValues.True.Length
+            + 32
+        ); // one NUL per key and value
 
     /// <inheritdoc/>
     /// <summary>Tears down synchronously. Disposal here does no I/O.</summary>
@@ -1232,7 +1396,8 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
     private void DisposeCore()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
 
         // Watchers are released before the native teardown, so a consumer blocked on the stream is
@@ -1259,11 +1424,21 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        PipeWireNode node = Current.GetNode(nodeId)
-            ?? throw new ArgumentException($"{nodeId} is not a node in the current graph.", nameof(nodeId));
+        PipeWireNode node =
+            Current.GetNode(nodeId)
+            ?? throw new ArgumentException(
+                $"{nodeId} is not a node in the current graph.",
+                nameof(nodeId)
+            );
 
-        PipeWireNodeProxy control =
-            PipeWireNodeProxy.Bind(_ctx, RegistryHandle, nodeId, node.InterfaceVersion, _logger, EnrichGlobal);
+        PipeWireNodeProxy control = PipeWireNodeProxy.Bind(
+            _ctx,
+            RegistryHandle,
+            nodeId,
+            node.InterfaceVersion,
+            _logger,
+            EnrichGlobal
+        );
         return control;
     }
 
@@ -1277,11 +1452,21 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        PipeWireDevice device = Current.GetDevice(deviceId)
-            ?? throw new ArgumentException($"{deviceId} is not a device in the current graph.", nameof(deviceId));
+        PipeWireDevice device =
+            Current.GetDevice(deviceId)
+            ?? throw new ArgumentException(
+                $"{deviceId} is not a device in the current graph.",
+                nameof(deviceId)
+            );
 
-        PipeWireDeviceProxy control =
-            PipeWireDeviceProxy.Bind(_ctx, RegistryHandle, deviceId, device.InterfaceVersion, _logger, EnrichGlobal);
+        PipeWireDeviceProxy control = PipeWireDeviceProxy.Bind(
+            _ctx,
+            RegistryHandle,
+            deviceId,
+            device.InterfaceVersion,
+            _logger,
+            EnrichGlobal
+        );
         return control;
     }
 
@@ -1300,11 +1485,21 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        PipeWireClient client = Current.GetClient(clientId)
-            ?? throw new ArgumentException($"{clientId} is not a client in the current graph.", nameof(clientId));
+        PipeWireClient client =
+            Current.GetClient(clientId)
+            ?? throw new ArgumentException(
+                $"{clientId} is not a client in the current graph.",
+                nameof(clientId)
+            );
 
         return PipeWireClientProxy.Bind(
-            _ctx, RegistryHandle, clientId, client.InterfaceVersion, _logger, EnrichGlobal);
+            _ctx,
+            RegistryHandle,
+            clientId,
+            client.InterfaceVersion,
+            _logger,
+            EnrichGlobal
+        );
     }
 
     /// <summary>
@@ -1323,11 +1518,21 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        PipeWirePort port = Current.GetPort(portId)
-            ?? throw new ArgumentException($"{portId} is not a port in the current graph.", nameof(portId));
+        PipeWirePort port =
+            Current.GetPort(portId)
+            ?? throw new ArgumentException(
+                $"{portId} is not a port in the current graph.",
+                nameof(portId)
+            );
 
-        PipeWirePortProxy control =
-            PipeWirePortProxy.Bind(_ctx, RegistryHandle, portId, port.InterfaceVersion, _logger, EnrichGlobal);
+        PipeWirePortProxy control = PipeWirePortProxy.Bind(
+            _ctx,
+            RegistryHandle,
+            portId,
+            port.InterfaceVersion,
+            _logger,
+            EnrichGlobal
+        );
         return control;
     }
 
@@ -1346,14 +1551,21 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        PipeWireSecurityContext context = Current.SecurityContext is { } found && found.Id == securityContextId
-            ? found
-            : throw new ArgumentException(
-                $"{securityContextId} is not a security context in the current graph.",
-                nameof(securityContextId));
+        PipeWireSecurityContext context =
+            Current.SecurityContext is { } found && found.Id == securityContextId
+                ? found
+                : throw new ArgumentException(
+                    $"{securityContextId} is not a security context in the current graph.",
+                    nameof(securityContextId)
+                );
 
         return PipeWireSecurityContextProxy.Bind(
-            _ctx, RegistryHandle, securityContextId, context.InterfaceVersion, _logger);
+            _ctx,
+            RegistryHandle,
+            securityContextId,
+            context.InterfaceVersion,
+            _logger
+        );
     }
 
     /// <summary>
@@ -1371,13 +1583,21 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        PipeWireProfiler profiler = Current.Profiler is { } found && found.Id == profilerId
-            ? found
-            : throw new ArgumentException(
-                $"{profilerId} is not the profiler in the current graph.", nameof(profilerId));
+        PipeWireProfiler profiler =
+            Current.Profiler is { } found && found.Id == profilerId
+                ? found
+                : throw new ArgumentException(
+                    $"{profilerId} is not the profiler in the current graph.",
+                    nameof(profilerId)
+                );
 
         return PipeWireProfilerProxy.Bind(
-            _ctx, RegistryHandle, profilerId, profiler.InterfaceVersion, _logger);
+            _ctx,
+            RegistryHandle,
+            profilerId,
+            profiler.InterfaceVersion,
+            _logger
+        );
     }
 
     /// <summary>
@@ -1398,11 +1618,21 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        PipeWireLink link = Current.GetLink(linkId)
-            ?? throw new ArgumentException($"{linkId} is not a link in the current graph.", nameof(linkId));
+        PipeWireLink link =
+            Current.GetLink(linkId)
+            ?? throw new ArgumentException(
+                $"{linkId} is not a link in the current graph.",
+                nameof(linkId)
+            );
 
-        PipeWireLinkProxy control =
-            PipeWireLinkProxy.Bind(_ctx, RegistryHandle, linkId, link.InterfaceVersion, _logger, EnrichGlobal);
+        PipeWireLinkProxy control = PipeWireLinkProxy.Bind(
+            _ctx,
+            RegistryHandle,
+            linkId,
+            link.InterfaceVersion,
+            _logger,
+            EnrichGlobal
+        );
         return control;
     }
 
@@ -1429,7 +1659,9 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         if (store is not PipeWireMetadata metadata)
         {
             throw new ArgumentException(
-                $"{storeId} is not a metadata store in the current graph.", nameof(storeId));
+                $"{storeId} is not a metadata store in the current graph.",
+                nameof(storeId)
+            );
         }
 
         // A store this connection serves cannot be bound through it. module-metadata answers a
@@ -1439,15 +1671,23 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         // good, every request on it included.
         foreach (PipeWireMetadataProvider served in _ctx.ServedStores.Keys)
         {
-            if (served.ServedGlobalId != storeId) continue;
+            if (served.ServedGlobalId != storeId)
+                continue;
             throw new InvalidOperationException(
                 $"metadata store {storeId} ('{metadata.MetadataName}') is served by this connection, and "
-                + "binding a store through the connection that serves it hangs the connection (the daemon "
-                + "waits on an answer from it while no longer reading from it). Use the "
-                + "PipeWireMetadataProvider itself, or bind the store from another context.");
+                    + "binding a store through the connection that serves it hangs the connection (the daemon "
+                    + "waits on an answer from it while no longer reading from it). Use the "
+                    + "PipeWireMetadataProvider itself, or bind the store from another context."
+            );
         }
 
-        return PipeWireMetadataProxy.Bind(_ctx, RegistryHandle, storeId, metadata.InterfaceVersion, _logger);
+        return PipeWireMetadataProxy.Bind(
+            _ctx,
+            RegistryHandle,
+            storeId,
+            metadata.InterfaceVersion,
+            _logger
+        );
     }
 
     /// <summary>
@@ -1483,26 +1723,66 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// logged so a daemon growing a new interface shows up as a message rather than as silence.
     /// </remarks>
     private unsafe void AddOtherObject(
-        uint id, PipeWirePermissions permissions, uint version, ReadOnlySpan<byte> kind, spa_dict* props)
+        uint id,
+        PipeWirePermissions permissions,
+        uint version,
+        ReadOnlySpan<byte> kind,
+        spa_dict* props
+    )
     {
         IPipeWireObject? parsed = null;
 
-        if      (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Device))
-            parsed = PipeWireGlobalParser.ParseDevice(id, permissions, version, PipeWireProperties.From(props));
+        if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Device))
+            parsed = PipeWireGlobalParser.ParseDevice(
+                id,
+                permissions,
+                version,
+                PipeWireProperties.From(props)
+            );
         else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Client))
-            parsed = PipeWireGlobalParser.ParseClient(id, permissions, version, PipeWireProperties.From(props));
+            parsed = PipeWireGlobalParser.ParseClient(
+                id,
+                permissions,
+                version,
+                PipeWireProperties.From(props)
+            );
         else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Factory))
-            parsed = PipeWireGlobalParser.ParseFactory(id, permissions, version, PipeWireProperties.From(props));
+            parsed = PipeWireGlobalParser.ParseFactory(
+                id,
+                permissions,
+                version,
+                PipeWireProperties.From(props)
+            );
         else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Module))
-            parsed = PipeWireGlobalParser.ParseModule(id, permissions, version, PipeWireProperties.From(props));
+            parsed = PipeWireGlobalParser.ParseModule(
+                id,
+                permissions,
+                version,
+                PipeWireProperties.From(props)
+            );
         else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Metadata))
-            parsed = PipeWireGlobalParser.ParseMetadata(id, permissions, version, PipeWireProperties.From(props));
+            parsed = PipeWireGlobalParser.ParseMetadata(
+                id,
+                permissions,
+                version,
+                PipeWireProperties.From(props)
+            );
         else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Core))
-            parsed = PipeWireGlobalParser.ParseCore(id, permissions, version, PipeWireProperties.From(props));
+            parsed = PipeWireGlobalParser.ParseCore(
+                id,
+                permissions,
+                version,
+                PipeWireProperties.From(props)
+            );
         else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Profiler))
             parsed = new PipeWireProfiler(id, permissions, version, PipeWireProperties.From(props));
         else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_SecurityContext))
-            parsed = new PipeWireSecurityContext(id, permissions, version, PipeWireProperties.From(props));
+            parsed = new PipeWireSecurityContext(
+                id,
+                permissions,
+                version,
+                PipeWireProperties.From(props)
+            );
 
         if (parsed is null)
         {
@@ -1533,18 +1813,23 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// <exception cref="ArgumentException">The id is not a module in the current graph.</exception>
     /// <exception cref="ObjectDisposedException">The registry has been disposed.</exception>
     public async Task<PipeWireModule> ReadModuleDetailsAsync(
-        uint moduleId, CancellationToken cancellationToken = default)
+        uint moduleId,
+        CancellationToken cancellationToken = default
+    )
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         if (Current.GetModule(moduleId) is not { } module)
-            throw new ArgumentException($"{moduleId} is not a module in the current graph.", nameof(moduleId));
+            throw new ArgumentException(
+                $"{moduleId} is not a module in the current graph.",
+                nameof(moduleId)
+            );
 
         PipeWireModuleProxy reader = BindModuleReader(moduleId, module.InterfaceVersion);
         try
         {
-            PipeWireProperties full = await reader.Properties
-                .WaitAsync(cancellationToken)
+            PipeWireProperties full = await reader
+                .Properties.WaitAsync(cancellationToken)
                 .ConfigureAwait(false);
 
             EnrichGlobal(moduleId, full);
@@ -1581,48 +1866,83 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// </remarks>
     private void EnrichGlobal(uint id, PipeWireProperties observed)
     {
-        if (_disposed || observed.Count == 0) return;
+        if (_disposed || observed.Count == 0)
+            return;
 
         bool replaced;
         if (_sources.TryGetValue(id, out PipeWireNode? node))
         {
-            replaced = TryReplace(node.Properties, merged =>
-                _sources[id] = PipeWireGlobalParser.ParseNode(
-                    id, node.Permissions, node.InterfaceVersion, merged));
+            replaced = TryReplace(
+                node.Properties,
+                merged =>
+                    _sources[id] = PipeWireGlobalParser.ParseNode(
+                        id,
+                        node.Permissions,
+                        node.InterfaceVersion,
+                        merged
+                    )
+            );
         }
         else if (_ports.TryGetValue(id, out PipeWirePort? port))
         {
-            replaced = TryReplace(port.Properties, merged =>
-            {
-                if (PipeWireGlobalParser.TryParsePort(
-                        id, port.Permissions, port.InterfaceVersion, merged,
-                        out PipeWirePort? rebuilt, out _, out _))
-                    _ports[id] = rebuilt!;
-            });
+            replaced = TryReplace(
+                port.Properties,
+                merged =>
+                {
+                    if (
+                        PipeWireGlobalParser.TryParsePort(
+                            id,
+                            port.Permissions,
+                            port.InterfaceVersion,
+                            merged,
+                            out PipeWirePort? rebuilt,
+                            out _,
+                            out _
+                        )
+                    )
+                        _ports[id] = rebuilt!;
+                }
+            );
         }
         else if (_links.TryGetValue(id, out PipeWireLink? link))
         {
-            replaced = TryReplace(link.Properties, merged =>
-            {
-                if (PipeWireGlobalParser.TryParseLink(
-                        id, link.Permissions, link.InterfaceVersion, merged,
-                        out PipeWireLink? rebuilt, out _, out _))
-                    _links[id] = rebuilt!;
-            });
+            replaced = TryReplace(
+                link.Properties,
+                merged =>
+                {
+                    if (
+                        PipeWireGlobalParser.TryParseLink(
+                            id,
+                            link.Permissions,
+                            link.InterfaceVersion,
+                            merged,
+                            out PipeWireLink? rebuilt,
+                            out _,
+                            out _
+                        )
+                    )
+                        _links[id] = rebuilt!;
+                }
+            );
         }
         else if (_objects.TryGetValue(id, out IPipeWireObject? other))
         {
-            replaced = TryReplace(other.Properties, merged =>
-            {
-                if (RebuildOther(other, merged) is { } rebuilt) _objects[id] = rebuilt;
-            });
+            replaced = TryReplace(
+                other.Properties,
+                merged =>
+                {
+                    if (RebuildOther(other, merged) is { } rebuilt)
+                        _objects[id] = rebuilt;
+                }
+            );
         }
         else
         {
             return;
         }
 
-        if (!replaced) return;
+        if (!replaced)
+            return;
 
         RaiseGraphChanged();
 
@@ -1636,7 +1956,8 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                 return false;
 
             PipeWireProperties merged = existing.MergedWith(observed);
-            if (ReferenceEquals(merged, existing)) return false;
+            if (ReferenceEquals(merged, existing))
+                return false;
 
             Change(() => store(merged));
             return true;
@@ -1644,7 +1965,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     }
 
     /// <summary>Rebuilds one of the non-graph objects from merged properties.</summary>
-    private static IPipeWireObject? RebuildOther(IPipeWireObject existing, PipeWireProperties merged)
+    private static IPipeWireObject? RebuildOther(
+        IPipeWireObject existing,
+        PipeWireProperties merged
+    )
     {
         uint id = existing.Id;
         PipeWirePermissions permissions = existing.Permissions;
@@ -1652,14 +1976,49 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
         return existing.Kind switch
         {
-            PipeWireObjectKind.Device => PipeWireGlobalParser.ParseDevice(id, permissions, version, merged),
-            PipeWireObjectKind.Client => PipeWireGlobalParser.ParseClient(id, permissions, version, merged),
-            PipeWireObjectKind.Factory => PipeWireGlobalParser.ParseFactory(id, permissions, version, merged),
-            PipeWireObjectKind.Module => PipeWireGlobalParser.ParseModule(id, permissions, version, merged),
-            PipeWireObjectKind.Metadata => PipeWireGlobalParser.ParseMetadata(id, permissions, version, merged),
-            PipeWireObjectKind.Core => PipeWireGlobalParser.ParseCore(id, permissions, version, merged),
+            PipeWireObjectKind.Device => PipeWireGlobalParser.ParseDevice(
+                id,
+                permissions,
+                version,
+                merged
+            ),
+            PipeWireObjectKind.Client => PipeWireGlobalParser.ParseClient(
+                id,
+                permissions,
+                version,
+                merged
+            ),
+            PipeWireObjectKind.Factory => PipeWireGlobalParser.ParseFactory(
+                id,
+                permissions,
+                version,
+                merged
+            ),
+            PipeWireObjectKind.Module => PipeWireGlobalParser.ParseModule(
+                id,
+                permissions,
+                version,
+                merged
+            ),
+            PipeWireObjectKind.Metadata => PipeWireGlobalParser.ParseMetadata(
+                id,
+                permissions,
+                version,
+                merged
+            ),
+            PipeWireObjectKind.Core => PipeWireGlobalParser.ParseCore(
+                id,
+                permissions,
+                version,
+                merged
+            ),
             PipeWireObjectKind.Profiler => new PipeWireProfiler(id, permissions, version, merged),
-            PipeWireObjectKind.SecurityContext => new PipeWireSecurityContext(id, permissions, version, merged),
+            PipeWireObjectKind.SecurityContext => new PipeWireSecurityContext(
+                id,
+                permissions,
+                version,
+                merged
+            ),
             _ => null,
         };
     }
@@ -1667,12 +2026,20 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     // - Native callbacks -
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe void OnGlobal(void* data, uint id, uint permissions, sbyte* type, uint version, spa_dict* props)
+    private static unsafe void OnGlobal(
+        void* data,
+        uint id,
+        uint permissions,
+        sbyte* type,
+        uint version,
+        spa_dict* props
+    )
     {
         // An exception escaping a reverse P/Invoke aborts the process, so nothing below may throw -
         // including the handle lookup, which throws for a handle that has already been freed.
         PipeWireRegistry? self = FromData(data);
-        if (self is null || self._disposed) return;
+        if (self is null || self._disposed)
+            return;
 
         try
         {
@@ -1690,10 +2057,14 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
 
             ReadOnlySpan<byte> kind = DaemonText.Bytes(type);
 
-            if      (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Node)) self.AddNode(id, perms, version, props);
-            else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Port)) self.AddPort(id, perms, version, props);
-            else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Link)) self.AddLink(id, perms, version, props);
-            else self.AddOtherObject(id, perms, version, kind, props);
+            if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Node))
+                self.AddNode(id, perms, version, props);
+            else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Port))
+                self.AddPort(id, perms, version, props);
+            else if (kind.SequenceEqual(NativeConstants.PW_TYPE_INTERFACE_Link))
+                self.AddLink(id, perms, version, props);
+            else
+                self.AddOtherObject(id, perms, version, kind, props);
         }
         catch (Exception ex)
         {
@@ -1705,9 +2076,19 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         }
     }
 
-    private unsafe void AddNode(uint id, PipeWirePermissions permissions, uint version, spa_dict* props)
+    private unsafe void AddNode(
+        uint id,
+        PipeWirePermissions permissions,
+        uint version,
+        spa_dict* props
+    )
     {
-        PipeWireNode source = PipeWireGlobalParser.ParseNode(id, permissions, version, PipeWireProperties.From(props));
+        PipeWireNode source = PipeWireGlobalParser.ParseNode(
+            id,
+            permissions,
+            version,
+            PipeWireProperties.From(props)
+        );
         string? name = source.NodeName;
         string? mediaClass = source.MediaClass;
 
@@ -1717,7 +2098,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         Change(() =>
         {
             _sources[id] = source;
-            _removedNodes.Remove(id);   // the id is a node again; ports naming it belong to this one
+            _removedNodes.Remove(id); // the id is a node again; ports naming it belong to this one
         });
         LogNodeAdded(id, name, mediaClass);
         CompletePublishWaiter(id, source);
@@ -1726,11 +2107,24 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         RaiseGraphChanged();
     }
 
-    private unsafe void AddPort(uint id, PipeWirePermissions permissions, uint version, spa_dict* props)
+    private unsafe void AddPort(
+        uint id,
+        PipeWirePermissions permissions,
+        uint version,
+        spa_dict* props
+    )
     {
-        if (!PipeWireGlobalParser.TryParsePort(
-                id, permissions, version, PipeWireProperties.From(props),
-                out PipeWirePort? parsed, out string reason, out string? offending))
+        if (
+            !PipeWireGlobalParser.TryParsePort(
+                id,
+                permissions,
+                version,
+                PipeWireProperties.From(props),
+                out PipeWirePort? parsed,
+                out string reason,
+                out string? offending
+            )
+        )
         {
             LogPortSkipped(id, reason, offending);
             FailPublishWaiter(id, reason);
@@ -1756,11 +2150,24 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         RaiseGraphChanged();
     }
 
-    private unsafe void AddLink(uint id, PipeWirePermissions permissions, uint version, spa_dict* props)
+    private unsafe void AddLink(
+        uint id,
+        PipeWirePermissions permissions,
+        uint version,
+        spa_dict* props
+    )
     {
-        if (!PipeWireGlobalParser.TryParseLink(
-                id, permissions, version, PipeWireProperties.From(props),
-                out PipeWireLink? parsed, out string reason, out string? offending))
+        if (
+            !PipeWireGlobalParser.TryParseLink(
+                id,
+                permissions,
+                version,
+                PipeWireProperties.From(props),
+                out PipeWireLink? parsed,
+                out string reason,
+                out string? offending
+            )
+        )
         {
             LogLinkSkipped(id, reason, offending);
             FailPublishWaiter(id, reason);
@@ -1768,8 +2175,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         }
 
         PipeWireLink link = parsed!;
-        uint outputNode = link.OutputNodeId, outputPort = link.OutputPortId;
-        uint inputNode = link.InputNodeId, inputPort = link.InputPortId;
+        uint outputNode = link.OutputNodeId,
+            outputPort = link.OutputPortId;
+        uint inputNode = link.InputNodeId,
+            inputPort = link.InputPortId;
 
         Change(() => _links[id] = link);
         LogLinkAdded(id, outputNode, outputPort, inputNode, inputPort);
@@ -1783,7 +2192,8 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     private static unsafe void OnGlobalRemove(void* data, uint id)
     {
         PipeWireRegistry? self = FromData(data);
-        if (self is null || self._disposed) return;
+        if (self is null || self._disposed)
+            return;
 
         try
         {
@@ -1797,7 +2207,8 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             // The kind is decided and the change applied in one hold of the gate: the loop thread is
             // the only writer, but a reader building a snapshot must see the node and everything that
             // goes with it leave together.
-            List<uint> removedLinks = [], removedPorts = [];
+            List<uint> removedLinks = [],
+                removedPorts = [];
             string? kind = null;
             self.Change(() =>
             {
@@ -1815,12 +2226,16 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
                     // nothing left to do.
                     self.CascadeRemove(id, out removedLinks, out removedPorts);
                 }
-                else if (self._ports.TryRemove(id, out _)) kind = "port";
-                else if (self._links.TryRemove(id, out _)) kind = "link";
-                else if (self._objects.TryRemove(id, out IPipeWireObject? gone)) kind = gone.Kind.ToString();
+                else if (self._ports.TryRemove(id, out _))
+                    kind = "port";
+                else if (self._links.TryRemove(id, out _))
+                    kind = "link";
+                else if (self._objects.TryRemove(id, out IPipeWireObject? gone))
+                    kind = gone.Kind.ToString();
             });
 
-            if (kind is null) return;
+            if (kind is null)
+                return;
             self.LogRemoved(kind, id);
 
             if (kind == "node")
@@ -1851,33 +2266,74 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     // - Diagnostics (source-generated, level-gated). Enabled via the logger factory passed to
     //   PipeWireContext; silent by default. -
 
-    [LoggerMessage(EventId = 1, Level = LogLevel.Trace, Message = "node {Id} '{Name}' ({MediaClass})")]
+    [LoggerMessage(
+        EventId = 1,
+        Level = LogLevel.Trace,
+        Message = "node {Id} '{Name}' ({MediaClass})"
+    )]
     private partial void LogNodeAdded(uint id, string? name, string? mediaClass);
 
-    [LoggerMessage(EventId = 2, Level = LogLevel.Trace, Message = "port {Id} '{Name}' ({Direction}) of node {NodeId}")]
-    private partial void LogPortAdded(uint id, string? name, PipeWirePortDirection direction, uint nodeId);
+    [LoggerMessage(
+        EventId = 2,
+        Level = LogLevel.Trace,
+        Message = "port {Id} '{Name}' ({Direction}) of node {NodeId}"
+    )]
+    private partial void LogPortAdded(
+        uint id,
+        string? name,
+        PipeWirePortDirection direction,
+        uint nodeId
+    );
 
-    [LoggerMessage(EventId = 10, Level = LogLevel.Error, Message = "a graph watcher's completion handler threw during disposal")]
+    [LoggerMessage(
+        EventId = 10,
+        Level = LogLevel.Error,
+        Message = "a graph watcher's completion handler threw during disposal"
+    )]
     private partial void LogWatchCompletionThrew(Exception ex);
 
-    [LoggerMessage(EventId = 3, Level = LogLevel.Trace, Message = "link {Id} {OutputNode}.{OutputPort} -> {InputNode}.{InputPort}")]
-    private partial void LogLinkAdded(uint id, uint outputNode, uint outputPort, uint inputNode, uint inputPort);
+    [LoggerMessage(
+        EventId = 3,
+        Level = LogLevel.Trace,
+        Message = "link {Id} {OutputNode}.{OutputPort} -> {InputNode}.{InputPort}"
+    )]
+    private partial void LogLinkAdded(
+        uint id,
+        uint outputNode,
+        uint outputPort,
+        uint inputNode,
+        uint inputPort
+    );
 
     [LoggerMessage(EventId = 4, Level = LogLevel.Trace, Message = "removed {Kind} {Id}")]
     private partial void LogRemoved(string kind, uint id);
 
-    [LoggerMessage(EventId = 5, Level = LogLevel.Warning, Message = "skipped port {Id}: {Reason} ({Value})")]
+    [LoggerMessage(
+        EventId = 5,
+        Level = LogLevel.Warning,
+        Message = "skipped port {Id}: {Reason} ({Value})"
+    )]
     private partial void LogPortSkipped(uint id, string reason, string? value);
 
-    [LoggerMessage(EventId = 12, Level = LogLevel.Debug,
-        Message = "port {Id} announced for node {NodeId}, which was already removed; not filed")]
+    [LoggerMessage(
+        EventId = 12,
+        Level = LogLevel.Debug,
+        Message = "port {Id} announced for node {NodeId}, which was already removed; not filed"
+    )]
     private partial void LogPortOfRemovedNode(uint id, uint nodeId);
 
-    [LoggerMessage(EventId = 6, Level = LogLevel.Warning, Message = "skipped link {Id}: {Reason} ({Value})")]
+    [LoggerMessage(
+        EventId = 6,
+        Level = LogLevel.Warning,
+        Message = "skipped link {Id}: {Reason} ({Value})"
+    )]
     private partial void LogLinkSkipped(uint id, string reason, string? value);
 
-    [LoggerMessage(EventId = 11, Level = LogLevel.Warning,
-        Message = "the daemon published global {Id} with no interface type")]
+    [LoggerMessage(
+        EventId = 11,
+        Level = LogLevel.Warning,
+        Message = "the daemon published global {Id} with no interface type"
+    )]
     private partial void LogGlobalWithoutType(uint id);
 
     [LoggerMessage(EventId = 7, Level = LogLevel.Error, Message = "a {Event} handler threw")]
@@ -1886,8 +2342,10 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     [LoggerMessage(EventId = 8, Level = LogLevel.Trace, Message = "{Kind} {Id}")]
     private partial void LogObjectAdded(string kind, uint id);
 
-    [LoggerMessage(EventId = 9, Level = LogLevel.Debug,
-                   Message = "global {Id} dropped: this version does not model {Interface}")]
+    [LoggerMessage(
+        EventId = 9,
+        Level = LogLevel.Debug,
+        Message = "global {Id} dropped: this version does not model {Interface}"
+    )]
     private partial void LogUnmodelledGlobal(uint id, string @interface);
-
 }

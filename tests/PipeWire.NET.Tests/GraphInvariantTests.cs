@@ -63,7 +63,10 @@ public sealed class GraphInvariantTests : PipeWireTestBase
         // InfoChanged. This pins the assumption that costs.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-global-once", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-global-once",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -74,10 +77,14 @@ public sealed class GraphInvariantTests : PipeWireTestBase
             registry.NodeAdded += OnAdded;
             try
             {
-                PipeWireNode source = await registry.CreateVirtualSink("GlobalOnce")
-                    .WithName($"pwnet_once_src_{Environment.ProcessId}_{Random.Shared.Next():x}").ExecuteAsync(cts.Token);
-                PipeWireNode sink = await registry.CreateVirtualSink("GlobalOnce")
-                    .WithName($"pwnet_once_sink_{Environment.ProcessId}_{Random.Shared.Next():x}").ExecuteAsync(cts.Token);
+                PipeWireNode source = await registry
+                    .CreateVirtualSink("GlobalOnce")
+                    .WithName($"pwnet_once_src_{Environment.ProcessId}_{Random.Shared.Next():x}")
+                    .ExecuteAsync(cts.Token);
+                PipeWireNode sink = await registry
+                    .CreateVirtualSink("GlobalOnce")
+                    .WithName($"pwnet_once_sink_{Environment.ProcessId}_{Random.Shared.Next():x}")
+                    .ExecuteAsync(cts.Token);
 
                 // Things that change a node without creating or destroying it: linking it, which
                 // moves it out of idle, and writing a param, which the daemon applies to it.
@@ -98,17 +105,25 @@ public sealed class GraphInvariantTests : PipeWireTestBase
                         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
                         PipeWirePort[] found =
-                            [.. registry.Current.GetPortsForNode(nodeId).Where(p => p.PortDirection == direction)];
-                        if (found.Length > 0) return found;
+                        [
+                            .. registry
+                                .Current.GetPortsForNode(nodeId)
+                                .Where(p => p.PortDirection == direction),
+                        ];
+                        if (found.Length > 0)
+                            return found;
                     }
                 }
                 PipeWireLink link = await registry.CreateLinkAsync(outs[0], ins[0], cts.Token);
 
                 await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-                Assert.AreEqual(1, seen.GetValueOrDefault(source.NodeId),
+                Assert.AreEqual(
+                    1,
+                    seen.GetValueOrDefault(source.NodeId),
                     "the registry announced a node more than once, so it does carry updates and "
-                    + "the graph could raise a change event without binding anything");
+                        + "the graph could raise a change event without binding anything"
+                );
 
                 await registry.DestroyGlobalAsync(link.LinkId, cts.Token);
                 await registry.DestroyGlobalAsync(source.NodeId, cts.Token);
@@ -127,7 +142,10 @@ public sealed class GraphInvariantTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-invariant", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-invariant",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -139,7 +157,8 @@ public sealed class GraphInvariantTests : PipeWireTestBase
         {
             Interlocked.Increment(ref snapshots);
             List<string> broken = DanglingReferences(g);
-            if (broken.Count > 0) observed.Enqueue((g.Version, broken));
+            if (broken.Count > 0)
+                observed.Enqueue((g.Version, broken));
         }
 
         registry.GraphChanged += OnChanged;
@@ -147,7 +166,8 @@ public sealed class GraphInvariantTests : PipeWireTestBase
         {
             for (int round = 0; round < 25; round++)
             {
-                PipeWireNode node = await registry.CreateVirtualSink("Invariant")
+                PipeWireNode node = await registry
+                    .CreateVirtualSink("Invariant")
                     .WithName($"pwnet_inv_{Environment.ProcessId}_{round}_{Random.Shared.Next():x}")
                     .ExecuteAsync(cts.Token);
 
@@ -161,7 +181,10 @@ public sealed class GraphInvariantTests : PipeWireTestBase
             registry.GraphChanged -= OnChanged;
         }
 
-        Assert.IsTrue(Volatile.Read(ref snapshots) > 0, "the churn published no snapshots to check");
+        Assert.IsTrue(
+            Volatile.Read(ref snapshots) > 0,
+            "the churn published no snapshots to check"
+        );
 
         // Not asserted per snapshot: a node and its ports are removed by separate global_remove
         // events, so a snapshot published between them legitimately shows ports whose node is
@@ -169,12 +192,17 @@ public sealed class GraphInvariantTests : PipeWireTestBase
         // observations are carried into the failure message, because "the settled graph has a
         // dangling port" is only diagnosable alongside when that reference first appeared.
         List<string> settled = DanglingReferences(registry.Current);
-        Assert.AreEqual(0, settled.Count,
+        Assert.AreEqual(
+            0,
+            settled.Count,
             $"the settled graph has dangling references: {string.Join("; ", settled)}. "
-            + $"{observed.Count} of {Volatile.Read(ref snapshots)} snapshots dangled mid-churn"
-            + (observed.TryPeek(out (long Version, List<string> Broken) first)
-                ? $", first at version {first.Version}: {string.Join("; ", first.Broken)}"
-                : string.Empty));
+                + $"{observed.Count} of {Volatile.Read(ref snapshots)} snapshots dangled mid-churn"
+                + (
+                    observed.TryPeek(out (long Version, List<string> Broken) first)
+                        ? $", first at version {first.Version}: {string.Join("; ", first.Broken)}"
+                        : string.Empty
+                )
+        );
     }
 
     [TestMethod]
@@ -183,12 +211,16 @@ public sealed class GraphInvariantTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-invariant-held", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-invariant-held",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await registry.CreateVirtualSink("Held")
+        PipeWireNode node = await registry
+            .CreateVirtualSink("Held")
             .WithName($"pwnet_held_{Environment.ProcessId}_{Random.Shared.Next():x}")
             .ExecuteAsync(cts.Token);
 
@@ -209,9 +241,15 @@ public sealed class GraphInvariantTests : PipeWireTestBase
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
         Assert.IsNotNull(held.GetNode(node.NodeId), "a held snapshot lost a node it had");
-        Assert.AreEqual(ports.Length, held.GetPortsForNode(node.NodeId).Length,
-            "a held snapshot lost ports it had");
-        Assert.AreEqual(0, DanglingReferences(held).Count,
-            "a held snapshot developed dangling references after the graph moved on");
+        Assert.AreEqual(
+            ports.Length,
+            held.GetPortsForNode(node.NodeId).Length,
+            "a held snapshot lost ports it had"
+        );
+        Assert.AreEqual(
+            0,
+            DanglingReferences(held).Count,
+            "a held snapshot developed dangling references after the graph moved on"
+        );
     }
 }

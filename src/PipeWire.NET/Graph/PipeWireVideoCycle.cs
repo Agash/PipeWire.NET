@@ -30,4 +30,5 @@ public readonly record struct PipeWireVideoCycle(
     uint Height,
     uint Stride,
     uint FrameRateNum,
-    uint FrameRateDen);
+    uint FrameRateDen
+);

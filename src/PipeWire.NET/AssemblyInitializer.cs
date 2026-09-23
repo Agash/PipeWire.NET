@@ -30,10 +30,14 @@ internal static class AssemblyInitializer
                     _ => (string.Empty, string.Empty),
                 };
 
-                if (versioned.Length == 0) return 0;
-                if (NativeLibrary.TryLoad(versioned, asm, path, out nint h)) return h;
-                if (NativeLibrary.TryLoad(unversioned, asm, path, out h)) return h;
+                if (versioned.Length == 0)
+                    return 0;
+                if (NativeLibrary.TryLoad(versioned, asm, path, out nint h))
+                    return h;
+                if (NativeLibrary.TryLoad(unversioned, asm, path, out h))
+                    return h;
                 return 0;
-            });
+            }
+        );
     }
 }

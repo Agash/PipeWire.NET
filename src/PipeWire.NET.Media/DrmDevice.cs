@@ -64,9 +64,21 @@ public readonly record struct DrmDevice
 
         string numbers = File.ReadAllText($"/sys/class/drm/{name}/dev").Trim();
         int colon = numbers.IndexOf(':', StringComparison.Ordinal);
-        if (colon <= 0
-            || !uint.TryParse(numbers.AsSpan(0, colon), NumberStyles.None, CultureInfo.InvariantCulture, out uint major)
-            || !uint.TryParse(numbers.AsSpan(colon + 1), NumberStyles.None, CultureInfo.InvariantCulture, out uint minor))
+        if (
+            colon <= 0
+            || !uint.TryParse(
+                numbers.AsSpan(0, colon),
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out uint major
+            )
+            || !uint.TryParse(
+                numbers.AsSpan(colon + 1),
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out uint minor
+            )
+        )
         {
             throw new IOException($"the kernel describes {name} as '{numbers}', not major:minor.");
         }
@@ -77,7 +89,8 @@ public readonly record struct DrmDevice
     /// <summary>Every render node on this machine, in order of minor number.</summary>
     public static ImmutableArray<DrmDevice> EnumerateRenderNodes()
     {
-        if (!Directory.Exists("/dev/dri")) return [];
+        if (!Directory.Exists("/dev/dri"))
+            return [];
 
         var found = ImmutableArray.CreateBuilder<DrmDevice>();
         foreach (string path in Directory.EnumerateFiles("/dev/dri", "renderD*"))

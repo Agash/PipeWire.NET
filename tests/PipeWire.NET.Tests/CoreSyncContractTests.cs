@@ -32,7 +32,9 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken cancellationToken)
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -49,15 +51,23 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
         // Reported through the round-trip or not at all.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-sync-refuse", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-sync-refuse",
+            cts.Token
+        );
 
         await using (ctx)
         await using (registry)
         {
-            PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
-                async () => await registry.DestroyGlobalAsync(NoSuchGlobal, cts.Token));
+            PipeWireException refused =
+                await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(async () =>
+                    await registry.DestroyGlobalAsync(NoSuchGlobal, cts.Token)
+                );
 
-            Assert.IsTrue(refused.Result < 0, $"a refusal must carry the daemon's code, got {refused.Result}");
+            Assert.IsTrue(
+                refused.Result < 0,
+                $"a refusal must carry the daemon's code, got {refused.Result}"
+            );
         }
     }
 
@@ -69,7 +79,10 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
         // the connection happens to be doing.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-sync-barrier", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-sync-barrier",
+            cts.Token
+        );
 
         await using (ctx)
         await using (registry)
@@ -79,10 +92,19 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
                 Task refused = Task.Run(
                     async () =>
                     {
-                        try { await registry.DestroyGlobalAsync(NoSuchGlobal + (uint)attempt, cts.Token); }
-                        catch (PipeWireException) { /* the point of the neighbour */ }
+                        try
+                        {
+                            await registry.DestroyGlobalAsync(
+                                NoSuchGlobal + (uint)attempt,
+                                cts.Token
+                            );
+                        }
+                        catch (PipeWireException)
+                        { /* the point of the neighbour */
+                        }
                     },
-                    cts.Token);
+                    cts.Token
+                );
 
                 await registry.WaitForInitialEnumerationAsync(cts.Token);
                 await refused;
@@ -95,7 +117,10 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-sync-many", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-sync-many",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -106,8 +131,9 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
             {
                 Task[] syncs =
                 [
-                    .. Enumerable.Range(0, 30).Select(_ =>
-                        registry.WaitForInitialEnumerationAsync(cts.Token)),
+                    .. Enumerable
+                        .Range(0, 30)
+                        .Select(_ => registry.WaitForInitialEnumerationAsync(cts.Token)),
                 ];
 
                 await Task.WhenAll(syncs).WaitAsync(TimeSpan.FromSeconds(15), cts.Token);
@@ -125,14 +151,18 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-sync-cancel", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-sync-cancel",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             // Sweeping the cancellation delay walks the token across the whole exchange, including
             // the moment the reply is being dispatched - the one interleaving where a waiter could
             // be completed and cancelled at once.
-            int cancelled = 0, completed = 0;
+            int cancelled = 0,
+                completed = 0;
 
             for (int micros = 0; micros < 3000; micros += 61)
             {
@@ -152,7 +182,10 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
 
             // Both outcomes must occur across that sweep, or the test is not covering the race it
             // claims to; and the connection must still work afterwards.
-            Assert.IsTrue(completed > 0, "no round-trip completed; the sweep never reached the reply");
+            Assert.IsTrue(
+                completed > 0,
+                "no round-trip completed; the sweep never reached the reply"
+            );
             Assert.IsTrue(cancelled > 0, "no round-trip was cancelled; the sweep started too late");
 
             await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -170,21 +203,28 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
         // reply that can never arrive, forever.
         for (int round = 0; round < 5; round++)
         {
-            var ctx = new PipeWireContext($"pwnet-sync-dispose-{round}", ConsoleTestLoggerFactory.Instance);
+            var ctx = new PipeWireContext(
+                $"pwnet-sync-dispose-{round}",
+                ConsoleTestLoggerFactory.Instance
+            );
             await ctx.StartAsync(cts.Token);
             var registry = new PipeWireRegistry(ctx);
 
-            Task waiting = Task.Run(async () =>
-            {
-                try
+            Task waiting = Task.Run(
+                async () =>
                 {
-                    // Deliberately uncancellable from the caller's side.
-                    await registry.WaitForInitialEnumerationAsync(CancellationToken.None);
-                }
-                catch (ObjectDisposedException) { }
-                catch (Exception e) when (e is InvalidOperationException or PipeWireException) { }
-                catch (OperationCanceledException) { }
-            }, cts.Token);
+                    try
+                    {
+                        // Deliberately uncancellable from the caller's side.
+                        await registry.WaitForInitialEnumerationAsync(CancellationToken.None);
+                    }
+                    catch (ObjectDisposedException) { }
+                    catch (Exception e) when (e is InvalidOperationException or PipeWireException)
+                    { }
+                    catch (OperationCanceledException) { }
+                },
+                cts.Token
+            );
 
             await ctx.DisposeAsync();
 
@@ -198,11 +238,15 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-sync-error", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-sync-error",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("SyncErr")
+            PipeWireNode node = await registry
+                .CreateVirtualSink("SyncErr")
                 .WithName($"pwnet_syncerr_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
 
@@ -214,13 +258,16 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
                 // A parameter a node does not have. The daemon refuses the request and reports it
                 // out of band on the error stream, carrying the request's own sequence number -
                 // which is the only thing tying the failure to the caller waiting on it.
-                await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
-                    async () => await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token));
+                await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(async () =>
+                    await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token)
+                );
 
                 // An error must fault only the request it belongs to. A read of a parameter the
                 // node does have, straight afterwards, has to succeed.
-                Assert.IsNotNull(await control.GetVolumeAsync(cts.Token),
-                    $"iteration {i}: an error on one request poisoned the next");
+                Assert.IsNotNull(
+                    await control.GetVolumeAsync(cts.Token),
+                    $"iteration {i}: an error on one request poisoned the next"
+                );
             }
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
@@ -232,19 +279,25 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-rm-contract", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-rm-contract",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             // The core. The daemon accepts the request and does nothing at all - no error, no
             // removal - so a caller that trusted the return value would believe it had worked.
-            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
-                async () => await registry.DestroyGlobalAsync(0, cts.Token));
+            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(async () =>
+                await registry.DestroyGlobalAsync(0, cts.Token)
+            );
 
             // An id the daemon has never issued. This one it does refuse, out of band on the error
             // stream, and that refusal has to reach the caller rather than being lost.
-            PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
-                async () => await registry.DestroyGlobalAsync(NoSuchGlobal, cts.Token));
+            PipeWireException refused =
+                await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(async () =>
+                    await registry.DestroyGlobalAsync(NoSuchGlobal, cts.Token)
+                );
 
             // The point of the type: a caller can tell what failed and why without parsing text.
             Assert.IsTrue(refused.Result < 0, "a refusal must carry the daemon's result code");
@@ -261,7 +314,10 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-sync-threads", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-sync-threads",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -271,14 +327,28 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
 
             Task[] workers =
             [
-                .. Enumerable.Range(0, 8).Select(w => Task.Run(async () =>
-                {
-                    for (int i = 0; i < 12; i++)
-                    {
-                        try { await registry.WaitForInitialEnumerationAsync(cts.Token); }
-                        catch (Exception ex) { faults.Enqueue($"worker {w}: {ex.GetType().Name}"); return; }
-                    }
-                }, cts.Token)),
+                .. Enumerable
+                    .Range(0, 8)
+                    .Select(w =>
+                        Task.Run(
+                            async () =>
+                            {
+                                for (int i = 0; i < 12; i++)
+                                {
+                                    try
+                                    {
+                                        await registry.WaitForInitialEnumerationAsync(cts.Token);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        faults.Enqueue($"worker {w}: {ex.GetType().Name}");
+                                        return;
+                                    }
+                                }
+                            },
+                            cts.Token
+                        )
+                    ),
             ];
 
             await Task.WhenAll(workers).WaitAsync(TimeSpan.FromSeconds(20), cts.Token);
@@ -295,19 +365,24 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
         // not happen is the two disagreeing afterwards, or the connection being left unusable.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-cancel-write", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-cancel-write",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             PipeWireMetadataProxy? store = registry.BindMetadata("default");
-            if (store is null) Assert.Inconclusive("no session manager, so no default store.");
+            if (store is null)
+                Assert.Inconclusive("no session manager, so no default store.");
 
             await using (store)
             {
                 await store!.ReadyAsync(cts.Token);
 
                 string key = $"pwnet.cancel.{Environment.ProcessId}.{Random.Shared.Next():x}";
-                int cancelled = 0, completed = 0;
+                int cancelled = 0,
+                    completed = 0;
 
                 try
                 {
@@ -317,10 +392,16 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
                         // window where the native call has been made but the reply has not arrived
                         // is actually hit rather than assumed.
                         using var race = new CancellationTokenSource();
-                        Task write = store.SetAsync(key, $"v{round}", cancellationToken: race.Token);
+                        Task write = store.SetAsync(
+                            key,
+                            $"v{round}",
+                            cancellationToken: race.Token
+                        );
 
-                        if (round % 3 == 0) race.Cancel();
-                        else if (round % 3 == 1) await Task.Yield();
+                        if (round % 3 == 0)
+                            race.Cancel();
+                        else if (round % 3 == 1)
+                            await Task.Yield();
 
                         race.CancelAfter(TimeSpan.FromMilliseconds(round % 7));
 
@@ -341,16 +422,22 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
                     string? settled = store.Get(key);
 
                     await store.SetAsync(key, "final", cancellationToken: cts.Token);
-                    Assert.AreEqual("final", store.Get(key),
+                    Assert.AreEqual(
+                        "final",
+                        store.Get(key),
                         $"the store stopped tracking the key after {cancelled} cancelled and "
-                        + $"{completed} completed writes (it had settled on '{settled ?? "(null)"}')");
+                            + $"{completed} completed writes (it had settled on '{settled ?? "(null)"}')"
+                    );
                 }
                 finally
                 {
                     await store.SetAsync(key, null, cancellationToken: CancellationToken.None);
                 }
 
-                Assert.IsTrue(cancelled > 0, "no write was actually cancelled, so nothing was exercised");
+                Assert.IsTrue(
+                    cancelled > 0,
+                    "no write was actually cancelled, so nothing was exercised"
+                );
 
                 // And the connection still works, which a half-torn-down request would not leave it.
                 await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -364,11 +451,15 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-sync-once", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-sync-once",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("DestroyOnce")
+            PipeWireNode node = await registry
+                .CreateVirtualSink("DestroyOnce")
                 .WithName($"pwnet_destroyonce_{Environment.ProcessId}_{Random.Shared.Next():x}")
                 .ExecuteAsync(cts.Token);
 

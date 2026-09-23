@@ -34,7 +34,8 @@ public sealed class SpaKeyTests : PipeWireTestBase
         AssertKey(SpaParamIo.Id);
         AssertKey(SpaProfiler.Info);
 
-        static void AssertKey<TEnum>(TEnum value) where TEnum : unmanaged, Enum
+        static void AssertKey<TEnum>(TEnum value)
+            where TEnum : unmanaged, Enum
         {
             SpaKey key = value switch
             {
@@ -54,8 +55,11 @@ public sealed class SpaKeyTests : PipeWireTestBase
                 _ => throw new InvalidOperationException($"unmapped enum {typeof(TEnum).Name}"),
             };
 
-            Assert.AreEqual(Convert.ToUInt32(value, System.Globalization.CultureInfo.InvariantCulture), key.Value,
-                $"{typeof(TEnum).Name}.{value} converted to the wrong key");
+            Assert.AreEqual(
+                Convert.ToUInt32(value, System.Globalization.CultureInfo.InvariantCulture),
+                key.Value,
+                $"{typeof(TEnum).Name}.{value} converted to the wrong key"
+            );
             Assert.AreEqual(value, key.As<TEnum>(), "As<T> must undo the conversion");
         }
     }
@@ -100,21 +104,41 @@ public sealed class SpaKeyTests : PipeWireTestBase
         Check<SpaVideoColorRange>(SpaVideoColorRange.Full, SpaVideoColorRange.Full);
         Check<SpaVideoColorMatrix>(SpaVideoColorMatrix.Bt709, SpaVideoColorMatrix.Bt709);
         Check<SpaVideoColorPrimaries>(SpaVideoColorPrimaries.Bt709, SpaVideoColorPrimaries.Bt709);
-        Check<SpaVideoTransferFunction>(SpaVideoTransferFunction.Bt709, SpaVideoTransferFunction.Bt709);
-        Check<SpaVideoInterlaceMode>(SpaVideoInterlaceMode.Progressive, SpaVideoInterlaceMode.Progressive);
+        Check<SpaVideoTransferFunction>(
+            SpaVideoTransferFunction.Bt709,
+            SpaVideoTransferFunction.Bt709
+        );
+        Check<SpaVideoInterlaceMode>(
+            SpaVideoInterlaceMode.Progressive,
+            SpaVideoInterlaceMode.Progressive
+        );
         Check<SpaVideoChromaSite>(SpaVideoChromaSite.Cosited, SpaVideoChromaSite.Cosited);
         Check<SpaParamAvailability>(SpaParamAvailability.Yes, SpaParamAvailability.Yes);
         Check<SpaParamPortConfigMode>(SpaParamPortConfigMode.Dsp, SpaParamPortConfigMode.Dsp);
         Check<SpaParamBitorder>(SpaParamBitorder.Lsb, SpaParamBitorder.Lsb);
-        Check<SpaAudioVolumeRampScale>(SpaAudioVolumeRampScale.Cubic, SpaAudioVolumeRampScale.Cubic);
+        Check<SpaAudioVolumeRampScale>(
+            SpaAudioVolumeRampScale.Cubic,
+            SpaAudioVolumeRampScale.Cubic
+        );
         Check<SpaIoType>(SpaIoType.Clock, SpaIoType.Clock);
-        Check<SpaMetaVideotransformValue>(SpaMetaVideotransformValue.None, SpaMetaVideotransformValue.None);
+        Check<SpaMetaVideotransformValue>(
+            SpaMetaVideotransformValue.None,
+            SpaMetaVideotransformValue.None
+        );
 
-        static void Check<TEnum>(SpaIdValue converted, TEnum original) where TEnum : unmanaged, Enum
+        static void Check<TEnum>(SpaIdValue converted, TEnum original)
+            where TEnum : unmanaged, Enum
         {
-            uint expected = Convert.ToUInt32(original, System.Globalization.CultureInfo.InvariantCulture);
+            uint expected = Convert.ToUInt32(
+                original,
+                System.Globalization.CultureInfo.InvariantCulture
+            );
 
-            Assert.AreEqual(expected, converted.Value, $"{typeof(TEnum).Name} converted to the wrong id");
+            Assert.AreEqual(
+                expected,
+                converted.Value,
+                $"{typeof(TEnum).Name} converted to the wrong id"
+            );
             Assert.AreEqual(expected, (uint)converted);
             Assert.AreEqual(original, converted.As<TEnum>(), "As<T> must undo the conversion");
         }
@@ -129,14 +153,21 @@ public sealed class SpaKeyTests : PipeWireTestBase
         Assert.ThrowsExactly<ArgumentException>(() => SpaKey.FromRaw(1).As<ByteWide>());
     }
 
-    private enum ByteWide : byte { Zero }
+    private enum ByteWide : byte
+    {
+        Zero,
+    }
 
     [TestMethod]
     public void KeysCompareByValue_SoTheyCanIndexALookup()
     {
         // They are the key type of the parser's property lookups; identity equality would make
         // every lookup miss.
-        var lookup = new Dictionary<SpaKey, string> { [SpaProp.Volume] = "volume", [SpaProp.Mute] = "mute" };
+        var lookup = new Dictionary<SpaKey, string>
+        {
+            [SpaProp.Volume] = "volume",
+            [SpaProp.Mute] = "mute",
+        };
 
         Assert.AreEqual("volume", lookup[SpaProp.Volume]);
         Assert.AreEqual("mute", lookup[SpaProp.Mute]);

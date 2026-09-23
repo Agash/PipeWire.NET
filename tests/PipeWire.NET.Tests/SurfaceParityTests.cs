@@ -28,7 +28,10 @@ public sealed class SurfaceParityTests : PipeWireTestBase
             Assert.Inconclusive("PipeWire is a Linux daemon.");
     }
 
-    private static async Task<PipeWireContext> ConnectAsync(string name, CancellationToken cancellationToken)
+    private static async Task<PipeWireContext> ConnectAsync(
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var ctx = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cancellationToken);
@@ -47,14 +50,24 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         PipeWireNode sink = await reg.CreateVirtualSinkAsync(
-            "pwnet parity sink", cancellationToken: cts.Token);
+            "pwnet parity sink",
+            cancellationToken: cts.Token
+        );
 
         await using var audio = new PipeWireAudioOutput(ctx, "pwnet_parity_audio_out");
-        audio.FillSamples += (_, samples, _, _, _) => { samples.Clear(); return samples.Length; };
+        audio.FillSamples += (_, samples, _, _, _) =>
+        {
+            samples.Clear();
+            return samples.Length;
+        };
         audio.Connect(sink);
 
         await using var video = new PipeWireVideoOutput(ctx, "pwnet_parity_video_out", 64, 64);
-        video.FillFrame += (_, pixels, _, _, _, _) => { pixels.Clear(); return true; };
+        video.FillFrame += (_, pixels, _, _, _, _) =>
+        {
+            pixels.Clear();
+            return true;
+        };
         video.Connect(sink, autoConnect: false);
 
         // Reaching a node id at all is what proves the overload routed the connect rather than
@@ -77,11 +90,15 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         PipeWireNode source = await reg.CreateVirtualSourceAsync(
-            "pwnet parity source", cancellationToken: cts.Token);
+            "pwnet parity source",
+            cancellationToken: cts.Token
+        );
 
         Assert.AreEqual(
-            "Audio/Source", source.MediaClass,
-            "the async form did not apply the media class its builder does");
+            "Audio/Source",
+            source.MediaClass,
+            "the async form did not apply the media class its builder does"
+        );
 
         await reg.DestroyGlobalAsync(source.NodeId, cts.Token);
     }
@@ -101,7 +118,11 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         await using PipeWireContext ctx = await ConnectAsync("pwnet-parity-trigger", cts.Token);
 
         await using var audioOut = new PipeWireAudioOutput(ctx, "pwnet_parity_trig_ao");
-        audioOut.FillSamples += (_, samples, _, _, _) => { samples.Clear(); return samples.Length; };
+        audioOut.FillSamples += (_, samples, _, _, _) =>
+        {
+            samples.Clear();
+            return samples.Length;
+        };
         audioOut.Connect(autoConnect: false);
 
         await using var audioIn = new PipeWireAudioCapture(ctx, "pwnet_parity_trig_ai");
@@ -116,12 +137,14 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         audioIn.TriggerProcess();
         videoIn.TriggerProcess();
 
-        foreach (Func<Task> wait in new Func<Task>[]
-        {
-            () => audioOut.TriggerProcessAndWaitAsync(cts.Token),
-            () => audioIn.TriggerProcessAndWaitAsync(cts.Token),
-            () => videoIn.TriggerProcessAndWaitAsync(cts.Token),
-        })
+        foreach (
+            Func<Task> wait in new Func<Task>[]
+            {
+                () => audioOut.TriggerProcessAndWaitAsync(cts.Token),
+                () => audioIn.TriggerProcessAndWaitAsync(cts.Token),
+                () => videoIn.TriggerProcessAndWaitAsync(cts.Token),
+            }
+        )
         {
             try
             {
@@ -155,11 +178,18 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         filter.Dispose();
 
         var node = PipeWireNodeProvider.Create(
-            ctx, "pwnet_parity_node", PipeWireExportedFormat.AudioF32(48000, 1));
+            ctx,
+            "pwnet_parity_node",
+            PipeWireExportedFormat.AudioF32(48000, 1)
+        );
         node.Dispose();
         node.Dispose();
 
-        var device = PipeWireDeviceProvider.Create(ctx, "pwnet_parity_device", "pwnet parity device");
+        var device = PipeWireDeviceProvider.Create(
+            ctx,
+            "pwnet_parity_device",
+            "pwnet parity device"
+        );
         await device.DisposeAsync();
         await device.DisposeAsync();
 
@@ -188,11 +218,13 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         PipeWireClient? own = null;
         for (var i = 0; i < 100 && own is null; i++)
         {
-            own = reg.Current.Clients.FirstOrDefault(
-                c => c.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? v)
-                     && v == "pwnet-perm-guard");
+            own = reg.Current.Clients.FirstOrDefault(c =>
+                c.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? v)
+                && v == "pwnet-perm-guard"
+            );
 
-            if (own is null) await Task.Delay(50, cts.Token);
+            if (own is null)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(own, "no client in the graph is this process");
@@ -207,8 +239,13 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         try
         {
             Assert.ThrowsExactly<InvalidOperationException>(
-                () => client.GetPermissionsAsync(cancellationToken: cts.Token).GetAwaiter().GetResult(),
-                "two reads were allowed in flight at once");
+                () =>
+                    client
+                        .GetPermissionsAsync(cancellationToken: cts.Token)
+                        .GetAwaiter()
+                        .GetResult(),
+                "two reads were allowed in flight at once"
+            );
         }
         catch (AssertFailedException) when (first.IsCompleted)
         {
@@ -222,7 +259,8 @@ public sealed class SurfaceParityTests : PipeWireTestBase
 
         await Assert.ThrowsExactlyAsync<ObjectDisposedException>(
             async () => await client.GetPermissionsAsync(cancellationToken: cts.Token),
-            "a disposed proxy answered a permissions read");
+            "a disposed proxy answered a permissions read"
+        );
     }
 
     /// <summary>Removal reaches every shape of bound proxy, not only the parameter objects.</summary>
@@ -241,20 +279,25 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         PipeWireNode node = await reg.CreateVirtualSinkAsync(
-            "pwnet removed shapes", cancellationToken: cts.Token);
+            "pwnet removed shapes",
+            cancellationToken: cts.Token
+        );
 
         // A port of that node: a parameter object, like the node itself.
         PipeWirePort? port = null;
         for (var i = 0; i < 100 && port is null; i++)
         {
             port = reg.Current.Ports.FirstOrDefault(p => p.NodeId == node.NodeId);
-            if (port is null) await Task.Delay(50, cts.Token);
+            if (port is null)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(port, "the virtual sink never published a port");
 
         await using PipeWirePortProxy portProxy = reg.BindPort(port!.PortId);
-        var portRemoved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var portRemoved = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
         portProxy.Removed += () => portRemoved.TrySetResult();
 
         Assert.IsFalse(portProxy.IsRemoved);
@@ -286,12 +329,15 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         Assert.ThrowsExactly<ArgumentNullException>(() => one.RemovePort(null!));
         Assert.ThrowsExactly<ArgumentException>(
             () => one.RemovePort(theirs),
-            "a filter removed a port belonging to another filter");
+            "a filter removed a port belonging to another filter"
+        );
 
         Assert.ThrowsExactly<ArgumentNullException>(() => one.UpdateProperties(null!));
         Assert.AreEqual(
-            0, one.UpdateProperties(new Dictionary<string, string>()),
-            "an empty property set reported a change");
+            0,
+            one.UpdateProperties(new Dictionary<string, string>()),
+            "an empty property set reported a change"
+        );
 
         one.RemovePort(mine);
         Assert.AreEqual(0, one.Ports.Count);
@@ -320,35 +366,53 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         await client.ReadyAsync(cts.Token);
 
         await Assert.ThrowsExactlyAsync<ArgumentException>(
-            async () => await client.UpdatePermissionsAsync(
-                ReadOnlyMemory<PipeWireObjectPermission>.Empty, cts.Token),
-            "an empty write was sent rather than refused");
+            async () =>
+                await client.UpdatePermissionsAsync(
+                    ReadOnlyMemory<PipeWireObjectPermission>.Empty,
+                    cts.Token
+                ),
+            "an empty write was sent rather than refused"
+        );
 
         // 0x1 is none of the five permission.h defines: a cast from the wrong enum looks exactly
         // like this, and forwarding it asks the daemon to read a number we cannot describe.
-        var undefined = new[]
-        {
-            new PipeWireObjectPermission(1, (PipeWirePermissions)0x1),
-        };
+        var undefined = new[] { new PipeWireObjectPermission(1, (PipeWirePermissions)0x1) };
 
         await Assert.ThrowsExactlyAsync<ArgumentException>(
             async () => await client.UpdatePermissionsAsync(undefined, cts.Token),
-            "an undefined permission bit was forwarded to the daemon");
+            "an undefined permission bit was forwarded to the daemon"
+        );
 
         // Link is defined but sits outside upstream's own PW_PERM_ALL, so it is the bit a mask
         // taken from All would wrongly refuse. Reaching the daemon at all is the assertion.
         await client.UpdatePermissionsAsync(
-            new[] { new PipeWireObjectPermission(any!.Id, PipeWirePermissions.ReadWriteExecuteMetadataLink) },
-            cts.Token);
+            new[]
+            {
+                new PipeWireObjectPermission(
+                    any!.Id,
+                    PipeWirePermissions.ReadWriteExecuteMetadataLink
+                ),
+            },
+            cts.Token
+        );
 
         Assert.ThrowsExactly<ArgumentException>(
-            () => client.ConfineToAsync(
-                [new PipeWireObjectPermission(PipeWireClientProxy.AnyObject, PipeWirePermissions.All)],
-                cts.Token),
-            "a confining call accepted a default that contradicts the one it writes");
+            () =>
+                client.ConfineToAsync(
+                    [
+                        new PipeWireObjectPermission(
+                            PipeWireClientProxy.AnyObject,
+                            PipeWirePermissions.All
+                        ),
+                    ],
+                    cts.Token
+                ),
+            "a confining call accepted a default that contradicts the one it writes"
+        );
 
-        await Assert.ThrowsExactlyAsync<ArgumentNullException>(
-            async () => await client.UpdatePropertiesAsync(null!, cts.Token));
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+            await client.UpdatePropertiesAsync(null!, cts.Token)
+        );
     }
 
     /// <summary>Every member of every stream works once connected, and goes quiet once disposed.</summary>
@@ -380,21 +444,33 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         audioIn.Connect(autoConnect: false);
 
         var audioOut = new PipeWireAudioOutput(ctx, "pwnet_conn_ao");
-        audioOut.FillSamples += (_, samples, _, _, _) => { samples.Clear(); return samples.Length; };
+        audioOut.FillSamples += (_, samples, _, _, _) =>
+        {
+            samples.Clear();
+            return samples.Length;
+        };
         audioOut.Connect(autoConnect: false);
 
         var videoIn = new PipeWireVideoCapture(ctx, "pwnet_conn_vi");
         videoIn.Connect(autoConnect: false);
 
         var videoOut = new PipeWireVideoOutput(ctx, "pwnet_conn_vo", 64, 64);
-        videoOut.FillFrame += (_, pixels, _, _, _, _) => { pixels.Clear(); return true; };
+        videoOut.FillFrame += (_, pixels, _, _, _, _) =>
+        {
+            pixels.Clear();
+            return true;
+        };
         videoOut.Connect(autoConnect: false);
 
-        foreach (Func<CancellationToken, Task<uint>> wait in new Func<CancellationToken, Task<uint>>[]
-        {
-            audioIn.WaitForNodeIdAsync, audioOut.WaitForNodeIdAsync,
-            videoIn.WaitForNodeIdAsync, videoOut.WaitForNodeIdAsync,
-        })
+        foreach (
+            Func<CancellationToken, Task<uint>> wait in new Func<CancellationToken, Task<uint>>[]
+            {
+                audioIn.WaitForNodeIdAsync,
+                audioOut.WaitForNodeIdAsync,
+                videoIn.WaitForNodeIdAsync,
+                videoOut.WaitForNodeIdAsync,
+            }
+        )
         {
             Assert.AreNotEqual(0u, await wait(cts.Token), "a connected stream never got a node id");
         }
@@ -406,17 +482,35 @@ public sealed class SurfaceParityTests : PipeWireTestBase
 
         // Reads that answer from the stream rather than from a null: each has a "no stream" arm the
         // guard tests cover, and this is the other one.
-        foreach (Action read in new Action[]
-        {
-            () => _ = audioIn.Queue, () => _ = audioIn.IsLazy, () => _ = audioIn.IsDriving,
-            () => _ = audioIn.GraphClock, () => _ = audioIn.RateMatch, () => _ = audioIn.Controls,
-            () => _ = audioOut.Queue, () => _ = audioOut.IsLazy, () => _ = audioOut.IsDriving,
-            () => _ = audioOut.GraphClock, () => _ = audioOut.RateMatch, () => _ = audioOut.Controls,
-            () => _ = videoIn.Queue, () => _ = videoIn.IsLazy, () => _ = videoIn.IsDriving,
-            () => _ = videoIn.GraphClock, () => _ = videoIn.RateMatch, () => _ = videoIn.Controls,
-            () => _ = videoOut.Queue, () => _ = videoOut.IsLazy, () => _ = videoOut.IsDriving,
-            () => _ = videoOut.GraphClock, () => _ = videoOut.RateMatch, () => _ = videoOut.Controls,
-        })
+        foreach (
+            Action read in new Action[]
+            {
+                () => _ = audioIn.Queue,
+                () => _ = audioIn.IsLazy,
+                () => _ = audioIn.IsDriving,
+                () => _ = audioIn.GraphClock,
+                () => _ = audioIn.RateMatch,
+                () => _ = audioIn.Controls,
+                () => _ = audioOut.Queue,
+                () => _ = audioOut.IsLazy,
+                () => _ = audioOut.IsDriving,
+                () => _ = audioOut.GraphClock,
+                () => _ = audioOut.RateMatch,
+                () => _ = audioOut.Controls,
+                () => _ = videoIn.Queue,
+                () => _ = videoIn.IsLazy,
+                () => _ = videoIn.IsDriving,
+                () => _ = videoIn.GraphClock,
+                () => _ = videoIn.RateMatch,
+                () => _ = videoIn.Controls,
+                () => _ = videoOut.Queue,
+                () => _ = videoOut.IsLazy,
+                () => _ = videoOut.IsDriving,
+                () => _ = videoOut.GraphClock,
+                () => _ = videoOut.RateMatch,
+                () => _ = videoOut.Controls,
+            }
+        )
         {
             read();
         }
@@ -439,20 +533,31 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         audioIn.SkipCurrentFrame();
         videoIn.SkipCurrentFrame();
 
-        Assert.IsTrue(videoIn.RequestFormat([PixelFormat.Bgrx], 64, 64), "a connected capture refused a format request");
+        Assert.IsTrue(
+            videoIn.RequestFormat([PixelFormat.Bgrx], 64, 64),
+            "a connected capture refused a format request"
+        );
         Assert.IsTrue(videoOut.RequestFormat([PixelFormat.Bgrx], 64, 64));
 
         // Out of range on a connected stream, which is the only place the range guards are reached:
         // unconnected, the null check answers first.
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => videoIn.RequestFormat([PixelFormat.Bgrx], 0, 64));
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => videoOut.RequestFormat([PixelFormat.Bgrx], 64, -1));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            videoIn.RequestFormat([PixelFormat.Bgrx], 0, 64)
+        );
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            videoOut.RequestFormat([PixelFormat.Bgrx], 64, -1)
+        );
 
         Assert.ThrowsExactly<ArgumentException>(
-            () => audioIn.SetControl(0, []), "an empty control write was sent");
+            () => audioIn.SetControl(0, []),
+            "an empty control write was sent"
+        );
 
-        audioOut.SetError(-5, "a deliberate error, to prove the call reaches the daemon", cts.Token);
+        audioOut.SetError(
+            -5,
+            "a deliberate error, to prove the call reaches the daemon",
+            cts.Token
+        );
 
         await audioIn.DisposeAsync();
         await audioOut.DisposeAsync();

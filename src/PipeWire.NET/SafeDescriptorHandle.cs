@@ -11,24 +11,23 @@ namespace PipeWire.NET;
 public sealed class SafeDescriptorHandle : SafeHandle
 {
     /// <summary>Wraps <paramref name="descriptor"/>, which this handle then owns.</summary>
-    public SafeDescriptorHandle(int descriptor) : base(new IntPtr(-1), ownsHandle: true)
-        => SetHandle(new IntPtr(descriptor));
+    public SafeDescriptorHandle(int descriptor)
+        : base(new IntPtr(-1), ownsHandle: true) => SetHandle(new IntPtr(descriptor));
 
     /// <summary>An owning handle over no descriptor.</summary>
-    public SafeDescriptorHandle() : base(new IntPtr(-1), ownsHandle: true)
-    {
-    }
+    public SafeDescriptorHandle()
+        : base(new IntPtr(-1), ownsHandle: true) { }
 
     /// <inheritdoc/>
     public override bool IsInvalid => handle == new IntPtr(-1);
 
     /// <summary>The descriptor, for a call that takes one. Does not transfer ownership.</summary>
     /// <exception cref="ObjectDisposedException">The handle has been disposed.</exception>
-    public int Descriptor => IsClosed || IsInvalid
-        ? throw new ObjectDisposedException(nameof(SafeDescriptorHandle))
-        : (int)handle;
+    public int Descriptor =>
+        IsClosed || IsInvalid
+            ? throw new ObjectDisposedException(nameof(SafeDescriptorHandle))
+            : (int)handle;
 
     /// <inheritdoc/>
     protected override bool ReleaseHandle() => NativeLibc.close((int)handle) == 0;
-
 }

@@ -30,7 +30,15 @@ internal static class FdInterop
     {
         int listening = 0;
         int size = sizeof(int);
-        if (NativeLibc.getsockopt(fd, NativeLibc.SOL_SOCKET, NativeLibc.SO_ACCEPTCONN, &listening, &size) < 0)
+        if (
+            NativeLibc.getsockopt(
+                fd,
+                NativeLibc.SOL_SOCKET,
+                NativeLibc.SO_ACCEPTCONN,
+                &listening,
+                &size
+            ) < 0
+        )
             return false;
 
         return listening != 0;
@@ -60,7 +68,10 @@ internal static class FdInterop
     {
         int duplicate = NativeLibc.fcntl(fd, NativeLibc.F_DUPFD_CLOEXEC, LowestDuplicate);
         if (duplicate < 0)
-            throw new PipeWireInteropException("fcntl(F_DUPFD_CLOEXEC)", -Marshal.GetLastPInvokeError());
+            throw new PipeWireInteropException(
+                "fcntl(F_DUPFD_CLOEXEC)",
+                -Marshal.GetLastPInvokeError()
+            );
 
         return new SafeFileHandle(duplicate, ownsHandle: true);
     }
@@ -81,7 +92,8 @@ internal static class FdInterop
         }
         finally
         {
-            if (referenced) handle.DangerousRelease();
+            if (referenced)
+                handle.DangerousRelease();
         }
     }
 
@@ -94,7 +106,11 @@ internal static class FdInterop
     /// first await, and releasing there would leave the descriptors unheld for the part of the
     /// operation that actually uses them.
     /// </remarks>
-    internal static async Task BorrowAsync(SafeHandle first, SafeHandle second, Func<int, int, Task> use)
+    internal static async Task BorrowAsync(
+        SafeHandle first,
+        SafeHandle second,
+        Func<int, int, Task> use
+    )
     {
         bool firstHeld = false;
         bool secondHeld = false;
@@ -107,8 +123,10 @@ internal static class FdInterop
         }
         finally
         {
-            if (secondHeld) second.DangerousRelease();
-            if (firstHeld) first.DangerousRelease();
+            if (secondHeld)
+                second.DangerousRelease();
+            if (firstHeld)
+                first.DangerousRelease();
         }
     }
 }

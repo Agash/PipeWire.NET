@@ -29,7 +29,9 @@ public sealed class ToolOracleTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken cancellationToken)
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -47,12 +49,17 @@ public sealed class ToolOracleTests : PipeWireTestBase
         RequireLinux();
         CliTool.Require("pw-dump");
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-oracle-dump", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-oracle-dump",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("Oracle")
-                .WithName(Unique("pwnet_oracle")).ExecuteAsync(cts.Token);
+            PipeWireNode node = await registry
+                .CreateVirtualSink("Oracle")
+                .WithName(Unique("pwnet_oracle"))
+                .ExecuteAsync(cts.Token);
 
             // Both views are taken after the same barrier, so neither is a moving target - and the
             // comparison is by id, which is the only thing both sides agree to call an object.
@@ -60,14 +67,38 @@ public sealed class ToolOracleTests : PipeWireTestBase
             PwDump dump = await PwDump.CaptureAsync(cts.Token);
             PipeWireGraphSnapshot ours = registry.Current;
 
-            await AssertWeSeeAllAsync("Node", d => d.IdsOfKind("Node"),
-                g => g.Nodes.Select(n => n.NodeId), dump, registry, cts.Token);
-            await AssertWeSeeAllAsync("Port", d => d.IdsOfKind("Port"),
-                g => g.Ports.Select(p => p.PortId), dump, registry, cts.Token);
-            await AssertWeSeeAllAsync("Link", d => d.IdsOfKind("Link"),
-                g => g.Links.Select(l => l.LinkId), dump, registry, cts.Token);
-            await AssertWeSeeAllAsync("Device", d => d.IdsOfKind("Device"),
-                g => g.Devices.Select(x => x.Id), dump, registry, cts.Token);
+            await AssertWeSeeAllAsync(
+                "Node",
+                d => d.IdsOfKind("Node"),
+                g => g.Nodes.Select(n => n.NodeId),
+                dump,
+                registry,
+                cts.Token
+            );
+            await AssertWeSeeAllAsync(
+                "Port",
+                d => d.IdsOfKind("Port"),
+                g => g.Ports.Select(p => p.PortId),
+                dump,
+                registry,
+                cts.Token
+            );
+            await AssertWeSeeAllAsync(
+                "Link",
+                d => d.IdsOfKind("Link"),
+                g => g.Links.Select(l => l.LinkId),
+                dump,
+                registry,
+                cts.Token
+            );
+            await AssertWeSeeAllAsync(
+                "Device",
+                d => d.IdsOfKind("Device"),
+                g => g.Devices.Select(x => x.Id),
+                dump,
+                registry,
+                cts.Token
+            );
             // Clients are compared as a superset: pw-dump connects to produce the dump, so its own
             // client is in its output and cannot be in a snapshot taken before it ran.
             // The other direction, which is racy by construction: our snapshot is taken after the
@@ -83,29 +114,66 @@ public sealed class ToolOracleTests : PipeWireTestBase
                 HashSet<uint> theirsNow = second.IdsOfKind("Client").ToHashSet();
                 HashSet<uint> oursNow = registry.Current.Clients.Select(c => c.Id).ToHashSet();
 
-                List<uint> phantom = [.. weLack.Where(id => !theirsNow.Contains(id) && oursNow.Contains(id))];
+                List<uint> phantom =
+                [
+                    .. weLack.Where(id => !theirsNow.Contains(id) && oursNow.Contains(id)),
+                ];
 
-                Assert.IsTrue(phantom.Count == 0,
-                    $"Client: we still report ids no dump has [{string.Join(",", phantom)}]");
+                Assert.IsTrue(
+                    phantom.Count == 0,
+                    $"Client: we still report ids no dump has [{string.Join(",", phantom)}]"
+                );
             }
             await AssertWeSeeAllAsync(
                 "Client",
-                d => d.OfKind("Client")
-                    .Where(e => !string.Equals(e.Prop("application.name"), "pw-dump", StringComparison.Ordinal))
-                    .Select(e => e.Id),
-                g => g.Clients.Select(c => c.Id), dump, registry, cts.Token);
-            await AssertWeSeeAllAsync("Factory", d => d.IdsOfKind("Factory"),
-                g => g.Factories.Select(f => f.Id), dump, registry, cts.Token);
-            await AssertWeSeeAllAsync("Module", d => d.IdsOfKind("Module"),
-                g => g.Modules.Select(m => m.Id), dump, registry, cts.Token);
-            await AssertWeSeeAllAsync("Metadata", d => d.IdsOfKind("Metadata"),
-                g => g.Metadata.Select(m => m.Id), dump, registry, cts.Token);
+                d =>
+                    d.OfKind("Client")
+                        .Where(e =>
+                            !string.Equals(
+                                e.Prop("application.name"),
+                                "pw-dump",
+                                StringComparison.Ordinal
+                            )
+                        )
+                        .Select(e => e.Id),
+                g => g.Clients.Select(c => c.Id),
+                dump,
+                registry,
+                cts.Token
+            );
+            await AssertWeSeeAllAsync(
+                "Factory",
+                d => d.IdsOfKind("Factory"),
+                g => g.Factories.Select(f => f.Id),
+                dump,
+                registry,
+                cts.Token
+            );
+            await AssertWeSeeAllAsync(
+                "Module",
+                d => d.IdsOfKind("Module"),
+                g => g.Modules.Select(m => m.Id),
+                dump,
+                registry,
+                cts.Token
+            );
+            await AssertWeSeeAllAsync(
+                "Metadata",
+                d => d.IdsOfKind("Metadata"),
+                g => g.Metadata.Select(m => m.Id),
+                dump,
+                registry,
+                cts.Token
+            );
 
             // And the properties we parsed for our own node match what pw-dump read independently.
             PwDump.Entry? theirs = dump.ById(node.NodeId);
             Assert.IsNotNull(theirs, "pw-dump does not see a node we created");
-            Assert.AreEqual(theirs!.Prop("node.name"), ours.GetNode(node.NodeId)!.NodeName,
-                "we and pw-dump disagree about a node's name");
+            Assert.AreEqual(
+                theirs!.Prop("node.name"),
+                ours.GetNode(node.NodeId)!.NodeName,
+                "we and pw-dump disagree about a node's name"
+            );
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
@@ -133,7 +201,10 @@ public sealed class ToolOracleTests : PipeWireTestBase
         RequireLinux();
         CliTool.Require("pw-dump");
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-oracle-props", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-oracle-props",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -146,25 +217,42 @@ public sealed class ToolOracleTests : PipeWireTestBase
             foreach (PwDump.Entry entry in dump.OfKind("Device"))
             {
                 PipeWireDevice? mine = ours.Devices.FirstOrDefault(d => d.Id == entry.Id);
-                if (mine is null) continue;   // presence is the other test's business
+                if (mine is null)
+                    continue; // presence is the other test's business
 
                 if (!string.Equals(mine.Api, entry.Prop("device.api"), StringComparison.Ordinal))
                     disagreements.Add(
-                        $"device {entry.Id}: device.api is '{entry.Prop("device.api")}', we say '{mine.Api}'");
+                        $"device {entry.Id}: device.api is '{entry.Prop("device.api")}', we say '{mine.Api}'"
+                    );
 
-                if (!string.Equals(mine.MediaClass, entry.Prop("media.class"), StringComparison.Ordinal))
+                if (
+                    !string.Equals(
+                        mine.MediaClass,
+                        entry.Prop("media.class"),
+                        StringComparison.Ordinal
+                    )
+                )
                     disagreements.Add(
-                        $"device {entry.Id}: media.class is '{entry.Prop("media.class")}', we say '{mine.MediaClass}'");
+                        $"device {entry.Id}: media.class is '{entry.Prop("media.class")}', we say '{mine.MediaClass}'"
+                    );
             }
 
             foreach (PwDump.Entry entry in dump.OfKind("Node"))
             {
                 PipeWireNode? mine = ours.GetNode(entry.Id);
-                if (mine is null) continue;
+                if (mine is null)
+                    continue;
 
-                if (!string.Equals(mine.MediaClass, entry.Prop("media.class"), StringComparison.Ordinal))
+                if (
+                    !string.Equals(
+                        mine.MediaClass,
+                        entry.Prop("media.class"),
+                        StringComparison.Ordinal
+                    )
+                )
                     disagreements.Add(
-                        $"node {entry.Id}: media.class is '{entry.Prop("media.class")}', we say '{mine.MediaClass}'");
+                        $"node {entry.Id}: media.class is '{entry.Prop("media.class")}', we say '{mine.MediaClass}'"
+                    );
             }
 
             Assert.IsTrue(disagreements.Count == 0, string.Join("; ", disagreements));
@@ -190,7 +278,8 @@ public sealed class ToolOracleTests : PipeWireTestBase
         Func<PipeWireGraphSnapshot, IEnumerable<uint>> ours,
         PwDump dump,
         PipeWireRegistry registry,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         HashSet<uint> wanted = theirs(dump).ToHashSet();
         List<uint> missing = [];
@@ -198,7 +287,8 @@ public sealed class ToolOracleTests : PipeWireTestBase
         for (int attempt = 0; attempt < 40; attempt++)
         {
             missing = [.. wanted.Except(ours(registry.Current).ToHashSet()).Order()];
-            if (missing.Count == 0) return;
+            if (missing.Count == 0)
+                return;
 
             await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
         }
@@ -210,8 +300,10 @@ public sealed class ToolOracleTests : PipeWireTestBase
 
         List<uint> real = [.. missing.Where(stillThere.Contains)];
 
-        Assert.IsTrue(real.Count == 0,
-            $"{kind}: pw-dump reports ids that never reached our graph [{string.Join(",", real)}]");
+        Assert.IsTrue(
+            real.Count == 0,
+            $"{kind}: pw-dump reports ids that never reached our graph [{string.Join(",", real)}]"
+        );
     }
 
     [TestMethod]
@@ -220,12 +312,17 @@ public sealed class ToolOracleTests : PipeWireTestBase
         RequireLinux();
         CliTool wpctl = CliTool.Require("wpctl");
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-oracle-wpctl", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-oracle-wpctl",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("WpctlOracle")
-                .WithName(Unique("pwnet_wpctl")).ExecuteAsync(cts.Token);
+            PipeWireNode node = await registry
+                .CreateVirtualSink("WpctlOracle")
+                .WithName(Unique("pwnet_wpctl"))
+                .ExecuteAsync(cts.Token);
             string nodeName = node.NodeName!;
 
             await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
@@ -240,10 +337,14 @@ public sealed class ToolOracleTests : PipeWireTestBase
             const float Asked = 0.42f;
             string id = node.NodeId.ToString(CultureInfo.InvariantCulture);
             (int exit, _, string stderr) = await wpctl.RunAsync(
-                ["set-volume", id, Asked.ToString(CultureInfo.InvariantCulture)], cts.Token);
+                ["set-volume", id, Asked.ToString(CultureInfo.InvariantCulture)],
+                cts.Token
+            );
 
             if (exit != 0)
-                Assert.Inconclusive($"wpctl cannot set this node's volume on this session: {stderr}");
+                Assert.Inconclusive(
+                    $"wpctl cannot set this node's volume on this session: {stderr}"
+                );
 
             // What the session actually holds now, in wpctl's own cubic scale, rather than what
             // was asked: the session manager may overwrite the write on its way through, and
@@ -251,48 +352,70 @@ public sealed class ToolOracleTests : PipeWireTestBase
             float cubic = await ReadWpctlVolumeAsync(wpctl, id, cts.Token);
             float expected = cubic * cubic * cubic;
 
-            bool sawIt = await EventuallyAsync(async () =>
-            {
-                ImmutableArray<float> volumes = await control.GetChannelVolumesAsync(cts.Token);
-                return !volumes.IsDefaultOrEmpty && volumes.All(v => Math.Abs(v - expected) < 0.005f);
-            }, TimeSpan.FromSeconds(15), cts.Token);
+            bool sawIt = await EventuallyAsync(
+                async () =>
+                {
+                    ImmutableArray<float> volumes = await control.GetChannelVolumesAsync(cts.Token);
+                    return !volumes.IsDefaultOrEmpty
+                        && volumes.All(v => Math.Abs(v - expected) < 0.005f);
+                },
+                TimeSpan.FromSeconds(15),
+                cts.Token
+            );
 
             if (!sawIt)
             {
                 // Ids are reused under churn: if this id no longer names our node, wpctl and this
                 // test talked to different objects and there is nothing to compare.
                 PwDump dump = await PwDump.CaptureAsync(cts.Token);
-                string? owner = dump.OfKind("Node").FirstOrDefault(e => e.Id == node.NodeId)
+                string? owner = dump.OfKind("Node")
+                    .FirstOrDefault(e => e.Id == node.NodeId)
                     ?.Prop("node.name");
                 if (!string.Equals(owner, nodeName, StringComparison.Ordinal))
-                    Assert.Inconclusive($"node id {node.NodeId} changed hands mid-test (now '{owner}')");
+                    Assert.Inconclusive(
+                        $"node id {node.NodeId} changed hands mid-test (now '{owner}')"
+                    );
             }
 
-            Assert.IsTrue(sawIt,
+            Assert.IsTrue(
+                sawIt,
                 $"wpctl reports {cubic} (expecting {expected} linear) and we report "
-                + $"[{string.Join(",", await control.GetChannelVolumesAsync(cts.Token))}]");
+                    + $"[{string.Join(",", await control.GetChannelVolumesAsync(cts.Token))}]"
+            );
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 
     private static async Task<float> ReadWpctlVolumeAsync(
-        CliTool wpctl, string id, CancellationToken cancellationToken)
+        CliTool wpctl,
+        string id,
+        CancellationToken cancellationToken
+    )
     {
         (int exit, string stdout, string stderr) = await wpctl.RunAsync(
-            ["get-volume", id], cancellationToken, TimeSpan.FromSeconds(10));
+            ["get-volume", id],
+            cancellationToken,
+            TimeSpan.FromSeconds(10)
+        );
 
         if (exit != 0)
             Assert.Inconclusive($"wpctl cannot read this node's volume on this session: {stderr}");
 
         // "Volume: 0.42", with " [MUTED]" after it when muted.
-        System.Text.RegularExpressions.Match match =
-            System.Text.RegularExpressions.Regex.Match(stdout, @"Volume:\s*([0-9.]+)");
+        System.Text.RegularExpressions.Match match = System.Text.RegularExpressions.Regex.Match(
+            stdout,
+            @"Volume:\s*([0-9.]+)"
+        );
         float cubic = 0f;
-        bool parsed = match.Success && float.TryParse(match.Groups[1].Value,
-            System.Globalization.NumberStyles.Float,
-            System.Globalization.CultureInfo.InvariantCulture,
-            out cubic);
+        bool parsed =
+            match.Success
+            && float.TryParse(
+                match.Groups[1].Value,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out cubic
+            );
         if (!parsed)
             Assert.Inconclusive($"wpctl reported a volume this cannot parse: {stdout}");
 
@@ -305,7 +428,10 @@ public sealed class ToolOracleTests : PipeWireTestBase
         RequireLinux();
         CliTool pwcat = CliTool.Require("pw-cat");
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-oracle-pwcat", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-oracle-pwcat",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -313,36 +439,67 @@ public sealed class ToolOracleTests : PipeWireTestBase
             // is a plain libpipewire client, so it exercises the ordinary stream path.
             string name = Unique("pwnet_pwcat");
             using Process player = pwcat.Start(
-                "--playback", "--target", "0", "--media-role", "Music",
-                "--rate", "48000", "--channels", "2", "--format", "s16", "--raw",
-                "--properties", $"node.name={name}", "/dev/zero");
+                "--playback",
+                "--target",
+                "0",
+                "--media-role",
+                "Music",
+                "--rate",
+                "48000",
+                "--channels",
+                "2",
+                "--format",
+                "s16",
+                "--raw",
+                "--properties",
+                $"node.name={name}",
+                "/dev/zero"
+            );
 
             try
             {
-                bool appeared = await EventuallyAsync(async () =>
-                {
-                    await registry.WaitForInitialEnumerationAsync(cts.Token);
-                    return registry.Current.Nodes.Any(n => string.Equals(n.NodeName, name, StringComparison.Ordinal));
-                }, TimeSpan.FromSeconds(20), cts.Token);
+                bool appeared = await EventuallyAsync(
+                    async () =>
+                    {
+                        await registry.WaitForInitialEnumerationAsync(cts.Token);
+                        return registry.Current.Nodes.Any(n =>
+                            string.Equals(n.NodeName, name, StringComparison.Ordinal)
+                        );
+                    },
+                    TimeSpan.FromSeconds(20),
+                    cts.Token
+                );
 
                 if (!appeared)
                     Assert.Inconclusive("pw-cat did not publish a node on this session.");
 
-                PipeWireNode published = registry.Current.Nodes
-                    .First(n => string.Equals(n.NodeName, name, StringComparison.Ordinal));
+                PipeWireNode published = registry.Current.Nodes.First(n =>
+                    string.Equals(n.NodeName, name, StringComparison.Ordinal)
+                );
 
                 // Its ports have to reach us too, not just the node.
                 Assert.IsTrue(
-                    await EventuallyAsync(async () =>
-                    {
-                        await registry.WaitForInitialEnumerationAsync(cts.Token);
-                        return !registry.Current.GetPortsForNode(published.NodeId).IsEmpty;
-                    }, TimeSpan.FromSeconds(15), cts.Token),
-                    "a native player's node arrived without its ports");
+                    await EventuallyAsync(
+                        async () =>
+                        {
+                            await registry.WaitForInitialEnumerationAsync(cts.Token);
+                            return !registry.Current.GetPortsForNode(published.NodeId).IsEmpty;
+                        },
+                        TimeSpan.FromSeconds(15),
+                        cts.Token
+                    ),
+                    "a native player's node arrived without its ports"
+                );
             }
             finally
             {
-                try { player.Kill(entireProcessTree: true); } catch (InvalidOperationException) { /* gone */ }
+                try
+                {
+                    player.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException)
+                { /* gone */
+                }
                 player.WaitForExit(3000);
             }
         }
@@ -354,26 +511,41 @@ public sealed class ToolOracleTests : PipeWireTestBase
         RequireLinux();
         CliTool pwmon = CliTool.Require("pw-mon");
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-oracle-pwmon", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-oracle-pwmon",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             var added = new List<uint>();
             var removed = new List<uint>();
-            void OnAdded(PipeWireNode n) { lock (added) added.Add(n.NodeId); }
-            void OnRemoved(uint id) { lock (removed) removed.Add(id); }
+            void OnAdded(PipeWireNode n)
+            {
+                lock (added)
+                    added.Add(n.NodeId);
+            }
+            void OnRemoved(uint id)
+            {
+                lock (removed)
+                    removed.Add(id);
+            }
 
             registry.NodeAdded += OnAdded;
             registry.NodeRemoved += OnRemoved;
 
             using Process mon = pwmon.Start();
             var monitorOutput = new System.Text.StringBuilder();
-            Task pump = Task.Run(async () =>
-            {
-                string? line;
-                while ((line = await mon.StandardOutput.ReadLineAsync(cts.Token)) is not null)
-                    lock (monitorOutput) monitorOutput.AppendLine(line);
-            }, cts.Token);
+            Task pump = Task.Run(
+                async () =>
+                {
+                    string? line;
+                    while ((line = await mon.StandardOutput.ReadLineAsync(cts.Token)) is not null)
+                        lock (monitorOutput)
+                            monitorOutput.AppendLine(line);
+                },
+                cts.Token
+            );
 
             try
             {
@@ -383,14 +555,20 @@ public sealed class ToolOracleTests : PipeWireTestBase
                 bool dumped = await EventuallyAsync(
                     () =>
                     {
-                        lock (monitorOutput) return Task.FromResult(monitorOutput.Length > 0);
+                        lock (monitorOutput)
+                            return Task.FromResult(monitorOutput.Length > 0);
                     },
-                    TimeSpan.FromSeconds(10), cts.Token);
+                    TimeSpan.FromSeconds(10),
+                    cts.Token
+                );
 
-                if (!dumped) Assert.Inconclusive("pw-mon printed nothing, so it never started.");
+                if (!dumped)
+                    Assert.Inconclusive("pw-mon printed nothing, so it never started.");
 
-                PipeWireNode node = await registry.CreateVirtualSink("MonOracle")
-                    .WithName(Unique("pwnet_mon")).ExecuteAsync(cts.Token);
+                PipeWireNode node = await registry
+                    .CreateVirtualSink("MonOracle")
+                    .WithName(Unique("pwnet_mon"))
+                    .ExecuteAsync(cts.Token);
 
                 await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
                 await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -402,36 +580,55 @@ public sealed class ToolOracleTests : PipeWireTestBase
                     () =>
                     {
                         string current;
-                        lock (monitorOutput) current = monitorOutput.ToString();
+                        lock (monitorOutput)
+                            current = monitorOutput.ToString();
 
                         return Task.FromResult(
                             current.Contains($"id: {node.NodeId}", StringComparison.Ordinal)
-                            || current.Contains($"id:{node.NodeId}", StringComparison.Ordinal));
+                                || current.Contains($"id:{node.NodeId}", StringComparison.Ordinal)
+                        );
                     },
-                    TimeSpan.FromSeconds(10), cts.Token);
+                    TimeSpan.FromSeconds(10),
+                    cts.Token
+                );
 
-                lock (added) Assert.IsTrue(added.Contains(node.NodeId), "we never raised NodeAdded");
-                lock (removed) Assert.IsTrue(removed.Contains(node.NodeId), "we never raised NodeRemoved");
+                lock (added)
+                    Assert.IsTrue(added.Contains(node.NodeId), "we never raised NodeAdded");
+                lock (removed)
+                    Assert.IsTrue(removed.Contains(node.NodeId), "we never raised NodeRemoved");
 
-                Assert.IsTrue(mentioned, "pw-mon never mentioned an object we created and destroyed");
+                Assert.IsTrue(
+                    mentioned,
+                    "pw-mon never mentioned an object we created and destroyed"
+                );
             }
             finally
             {
                 registry.NodeAdded -= OnAdded;
                 registry.NodeRemoved -= OnRemoved;
-                try { mon.Kill(entireProcessTree: true); } catch (InvalidOperationException) { /* gone */ }
+                try
+                {
+                    mon.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException)
+                { /* gone */
+                }
                 mon.WaitForExit(3000);
             }
         }
     }
 
     private static async Task<bool> EventuallyAsync(
-        Func<Task<bool>> condition, TimeSpan within, CancellationToken cancellationToken)
+        Func<Task<bool>> condition,
+        TimeSpan within,
+        CancellationToken cancellationToken
+    )
     {
         long deadline = Environment.TickCount64 + (long)within.TotalMilliseconds;
         while (Environment.TickCount64 < deadline)
         {
-            if (await condition()) return true;
+            if (await condition())
+                return true;
             await Task.Delay(50, cancellationToken);
         }
 

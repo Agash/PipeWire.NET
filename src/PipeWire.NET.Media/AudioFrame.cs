@@ -26,18 +26,19 @@ public readonly ref struct AudioFrame
         long graphTimeNs = -1,
         long streamPositionNs = -1,
         long delayNs = 0,
-        long queuedTimeNs = -1)
+        long queuedTimeNs = -1
+    )
     {
-        Samples                 = samples;
-        SampleRate              = sampleRate;
-        Channels                = channels;
-        Format                  = format;
-        SequenceNumber          = sequenceNumber;
+        Samples = samples;
+        SampleRate = sampleRate;
+        Channels = channels;
+        Format = format;
+        SequenceNumber = sequenceNumber;
         PresentationTimestampNs = presentationTimestampNs < 0 ? null : presentationTimestampNs;
-        QueuedTimeNs            = queuedTimeNs < 0 ? null : queuedTimeNs;
-        GraphTimeNs             = graphTimeNs < 0 ? null : graphTimeNs;
-        StreamPositionNs        = streamPositionNs < 0 ? null : streamPositionNs;
-        DelayNs                 = delayNs;
+        QueuedTimeNs = queuedTimeNs < 0 ? null : queuedTimeNs;
+        GraphTimeNs = graphTimeNs < 0 ? null : graphTimeNs;
+        StreamPositionNs = streamPositionNs < 0 ? null : streamPositionNs;
+        DelayNs = delayNs;
     }
 
     /// <summary>Raw interleaved sample bytes.</summary>
@@ -45,17 +46,19 @@ public readonly ref struct AudioFrame
 
     /// <summary>Copies the chunk so it can be kept past the handler that delivered it.</summary>
     /// <inheritdoc cref="OwnedAudioFrame" path="/remarks"/>
-    public OwnedAudioFrame Clone() => new(
-        [.. Samples],
-        SampleRate,
-        Channels,
-        Format,
-        SequenceNumber,
-        PresentationTimestampNs,
-        QueuedTimeNs,
-        GraphTimeNs,
-        StreamPositionNs,
-        DelayNs);
+    public OwnedAudioFrame Clone() =>
+        new(
+            [.. Samples],
+            SampleRate,
+            Channels,
+            Format,
+            SequenceNumber,
+            PresentationTimestampNs,
+            QueuedTimeNs,
+            GraphTimeNs,
+            StreamPositionNs,
+            DelayNs
+        );
 
     /// <summary>Sample rate in Hz.</summary>
     public int SampleRate { get; }

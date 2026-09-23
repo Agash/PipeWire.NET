@@ -31,26 +31,37 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             Assert.Inconclusive("PipeWire is a Linux daemon.");
     }
 
-    private static string Unique() => $"pwnet_device_{Environment.ProcessId}_{Random.Shared.Next():x}";
+    private static string Unique() =>
+        $"pwnet_device_{Environment.ProcessId}_{Random.Shared.Next():x}";
 
     /// <summary>Two profiles, which is the least that makes a device selectable.</summary>
     private static ImmutableArray<SpaObject> Profiles() =>
-    [
-        new SpaObject(SpaType.ObjectParamProfile, SpaParamType.EnumProfile,
         [
-            new SpaPodProperty((uint)SpaParamProfile.Index, 0, new SpaInt(0)),
-            new SpaPodProperty((uint)SpaParamProfile.Name, 0, new SpaString("off")),
-            new SpaPodProperty((uint)SpaParamProfile.Description, 0, new SpaString("Off")),
-            new SpaPodProperty((uint)SpaParamProfile.Priority, 0, new SpaInt(0)),
-        ]),
-        new SpaObject(SpaType.ObjectParamProfile, SpaParamType.EnumProfile,
-        [
-            new SpaPodProperty((uint)SpaParamProfile.Index, 0, new SpaInt(1)),
-            new SpaPodProperty((uint)SpaParamProfile.Name, 0, new SpaString("stereo")),
-            new SpaPodProperty((uint)SpaParamProfile.Description, 0, new SpaString("Stereo")),
-            new SpaPodProperty((uint)SpaParamProfile.Priority, 0, new SpaInt(100)),
-        ]),
-    ];
+            new SpaObject(
+                SpaType.ObjectParamProfile,
+                SpaParamType.EnumProfile,
+                [
+                    new SpaPodProperty((uint)SpaParamProfile.Index, 0, new SpaInt(0)),
+                    new SpaPodProperty((uint)SpaParamProfile.Name, 0, new SpaString("off")),
+                    new SpaPodProperty((uint)SpaParamProfile.Description, 0, new SpaString("Off")),
+                    new SpaPodProperty((uint)SpaParamProfile.Priority, 0, new SpaInt(0)),
+                ]
+            ),
+            new SpaObject(
+                SpaType.ObjectParamProfile,
+                SpaParamType.EnumProfile,
+                [
+                    new SpaPodProperty((uint)SpaParamProfile.Index, 0, new SpaInt(1)),
+                    new SpaPodProperty((uint)SpaParamProfile.Name, 0, new SpaString("stereo")),
+                    new SpaPodProperty(
+                        (uint)SpaParamProfile.Description,
+                        0,
+                        new SpaString("Stereo")
+                    ),
+                    new SpaPodProperty((uint)SpaParamProfile.Priority, 0, new SpaInt(100)),
+                ]
+            ),
+        ];
 
     /// <summary>Two routes, so the device has ports to select as well as profiles.</summary>
     /// <remarks>
@@ -61,28 +72,56 @@ public sealed class DeviceProviderTests : PipeWireTestBase
     /// the event hook down with it.
     /// </remarks>
     private static ImmutableArray<SpaObject> Routes() =>
-    [
-        new SpaObject(SpaType.ObjectParamRoute, SpaParamType.EnumRoute,
         [
-            new SpaPodProperty((uint)SpaParamRoute.Index, 0, new SpaInt(0)),
-            new SpaPodProperty((uint)SpaParamRoute.Name, 0, new SpaString("speaker")),
-            new SpaPodProperty((uint)SpaParamRoute.Description, 0, new SpaString("Speaker")),
-            new SpaPodProperty((uint)SpaParamRoute.Priority, 0, new SpaInt(100)),
-            new SpaPodProperty((uint)SpaParamRoute.Direction, 0, new SpaId((uint)SpaDirection.Output)),
-            new SpaPodProperty((uint)SpaParamRoute.Available, 0,
-                            new SpaId((uint)SpaParamAvailability.Yes)),
-        ]),
-        new SpaObject(SpaType.ObjectParamRoute, SpaParamType.EnumRoute,
-        [
-            new SpaPodProperty((uint)SpaParamRoute.Index, 0, new SpaInt(1)),
-            new SpaPodProperty((uint)SpaParamRoute.Name, 0, new SpaString("headphone")),
-            new SpaPodProperty((uint)SpaParamRoute.Description, 0, new SpaString("Headphones")),
-            new SpaPodProperty((uint)SpaParamRoute.Priority, 0, new SpaInt(50)),
-            new SpaPodProperty((uint)SpaParamRoute.Direction, 0, new SpaId((uint)SpaDirection.Output)),
-            new SpaPodProperty((uint)SpaParamRoute.Available, 0,
-                            new SpaId((uint)SpaParamAvailability.Unknown)),
-        ]),
-    ];
+            new SpaObject(
+                SpaType.ObjectParamRoute,
+                SpaParamType.EnumRoute,
+                [
+                    new SpaPodProperty((uint)SpaParamRoute.Index, 0, new SpaInt(0)),
+                    new SpaPodProperty((uint)SpaParamRoute.Name, 0, new SpaString("speaker")),
+                    new SpaPodProperty(
+                        (uint)SpaParamRoute.Description,
+                        0,
+                        new SpaString("Speaker")
+                    ),
+                    new SpaPodProperty((uint)SpaParamRoute.Priority, 0, new SpaInt(100)),
+                    new SpaPodProperty(
+                        (uint)SpaParamRoute.Direction,
+                        0,
+                        new SpaId((uint)SpaDirection.Output)
+                    ),
+                    new SpaPodProperty(
+                        (uint)SpaParamRoute.Available,
+                        0,
+                        new SpaId((uint)SpaParamAvailability.Yes)
+                    ),
+                ]
+            ),
+            new SpaObject(
+                SpaType.ObjectParamRoute,
+                SpaParamType.EnumRoute,
+                [
+                    new SpaPodProperty((uint)SpaParamRoute.Index, 0, new SpaInt(1)),
+                    new SpaPodProperty((uint)SpaParamRoute.Name, 0, new SpaString("headphone")),
+                    new SpaPodProperty(
+                        (uint)SpaParamRoute.Description,
+                        0,
+                        new SpaString("Headphones")
+                    ),
+                    new SpaPodProperty((uint)SpaParamRoute.Priority, 0, new SpaInt(50)),
+                    new SpaPodProperty(
+                        (uint)SpaParamRoute.Direction,
+                        0,
+                        new SpaId((uint)SpaDirection.Output)
+                    ),
+                    new SpaPodProperty(
+                        (uint)SpaParamRoute.Available,
+                        0,
+                        new SpaId((uint)SpaParamAvailability.Unknown)
+                    ),
+                ]
+            ),
+        ];
 
     [TestMethod]
     public async Task ADeviceWeServe_AppearsInTheGraphAndLeavesTheSessionResponsive()
@@ -90,19 +129,27 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-device-host", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-device-host",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
         string name = Unique();
 
-        using (PipeWireDeviceProvider provider = PipeWireDeviceProvider.Create(
-            ctx, name, "A device this test serves",
-            new Dictionary<SpaParamType, ImmutableArray<SpaObject>>
-            {
-                [SpaParamType.EnumProfile] = Profiles(),
-            }))
+        using (
+            PipeWireDeviceProvider provider = PipeWireDeviceProvider.Create(
+                ctx,
+                name,
+                "A device this test serves",
+                new Dictionary<SpaParamType, ImmutableArray<SpaObject>>
+                {
+                    [SpaParamType.EnumProfile] = Profiles(),
+                }
+            )
+        )
         {
             Assert.AreEqual(name, provider.Name);
 
@@ -111,7 +158,8 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             PipeWireGraphSnapshot graph = await WaitForAsync(
                 registry,
                 g => g.Devices.Any(d => d.DeviceName == name),
-                cts.Token);
+                cts.Token
+            );
 
             PipeWireDevice? seen = graph.Devices.FirstOrDefault(d => d.DeviceName == name);
             Assert.IsNotNull(seen, $"the device '{name}' never appeared in the graph");
@@ -131,7 +179,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-device-params", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-device-params",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -139,21 +190,30 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         string name = Unique();
 
         using PipeWireDeviceProvider provider = PipeWireDeviceProvider.Create(
-            ctx, name, "A device with profiles",
+            ctx,
+            name,
+            "A device with profiles",
             new Dictionary<SpaParamType, ImmutableArray<SpaObject>>
             {
                 [SpaParamType.EnumProfile] = Profiles(),
-            });
+            }
+        );
 
         PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry, g => g.Devices.Any(d => d.DeviceName == name), cts.Token);
+            registry,
+            g => g.Devices.Any(d => d.DeviceName == name),
+            cts.Token
+        );
 
         uint id = graph.Devices.First(d => d.DeviceName == name).Id;
 
         // Read it back from a second connection, which is what a device provider is for: the
         // consumer is another client, not the process serving it. Same-connection enumeration is a
         // different question and is covered separately.
-        await using var reader = new PipeWireContext("pwnet-device-reader", ConsoleTestLoggerFactory.Instance);
+        await using var reader = new PipeWireContext(
+            "pwnet-device-reader",
+            ConsoleTestLoggerFactory.Instance
+        );
         await reader.StartAsync(cts.Token);
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
@@ -161,8 +221,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await using PipeWireDeviceProxy control = readerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
 
-        ImmutableArray<SpaObject> profiles =
-            await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token);
+        ImmutableArray<SpaObject> profiles = await control.EnumerateParametersAsync(
+            SpaParamType.EnumProfile,
+            cts.Token
+        );
 
         Assert.HasCount(2, profiles, "the device did not answer with the profiles it was given");
 
@@ -179,7 +241,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-device-filter", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-device-filter",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -187,18 +252,27 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         string name = Unique();
 
         using PipeWireDeviceProvider provider = PipeWireDeviceProvider.Create(
-            ctx, name, "A device with profiles",
+            ctx,
+            name,
+            "A device with profiles",
             new Dictionary<SpaParamType, ImmutableArray<SpaObject>>
             {
                 [SpaParamType.EnumProfile] = Profiles(),
-            });
+            }
+        );
 
         PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry, g => g.Devices.Any(d => d.DeviceName == name), cts.Token);
+            registry,
+            g => g.Devices.Any(d => d.DeviceName == name),
+            cts.Token
+        );
 
         uint id = graph.Devices.First(d => d.DeviceName == name).Id;
 
-        await using var reader = new PipeWireContext("pwnet-device-filter-reader", ConsoleTestLoggerFactory.Instance);
+        await using var reader = new PipeWireContext(
+            "pwnet-device-filter-reader",
+            ConsoleTestLoggerFactory.Instance
+        );
         await reader.StartAsync(cts.Token);
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
@@ -207,36 +281,52 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await control.ReadyAsync(cts.Token);
 
         // The filter objects: one matching nothing, one matching the stereo profile.
-        var surround = new SpaObject(SpaType.ObjectParamProfile, SpaParamType.EnumProfile,
-        [
-            new SpaPodProperty((uint)SpaParamProfile.Name, 0, new SpaString("surround")),
-        ]);
-        var stereo = new SpaObject(SpaType.ObjectParamProfile, SpaParamType.EnumProfile,
-        [
-            new SpaPodProperty((uint)SpaParamProfile.Name, 0, new SpaString("stereo")),
-        ]);
+        var surround = new SpaObject(
+            SpaType.ObjectParamProfile,
+            SpaParamType.EnumProfile,
+            [new SpaPodProperty((uint)SpaParamProfile.Name, 0, new SpaString("surround"))]
+        );
+        var stereo = new SpaObject(
+            SpaType.ObjectParamProfile,
+            SpaParamType.EnumProfile,
+            [new SpaPodProperty((uint)SpaParamProfile.Name, 0, new SpaString("stereo"))]
+        );
 
         // Filtered first, on a fresh device: the daemon has cached nothing yet, so these run the
         // provider's own matcher rather than the daemon's cache projection.
-        ImmutableArray<SpaObject> noneFirst =
-            await control.EnumerateParametersAsync(SpaParamType.EnumProfile, surround, cts.Token);
+        ImmutableArray<SpaObject> noneFirst = await control.EnumerateParametersAsync(
+            SpaParamType.EnumProfile,
+            surround,
+            cts.Token
+        );
         Assert.HasCount(0, noneFirst);
 
-        ImmutableArray<SpaObject> matches =
-            await control.EnumerateParametersAsync(SpaParamType.EnumProfile, stereo, cts.Token);
+        ImmutableArray<SpaObject> matches = await control.EnumerateParametersAsync(
+            SpaParamType.EnumProfile,
+            stereo,
+            cts.Token
+        );
         Assert.HasCount(1, matches, "the filter did not narrow the enumeration to its match");
-        Assert.AreEqual("stereo", ProfileName(matches[0]),
-            "the filtered enumeration did not return the stereo profile");
+        Assert.AreEqual(
+            "stereo",
+            ProfileName(matches[0]),
+            "the filtered enumeration did not return the stereo profile"
+        );
 
         // Unfiltered, both profiles arrive: the filter narrows, it does not change the set. This
         // full enumeration also populates the daemon's cache, so the repeat below is served from
         // there rather than by the provider again - same answer, different path.
-        ImmutableArray<SpaObject> all =
-            await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token);
+        ImmutableArray<SpaObject> all = await control.EnumerateParametersAsync(
+            SpaParamType.EnumProfile,
+            cts.Token
+        );
         Assert.HasCount(2, all);
 
-        ImmutableArray<SpaObject> cached =
-            await control.EnumerateParametersAsync(SpaParamType.EnumProfile, stereo, cts.Token);
+        ImmutableArray<SpaObject> cached = await control.EnumerateParametersAsync(
+            SpaParamType.EnumProfile,
+            stereo,
+            cts.Token
+        );
         Assert.HasCount(1, cached);
         Assert.AreEqual("stereo", ProfileName(cached[0]));
     }
@@ -265,7 +355,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-device-teardown", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-device-teardown",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -273,20 +366,29 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         string name = Unique();
 
         var provider = PipeWireDeviceProvider.Create(
-            ctx, name, "A device with a listener",
+            ctx,
+            name,
+            "A device with a listener",
             new Dictionary<SpaParamType, ImmutableArray<SpaObject>>
             {
                 [SpaParamType.EnumProfile] = Profiles(),
-            });
+            }
+        );
 
         PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry, g => g.Devices.Any(d => d.DeviceName == name), cts.Token);
+            registry,
+            g => g.Devices.Any(d => d.DeviceName == name),
+            cts.Token
+        );
 
         uint id = graph.Devices.First(d => d.DeviceName == name).Id;
 
         // A second connection binds and subscribes, so a remote listener is attached while the
         // provider is disposed - the order the invariant is about.
-        var reader = new PipeWireContext("pwnet-device-teardown-reader", ConsoleTestLoggerFactory.Instance);
+        var reader = new PipeWireContext(
+            "pwnet-device-teardown-reader",
+            ConsoleTestLoggerFactory.Instance
+        );
         await reader.StartAsync(cts.Token);
         var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
@@ -315,15 +417,21 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-device-empty", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-device-empty",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
         string name = Unique();
 
-        using PipeWireDeviceProvider provider =
-            PipeWireDeviceProvider.Create(ctx, name, "An empty device");
+        using PipeWireDeviceProvider provider = PipeWireDeviceProvider.Create(
+            ctx,
+            name,
+            "An empty device"
+        );
 
         await WaitForAsync(registry, g => g.Devices.Any(d => d.DeviceName == name), cts.Token);
     }
@@ -336,7 +444,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-device-churn", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-device-churn",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -344,11 +455,14 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         for (int i = 0; i < 20; i++)
         {
             using PipeWireDeviceProvider provider = PipeWireDeviceProvider.Create(
-                ctx, $"{Unique()}_{i}", $"Churn {i}",
+                ctx,
+                $"{Unique()}_{i}",
+                $"Churn {i}",
                 new Dictionary<SpaParamType, ImmutableArray<SpaObject>>
                 {
                     [SpaParamType.EnumProfile] = Profiles(),
-                });
+                }
+            );
         }
 
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -363,7 +477,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-device-update", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-device-update",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -371,17 +488,26 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         string name = Unique();
 
         using PipeWireDeviceProvider provider = PipeWireDeviceProvider.Create(
-            ctx, name, "A device with profiles",
+            ctx,
+            name,
+            "A device with profiles",
             new Dictionary<SpaParamType, ImmutableArray<SpaObject>>
             {
                 [SpaParamType.EnumProfile] = Profiles(),
-            });
+            }
+        );
 
         PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry, g => g.Devices.Any(d => d.DeviceName == name), cts.Token);
+            registry,
+            g => g.Devices.Any(d => d.DeviceName == name),
+            cts.Token
+        );
         uint id = graph.Devices.First(d => d.DeviceName == name).Id;
 
-        await using var reader = new PipeWireContext("pwnet-device-reread", ConsoleTestLoggerFactory.Instance);
+        await using var reader = new PipeWireContext(
+            "pwnet-device-reread",
+            ConsoleTestLoggerFactory.Instance
+        );
         await reader.StartAsync(cts.Token);
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
@@ -389,7 +515,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await using PipeWireDeviceProxy control = readerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
 
-        Assert.HasCount(2, await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token));
+        Assert.HasCount(
+            2,
+            await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token)
+        );
 
         ImmutableArray<SpaObject> three = [.. Profiles(), Profiles()[0]];
         provider.SetParameter(SpaParamType.EnumProfile, three);
@@ -403,12 +532,18 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         int answered = 0;
         for (int attempt = 0; attempt < 40 && answered != 3; attempt++)
         {
-            answered = (await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token)).Length;
-            if (answered != 3) await Task.Delay(50, cts.Token);
+            answered = (
+                await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token)
+            ).Length;
+            if (answered != 3)
+                await Task.Delay(50, cts.Token);
         }
 
-        Assert.AreEqual(3, answered,
-            "the replacement set is not what the next enumeration answered with");
+        Assert.AreEqual(
+            3,
+            answered,
+            "the replacement set is not what the next enumeration answered with"
+        );
     }
 
     [TestMethod]
@@ -420,7 +555,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-device-props", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-device-props",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -428,7 +566,9 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         string name = Unique();
 
         using PipeWireDeviceProvider provider = PipeWireDeviceProvider.Create(
-            ctx, name, "A device with properties",
+            ctx,
+            name,
+            "A device with properties",
             new Dictionary<SpaParamType, ImmutableArray<SpaObject>>
             {
                 [SpaParamType.EnumProfile] = Profiles(),
@@ -438,12 +578,16 @@ public sealed class DeviceProviderTests : PipeWireTestBase
                 ["device.name"] = "ignored",
                 ["device.description"] = "ignored",
                 ["x-pwnet-test"] = "yes",
-            });
+            }
+        );
 
         Assert.AreEqual(name, provider.Name);
 
         PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry, g => g.Devices.Any(d => d.DeviceName == name), cts.Token);
+            registry,
+            g => g.Devices.Any(d => d.DeviceName == name),
+            cts.Token
+        );
         Assert.IsNotNull(graph.Devices.FirstOrDefault(d => d.DeviceName == name));
     }
 
@@ -456,7 +600,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-device-teardown", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-device-teardown",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -464,17 +611,26 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         string name = Unique();
 
         var provider = PipeWireDeviceProvider.Create(
-            ctx, name, "A device withdrawn mid-read",
+            ctx,
+            name,
+            "A device withdrawn mid-read",
             new Dictionary<SpaParamType, ImmutableArray<SpaObject>>
             {
                 [SpaParamType.EnumProfile] = Profiles(),
-            });
+            }
+        );
 
         PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry, g => g.Devices.Any(d => d.DeviceName == name), cts.Token);
+            registry,
+            g => g.Devices.Any(d => d.DeviceName == name),
+            cts.Token
+        );
         uint id = graph.Devices.First(d => d.DeviceName == name).Id;
 
-        await using var reader = new PipeWireContext("pwnet-device-hammer", ConsoleTestLoggerFactory.Instance);
+        await using var reader = new PipeWireContext(
+            "pwnet-device-hammer",
+            ConsoleTestLoggerFactory.Instance
+        );
         await reader.StartAsync(cts.Token);
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
@@ -492,7 +648,9 @@ public sealed class DeviceProviderTests : PipeWireTestBase
                     await control.EnumerateParametersAsync(SpaParamType.EnumProfile, stop.Token);
                 }
                 catch (OperationCanceledException) { }
-                catch (PipeWireException) { /* the device is going or gone */ }
+                catch (PipeWireException)
+                { /* the device is going or gone */
+                }
                 catch (ObjectDisposedException) { }
             }
         });
@@ -502,7 +660,9 @@ public sealed class DeviceProviderTests : PipeWireTestBase
 
         // Failures above are the device going away. A crash would have ended the host instead.
         await hammer;
-        Assert.ThrowsExactly<ObjectDisposedException>(() => provider.SetParameter(SpaParamType.EnumProfile, []));
+        Assert.ThrowsExactly<ObjectDisposedException>(() =>
+            provider.SetParameter(SpaParamType.EnumProfile, [])
+        );
 
         await registry.WaitForInitialEnumerationAsync(cts.Token);
         Assert.IsTrue(registry.Current.Nodes.Length > 0, "the session stopped answering");
@@ -516,7 +676,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-device-gate", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-device-gate",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -524,17 +687,26 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         string name = Unique();
 
         using PipeWireDeviceProvider provider = PipeWireDeviceProvider.Create(
-            ctx, name, "A device with profiles only",
+            ctx,
+            name,
+            "A device with profiles only",
             new Dictionary<SpaParamType, ImmutableArray<SpaObject>>
             {
                 [SpaParamType.EnumProfile] = Profiles(),
-            });
+            }
+        );
 
         PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry, g => g.Devices.Any(d => d.DeviceName == name), cts.Token);
+            registry,
+            g => g.Devices.Any(d => d.DeviceName == name),
+            cts.Token
+        );
         uint id = graph.Devices.First(d => d.DeviceName == name).Id;
 
-        await using var reader = new PipeWireContext("pwnet-device-gateread", ConsoleTestLoggerFactory.Instance);
+        await using var reader = new PipeWireContext(
+            "pwnet-device-gateread",
+            ConsoleTestLoggerFactory.Instance
+        );
         await reader.StartAsync(cts.Token);
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
@@ -542,8 +714,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await using PipeWireDeviceProxy control = readerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
 
-        PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
-            () => control.EnumerateParametersAsync(SpaParamType.EnumRoute, cts.Token));
+        PipeWireException refused =
+            await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(() =>
+                control.EnumerateParametersAsync(SpaParamType.EnumRoute, cts.Token)
+            );
         Assert.AreEqual(-2, refused.Result);
     }
 
@@ -555,7 +729,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-device-write", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-device-write",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -563,20 +740,32 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         string name = Unique();
 
         using PipeWireDeviceProvider provider = PipeWireDeviceProvider.Create(
-            ctx, name, "A device clients write to",
+            ctx,
+            name,
+            "A device clients write to",
             new Dictionary<SpaParamType, ImmutableArray<SpaObject>>
             {
                 [SpaParamType.EnumProfile] = Profiles(),
-            });
+            }
+        );
 
-        var seen = new System.Collections.Concurrent.ConcurrentBag<(SpaParamType Id, SpaObject? Value)>();
+        var seen = new System.Collections.Concurrent.ConcurrentBag<(
+            SpaParamType Id,
+            SpaObject? Value
+        )>();
         provider.ParameterWritten += (p, id, value) => seen.Add((id, value));
 
         PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry, g => g.Devices.Any(d => d.DeviceName == name), cts.Token);
+            registry,
+            g => g.Devices.Any(d => d.DeviceName == name),
+            cts.Token
+        );
         uint id = graph.Devices.First(d => d.DeviceName == name).Id;
 
-        await using var writer = new PipeWireContext("pwnet-device-writer", ConsoleTestLoggerFactory.Instance);
+        await using var writer = new PipeWireContext(
+            "pwnet-device-writer",
+            ConsoleTestLoggerFactory.Instance
+        );
         await writer.StartAsync(cts.Token);
         await using var writerRegistry = new PipeWireRegistry(writer);
         await writerRegistry.WaitForInitialEnumerationAsync(cts.Token);
@@ -590,8 +779,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         {
             foreach ((SpaParamType got, SpaObject? value) in seen)
             {
-                if (got == SpaParamType.Profile
-                    && (value?[(uint)SpaParamProfile.Index] as SpaInt)?.Value == 1)
+                if (
+                    got == SpaParamType.Profile
+                    && (value?[(uint)SpaParamProfile.Index] as SpaInt)?.Value == 1
+                )
                 {
                     arrived = true;
                     break;
@@ -613,7 +804,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-device-fault", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-device-fault",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -621,17 +815,26 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         string name = Unique();
 
         using PipeWireDeviceProvider provider = PipeWireDeviceProvider.Create(
-            ctx, name, "A device with a faulting subscriber",
+            ctx,
+            name,
+            "A device with a faulting subscriber",
             new Dictionary<SpaParamType, ImmutableArray<SpaObject>>
             {
                 [SpaParamType.EnumProfile] = Profiles(),
-            });
+            }
+        );
 
         PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry, g => g.Devices.Any(d => d.DeviceName == name), cts.Token);
+            registry,
+            g => g.Devices.Any(d => d.DeviceName == name),
+            cts.Token
+        );
         uint id = graph.Devices.First(d => d.DeviceName == name).Id;
 
-        await using var reader = new PipeWireContext("pwnet-device-faultread", ConsoleTestLoggerFactory.Instance);
+        await using var reader = new PipeWireContext(
+            "pwnet-device-faultread",
+            ConsoleTestLoggerFactory.Instance
+        );
         await reader.StartAsync(cts.Token);
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
@@ -645,8 +848,11 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         // which throws inside the dispatch.
         provider.SetParameter(SpaParamType.EnumProfile, Profiles());
 
-        Assert.HasCount(2, await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token),
-            "the binding stopped answering after a faulting handler");
+        Assert.HasCount(
+            2,
+            await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token),
+            "the binding stopped answering after a faulting handler"
+        );
     }
 
     [TestMethod]
@@ -655,7 +861,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-device-vol", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-device-vol",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -663,17 +872,26 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         string name = Unique();
 
         using PipeWireDeviceProvider provider = PipeWireDeviceProvider.Create(
-            ctx, name, "A device volumes are checked against",
+            ctx,
+            name,
+            "A device volumes are checked against",
             new Dictionary<SpaParamType, ImmutableArray<SpaObject>>
             {
                 [SpaParamType.EnumProfile] = Profiles(),
-            });
+            }
+        );
 
         PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry, g => g.Devices.Any(d => d.DeviceName == name), cts.Token);
+            registry,
+            g => g.Devices.Any(d => d.DeviceName == name),
+            cts.Token
+        );
         uint id = graph.Devices.First(d => d.DeviceName == name).Id;
 
-        await using var reader = new PipeWireContext("pwnet-device-volread", ConsoleTestLoggerFactory.Instance);
+        await using var reader = new PipeWireContext(
+            "pwnet-device-volread",
+            ConsoleTestLoggerFactory.Instance
+        );
         await reader.StartAsync(cts.Token);
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
@@ -681,11 +899,18 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await using PipeWireDeviceProxy control = readerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
 
-        await Assert.ThrowsExactlyAsync<ArgumentException>(
-            async () => await control.SetRouteVolumeAsync(0, 0, [], false, cancellationToken: cts.Token));
-        await Assert.ThrowsExactlyAsync<ArgumentException>(
-            async () => await control.SetRouteVolumeAsync(
-                0, 0, new float[] { -1f }, false, cancellationToken: cts.Token));
+        await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+            await control.SetRouteVolumeAsync(0, 0, [], false, cancellationToken: cts.Token)
+        );
+        await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+            await control.SetRouteVolumeAsync(
+                0,
+                0,
+                new float[] { -1f },
+                false,
+                cancellationToken: cts.Token
+            )
+        );
     }
 
     [TestMethod]
@@ -696,7 +921,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-device-routes", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-device-routes",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -704,21 +932,33 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         string name = Unique();
 
         using PipeWireDeviceProvider provider = PipeWireDeviceProvider.Create(
-            ctx, name, "A device with routes",
+            ctx,
+            name,
+            "A device with routes",
             new Dictionary<SpaParamType, ImmutableArray<SpaObject>>
             {
                 [SpaParamType.EnumProfile] = Profiles(),
                 [SpaParamType.EnumRoute] = Routes(),
-            });
+            }
+        );
 
-        var seen = new System.Collections.Concurrent.ConcurrentBag<(SpaParamType Id, SpaObject? Value)>();
+        var seen = new System.Collections.Concurrent.ConcurrentBag<(
+            SpaParamType Id,
+            SpaObject? Value
+        )>();
         provider.ParameterWritten += (p, id, value) => seen.Add((id, value));
 
         PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry, g => g.Devices.Any(d => d.DeviceName == name), cts.Token);
+            registry,
+            g => g.Devices.Any(d => d.DeviceName == name),
+            cts.Token
+        );
         uint id = graph.Devices.First(d => d.DeviceName == name).Id;
 
-        await using var reader = new PipeWireContext("pwnet-device-routeread", ConsoleTestLoggerFactory.Instance);
+        await using var reader = new PipeWireContext(
+            "pwnet-device-routeread",
+            ConsoleTestLoggerFactory.Instance
+        );
         await reader.StartAsync(cts.Token);
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
@@ -726,8 +966,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await using PipeWireDeviceProxy control = readerRegistry.BindDevice(id);
         await control.ReadyAsync(cts.Token);
 
-        ImmutableArray<SpaObject> routes =
-            await control.EnumerateRoutesAsync(cts.Token);
+        ImmutableArray<SpaObject> routes = await control.EnumerateRoutesAsync(cts.Token);
         Assert.HasCount(2, routes, "the device did not answer with the routes it was given");
 
         var names = routes
@@ -737,8 +976,9 @@ public sealed class DeviceProviderTests : PipeWireTestBase
 
         // The active routes are a different parameter this device does not serve: asking for
         // them is refused rather than answered empty.
-        await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
-            () => control.GetActiveRoutesAsync(cts.Token));
+        await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(() =>
+            control.GetActiveRoutesAsync(cts.Token)
+        );
 
         await control.SetRouteAsync(1, 0, cancellationToken: cts.Token);
 
@@ -747,8 +987,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         {
             foreach ((SpaParamType got, SpaObject? value) in seen)
             {
-                if (got == SpaParamType.Route
-                    && (value?[(uint)SpaParamRoute.Index] as SpaInt)?.Value == 1)
+                if (
+                    got == SpaParamType.Route
+                    && (value?[(uint)SpaParamRoute.Index] as SpaInt)?.Value == 1
+                )
                 {
                     arrived = true;
                     break;
@@ -765,12 +1007,14 @@ public sealed class DeviceProviderTests : PipeWireTestBase
     private static async Task<PipeWireGraphSnapshot> WaitForAsync(
         PipeWireRegistry registry,
         Func<PipeWireGraphSnapshot, bool> predicate,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         for (int attempt = 0; attempt < 100; attempt++)
         {
             PipeWireGraphSnapshot graph = registry.Current;
-            if (predicate(graph)) return graph;
+            if (predicate(graph))
+                return graph;
 
             await Task.Delay(100, cancellationToken).ConfigureAwait(false);
         }

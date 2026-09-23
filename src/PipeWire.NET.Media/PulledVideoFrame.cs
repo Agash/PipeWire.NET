@@ -18,7 +18,8 @@ public sealed record PulledVideoPlane(
     SafeDescriptorHandle Descriptor,
     uint Offset,
     int Stride,
-    uint Size);
+    uint Size
+);
 
 /// <summary>
 /// A frame taken out of the stream and handed to a consumer that pulls on its own schedule, rather
@@ -65,7 +66,8 @@ public sealed class PulledVideoFrame : IDisposable
         long? streamPositionNs,
         long delayNs,
         VideoRegion? crop,
-        SpaMetaVideotransformValue transform)
+        SpaMetaVideotransformValue transform
+    )
     {
         Pixels = pixels;
         Planes = planes;

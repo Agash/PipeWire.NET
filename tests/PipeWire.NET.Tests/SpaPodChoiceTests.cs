@@ -31,11 +31,12 @@ public sealed class SpaPodChoiceTests : PipeWireTestBase
     private static byte[] ChoicePod(SpaType childType, uint childSize, params byte[][] values)
     {
         var body = new List<byte>();
-        body.AddRange(BitConverter.GetBytes(0u));          // choiceType (Enum)
-        body.AddRange(BitConverter.GetBytes(0u));          // flags
+        body.AddRange(BitConverter.GetBytes(0u)); // choiceType (Enum)
+        body.AddRange(BitConverter.GetBytes(0u)); // flags
         body.AddRange(BitConverter.GetBytes(childSize));
         body.AddRange(BitConverter.GetBytes((uint)childType));
-        foreach (byte[] v in values) body.AddRange(v);
+        foreach (byte[] v in values)
+            body.AddRange(v);
         return Pod(SpaType.Choice, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(body));
     }
 
@@ -66,10 +67,13 @@ public sealed class SpaPodChoiceTests : PipeWireTestBase
     public void AChoiceOfSeveralModifiers_ReturnsThePreferredOneAndTheCount()
     {
         // The first value is the preferred modifier; more than one means fixation is still needed.
-        byte[] pod = ChoicePod(SpaType.Long, 8,
+        byte[] pod = ChoicePod(
+            SpaType.Long,
+            8,
             BitConverter.GetBytes(0x0100000000000002L),
             BitConverter.GetBytes(0x0100000000000003L),
-            BitConverter.GetBytes(0L));
+            BitConverter.GetBytes(0L)
+        );
 
         var reader = new SpaPodReader(pod);
         Assert.IsTrue(reader.TryReadModifier(out long first, out int count));
@@ -103,7 +107,9 @@ public sealed class SpaPodChoiceTests : PipeWireTestBase
     [TestMethod]
     public void ANonChoiceNonLongPod_IsDeclinedWithoutConsuming()
     {
-        foreach (SpaType type in (SpaType[])[SpaType.Int, SpaType.Id, SpaType.Rectangle, SpaType.Float])
+        foreach (
+            SpaType type in (SpaType[])[SpaType.Int, SpaType.Id, SpaType.Rectangle, SpaType.Float]
+        )
         {
             var reader = new SpaPodReader(Pod(type, new byte[8]));
             Assert.IsFalse(reader.TryReadModifier(out _, out _), $"type {type} is not a modifier");
@@ -126,20 +132,25 @@ public sealed class SpaPodChoiceTests : PipeWireTestBase
     {
         // Hand-build a choice whose declared size promises values that are not there.
         byte[] pod = ChoicePod(SpaType.Long, 8, BitConverter.GetBytes(1L));
-        BitConverter.TryWriteBytes(pod.AsSpan(0, 4), 16u + 80u);   // claim ten values
+        BitConverter.TryWriteBytes(pod.AsSpan(0, 4), 16u + 80u); // claim ten values
 
         var reader = new SpaPodReader(pod);
-        Assert.IsFalse(reader.TryReadModifier(out _, out _),
-            "a choice may not promise more values than the buffer holds");
+        Assert.IsFalse(
+            reader.TryReadModifier(out _, out _),
+            "a choice may not promise more values than the buffer holds"
+        );
         Assert.AreEqual(0, reader.Position);
     }
 
     [TestMethod]
     public void AChoiceWithNoValuesAtAll_IsDeclined()
     {
-        byte[] pod = ChoicePod(SpaType.Long, 8);   // header only, zero values
+        byte[] pod = ChoicePod(SpaType.Long, 8); // header only, zero values
         var reader = new SpaPodReader(pod);
-        Assert.IsFalse(reader.TryReadModifier(out _, out _), "a choice of nothing offers no modifier");
+        Assert.IsFalse(
+            reader.TryReadModifier(out _, out _),
+            "a choice of nothing offers no modifier"
+        );
     }
 
     [TestMethod]
@@ -182,8 +193,11 @@ public sealed class SpaPodChoiceTests : PipeWireTestBase
 
         var reader = new SpaPodReader(pod);
         Assert.IsFalse(reader.TryUnwrapChoice(out _), "a plain value is not a choice");
-        Assert.AreEqual((640u, 480u), reader.ReadRectangle(),
-            "declining must leave the pod fully readable");
+        Assert.AreEqual(
+            (640u, 480u),
+            reader.ReadRectangle(),
+            "declining must leave the pod fully readable"
+        );
     }
 
     [TestMethod]
@@ -193,7 +207,7 @@ public sealed class SpaPodChoiceTests : PipeWireTestBase
         for (int cut = 8; cut < full.Length; cut++)
         {
             var reader = new SpaPodReader(full.AsSpan(0, cut).ToArray());
-            _ = reader.TryUnwrapChoice(out _);   // must not throw at any cut point
+            _ = reader.TryUnwrapChoice(out _); // must not throw at any cut point
         }
     }
 
@@ -205,15 +219,16 @@ public sealed class SpaPodChoiceTests : PipeWireTestBase
         BitConverter.TryWriteBytes(pod.AsSpan(16, 4), 4096u);
 
         var reader = new SpaPodReader(pod);
-        Assert.IsFalse(reader.TryUnwrapChoice(out _),
-            "a child larger than the buffer must not produce a reader over it");
+        Assert.IsFalse(
+            reader.TryUnwrapChoice(out _),
+            "a child larger than the buffer must not produce a reader over it"
+        );
     }
 
     [TestMethod]
     public void AChoiceOfIds_UnwrapsToTheFirstId()
     {
-        byte[] pod = ChoicePod(SpaType.Id, 4,
-            BitConverter.GetBytes(7u), BitConverter.GetBytes(9u));
+        byte[] pod = ChoicePod(SpaType.Id, 4, BitConverter.GetBytes(7u), BitConverter.GetBytes(9u));
 
         var reader = new SpaPodReader(pod);
         Assert.IsTrue(reader.TryUnwrapChoice(out SpaPodReader inner));

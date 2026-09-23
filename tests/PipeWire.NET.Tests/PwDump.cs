@@ -32,11 +32,16 @@ internal sealed record PwDump(IReadOnlyList<PwDump.Entry> Entries)
 
     /// <summary>Runs pw-dump and parses it.</summary>
     public static async Task<PwDump> CaptureAsync(
-        CancellationToken cancellationToken, TimeSpan? timeout = null)
+        CancellationToken cancellationToken,
+        TimeSpan? timeout = null
+    )
     {
         CliTool tool = CliTool.Require("pw-dump");
         (int exit, string stdout, string stderr) = await tool.RunAsync(
-            [], cancellationToken, timeout ?? TimeSpan.FromSeconds(5));
+            [],
+            cancellationToken,
+            timeout ?? TimeSpan.FromSeconds(5)
+        );
 
         if (exit != 0)
             throw new InvalidOperationException($"pw-dump exited {exit}: {stderr}");
@@ -51,23 +56,30 @@ internal sealed record PwDump(IReadOnlyList<PwDump.Entry> Entries)
         using JsonDocument doc = JsonDocument.Parse(json);
         foreach (JsonElement element in doc.RootElement.EnumerateArray())
         {
-            if (!element.TryGetProperty("id", out JsonElement idElement)) continue;
-            if (!element.TryGetProperty("type", out JsonElement typeElement)) continue;
+            if (!element.TryGetProperty("id", out JsonElement idElement))
+                continue;
+            if (!element.TryGetProperty("type", out JsonElement typeElement))
+                continue;
 
             var props = new Dictionary<string, string>(StringComparer.Ordinal);
-            if (element.TryGetProperty("info", out JsonElement info)
+            if (
+                element.TryGetProperty("info", out JsonElement info)
                 && info.TryGetProperty("props", out JsonElement propsElement)
-                && propsElement.ValueKind == JsonValueKind.Object)
+                && propsElement.ValueKind == JsonValueKind.Object
+            )
             {
                 foreach (JsonProperty p in propsElement.EnumerateObject())
                 {
-                    props[p.Name] = p.Value.ValueKind == JsonValueKind.String
-                        ? p.Value.GetString() ?? string.Empty
-                        : p.Value.ToString();
+                    props[p.Name] =
+                        p.Value.ValueKind == JsonValueKind.String
+                            ? p.Value.GetString() ?? string.Empty
+                            : p.Value.ToString();
                 }
             }
 
-            entries.Add(new Entry(idElement.GetUInt32(), typeElement.GetString() ?? string.Empty, props));
+            entries.Add(
+                new Entry(idElement.GetUInt32(), typeElement.GetString() ?? string.Empty, props)
+            );
         }
 
         return new PwDump(entries);

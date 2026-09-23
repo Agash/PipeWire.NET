@@ -45,8 +45,13 @@ public sealed class ControlContractTests : PipeWireTestBase
     {
         // The array's child type is what says how the daemon reads the values that follow. Declared
         // as anything else, the bytes are the same length and mean something different.
-        var pod = Props(new SpaPodProperty(SpaProp.ChannelVolumes, 0,
-            new SpaArray(SpaType.Float, [new SpaFloat(0.25f), new SpaFloat(0.75f)])));
+        var pod = Props(
+            new SpaPodProperty(
+                SpaProp.ChannelVolumes,
+                0,
+                new SpaArray(SpaType.Float, [new SpaFloat(0.25f), new SpaFloat(0.75f)])
+            )
+        );
 
         Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(pod), out SpaValue? read));
         var array = (SpaArray)((SpaObject)read!)[SpaProp.ChannelVolumes]!;
@@ -64,15 +69,23 @@ public sealed class ControlContractTests : PipeWireTestBase
         // it does not have.
         var props = Props(
             new SpaPodProperty(SpaProp.Mute, 0, new SpaBool(false)),
-            new SpaPodProperty(SpaProp.ChannelVolumes, 0, new SpaArray(SpaType.Float, [new SpaFloat(0.4f)])));
+            new SpaPodProperty(
+                SpaProp.ChannelVolumes,
+                0,
+                new SpaArray(SpaType.Float, [new SpaFloat(0.4f)])
+            )
+        );
 
-        var route = new SpaObject(SpaType.ObjectParamRoute, SpaParamType.Route,
-        [
-            new SpaPodProperty(SpaParamRoute.Index, 0, new SpaInt(2)),
-            new SpaPodProperty(SpaParamRoute.Device, 0, new SpaInt(1)),
-            new SpaPodProperty(SpaParamRoute.Props, 0, props),
-            new SpaPodProperty(SpaParamRoute.Save, 0, new SpaBool(true)),
-        ]);
+        var route = new SpaObject(
+            SpaType.ObjectParamRoute,
+            SpaParamType.Route,
+            [
+                new SpaPodProperty(SpaParamRoute.Index, 0, new SpaInt(2)),
+                new SpaPodProperty(SpaParamRoute.Device, 0, new SpaInt(1)),
+                new SpaPodProperty(SpaParamRoute.Props, 0, props),
+                new SpaPodProperty(SpaParamRoute.Save, 0, new SpaBool(true)),
+            ]
+        );
 
         Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(route), out SpaValue? read));
         var parsed = (SpaObject)read!;
@@ -81,8 +94,11 @@ public sealed class ControlContractTests : PipeWireTestBase
         Assert.AreEqual(new SpaInt(2), parsed[SpaParamRoute.Index]);
 
         var nested = (SpaObject)parsed[SpaParamRoute.Props]!;
-        Assert.AreEqual(SpaType.ObjectProps, nested.ObjectType,
-            "the nested mixer must still be a Props object");
+        Assert.AreEqual(
+            SpaType.ObjectProps,
+            nested.ObjectType,
+            "the nested mixer must still be a Props object"
+        );
         Assert.AreEqual(new SpaBool(false), nested[SpaProp.Mute]);
     }
 
@@ -90,8 +106,11 @@ public sealed class ControlContractTests : PipeWireTestBase
     public void AProfilePod_CarriesOnlyTheIndex()
     {
         // Switching profile is one field. Sending more risks the daemon matching on something else.
-        var pod = new SpaObject(SpaType.ObjectParamProfile, SpaParamType.Profile,
-            [new SpaPodProperty(SpaParamProfile.Index, 0, new SpaInt(3))]);
+        var pod = new SpaObject(
+            SpaType.ObjectParamProfile,
+            SpaParamType.Profile,
+            [new SpaPodProperty(SpaParamProfile.Index, 0, new SpaInt(3))]
+        );
 
         Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(pod), out SpaValue? read));
         var parsed = (SpaObject)read!;
@@ -108,7 +127,11 @@ public sealed class ControlContractTests : PipeWireTestBase
         // A node advertises Props as both and Format as write-only. Collapsing the two into
         // "supported" would make enumerating Format look legal, and it is an error.
         var readable = new PipeWireParameterInfo(SpaParamType.Props, CanRead: true, CanWrite: true);
-        var writeOnly = new PipeWireParameterInfo(SpaParamType.Format, CanRead: false, CanWrite: true);
+        var writeOnly = new PipeWireParameterInfo(
+            SpaParamType.Format,
+            CanRead: false,
+            CanWrite: true
+        );
 
         Assert.IsTrue(readable.CanRead && readable.CanWrite);
         Assert.IsFalse(writeOnly.CanRead);
@@ -140,14 +163,22 @@ public sealed class ControlContractTests : PipeWireTestBase
     [TestMethod]
     public void APermissionEntry_IsAbsoluteAndCarriesTheObjectItIsAbout()
     {
-        var confine = new PipeWireObjectPermission(PipeWireClientProxy.AnyObject, PipeWirePermissions.None);
-        var grant = new PipeWireObjectPermission(42, PipeWirePermissions.Read | PipeWirePermissions.Execute);
+        var confine = new PipeWireObjectPermission(
+            PipeWireClientProxy.AnyObject,
+            PipeWirePermissions.None
+        );
+        var grant = new PipeWireObjectPermission(
+            42,
+            PipeWirePermissions.Read | PipeWirePermissions.Execute
+        );
 
         Assert.AreEqual(uint.MaxValue, confine.ObjectId, "the catch-all id is the wildcard");
         Assert.AreEqual(PipeWirePermissions.None, confine.Permissions);
         Assert.IsTrue(grant.Permissions.HasFlag(PipeWirePermissions.Read));
-        Assert.IsFalse(grant.Permissions.HasFlag(PipeWirePermissions.Write),
-            "a permission set is exactly what was asked for, not a superset");
+        Assert.IsFalse(
+            grant.Permissions.HasFlag(PipeWirePermissions.Write),
+            "a permission set is exactly what was asked for, not a superset"
+        );
     }
 
     [TestMethod]
@@ -177,7 +208,12 @@ public sealed class ControlContractTests : PipeWireTestBase
     [TestMethod]
     public void AMetadataEntryReportsRemovalAsANullValue_AndKeepsItsSubject()
     {
-        var removal = new PipeWireMetadataEntry(PipeWireMetadataProxy.SubjectCore, "default.audio.sink", null, null);
+        var removal = new PipeWireMetadataEntry(
+            PipeWireMetadataProxy.SubjectCore,
+            "default.audio.sink",
+            null,
+            null
+        );
 
         Assert.IsNull(removal.Value, "a removal is a null value, not an empty string");
         Assert.IsNull(removal.NameValue);
@@ -189,15 +225,39 @@ public sealed class ControlContractTests : PipeWireTestBase
     {
         // The daemon writes { "name": "..." } rather than a bare string, and writes whatever it likes
         // into other keys. Parsing must not throw on either.
-        Assert.AreEqual("alsa_output.x",
-            new PipeWireMetadataEntry(0, "k", "Spa:String:JSON", """{ "name": "alsa_output.x" }""").NameValue);
+        Assert.AreEqual(
+            "alsa_output.x",
+            new PipeWireMetadataEntry(
+                0,
+                "k",
+                "Spa:String:JSON",
+                """{ "name": "alsa_output.x" }"""
+            ).NameValue
+        );
 
-        foreach (string? junk in (string?[])
-                 [null, "", " ", "not json", "{", "}", "[]", "[1,2]", "\"bare\"", "{\"other\":1}",
-                  "{\"name\":42}", "{\"name\":null}", "{\"name\":{}}"])
+        foreach (
+            string? junk in (string?[])
+                [
+                    null,
+                    "",
+                    " ",
+                    "not json",
+                    "{",
+                    "}",
+                    "[]",
+                    "[1,2]",
+                    "\"bare\"",
+                    "{\"other\":1}",
+                    "{\"name\":42}",
+                    "{\"name\":null}",
+                    "{\"name\":{}}",
+                ]
+        )
         {
-            Assert.IsNull(new PipeWireMetadataEntry(0, "k", null, junk).NameValue,
-                $"'{junk ?? "null"}' must not yield a name");
+            Assert.IsNull(
+                new PipeWireMetadataEntry(0, "k", null, junk).NameValue,
+                $"'{junk ?? "null"}' must not yield a name"
+            );
         }
     }
 
@@ -208,11 +268,15 @@ public sealed class ControlContractTests : PipeWireTestBase
         // delimit strings has to survive being written into one.
         foreach (string awkward in (string[])["a\"b", @"a\b", "a\"b\\c", "\\", "\"\"\""])
         {
-            string json = $$"""{ "name": "{{awkward.Replace("\\", "\\\\", StringComparison.Ordinal)
+            string json =
+                $$"""{ "name": "{{awkward.Replace("\\", "\\\\", StringComparison.Ordinal)
                                                    .Replace("\"", "\\\"", StringComparison.Ordinal)}}" }""";
 
-            Assert.AreEqual(awkward, new PipeWireMetadataEntry(0, "k", null, json).NameValue,
-                $"'{awkward}' did not survive");
+            Assert.AreEqual(
+                awkward,
+                new PipeWireMetadataEntry(0, "k", null, json).NameValue,
+                $"'{awkward}' did not survive"
+            );
         }
     }
 
@@ -247,8 +311,19 @@ public sealed class ControlContractTests : PipeWireTestBase
     {
         // Filtered on first read and kept, like the id indexes. Rebuilding per call would make a UI
         // that reads them each frame allocate for nothing.
-        var device = new PipeWireDevice(10, PipeWirePermissions.None, 3,
-            "card", null, null, "alsa", null, null, null, null);
+        var device = new PipeWireDevice(
+            10,
+            PipeWirePermissions.None,
+            3,
+            "card",
+            null,
+            null,
+            "alsa",
+            null,
+            null,
+            null,
+            null
+        );
         var graph = new PipeWireGraphSnapshot(1, [], [], [], [device]);
 
         ImmutableArray<PipeWireDevice> first = graph.Devices;
@@ -257,8 +332,9 @@ public sealed class ControlContractTests : PipeWireTestBase
         Assert.AreEqual(1, first.Length);
         Assert.IsTrue(
             System.Runtime.InteropServices.ImmutableCollectionsMarshal.AsArray(first)
-            == System.Runtime.InteropServices.ImmutableCollectionsMarshal.AsArray(second),
-            "the filtered collection must be built once and kept");
+                == System.Runtime.InteropServices.ImmutableCollectionsMarshal.AsArray(second),
+            "the filtered collection must be built once and kept"
+        );
     }
 
     [TestMethod]
@@ -268,8 +344,31 @@ public sealed class ControlContractTests : PipeWireTestBase
         // dispatching without a type test.
         IPipeWireObject[] objects =
         [
-            new PipeWireDevice(1, PipeWirePermissions.None, 3, null, null, null, null, null, null, null, null),
-            new PipeWireClient(2, PipeWirePermissions.None, 3, null, null, null, null, null, null, null),
+            new PipeWireDevice(
+                1,
+                PipeWirePermissions.None,
+                3,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            ),
+            new PipeWireClient(
+                2,
+                PipeWirePermissions.None,
+                3,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            ),
             new PipeWireFactory(3, PipeWirePermissions.None, 3, null, null, null, null),
             new PipeWireModule(4, PipeWirePermissions.None, 3, null, null, null, null),
             new PipeWireMetadata(5, PipeWirePermissions.None, 3, null),
@@ -290,21 +389,39 @@ public sealed class ControlContractTests : PipeWireTestBase
     {
         // A racing first touch must build the collection once and publish it whole: two threads
         // arriving together must not each build or see a half-filled array.
-        var devices = Enumerable.Range(0, 50).Select(i =>
-            new PipeWireDevice((uint)i, PipeWirePermissions.None, 3,
-                $"dev{i}", null, null, "alsa", null, null, null, null));
+        var devices = Enumerable
+            .Range(0, 50)
+            .Select(i => new PipeWireDevice(
+                (uint)i,
+                PipeWirePermissions.None,
+                3,
+                $"dev{i}",
+                null,
+                null,
+                "alsa",
+                null,
+                null,
+                null,
+                null
+            ));
 
         var snapshot = new PipeWireGraphSnapshot(1, [], [], [], devices);
 
         var faults = new System.Collections.Concurrent.ConcurrentQueue<string>();
-        Parallel.For(0, 64, _ =>
-        {
-            ImmutableArray<PipeWireDevice> read = snapshot.Devices;
-            if (read.Length != 50) faults.Enqueue($"saw {read.Length} devices");
+        Parallel.For(
+            0,
+            64,
+            _ =>
+            {
+                ImmutableArray<PipeWireDevice> read = snapshot.Devices;
+                if (read.Length != 50)
+                    faults.Enqueue($"saw {read.Length} devices");
 
-            ImmutableArray<PipeWireClient> clients = snapshot.Clients;
-            if (clients.Length != 0) faults.Enqueue($"saw {clients.Length} clients");
-        });
+                ImmutableArray<PipeWireClient> clients = snapshot.Clients;
+                if (clients.Length != 0)
+                    faults.Enqueue($"saw {clients.Length} clients");
+            }
+        );
 
         Assert.IsTrue(faults.IsEmpty, string.Join("; ", faults));
     }

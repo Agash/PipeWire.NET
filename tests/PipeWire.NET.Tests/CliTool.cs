@@ -33,19 +33,23 @@ internal sealed class CliTool
         if (Environment.GetEnvironmentVariable(envKey) is { Length: > 0 } overridden)
             return File.Exists(overridden) ? new CliTool(name, overridden) : null;
 
-        foreach (string dir in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
-                     .Split(System.IO.Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        foreach (
+            string dir in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(
+                System.IO.Path.PathSeparator,
+                StringSplitOptions.RemoveEmptyEntries
+            )
+        )
         {
             string candidate = System.IO.Path.Combine(dir, name);
-            if (File.Exists(candidate)) return new CliTool(name, candidate);
+            if (File.Exists(candidate))
+                return new CliTool(name, candidate);
         }
 
         return null;
     }
 
     /// <summary>Resolves a tool, or skips the calling test when it is not installed.</summary>
-    public static CliTool Require(string name) =>
-        Find(name) ?? SkipBecauseMissing(name);
+    public static CliTool Require(string name) => Find(name) ?? SkipBecauseMissing(name);
 
     private static CliTool SkipBecauseMissing(string name)
     {
@@ -57,7 +61,8 @@ internal sealed class CliTool
         {
             Assert.Fail(
                 $"{name} is not installed, and PWNET_REQUIRE_TOOLS is set. Either install it in the "
-                + "image or drop the variable, but do not let this category stop running unnoticed.");
+                    + "image or drop the variable, but do not let this category stop running unnoticed."
+            );
         }
 
         Assert.Inconclusive($"{name} is not installed.");
@@ -67,7 +72,10 @@ internal sealed class CliTool
     /// <summary>Runs the tool to completion and captures both streams.</summary>
     /// <exception cref="TimeoutException">It did not exit within <paramref name="timeout"/>.</exception>
     public async Task<(int ExitCode, string Stdout, string Stderr)> RunAsync(
-        string[] args, CancellationToken cancellationToken, TimeSpan? timeout = null)
+        string[] args,
+        CancellationToken cancellationToken,
+        TimeSpan? timeout = null
+    )
     {
         var psi = new ProcessStartInfo(Path)
         {
@@ -75,10 +83,11 @@ internal sealed class CliTool
             RedirectStandardError = true,
             UseShellExecute = false,
         };
-        foreach (string a in args) psi.ArgumentList.Add(a);
+        foreach (string a in args)
+            psi.ArgumentList.Add(a);
 
-        using Process proc = Process.Start(psi)
-            ?? throw new InvalidOperationException($"failed to start {Path}");
+        using Process proc =
+            Process.Start(psi) ?? throw new InvalidOperationException($"failed to start {Path}");
 
         Task<string> stdout = proc.StandardOutput.ReadToEndAsync(cancellationToken);
         Task<string> stderr = proc.StandardError.ReadToEndAsync(cancellationToken);
@@ -93,9 +102,16 @@ internal sealed class CliTool
         {
             // Killed on any cancellation, not only the timeout: a child left running outlives the
             // test and interferes with every one after it.
-            try { proc.Kill(entireProcessTree: true); } catch (InvalidOperationException) { /* already gone */ }
+            try
+            {
+                proc.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            { /* already gone */
+            }
 
-            if (cancellationToken.IsCancellationRequested) throw;
+            if (cancellationToken.IsCancellationRequested)
+                throw;
             throw new TimeoutException($"{Name} did not exit");
         }
 
@@ -111,7 +127,8 @@ internal sealed class CliTool
             RedirectStandardError = true,
             UseShellExecute = false,
         };
-        foreach (string a in args) psi.ArgumentList.Add(a);
+        foreach (string a in args)
+            psi.ArgumentList.Add(a);
 
         return Process.Start(psi) ?? throw new InvalidOperationException($"failed to start {Path}");
     }

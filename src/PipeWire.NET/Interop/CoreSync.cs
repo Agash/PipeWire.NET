@@ -19,7 +19,9 @@ namespace PipeWire.NET.Interop;
 internal sealed class CoreSync : IDisposable
 {
     private readonly PipeWireContext _ctx;
-    private readonly TaskCompletionSource _done = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _done = new(
+        TaskCreationOptions.RunContinuationsAsynchronously
+    );
 
     private unsafe pw_core_events* _events;
     private unsafe spa_hook* _hook;
@@ -76,7 +78,10 @@ internal sealed class CoreSync : IDisposable
     /// </param>
     /// <param name="cancellationToken">Abandons the wait.</param>
     internal static Task RoundTripAsync(
-        PipeWireContext ctx, Func<int> request, CancellationToken cancellationToken)
+        PipeWireContext ctx,
+        Func<int> request,
+        CancellationToken cancellationToken
+    )
     {
         var sync = new CoreSync(ctx);
         try
@@ -99,7 +104,11 @@ internal sealed class CoreSync : IDisposable
     /// For requests already issued. Prefer the overload taking the request itself, which cannot
     /// miss a refusal answered before the listener went on.
     /// </remarks>
-    internal static Task RoundTripAsync(PipeWireContext ctx, int? watchedSeq, CancellationToken cancellationToken)
+    internal static Task RoundTripAsync(
+        PipeWireContext ctx,
+        int? watchedSeq,
+        CancellationToken cancellationToken
+    )
     {
         var sync = new CoreSync(ctx)
         {
@@ -148,7 +157,8 @@ internal sealed class CoreSync : IDisposable
         // that attaches its listener to a core that will never speak again, so there is no event
         // left to fault it and it would wait for its caller's token instead. The context records
         // the fault when it arrives; this is where a later request learns of it.
-        if (_ctx.ConnectionFault is { } dead) throw dead;
+        if (_ctx.ConnectionFault is { } dead)
+            throw dead;
 
         AllocateListener();
 
@@ -157,7 +167,12 @@ internal sealed class CoreSync : IDisposable
             // Both are checked. Without the listener nothing completes the wait, and without the
             // sync no done event is coming - either way the caller waits for an answer that cannot
             // arrive, and only its cancellation token ever ends it.
-            int added = Native.pw_core_add_listener(_ctx.CoreHandle, _hook, _events, (void*)GCHandle.ToIntPtr(_self));
+            int added = Native.pw_core_add_listener(
+                _ctx.CoreHandle,
+                _hook,
+                _events,
+                (void*)GCHandle.ToIntPtr(_self)
+            );
             if (added < 0)
                 throw new PipeWireInteropException("pw_core_add_listener", added);
 
@@ -175,7 +190,12 @@ internal sealed class CoreSync : IDisposable
         {
             // Attached before the request is issued, so nothing the daemon says about it can arrive
             // before there is somebody listening.
-            int added = Native.pw_core_add_listener(_ctx.CoreHandle, _hook, _events, (void*)GCHandle.ToIntPtr(_self));
+            int added = Native.pw_core_add_listener(
+                _ctx.CoreHandle,
+                _hook,
+                _events,
+                (void*)GCHandle.ToIntPtr(_self)
+            );
             if (added < 0)
                 throw new PipeWireInteropException("pw_core_add_listener", added);
 
@@ -201,12 +221,24 @@ internal sealed class CoreSync : IDisposable
             // The caller's token ends the wait early; the context's ends it at all. A round-trip
             // completes when the daemon answers on the loop, so once the context is disposing there
             // is no answer coming - and a caller that passed no token of its own would wait forever.
-            using (cancellationToken.UnsafeRegister(static s => ((CoreSync)s!)._done.TrySetCanceled(), this))
-            using (_ctx.Shutdown.UnsafeRegister(
-                static s => ((CoreSync)s!)._done.TrySetException(
-                    new ObjectDisposedException(nameof(PipeWireContext),
-                        "the context was disposed while a round-trip to the daemon was outstanding.")),
-                this))
+            using (
+                cancellationToken.UnsafeRegister(
+                    static s => ((CoreSync)s!)._done.TrySetCanceled(),
+                    this
+                )
+            )
+            using (
+                _ctx.Shutdown.UnsafeRegister(
+                    static s =>
+                        ((CoreSync)s!)._done.TrySetException(
+                            new ObjectDisposedException(
+                                nameof(PipeWireContext),
+                                "the context was disposed while a round-trip to the daemon was outstanding."
+                            )
+                        ),
+                    this
+                )
+            )
             {
                 await _done.Task.ConfigureAwait(false);
             }
@@ -224,8 +256,10 @@ internal sealed class CoreSync : IDisposable
         // did not allocate, and an exception escaping a native frame aborts rather than unwinding.
         try
         {
-            if (data is null) return;
-            if (GCHandle.FromIntPtr((nint)data).Target is not CoreSync self) return;
+            if (data is null)
+                return;
+            if (GCHandle.FromIntPtr((nint)data).Target is not CoreSync self)
+                return;
 
             string text = DaemonText.String(message) ?? $"code {res}";
 
@@ -236,7 +270,8 @@ internal sealed class CoreSync : IDisposable
             if (IsConnectionFatal(res))
             {
                 self._done.TrySetException(
-                    new PipeWireConnectionClosedException("request", res, id, text));
+                    new PipeWireConnectionClosedException("request", res, id, text)
+                );
                 return;
             }
 
@@ -247,19 +282,24 @@ internal sealed class CoreSync : IDisposable
             // for an answer that had already come.
             if (Native.SPA_RESULT_ASYNC_SEQ(seq) == Native.SPA_RESULT_ASYNC_SEQ(self._seq))
             {
-                self._done.TrySetException(new PipeWireRequestRefusedException("sync", res, id, text));
+                self._done.TrySetException(
+                    new PipeWireRequestRefusedException("sync", res, id, text)
+                );
                 return;
             }
 
             // Past here it is an answer to a request, so a barrier has nothing to report.
-            if (!self._carriesRequest) return;
+            if (!self._carriesRequest)
+                return;
 
             int watched = self._watchedSeq;
 
             // Compared with the async bit masked off at both ends: the value handed to us came from
             // a request's return code, and what arrives here carries the tag.
-            if (watched != NoWatchedSequence
-                && Native.SPA_RESULT_ASYNC_SEQ(seq) != Native.SPA_RESULT_ASYNC_SEQ(watched))
+            if (
+                watched != NoWatchedSequence
+                && Native.SPA_RESULT_ASYNC_SEQ(seq) != Native.SPA_RESULT_ASYNC_SEQ(watched)
+            )
             {
                 return;
             }
@@ -269,7 +309,9 @@ internal sealed class CoreSync : IDisposable
             // error in this window is taken as its own. Two such requests overlapping on one
             // connection can cross-attribute; reporting the wrong operation beats the alternative,
             // which is a refused operation returning success.
-            self._done.TrySetException(new PipeWireRequestRefusedException("request", res, id, text));
+            self._done.TrySetException(
+                new PipeWireRequestRefusedException("request", res, id, text)
+            );
         }
         catch (Exception)
         {
@@ -285,20 +327,25 @@ internal sealed class CoreSync : IDisposable
     /// EBADF is deliberately absent: it also means a descriptor the caller passed was bad, which
     /// is a refusal.
     /// </remarks>
-    private static bool IsConnectionFatal(int result) => result is
-        -NativeLibc.EPIPE or
-        -NativeLibc.ECONNABORTED or
-        -NativeLibc.ECONNRESET or
-        -NativeLibc.ENOTCONN;
+    private static bool IsConnectionFatal(int result) =>
+        result
+            is -NativeLibc.EPIPE
+                or -NativeLibc.ECONNABORTED
+                or -NativeLibc.ECONNRESET
+                or -NativeLibc.ENOTCONN;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnDone(void* data, uint id, int seq)
     {
         try
         {
-            if (data is null) return;
-            if (GCHandle.FromIntPtr((nint)data).Target is CoreSync self &&
-                id == NativeConstants.PW_ID_CORE && seq == self._seq)
+            if (data is null)
+                return;
+            if (
+                GCHandle.FromIntPtr((nint)data).Target is CoreSync self
+                && id == NativeConstants.PW_ID_CORE
+                && seq == self._seq
+            )
                 self._done.TrySetResult();
         }
         catch (Exception)
@@ -309,7 +356,8 @@ internal sealed class CoreSync : IDisposable
 
     public unsafe void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
 
         // Detached through this object's own loop reference rather than the context's lock. A
         // disposed context refuses its lock while the native core is still alive and still holding
@@ -333,9 +381,18 @@ internal sealed class CoreSync : IDisposable
         }
         finally
         {
-            if (_hook is not null) { NativeMemory.Free(_hook); _hook = null; }
-            if (_events is not null) { NativeMemory.Free(_events); _events = null; }
-            if (_self.IsAllocated) _self.Free();
+            if (_hook is not null)
+            {
+                NativeMemory.Free(_hook);
+                _hook = null;
+            }
+            if (_events is not null)
+            {
+                NativeMemory.Free(_events);
+                _events = null;
+            }
+            if (_self.IsAllocated)
+                _self.Free();
 
             if (_loopReferenced)
             {

@@ -16,6 +16,7 @@ internal sealed class GstTestSource : IAsyncDisposable
     private const string GstLaunch = "/usr/bin/gst-launch-1.0";
 
     private readonly Process[] _procs;
+
     private GstTestSource(params Process[] procs) => _procs = procs;
 
     /// <summary>
@@ -29,25 +30,33 @@ internal sealed class GstTestSource : IAsyncDisposable
 
     private static bool ComputeAvailable()
     {
-        if (!OperatingSystem.IsLinux() || !File.Exists(GstLaunch)) return false;
+        if (!OperatingSystem.IsLinux() || !File.Exists(GstLaunch))
+            return false;
         try
         {
-            using var p = Process.Start(new ProcessStartInfo("/usr/bin/gst-inspect-1.0", "pipewiresink")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            })!;
+            using var p = Process.Start(
+                new ProcessStartInfo("/usr/bin/gst-inspect-1.0", "pipewiresink")
+                {
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                }
+            )!;
             p.WaitForExit(5000);
             return p.ExitCode == 0;
         }
-        catch { return false; }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>Skips the calling test (Inconclusive) when GStreamer/pipewiresink isn't present.</summary>
     public static void RequireGStreamer()
     {
         if (!IsAvailable)
-            Assert.Inconclusive("GStreamer (gst-launch-1.0 + pipewiresink) not available - skipping real-source test.");
+            Assert.Inconclusive(
+                "GStreamer (gst-launch-1.0 + pipewiresink) not available - skipping real-source test."
+            );
     }
 
     /// <summary>
@@ -56,8 +65,12 @@ internal sealed class GstTestSource : IAsyncDisposable
     /// e.g. <c>videotestsrc is-live=true ! video/x-raw,format=BGRA,width=320,height=240,framerate=30/1</c>.
     /// </summary>
     public static async Task<GstTestSource> StartAsync(
-        PipeWireContext ctx, string nodeName, string pipelineHead, string mediaClass,
-        TimeSpan? timeout = null)
+        PipeWireContext ctx,
+        string nodeName,
+        string pipelineHead,
+        string mediaClass,
+        TimeSpan? timeout = null
+    )
     {
         var psi = new ProcessStartInfo(GstLaunch)
         {
@@ -74,19 +87,28 @@ internal sealed class GstTestSource : IAsyncDisposable
         // an Audio/Source branch advertises a node but never serves samples (a video source happens to
         // still produce), so an audio capture connects, reaches Streaming, yet no buffer ever flows.
         psi.ArgumentList.Add("mode=provide");
-        psi.ArgumentList.Add($"stream-properties=props,node.name={nodeName},media.class={mediaClass}");
+        psi.ArgumentList.Add(
+            $"stream-properties=props,node.name={nodeName},media.class={mediaClass}"
+        );
 
-        var proc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start gst-launch-1.0.");
+        var proc =
+            Process.Start(psi)
+            ?? throw new InvalidOperationException("Failed to start gst-launch-1.0.");
         var source = new GstTestSource(proc);
         try
         {
-            PipeWireNode? node = await WaitForNodeAsync(ctx, nodeName, timeout ?? TimeSpan.FromSeconds(8));
+            PipeWireNode? node = await WaitForNodeAsync(
+                ctx,
+                nodeName,
+                timeout ?? TimeSpan.FromSeconds(8)
+            );
             if (node is null)
             {
                 string err = await proc.StandardError.ReadToEndAsync();
                 await source.DisposeAsync();
                 throw new InvalidOperationException(
-                    $"gst node '{nodeName}' did not appear. gst stderr:\n{err}");
+                    $"gst node '{nodeName}' did not appear. gst stderr:\n{err}"
+                );
             }
 
             // Assigned here or not at all: the property is how a consumer targets this producer by
@@ -117,7 +139,8 @@ internal sealed class GstTestSource : IAsyncDisposable
         PipeWireContext ctx,
         (string Head, string Node) video,
         (string Head, string Node) audio,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null
+    )
     {
         Process videoProc = StartBranch(video.Head, video.Node, "Video/Source");
         Process audioProc = StartBranch(audio.Head, audio.Node, "Audio/Source");
@@ -126,18 +149,26 @@ internal sealed class GstTestSource : IAsyncDisposable
         try
         {
             var t = timeout ?? TimeSpan.FromSeconds(10);
-            if (await WaitForNodeAsync(ctx, video.Node, t) is null ||
-                await WaitForNodeAsync(ctx, audio.Node, t) is null)
+            if (
+                await WaitForNodeAsync(ctx, video.Node, t) is null
+                || await WaitForNodeAsync(ctx, audio.Node, t) is null
+            )
             {
-                string err = await videoProc.StandardError.ReadToEndAsync()
-                           + await audioProc.StandardError.ReadToEndAsync();
+                string err =
+                    await videoProc.StandardError.ReadToEndAsync()
+                    + await audioProc.StandardError.ReadToEndAsync();
                 await source.DisposeAsync();
                 throw new InvalidOperationException(
-                    $"gst A/V nodes did not appear. stderr:{Environment.NewLine}{err}");
+                    $"gst A/V nodes did not appear. stderr:{Environment.NewLine}{err}"
+                );
             }
             return source;
         }
-        catch { await source.DisposeAsync(); throw; }
+        catch
+        {
+            await source.DisposeAsync();
+            throw;
+        }
     }
 
     /// <summary>
@@ -157,11 +188,16 @@ internal sealed class GstTestSource : IAsyncDisposable
     /// linked. <c>async=false</c> takes the sinks out of that wait.
     /// </para>
     /// </remarks>
-    public static async Task<(GstTestSource Source, uint VideoNode, uint AudioNode)> StartOnePipelineAsync(
+    public static async Task<(
+        GstTestSource Source,
+        uint VideoNode,
+        uint AudioNode
+    )> StartOnePipelineAsync(
         PipeWireContext ctx,
         (string Head, string Node) video,
         (string Head, string Node) audio,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null
+    )
     {
         var psi = new ProcessStartInfo(GstLaunch)
         {
@@ -173,7 +209,9 @@ internal sealed class GstTestSource : IAsyncDisposable
         AppendBranch(psi, video.Head, video.Node, "Video/Source", asyncStateChange: false);
         AppendBranch(psi, audio.Head, audio.Node, "Audio/Source", asyncStateChange: false);
 
-        Process proc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start gst-launch-1.0.");
+        Process proc =
+            Process.Start(psi)
+            ?? throw new InvalidOperationException("Failed to start gst-launch-1.0.");
         var source = new GstTestSource(proc);
         try
         {
@@ -185,7 +223,8 @@ internal sealed class GstTestSource : IAsyncDisposable
                 string err = await proc.StandardError.ReadToEndAsync();
                 await source.DisposeAsync();
                 throw new InvalidOperationException(
-                    $"the one-pipeline gst A/V nodes did not appear. stderr:{Environment.NewLine}{err}");
+                    $"the one-pipeline gst A/V nodes did not appear. stderr:{Environment.NewLine}{err}"
+                );
             }
 
             return (source, v.NodeId, a.NodeId);
@@ -212,7 +251,12 @@ internal sealed class GstTestSource : IAsyncDisposable
     }
 
     private static void AppendBranch(
-        ProcessStartInfo psi, string head, string node, string mediaClass, bool asyncStateChange = true)
+        ProcessStartInfo psi,
+        string head,
+        string node,
+        string mediaClass,
+        bool asyncStateChange = true
+    )
     {
         foreach (var tok in head.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             psi.ArgumentList.Add(tok);
@@ -220,20 +264,38 @@ internal sealed class GstTestSource : IAsyncDisposable
         psi.ArgumentList.Add("pipewiresink");
         psi.ArgumentList.Add("mode=provide"); // see StartAsync: a source branch must provide to serve samples.
         psi.ArgumentList.Add($"stream-properties=props,node.name={node},media.class={mediaClass}");
-        if (!asyncStateChange) psi.ArgumentList.Add("async=false");
+        if (!asyncStateChange)
+            psi.ArgumentList.Add("async=false");
     }
 
-    private static async Task<PipeWireNode?> WaitForNodeAsync(PipeWireContext ctx, string nodeName, TimeSpan timeout)
+    private static async Task<PipeWireNode?> WaitForNodeAsync(
+        PipeWireContext ctx,
+        string nodeName,
+        TimeSpan timeout
+    )
     {
         await using var reg = new PipeWireRegistry(ctx);
-        var found = new TaskCompletionSource<PipeWireNode>(TaskCreationOptions.RunContinuationsAsynchronously);
-        reg.NodeAdded += s => { if (s.NodeName == nodeName) found.TrySetResult(s); };
+        var found = new TaskCompletionSource<PipeWireNode>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        reg.NodeAdded += s =>
+        {
+            if (s.NodeName == nodeName)
+                found.TrySetResult(s);
+        };
 
         foreach (var s in reg.Nodes)
-            if (s.NodeName == nodeName) return s;
+            if (s.NodeName == nodeName)
+                return s;
 
-        try { return await found.Task.WaitAsync(timeout); }
-        catch (TimeoutException) { return null; }
+        try
+        {
+            return await found.Task.WaitAsync(timeout);
+        }
+        catch (TimeoutException)
+        {
+            return null;
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -241,11 +303,18 @@ internal sealed class GstTestSource : IAsyncDisposable
         try
         {
             foreach (Process p in _procs)
-                if (!p.HasExited) p.Kill(entireProcessTree: true);
+                if (!p.HasExited)
+                    p.Kill(entireProcessTree: true);
             foreach (Process p in _procs)
                 await p.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(3));
         }
-        catch { /* best-effort teardown */ }
-        finally { foreach (Process p in _procs) p.Dispose(); }
+        catch
+        { /* best-effort teardown */
+        }
+        finally
+        {
+            foreach (Process p in _procs)
+                p.Dispose();
+        }
     }
 }

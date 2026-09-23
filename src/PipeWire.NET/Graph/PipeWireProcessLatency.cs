@@ -23,20 +23,25 @@ public sealed record PipeWireProcessLatency(float Quantum = 0f, int Rate = 0, lo
     /// <summary>Reads one out of a <c>SPA_PARAM_ProcessLatency</c> object, or null if it is not one.</summary>
     public static PipeWireProcessLatency? From(SpaObject? param)
     {
-        if (param is null || param.ObjectType != SpaType.ObjectParamProcessLatency) return null;
+        if (param is null || param.ObjectType != SpaType.ObjectParamProcessLatency)
+            return null;
 
         return new PipeWireProcessLatency(
             param[(uint)SpaParamProcessLatency.Quantum] is SpaFloat q ? q.Value : 0f,
             param[(uint)SpaParamProcessLatency.Rate] is SpaInt r ? r.Value : 0,
-            param[(uint)SpaParamProcessLatency.Ns] is SpaLong n ? n.Value : 0L);
+            param[(uint)SpaParamProcessLatency.Ns] is SpaLong n ? n.Value : 0L
+        );
     }
 
     /// <summary>This latency as the parameter object the daemon expects.</summary>
     public SpaObject ToParameter() =>
-        new(SpaType.ObjectParamProcessLatency, SpaParamType.ProcessLatency,
-        [
-            new SpaPodProperty((uint)SpaParamProcessLatency.Quantum, 0, new SpaFloat(Quantum)),
-            new SpaPodProperty((uint)SpaParamProcessLatency.Rate, 0, new SpaInt(Rate)),
-            new SpaPodProperty((uint)SpaParamProcessLatency.Ns, 0, new SpaLong(Ns)),
-        ]);
+        new(
+            SpaType.ObjectParamProcessLatency,
+            SpaParamType.ProcessLatency,
+            [
+                new SpaPodProperty((uint)SpaParamProcessLatency.Quantum, 0, new SpaFloat(Quantum)),
+                new SpaPodProperty((uint)SpaParamProcessLatency.Rate, 0, new SpaInt(Rate)),
+                new SpaPodProperty((uint)SpaParamProcessLatency.Ns, 0, new SpaLong(Ns)),
+            ]
+        );
 }

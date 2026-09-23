@@ -29,14 +29,35 @@ public sealed class SpaPodFuzzTests : PipeWireTestBase
 
     private static readonly SpaType[] Types =
     [
-        SpaType.None, SpaType.Bool, SpaType.Id, SpaType.Int, SpaType.Long, SpaType.Float,
-        SpaType.Double, SpaType.String, SpaType.Bytes, SpaType.Rectangle, SpaType.Fraction,
-        SpaType.Bitmap, SpaType.Array, SpaType.Struct, SpaType.Object, SpaType.Sequence,
-        SpaType.Pointer, SpaType.Fd, SpaType.Choice, SpaType.Pod,
+        SpaType.None,
+        SpaType.Bool,
+        SpaType.Id,
+        SpaType.Int,
+        SpaType.Long,
+        SpaType.Float,
+        SpaType.Double,
+        SpaType.String,
+        SpaType.Bytes,
+        SpaType.Rectangle,
+        SpaType.Fraction,
+        SpaType.Bitmap,
+        SpaType.Array,
+        SpaType.Struct,
+        SpaType.Object,
+        SpaType.Sequence,
+        SpaType.Pointer,
+        SpaType.Fd,
+        SpaType.Choice,
+        SpaType.Pod,
     ];
 
     /// <summary>A pod header over a body of the caller's choosing, with the size deliberately loose.</summary>
-    private static byte[] Framed(Random random, SpaType type, ReadOnlySpan<byte> body, bool honestSize)
+    private static byte[] Framed(
+        Random random,
+        SpaType type,
+        ReadOnlySpan<byte> body,
+        bool honestSize
+    )
     {
         var pod = new byte[8 + body.Length];
 
@@ -45,8 +66,8 @@ public sealed class SpaPodFuzzTests : PipeWireTestBase
             : random.Next(4) switch
             {
                 0 => 0u,
-                1 => (uint)body.Length + (uint)random.Next(1, 64),   // claims more than it has
-                2 => uint.MaxValue,                                   // the overflow case
+                1 => (uint)body.Length + (uint)random.Next(1, 64), // claims more than it has
+                2 => uint.MaxValue, // the overflow case
                 _ => (uint)Math.Max(0, body.Length - random.Next(1, 8)),
             };
 
@@ -80,7 +101,8 @@ public sealed class SpaPodFuzzTests : PipeWireTestBase
                 {
                     body.AddRange(BitConverter.GetBytes((uint)random.Next(0, 32)));
                     body.AddRange(BitConverter.GetBytes((uint)random.Next(0, 4)));
-                    if (depth > 0) body.AddRange(Nested(random, depth - 1));
+                    if (depth > 0)
+                        body.AddRange(Nested(random, depth - 1));
                 }
                 break;
 
@@ -107,7 +129,12 @@ public sealed class SpaPodFuzzTests : PipeWireTestBase
     }
 
     private static byte[] Nested(Random random, int depth) =>
-        Framed(random, Types[random.Next(Types.Length)], Body(random, depth), honestSize: random.Next(4) != 0);
+        Framed(
+            random,
+            Types[random.Next(Types.Length)],
+            Body(random, depth),
+            honestSize: random.Next(4) != 0
+        );
 
     private static void MustNotMisbehave(byte[] pod, string origin)
     {
@@ -119,13 +146,15 @@ public sealed class SpaPodFuzzTests : PipeWireTestBase
 
             // A parser that says yes has to hand back something, or a caller dereferences null on
             // an input an attacker chose.
-            if (value is null) return;
+            if (value is null)
+                return;
         }
         catch (Exception ex)
         {
             Assert.Fail(
                 $"{origin} threw {ex.GetType().Name}: {ex.Message}\n"
-                + $"pod: {Convert.ToHexString(pod)}");
+                    + $"pod: {Convert.ToHexString(pod)}"
+            );
         }
     }
 
@@ -166,7 +195,10 @@ public sealed class SpaPodFuzzTests : PipeWireTestBase
         builder.Pop();
 
         byte[] whole = builder.GetPod().ToArray();
-        Assert.IsTrue(SpaPod.TryParse(whole, out _), "the intact pod must parse, or this proves nothing");
+        Assert.IsTrue(
+            SpaPod.TryParse(whole, out _),
+            "the intact pod must parse, or this proves nothing"
+        );
 
         for (int length = 0; length < whole.Length; length++)
             MustNotMisbehave(whole[..length], $"a pod truncated to {length} bytes");

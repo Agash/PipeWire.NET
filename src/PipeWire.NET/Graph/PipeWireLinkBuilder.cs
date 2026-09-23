@@ -27,7 +27,11 @@ public readonly struct PipeWireLinkBuilder
     private readonly PipeWireObjectOptions _options;
 
     internal PipeWireLinkBuilder(
-        PipeWireRegistry registry, PipeWirePort output, PipeWirePort input, PipeWireObjectOptions options)
+        PipeWireRegistry registry,
+        PipeWirePort output,
+        PipeWirePort input,
+        PipeWireObjectOptions options
+    )
     {
         _registry = registry;
         _output = output;
@@ -54,11 +58,19 @@ public readonly struct PipeWireLinkBuilder
         ArgumentNullException.ThrowIfNull(value);
         PipeWireObjectOptions.ThrowIfReserved(key, forLink: true);
 
-        ImmutableArray<KeyValuePair<string, string>> existing =
-            _options.Properties.IsDefault ? [] : _options.Properties;
+        ImmutableArray<KeyValuePair<string, string>> existing = _options.Properties.IsDefault
+            ? []
+            : _options.Properties;
 
-        return new(_registry, _output, _input,
-            _options with { Properties = existing.Add(new(key, value)) });
+        return new(
+            _registry,
+            _output,
+            _input,
+            _options with
+            {
+                Properties = existing.Add(new(key, value)),
+            }
+        );
     }
 
     /// <summary>

@@ -3,8 +3,8 @@ using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
 using PipeWire.NET.Interop;
-using PipeWire.NET.Spa;
 using PipeWire.NET.Media;
+using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Tests;
 
@@ -29,7 +29,10 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
     [DataRow("Video/Sink", PipeWireMediaKind.Video, PipeWireMediaFlow.Sink)]
     [DataRow("Midi/Bridge", PipeWireMediaKind.Midi, PipeWireMediaFlow.Duplex)]
     public void MediaClass_ParsesKindAndFlowStructurally(
-        string raw, PipeWireMediaKind kind, PipeWireMediaFlow flow)
+        string raw,
+        PipeWireMediaKind kind,
+        PipeWireMediaFlow flow
+    )
     {
         Assert.AreEqual(kind, PipeWireMediaClass.ParseKind(raw));
         Assert.AreEqual(flow, PipeWireMediaClass.ParseFlow(raw));
@@ -41,7 +44,10 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
     [DataRow("Stream/Input/Audio", PipeWireMediaKind.Audio, PipeWireMediaFlow.Sink)]
     [DataRow("Stream/Input/Video", PipeWireMediaKind.Video, PipeWireMediaFlow.Sink)]
     public void StreamClasses_NameTheirMediumLastAndInvertDirection(
-        string raw, PipeWireMediaKind kind, PipeWireMediaFlow flow)
+        string raw,
+        PipeWireMediaKind kind,
+        PipeWireMediaFlow flow
+    )
     {
         // "Output" is the application's direction; from the graph it is a source to read from.
         Assert.AreEqual(kind, PipeWireMediaClass.ParseKind(raw));
@@ -53,7 +59,7 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
     [DataRow("")]
     [DataRow("/")]
     [DataRow("///")]
-    [DataRow("audio/source")]        // media.class is case-sensitive
+    [DataRow("audio/source")] // media.class is case-sensitive
     [DataRow("Telephony/Gateway")]
     public void UnrecognisedOrMalformedClasses_ReportUnknownRatherThanGuessing(string? raw)
     {
@@ -80,7 +86,10 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
         // whatever it actually states.
         Assert.AreEqual(PipeWireMediaKind.Video, PipeWireMediaClass.ParseKind("Video/Duplex"));
         Assert.AreEqual(PipeWireMediaFlow.Duplex, PipeWireMediaClass.ParseFlow("Video/Duplex"));
-        Assert.AreEqual(PipeWireMediaKind.Audio, PipeWireMediaClass.ParseKind("Audio/Source/Virtual/Something"));
+        Assert.AreEqual(
+            PipeWireMediaKind.Audio,
+            PipeWireMediaClass.ParseKind("Audio/Source/Virtual/Something")
+        );
     }
 
     [TestMethod]
@@ -114,9 +123,13 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
         // FrameCount divides by this, so a zero would be a divide-by-zero on a real capture.
         foreach (AudioSampleFormat fmt in Enum.GetValues<AudioSampleFormat>())
         {
-            if (fmt is AudioSampleFormat.Unknown) continue;
+            if (fmt is AudioSampleFormat.Unknown)
+                continue;
 
-            Assert.IsTrue(fmt.BytesPerSample() > 0, $"{fmt} reports a width of {fmt.BytesPerSample()}");
+            Assert.IsTrue(
+                fmt.BytesPerSample() > 0,
+                $"{fmt} reports a width of {fmt.BytesPerSample()}"
+            );
         }
     }
 
@@ -133,12 +146,15 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
     }
 
     [TestMethod]
-    [DataRow(AudioSampleFormat.S16Le, 2, 480)]     // 1920 bytes / (2ch * 2B)
-    [DataRow(AudioSampleFormat.F32Le, 2, 240)]     // 1920 / (2 * 4)
-    [DataRow(AudioSampleFormat.U8, 1, 1920)]       // 1920 / (1 * 1)
-    [DataRow(AudioSampleFormat.S24Le, 2, 320)]     // 1920 / (2 * 3)
+    [DataRow(AudioSampleFormat.S16Le, 2, 480)] // 1920 bytes / (2ch * 2B)
+    [DataRow(AudioSampleFormat.F32Le, 2, 240)] // 1920 / (2 * 4)
+    [DataRow(AudioSampleFormat.U8, 1, 1920)] // 1920 / (1 * 1)
+    [DataRow(AudioSampleFormat.S24Le, 2, 320)] // 1920 / (2 * 3)
     public void FrameCount_DividesBytesByChannelsAndWidth(
-        AudioSampleFormat fmt, int channels, int expected)
+        AudioSampleFormat fmt,
+        int channels,
+        int expected
+    )
     {
         var frame = new AudioFrame(new byte[1920], 48000, channels, fmt, 0, 0, 0, 0, 0);
         Assert.AreEqual(expected, frame.FrameCount);
@@ -172,7 +188,10 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
     [TestMethod]
     public void StreamProperties_WithersAreChainableAndAllLand()
     {
-        StreamProperties props = new StreamProperties(StreamMediaType.Audio, StreamCategory.Playback)
+        StreamProperties props = new StreamProperties(
+            StreamMediaType.Audio,
+            StreamCategory.Playback
+        )
             .WithRole("Music")
             .WithNodeName("my_node")
             .WithNodeDescription("My Node")
@@ -209,8 +228,10 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
     {
         // These become C strings, so the byte length is what matters, not the char count.
         string emoji = string.Concat(Enumerable.Repeat("\U0001F3B5", 200));
-        StreamProperties props = new StreamProperties(StreamMediaType.Audio, StreamCategory.Playback)
-            .WithNodeDescription(emoji);
+        StreamProperties props = new StreamProperties(
+            StreamMediaType.Audio,
+            StreamCategory.Playback
+        ).WithNodeDescription(emoji);
 
         Assert.AreEqual(emoji, props.Values["node.description"]);
     }
@@ -245,7 +266,7 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
         Span<spa_dict_item> items = stackalloc spa_dict_item[2];
         var b = new SpaDictBuilder(scratch, items);
         b.Add("z"u8, "1"u8);
-        b.Add("a"u8, "2"u8);          // deliberately out of order
+        b.Add("a"u8, "2"u8); // deliberately out of order
         Assert.AreEqual(0u, b.Build().flags);
     }
 
@@ -361,9 +382,17 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
     {
         byte[] pixels = [1, 2, 3, 4, 5, 6, 7, 8];
         var frame = new VideoFrame(
-            pixels, stride: 4, width: 2, height: 2, format: PixelFormat.Bgra,
-            sequenceNumber: 9, presentationTimestampNs: 100, graphTimeNs: 200,
-            streamPositionNs: 300, delayNs: 5);
+            pixels,
+            stride: 4,
+            width: 2,
+            height: 2,
+            format: PixelFormat.Bgra,
+            sequenceNumber: 9,
+            presentationTimestampNs: 100,
+            graphTimeNs: 200,
+            streamPositionNs: 300,
+            delayNs: 5
+        );
 
         OwnedVideoFrame owned = frame.Clone();
 
@@ -390,8 +419,15 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
         // buffer. A byte copy would keep an empty frame that reads as valid, so Clone refuses
         // and points at the descriptor duplication that actually keeps something.
         var frame = new VideoFrame(
-            [], stride: 0, width: 2, height: 2, format: PixelFormat.Bgra,
-            sequenceNumber: 9, bufferType: PipeWireBufferType.DmaBuf, fd: 42);
+            [],
+            stride: 0,
+            width: 2,
+            height: 2,
+            format: PixelFormat.Bgra,
+            sequenceNumber: 9,
+            bufferType: PipeWireBufferType.DmaBuf,
+            fd: 42
+        );
 
         // A ref struct cannot cross a lambda boundary, so the throw is asserted by hand.
         try
@@ -399,9 +435,7 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
             frame.Clone();
             Assert.Fail("cloning an fd-backed frame must refuse");
         }
-        catch (InvalidOperationException)
-        {
-        }
+        catch (InvalidOperationException) { }
     }
 
     [TestMethod]
@@ -409,8 +443,15 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
     {
         byte[] samples = [10, 20, 30, 40];
         var chunk = new AudioFrame(
-            samples, sampleRate: 48000, channels: 2, format: AudioSampleFormat.F32Le,
-            sequenceNumber: 4, presentationTimestampNs: -1, graphTimeNs: 700, delayNs: 2);
+            samples,
+            sampleRate: 48000,
+            channels: 2,
+            format: AudioSampleFormat.F32Le,
+            sequenceNumber: 4,
+            presentationTimestampNs: -1,
+            graphTimeNs: 700,
+            delayNs: 2
+        );
 
         OwnedAudioFrame owned = chunk.Clone();
 
@@ -431,25 +472,76 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
     public void OwnedFrames_CompareByValue()
     {
         var first = new OwnedVideoFrame(
-            ImmutableArray.Create<byte>(1, 2), 2, 1, 1, PixelFormat.Rgba, 0,
-            default, null, null, null, null, 0);
+            ImmutableArray.Create<byte>(1, 2),
+            2,
+            1,
+            1,
+            PixelFormat.Rgba,
+            0,
+            default,
+            null,
+            null,
+            null,
+            null,
+            0
+        );
         var same = new OwnedVideoFrame(
-            ImmutableArray.Create<byte>(1, 2), 2, 1, 1, PixelFormat.Rgba, 0,
-            default, null, null, null, null, 0);
+            ImmutableArray.Create<byte>(1, 2),
+            2,
+            1,
+            1,
+            PixelFormat.Rgba,
+            0,
+            default,
+            null,
+            null,
+            null,
+            null,
+            0
+        );
         var different = new OwnedVideoFrame(
-            ImmutableArray.Create<byte>(1, 3), 2, 1, 1, PixelFormat.Rgba, 0,
-            default, null, null, null, null, 0);
+            ImmutableArray.Create<byte>(1, 3),
+            2,
+            1,
+            1,
+            PixelFormat.Rgba,
+            0,
+            default,
+            null,
+            null,
+            null,
+            null,
+            0
+        );
 
         Assert.AreEqual(first, same);
         Assert.AreEqual(first.GetHashCode(), same.GetHashCode());
         Assert.AreNotEqual(first, different);
 
         var audio = new OwnedAudioFrame(
-            ImmutableArray.Create<byte>(1), 48000, 1, AudioSampleFormat.S16Le, 0,
-            null, null, null, null, 0);
+            ImmutableArray.Create<byte>(1),
+            48000,
+            1,
+            AudioSampleFormat.S16Le,
+            0,
+            null,
+            null,
+            null,
+            null,
+            0
+        );
         var audioSame = new OwnedAudioFrame(
-            ImmutableArray.Create<byte>(1), 48000, 1, AudioSampleFormat.S16Le, 0,
-            null, null, null, null, 0);
+            ImmutableArray.Create<byte>(1),
+            48000,
+            1,
+            AudioSampleFormat.S16Le,
+            0,
+            null,
+            null,
+            null,
+            null,
+            0
+        );
         Assert.AreEqual(audio, audioSame);
         Assert.AreEqual(audio.GetHashCode(), audioSame.GetHashCode());
     }
@@ -459,8 +551,13 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
     {
         // No libc call on this path: a frame with no fd answers -1 without duplicating.
         var frame = new VideoFrame(
-            [1, 2, 3, 4], stride: 4, width: 1, height: 1, format: PixelFormat.Bgra,
-            sequenceNumber: 0);
+            [1, 2, 3, 4],
+            stride: 4,
+            width: 1,
+            height: 1,
+            format: PixelFormat.Bgra,
+            sequenceNumber: 0
+        );
         Assert.IsFalse(frame.IsFdBacked);
         using SafeDescriptorHandle none = frame.DuplicateFd();
         Assert.IsTrue(none.IsInvalid);
@@ -472,16 +569,28 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
         // A node with no channel volumes has no array to read, which is not an error.
         Assert.AreEqual(0, PipeWireNodeProxy.ReadFloatArray(null, SpaProp.ChannelVolumes).Length);
 
-        var props = new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-            [new SpaPodProperty(SpaProp.Volume, 0, new SpaFloat(0.5f))]);
+        var props = new SpaObject(
+            SpaType.ObjectProps,
+            SpaParamType.Props,
+            [new SpaPodProperty(SpaProp.Volume, 0, new SpaFloat(0.5f))]
+        );
         Assert.AreEqual(0, PipeWireNodeProxy.ReadFloatArray(props, SpaProp.ChannelVolumes).Length);
 
-        var withVolumes = new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-            [new SpaPodProperty(SpaProp.ChannelVolumes, 0,
-                new SpaArray(SpaType.Float, [new SpaFloat(0.5f), new SpaFloat(0.25f)]))]);
+        var withVolumes = new SpaObject(
+            SpaType.ObjectProps,
+            SpaParamType.Props,
+            [
+                new SpaPodProperty(
+                    SpaProp.ChannelVolumes,
+                    0,
+                    new SpaArray(SpaType.Float, [new SpaFloat(0.5f), new SpaFloat(0.25f)])
+                ),
+            ]
+        );
         CollectionAssert.AreEqual(
             new[] { 0.5f, 0.25f },
-            PipeWireNodeProxy.ReadFloatArray(withVolumes, SpaProp.ChannelVolumes).ToArray());
+            PipeWireNodeProxy.ReadFloatArray(withVolumes, SpaProp.ChannelVolumes).ToArray()
+        );
     }
 
     [TestMethod]
@@ -490,8 +599,14 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
         // Explicit sync rides two extra data blocks plus a mandatory metaType: a peer that cannot
         // carry timeline metadata must refuse rather than silently accept unordered buffers.
         Span<byte> buf = stackalloc byte[256];
-        int len = SpaFormatPod.WriteVideoBuffersParam(buf, size: 1024, stride: 256,
-            dataTypes: 1 << (int)SpaDataType.DmaBuf, blocks: 1, syncDataBlocks: 2);
+        int len = SpaFormatPod.WriteVideoBuffersParam(
+            buf,
+            size: 1024,
+            stride: 256,
+            dataTypes: 1 << (int)SpaDataType.DmaBuf,
+            blocks: 1,
+            syncDataBlocks: 2
+        );
 
         Assert.IsTrue(SpaPod.TryParse(buf[..len], out SpaValue? value));
         var o = (SpaObject)value!;
@@ -499,8 +614,11 @@ public sealed class ConversionBoundaryTests : PipeWireTestBase
 
         SpaPodProperty? metaType = o.Find((uint)SpaParamBuffers.MetaType);
         Assert.IsNotNull(metaType, "the sync buffers param must carry a metaType");
-        Assert.AreNotEqual(SpaPodPropFlags.None, metaType.Flags & SpaPodPropFlags.Mandatory,
-            "the metaType must be mandatory, not advisory");
+        Assert.AreNotEqual(
+            SpaPodPropFlags.None,
+            metaType.Flags & SpaPodPropFlags.Mandatory,
+            "the metaType must be mandatory, not advisory"
+        );
         Assert.AreEqual(1 << (int)SpaMetaType.SyncTimeline, ((SpaInt)metaType.Value).Value);
     }
 

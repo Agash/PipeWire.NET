@@ -26,21 +26,41 @@ public sealed unsafe class NativeAbiTests : PipeWireTestBase
         // Every spa events struct begins with a uint32 version the daemon reads before dispatching
         // anything. A field inserted ahead of it makes the daemon read a function pointer as the
         // version and then refuse - or call through whatever it found.
-        Assert.AreEqual(0, (int)Marshal.OffsetOf<pw_registry_events>(nameof(pw_registry_events.version)));
+        Assert.AreEqual(
+            0,
+            (int)Marshal.OffsetOf<pw_registry_events>(nameof(pw_registry_events.version))
+        );
         Assert.AreEqual(0, (int)Marshal.OffsetOf<pw_core_events>(nameof(pw_core_events.version)));
         Assert.AreEqual(0, (int)Marshal.OffsetOf<pw_node_events>(nameof(pw_node_events.version)));
-        Assert.AreEqual(0, (int)Marshal.OffsetOf<pw_metadata_events>(nameof(pw_metadata_events.version)));
+        Assert.AreEqual(
+            0,
+            (int)Marshal.OffsetOf<pw_metadata_events>(nameof(pw_metadata_events.version))
+        );
         Assert.AreEqual(0, (int)Marshal.OffsetOf<pw_proxy_events>(nameof(pw_proxy_events.version)));
-        Assert.AreEqual(0, (int)Marshal.OffsetOf<pw_profiler_events>(nameof(pw_profiler_events.version)));
+        Assert.AreEqual(
+            0,
+            (int)Marshal.OffsetOf<pw_profiler_events>(nameof(pw_profiler_events.version))
+        );
     }
 
     [TestMethod]
     public void MethodTables_StartWithTheirVersionField()
     {
-        Assert.AreEqual(0, (int)Marshal.OffsetOf<pw_metadata_methods>(nameof(pw_metadata_methods.version)));
-        Assert.AreEqual(0, (int)Marshal.OffsetOf<pw_profiler_methods>(nameof(pw_profiler_methods.version)));
-        Assert.AreEqual(0, (int)Marshal.OffsetOf<pw_security_context_methods>(
-            nameof(pw_security_context_methods.version)));
+        Assert.AreEqual(
+            0,
+            (int)Marshal.OffsetOf<pw_metadata_methods>(nameof(pw_metadata_methods.version))
+        );
+        Assert.AreEqual(
+            0,
+            (int)Marshal.OffsetOf<pw_profiler_methods>(nameof(pw_profiler_methods.version))
+        );
+        Assert.AreEqual(
+            0,
+            (int)
+                Marshal.OffsetOf<pw_security_context_methods>(
+                    nameof(pw_security_context_methods.version)
+                )
+        );
     }
 
     [TestMethod]
@@ -49,10 +69,14 @@ public sealed unsafe class NativeAbiTests : PipeWireTestBase
         // A version field followed by pointers means the first pointer sits at the platform's
         // pointer alignment, not at four bytes. Getting that wrong shifts every callback by one
         // slot, which dispatches the wrong function rather than failing.
-        Assert.AreEqual(sizeof(nint), (int)Marshal.OffsetOf<pw_metadata_methods>(
-            nameof(pw_metadata_methods.add_listener)));
-        Assert.AreEqual(sizeof(nint), (int)Marshal.OffsetOf<pw_profiler_events>(
-            nameof(pw_profiler_events.profile)));
+        Assert.AreEqual(
+            sizeof(nint),
+            (int)Marshal.OffsetOf<pw_metadata_methods>(nameof(pw_metadata_methods.add_listener))
+        );
+        Assert.AreEqual(
+            sizeof(nint),
+            (int)Marshal.OffsetOf<pw_profiler_events>(nameof(pw_profiler_events.profile))
+        );
     }
 
     [TestMethod]
@@ -61,10 +85,14 @@ public sealed unsafe class NativeAbiTests : PipeWireTestBase
         // Capture reads chunk->offset and chunk->size out of these to build a span over the
         // producer's memory. A drift here reads the wrong bytes as a frame.
         Assert.AreEqual(0, (int)Marshal.OffsetOf<spa_data>(nameof(spa_data.type)));
-        Assert.IsTrue((int)Marshal.OffsetOf<spa_data>(nameof(spa_data.maxsize))
-                      < (int)Marshal.OffsetOf<spa_data>(nameof(spa_data.data)));
-        Assert.IsTrue((int)Marshal.OffsetOf<spa_data>(nameof(spa_data.data))
-                      < (int)Marshal.OffsetOf<spa_data>(nameof(spa_data.chunk)));
+        Assert.IsTrue(
+            (int)Marshal.OffsetOf<spa_data>(nameof(spa_data.maxsize))
+                < (int)Marshal.OffsetOf<spa_data>(nameof(spa_data.data))
+        );
+        Assert.IsTrue(
+            (int)Marshal.OffsetOf<spa_data>(nameof(spa_data.data))
+                < (int)Marshal.OffsetOf<spa_data>(nameof(spa_data.chunk))
+        );
 
         Assert.AreEqual(0, (int)Marshal.OffsetOf<spa_chunk>(nameof(spa_chunk.offset)));
         Assert.AreEqual(4, (int)Marshal.OffsetOf<spa_chunk>(nameof(spa_chunk.size)));
@@ -80,7 +108,10 @@ public sealed unsafe class NativeAbiTests : PipeWireTestBase
         Assert.AreEqual(0, (int)Marshal.OffsetOf<spa_buffer>(nameof(spa_buffer.n_metas)));
         Assert.AreEqual(4, (int)Marshal.OffsetOf<spa_buffer>(nameof(spa_buffer.n_datas)));
         Assert.AreEqual(8, (int)Marshal.OffsetOf<spa_buffer>(nameof(spa_buffer.metas)));
-        Assert.AreEqual(8 + sizeof(nint), (int)Marshal.OffsetOf<spa_buffer>(nameof(spa_buffer.datas)));
+        Assert.AreEqual(
+            8 + sizeof(nint),
+            (int)Marshal.OffsetOf<spa_buffer>(nameof(spa_buffer.datas))
+        );
         Assert.AreEqual(8 + (2 * sizeof(nint)), sizeof(spa_buffer));
     }
 
@@ -90,7 +121,10 @@ public sealed unsafe class NativeAbiTests : PipeWireTestBase
         // The dmabuf producer stores its pool index in user_data and reads it back on every
         // publish, so an offset drift hands the app a different buffer's surface.
         Assert.AreEqual(0, (int)Marshal.OffsetOf<pw_buffer>(nameof(pw_buffer.buffer)));
-        Assert.AreEqual(sizeof(nint), (int)Marshal.OffsetOf<pw_buffer>(nameof(pw_buffer.user_data)));
+        Assert.AreEqual(
+            sizeof(nint),
+            (int)Marshal.OffsetOf<pw_buffer>(nameof(pw_buffer.user_data))
+        );
     }
 
     [TestMethod]
@@ -105,7 +139,10 @@ public sealed unsafe class NativeAbiTests : PipeWireTestBase
         Assert.AreEqual(0, (int)Marshal.OffsetOf<spa_meta_header>(nameof(spa_meta_header.flags)));
         Assert.AreEqual(4, (int)Marshal.OffsetOf<spa_meta_header>(nameof(spa_meta_header.offset)));
         Assert.AreEqual(8, (int)Marshal.OffsetOf<spa_meta_header>(nameof(spa_meta_header.pts)));
-        Assert.AreEqual(16, (int)Marshal.OffsetOf<spa_meta_header>(nameof(spa_meta_header.dts_offset)));
+        Assert.AreEqual(
+            16,
+            (int)Marshal.OffsetOf<spa_meta_header>(nameof(spa_meta_header.dts_offset))
+        );
     }
 
     [TestMethod]
@@ -128,19 +165,35 @@ public sealed unsafe class NativeAbiTests : PipeWireTestBase
         // Each info struct arrives by pointer in a callback and is read field by field. The
         // change_mask in particular decides whether the rest is even valid.
         Assert.AreEqual(0, (int)Marshal.OffsetOf<pw_node_info>(nameof(pw_node_info.id)));
-        Assert.IsTrue((int)Marshal.OffsetOf<pw_node_info>(nameof(pw_node_info.change_mask))
-                      < (int)Marshal.OffsetOf<pw_node_info>(nameof(pw_node_info.props)));
-        Assert.IsTrue((int)Marshal.OffsetOf<pw_node_info>(nameof(pw_node_info.props))
-                      < (int)Marshal.OffsetOf<pw_node_info>(nameof(pw_node_info.@params)));
+        Assert.IsTrue(
+            (int)Marshal.OffsetOf<pw_node_info>(nameof(pw_node_info.change_mask))
+                < (int)Marshal.OffsetOf<pw_node_info>(nameof(pw_node_info.props))
+        );
+        Assert.IsTrue(
+            (int)Marshal.OffsetOf<pw_node_info>(nameof(pw_node_info.props))
+                < (int)Marshal.OffsetOf<pw_node_info>(nameof(pw_node_info.@params))
+        );
 
         Assert.AreEqual(0, (int)Marshal.OffsetOf<pw_port_info>(nameof(pw_port_info.id)));
         Assert.AreEqual(4, (int)Marshal.OffsetOf<pw_port_info>(nameof(pw_port_info.direction)));
 
         Assert.AreEqual(0, (int)Marshal.OffsetOf<pw_link_info>(nameof(pw_link_info.id)));
-        Assert.AreEqual(4, (int)Marshal.OffsetOf<pw_link_info>(nameof(pw_link_info.output_node_id)));
-        Assert.AreEqual(8, (int)Marshal.OffsetOf<pw_link_info>(nameof(pw_link_info.output_port_id)));
-        Assert.AreEqual(12, (int)Marshal.OffsetOf<pw_link_info>(nameof(pw_link_info.input_node_id)));
-        Assert.AreEqual(16, (int)Marshal.OffsetOf<pw_link_info>(nameof(pw_link_info.input_port_id)));
+        Assert.AreEqual(
+            4,
+            (int)Marshal.OffsetOf<pw_link_info>(nameof(pw_link_info.output_node_id))
+        );
+        Assert.AreEqual(
+            8,
+            (int)Marshal.OffsetOf<pw_link_info>(nameof(pw_link_info.output_port_id))
+        );
+        Assert.AreEqual(
+            12,
+            (int)Marshal.OffsetOf<pw_link_info>(nameof(pw_link_info.input_node_id))
+        );
+        Assert.AreEqual(
+            16,
+            (int)Marshal.OffsetOf<pw_link_info>(nameof(pw_link_info.input_port_id))
+        );
     }
 
     [TestMethod]
@@ -160,7 +213,10 @@ public sealed unsafe class NativeAbiTests : PipeWireTestBase
         // properties read from the wrong addresses.
         Assert.AreEqual(2 * sizeof(nint), sizeof(spa_dict_item));
         Assert.AreEqual(0, (int)Marshal.OffsetOf<spa_dict_item>(nameof(spa_dict_item.key)));
-        Assert.AreEqual(sizeof(nint), (int)Marshal.OffsetOf<spa_dict_item>(nameof(spa_dict_item.value)));
+        Assert.AreEqual(
+            sizeof(nint),
+            (int)Marshal.OffsetOf<spa_dict_item>(nameof(spa_dict_item.value))
+        );
     }
 
     [TestMethod]

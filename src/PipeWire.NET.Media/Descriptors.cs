@@ -16,12 +16,15 @@ internal static class Descriptors
     /// </remarks>
     internal static SafeDescriptorHandle Duplicate(long fd)
     {
-        if (fd < 0) return new SafeDescriptorHandle();
+        if (fd < 0)
+            return new SafeDescriptorHandle();
 
         // Range-checked before the narrowing cast. A descriptor is an int on Linux, so a value
         // outside that range did not come from the kernel and truncating it names a different file.
         if (fd > int.MaxValue)
-            throw new IOException($"descriptor {fd} is not a file descriptor this process can hold.");
+            throw new IOException(
+                $"descriptor {fd} is not a file descriptor this process can hold."
+            );
 
         if (!OperatingSystem.IsLinux())
             throw new PlatformNotSupportedException("descriptors are a Linux concept here.");
@@ -66,7 +69,8 @@ internal static class Descriptors
     /// </remarks>
     internal static bool IsEventfd(int fd)
     {
-        if (fd < 0) return false;
+        if (fd < 0)
+            return false;
 
         try
         {
@@ -97,7 +101,8 @@ internal static class Descriptors
         while (NativeLibc.write(fd, &one, 8) < 0)
         {
             int errno = Marshal.GetLastPInvokeError();
-            if (errno != NativeLibc.EINTR) return errno;
+            if (errno != NativeLibc.EINTR)
+                return errno;
         }
 
         return 0;
@@ -122,11 +127,13 @@ internal static class Descriptors
             if (ready < 0)
             {
                 int errno = Marshal.GetLastPInvokeError();
-                if (errno == NativeLibc.EINTR) continue;
+                if (errno == NativeLibc.EINTR)
+                    continue;
                 return new SyncWait(SyncWaitOutcome.Failed, errno);
             }
 
-            if (ready == 0) return new SyncWait(SyncWaitOutcome.TimedOut, NativeLibc.ETIME);
+            if (ready == 0)
+                return new SyncWait(SyncWaitOutcome.TimedOut, NativeLibc.ETIME);
 
             if ((pfd.revents & NativeLibc.POLLNVAL) != 0)
                 return new SyncWait(SyncWaitOutcome.Failed, NativeLibc.EBADF);
@@ -135,16 +142,18 @@ internal static class Descriptors
                 return new SyncWait(SyncWaitOutcome.Failed, NativeLibc.EIO);
 
             ulong taken;
-            if (NativeLibc.read(fd, &taken, 8) >= 0) return new SyncWait(SyncWaitOutcome.Reached, 0);
+            if (NativeLibc.read(fd, &taken, 8) >= 0)
+                return new SyncWait(SyncWaitOutcome.Reached, 0);
 
             int readErrno = Marshal.GetLastPInvokeError();
-            if (readErrno != NativeLibc.EINTR) return new SyncWait(SyncWaitOutcome.Failed, readErrno);
+            if (readErrno != NativeLibc.EINTR)
+                return new SyncWait(SyncWaitOutcome.Failed, readErrno);
         }
     }
 
     internal static void CloseDescriptor(int fd)
     {
-        if (fd >= 0) _ = NativeLibc.close(fd);
+        if (fd >= 0)
+            _ = NativeLibc.close(fd);
     }
-
 }

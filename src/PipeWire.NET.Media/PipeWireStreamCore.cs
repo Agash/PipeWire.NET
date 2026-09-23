@@ -44,7 +44,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         ulong Queued,
         ulong Buffered,
         uint QueuedBuffers,
-        uint AvailableBuffers);
+        uint AvailableBuffers
+    );
 
     /// <summary>Invoked from <c>process</c> with the first data plane of a dequeued buffer.</summary>
     /// <param name="data">First data plane of the buffer.</param>
@@ -118,32 +119,37 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     // Controls the daemon has reported, newest report wins. A dictionary rather than a list: the
     // daemon re-reports a control whenever one of its values changes, and appending would grow
     // without bound on a stream whose volume is being moved.
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<uint, PipeWireStreamControl>
-        _controls = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        uint,
+        PipeWireStreamControl
+    > _controls = new();
 
-    private readonly TaskCompletionSource _streaming =
-        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _streaming = new(
+        TaskCreationOptions.RunContinuationsAsynchronously
+    );
 
     // Completed with the node id once the daemon has bound this stream's proxy. Upstream's
     // proxy_bound_props (stream.c) assigns node_id and only then moves the stream to PAUSED, so the
     // first Paused - or Streaming, should Paused be skipped - is the point the id is known to be real.
-    private readonly TaskCompletionSource<uint> _bound =
-        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<uint> _bound = new(
+        TaskCreationOptions.RunContinuationsAsynchronously
+    );
 
     private string? _lastError;
 
     private unsafe pw_stream* _stream => _streamOwner is null ? null : _streamOwner.Stream;
     private pw_stream_events* _events;
+
     // The spa_hook MUST live in unmanaged memory, not as a managed field: pw_stream_add_listener stores this
     // pointer in the stream's listener list, and the GC compacting the heap would move a managed field, leaving
     // PipeWire with a dangling pointer that crashes (spa_list_remove on freed memory) the next time it emits an
     // event. _selfHandle is weak and non-pinning either way, so it does not keep a field address stable.
-    private spa_hook*         _hook;
-    private GCHandle          _selfHandle;
+    private spa_hook* _hook;
+    private GCHandle _selfHandle;
 
     // 0 until disposal is claimed. Read from every native callback, so volatile; claimed with an
     // interlocked exchange, so two concurrent disposals cannot both tear the stream down.
-    private volatile int      _disposedFlag;
+    private volatile int _disposedFlag;
 
     private bool _disposed => _disposedFlag != 0;
 
@@ -167,16 +173,17 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         PostFormatHandler? onPostFormat = null,
         BufferPoolHandler? onAddBuffer = null,
         BufferPoolHandler? onRemoveBuffer = null,
-        PeerConnectedHandler? onPeerConnected = null)
+        PeerConnectedHandler? onPeerConnected = null
+    )
     {
-        _ctx            = ctx;
-        _logger         = ctx.LoggerFactory.CreateLogger($"PipeWire.NET.{streamName}");
-        _streamName     = streamName;
-        _onBuffer       = onBuffer;
-        _onState        = onState;
-        _onPostFormat   = onPostFormat;
-        _onFormat       = onFormat;
-        _onAddBuffer    = onAddBuffer;
+        _ctx = ctx;
+        _logger = ctx.LoggerFactory.CreateLogger($"PipeWire.NET.{streamName}");
+        _streamName = streamName;
+        _onBuffer = onBuffer;
+        _onState = onState;
+        _onPostFormat = onPostFormat;
+        _onFormat = onFormat;
+        _onAddBuffer = onAddBuffer;
         _onRemoveBuffer = onRemoveBuffer;
         _onPeerConnected = onPeerConnected;
 
@@ -186,17 +193,19 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
         _hook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
         _events = (pw_stream_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_stream_events));
-        _events->version       = NativeConstants.PW_VERSION_STREAM_EVENTS;
-        _events->process       = &OnProcess;
+        _events->version = NativeConstants.PW_VERSION_STREAM_EVENTS;
+        _events->process = &OnProcess;
         _events->state_changed = &OnStateChanged;
         _events->param_changed = &OnParamChanged;
-        _events->control_info  = &OnControlInfo;
-        _events->io_changed    = &OnIoChanged;
-        _events->drained       = &OnDrained;
-        _events->command       = &OnCommandArrived;
-        _events->trigger_done  = &OnTriggerDone;
-        if (onAddBuffer is not null)    _events->add_buffer    = &OnAddBuffer;
-        if (onRemoveBuffer is not null) _events->remove_buffer = &OnRemoveBuffer;
+        _events->control_info = &OnControlInfo;
+        _events->io_changed = &OnIoChanged;
+        _events->drained = &OnDrained;
+        _events->command = &OnCommandArrived;
+        _events->trigger_done = &OnTriggerDone;
+        if (onAddBuffer is not null)
+            _events->add_buffer = &OnAddBuffer;
+        if (onRemoveBuffer is not null)
+            _events->remove_buffer = &OnRemoveBuffer;
 
         pw_properties* nativeProps = props.ToNativeProperties();
 
@@ -240,8 +249,12 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             // been destroyed rather than racing its last callbacks.
             _streamOwner.OwnListener(_events, _hook, _selfHandle);
 
-            Native.pw_stream_add_listener(stream, _hook, _events,
-                (void*)GCHandle.ToIntPtr(_selfHandle));
+            Native.pw_stream_add_listener(
+                stream,
+                _hook,
+                _events,
+                (void*)GCHandle.ToIntPtr(_selfHandle)
+            );
         }
     }
 
@@ -267,7 +280,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         if ((flags & PipeWireStreamFlags.RtProcess) != 0)
             throw new ArgumentException(
                 "streams built on PipeWireStreamCore process on the loop thread; RT_PROCESS would race their buffer bookkeeping",
-                nameof(flags));
+                nameof(flags)
+            );
     }
 
     /// <summary>Connects the stream. <paramref name="formatPod"/> is copied by PipeWire before returning.</summary>
@@ -283,7 +297,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         ReadOnlySpan<byte> formatPod,
         ReadOnlySpan<byte> fallbackPod = default,
         ReadOnlySpan<byte> capabilityPod = default,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         RequireLoopThreadProcess(flags);
@@ -292,8 +307,9 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         // and a caller that has already given up should not join that queue.
         cancellationToken.ThrowIfCancellationRequested();
 
-        using System.Diagnostics.Activity? span =
-            PipeWireDiagnostics.Source.StartActivity("pipewire.stream.connect");
+        using System.Diagnostics.Activity? span = PipeWireDiagnostics.Source.StartActivity(
+            "pipewire.stream.connect"
+        );
         span?.SetTag("pipewire.stream.name", _streamName);
         span?.SetTag("pipewire.stream.direction", direction.ToString());
         span?.SetTag("pipewire.target.node", targetNodeId);
@@ -314,10 +330,19 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
                 spa_pod** offers = stackalloc spa_pod*[3];
                 uint count = 0;
                 offers[count++] = (spa_pod*)fp;
-                if (!fallbackPod.IsEmpty) offers[count++] = (spa_pod*)fb;
-                if (!capabilityPod.IsEmpty) offers[count++] = (spa_pod*)cp;
+                if (!fallbackPod.IsEmpty)
+                    offers[count++] = (spa_pod*)fb;
+                if (!capabilityPod.IsEmpty)
+                    offers[count++] = (spa_pod*)cp;
 
-                rc = Native.pw_stream_connect(_stream, direction, targetNodeId, flags, offers, count);
+                rc = Native.pw_stream_connect(
+                    _stream,
+                    direction,
+                    targetNodeId,
+                    flags,
+                    offers,
+                    count
+                );
             }
             if (rc < 0)
                 throw new PipeWireInteropException("pw_stream_connect", rc);
@@ -343,13 +368,15 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// <summary>Puts the stream into the error state and tells the daemon why.</summary>
     internal unsafe void SetError(int result, string message, CancellationToken cancellationToken)
     {
-        if (_disposed || _stream is null) return;
+        if (_disposed || _stream is null)
+            return;
         cancellationToken.ThrowIfCancellationRequested();
 
         using (_ctx.Lock())
         {
             pw_stream* stream = _stream;
-            if (_disposed || stream is null) return;
+            if (_disposed || stream is null)
+                return;
 
             Native.pw_stream_set_error(stream, result, message);
         }
@@ -387,11 +414,13 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         {
             throw new InvalidOperationException(
                 "A stream cannot be disposed from its own callback: the callback's frame is still "
-                + "using the stream, and destroying it here corrupts the loop thread. Signal your "
-                + "own code from the handler and dispose from the thread that created the stream.");
+                    + "using the stream, and destroying it here corrupts the loop thread. Signal your "
+                    + "own code from the handler and dispose from the thread that created the stream."
+            );
         }
 
-        if (Interlocked.Exchange(ref _disposedFlag, 1) != 0) return;
+        if (Interlocked.Exchange(ref _disposedFlag, 1) != 0)
+            return;
 
         // The drive timer first, and while the stream is still alive. The source belongs to the
         // stream's data loop and holds a pointer to this instance's handle; destroying it after the
@@ -447,13 +476,15 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     private static void OnProcess(void* data)
     {
         PipeWireStreamCore? self = FromData(data);
-        if (self is null || self._disposed) return;
+        if (self is null || self._disposed)
+            return;
 
         // Snapshotted once. Every call in this callback, including the queue in the finally, must
         // use the same pointer: re-reading the field would let a disposal between the dequeue and
         // the requeue hand the second call a different one.
         pw_stream* stream = self._stream;
-        if (stream is null) return;
+        if (stream is null)
+            return;
 
         pw_buffer* buf = Native.pw_stream_dequeue_buffer(stream);
         if (buf is null)
@@ -469,13 +500,19 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
             // The count and the array are separate fields of a struct this process does not own, so
             // a non-zero count with no array behind it is a shape the daemon can present.
-            if (spaBuf is null || spaBuf->datas is null || spaBuf->n_datas == 0) return;
+            if (spaBuf is null || spaBuf->datas is null || spaBuf->n_datas == 0)
+                return;
 
             if (!self._firstBufferLogged)
             {
                 self._firstBufferLogged = true;
                 spa_data* d0 = &spaBuf->datas[0];
-                self.LogFirstBuffer(spaBuf->n_datas, d0->type, d0->chunk is null ? 0u : d0->chunk->size, d0->maxsize);
+                self.LogFirstBuffer(
+                    spaBuf->n_datas,
+                    d0->type,
+                    d0->chunk is null ? 0u : d0->chunk->size,
+                    d0->maxsize
+                );
             }
 
             // Graph clock for this cycle - the common monotonic reference across all streams,
@@ -491,19 +528,26 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
                 // overflow for any rate a sound card has. Ticks and rates are non-negative by
                 // construction, so the media product is unsigned; the delay below stays signed
                 // because negative latency compensation exists.
-                long num = t.rate.num, denom = t.rate.denom;     // seconds per tick = num/denom
-                long mediaNs = denom != 0
-                    ? (long)((UInt128)t.ticks * (UInt128)num * 1_000_000_000 / (UInt128)denom)
-                    : -1;
-                long delayNs = denom != 0
-                    ? (long)((Int128)(long)t.delay * num * 1_000_000_000 / denom)
-                    : 0;
+                long num = t.rate.num,
+                    denom = t.rate.denom; // seconds per tick = num/denom
+                long mediaNs =
+                    denom != 0
+                        ? (long)((UInt128)t.ticks * (UInt128)num * 1_000_000_000 / (UInt128)denom)
+                        : -1;
+                long delayNs =
+                    denom != 0 ? (long)((Int128)(long)t.delay * num * 1_000_000_000 / denom) : 0;
                 // Occupancy as well as time. These are what a rate controller measures its error
                 // against: module-rtp reads its own ring buffer because it owns one, but a stream
                 // consumer's queue is the stream's, and this is where its depth is reported.
                 clock = new StreamClock(
-                    (long)t.now, mediaNs, delayNs,
-                    t.queued, t.buffered, t.queued_buffers, t.avail_buffers);
+                    (long)t.now,
+                    mediaNs,
+                    delayNs,
+                    t.queued,
+                    t.buffered,
+                    t.queued_buffers,
+                    t.avail_buffers
+                );
             }
 
             spa_data* d = &spaBuf->datas[0];
@@ -556,7 +600,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     private static void OnAddBuffer(void* data, pw_buffer* buffer)
     {
         PipeWireStreamCore? self = FromData(data);
-        if (self is null || self._disposed) return;
+        if (self is null || self._disposed)
+            return;
         // The producer backs this buffer with its own dmabuf here. An escaping throw would abort the
         // process, and a silent swallow hides a handler that fails on every buffer, so the fault is
         // recorded for a non-realtime reader.
@@ -578,7 +623,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     private static void OnRemoveBuffer(void* data, pw_buffer* buffer)
     {
         PipeWireStreamCore? self = FromData(data);
-        if (self is null) return;
+        if (self is null)
+            return;
         try
         {
             self._onRemoveBuffer?.Invoke(buffer);
@@ -594,10 +640,16 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void OnStateChanged(void* data, PipeWireStreamState old, PipeWireStreamState state, sbyte* error)
+    private static void OnStateChanged(
+        void* data,
+        PipeWireStreamState old,
+        PipeWireStreamState state,
+        sbyte* error
+    )
     {
         PipeWireStreamCore? self = FromData(data);
-        if (self is null) return;
+        if (self is null)
+            return;
 
         // The whole body, not just the handler. Reading the daemon's error string is a marshal over
         // a pointer this process did not allocate, and it is as capable of throwing out of a native
@@ -636,8 +688,11 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// </remarks>
     private void SettleStreaming(PipeWireStreamState state)
     {
-        if (state is PipeWireStreamState.Paused or PipeWireStreamState.Streaming
-            && NodeId is var id && id != NativeConstants.PW_ID_ANY)
+        if (
+            state is PipeWireStreamState.Paused or PipeWireStreamState.Streaming
+            && NodeId is var id
+            && id != NativeConstants.PW_ID_ANY
+        )
         {
             _bound.TrySetResult(id);
         }
@@ -650,8 +705,11 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
             case PipeWireStreamState.Error:
                 var refused = new PipeWireRequestRefusedException(
-                    "pw_stream_connect", 0, _targetNodeId,
-                    _lastError ?? $"stream '{_streamName}' reported no reason");
+                    "pw_stream_connect",
+                    0,
+                    _targetNodeId,
+                    _lastError ?? $"stream '{_streamName}' reported no reason"
+                );
                 _streaming.TrySetException(refused);
                 _bound.TrySetException(refused);
                 break;
@@ -690,7 +748,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     private static void OnControlInfo(void* data, uint id, pw_stream_control* control)
     {
         PipeWireStreamCore? self = FromData(data);
-        if (self is null) return;
+        if (self is null)
+            return;
 
         // Contained in full: this reads a struct and a string the daemon owns, and it is a native
         // frame where anything escaping aborts the process.
@@ -705,12 +764,14 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             // n_values is the daemon's word for how long the array is. Capped before a span is
             // built over it, the same way every other length off the wire is.
             uint count = control->n_values;
-            if (count > MaxControlValues) count = MaxControlValues;
+            if (count > MaxControlValues)
+                count = MaxControlValues;
 
             var values = ImmutableArray.CreateBuilder<float>((int)count);
             if (control->values is not null)
             {
-                for (uint i = 0; i < count; i++) values.Add(control->values[i]);
+                for (uint i = 0; i < count; i++)
+                    values.Add(control->values[i]);
             }
 
             self._controls[id] = new PipeWireStreamControl(
@@ -720,7 +781,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
                 control->min,
                 control->max,
                 values.ToImmutable(),
-                control->max_values);
+                control->max_values
+            );
         }
         catch (Exception ex)
         {
@@ -757,27 +819,42 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// and several go as an Array of Float, which is the distinction its own builder makes.
     /// </para>
     /// </remarks>
-    internal void SetControl(uint id, ReadOnlySpan<float> values, CancellationToken cancellationToken)
+    internal void SetControl(
+        uint id,
+        ReadOnlySpan<float> values,
+        CancellationToken cancellationToken
+    )
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
 
-        SpaValue value = values.Length == 1
-            ? new SpaFloat(values[0])
-            : new SpaArray(SpaType.Float, [.. values.ToArray().Select(static v => (SpaValue)new SpaFloat(v))]);
+        SpaValue value =
+            values.Length == 1
+                ? new SpaFloat(values[0])
+                : new SpaArray(
+                    SpaType.Float,
+                    [.. values.ToArray().Select(static v => (SpaValue)new SpaFloat(v))]
+                );
 
-        byte[] pod = SpaPod.ToBytes(new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-            [new SpaPodProperty(id, 0, value)]));
+        byte[] pod = SpaPod.ToBytes(
+            new SpaObject(
+                SpaType.ObjectProps,
+                SpaParamType.Props,
+                [new SpaPodProperty(id, 0, value)]
+            )
+        );
 
         using (_ctx.Lock())
         {
             pw_stream* stream = _stream;
-            if (stream is null) throw new ObjectDisposedException(nameof(PipeWireStreamCore));
+            if (stream is null)
+                throw new ObjectDisposedException(nameof(PipeWireStreamCore));
 
             fixed (byte* p = pod)
             {
                 int rc = Native.pw_stream_set_param(stream, (uint)SpaParamType.Props, (spa_pod*)p);
-                if (rc < 0) throw new PipeWireInteropException("pw_stream_set_param", rc);
+                if (rc < 0)
+                    throw new PipeWireInteropException("pw_stream_set_param", rc);
             }
         }
     }
@@ -797,7 +874,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             return;
         }
 
-        if (self is null || self._disposed) return;
+        if (self is null || self._disposed)
+            return;
 
         // Null means the parameter was withdrawn, not that it is unchanged. For the Format that is
         // the daemon saying the stream is no longer configured, and keeping the last one delivers
@@ -805,14 +883,22 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         // reset; every other param is genuinely nothing to do.
         if (param is null)
         {
-            if ((SpaParamType)id != SpaParamType.Format) return;
+            if ((SpaParamType)id != SpaParamType.Format)
+                return;
 
-        using System.Diagnostics.Activity? span =
-            PipeWireDiagnostics.Source.StartActivity("pipewire.stream.negotiate");
-        span?.SetTag("pipewire.stream.name", self._streamName);
+            using System.Diagnostics.Activity? span = PipeWireDiagnostics.Source.StartActivity(
+                "pipewire.stream.negotiate"
+            );
+            span?.SetTag("pipewire.stream.name", self._streamName);
 
-            try { self._onFormat?.Invoke(null); }
-            catch (Exception ex) { self.LogFormatHandlerThrew(ex); }
+            try
+            {
+                self._onFormat?.Invoke(null);
+            }
+            catch (Exception ex)
+            {
+                self.LogFormatHandlerThrew(ex);
+            }
             return;
         }
 
@@ -836,7 +922,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             return;
         }
 
-        if ((SpaParamType)id != SpaParamType.Format) return;
+        if ((SpaParamType)id != SpaParamType.Format)
+            return;
 
         // This runs in an unmanaged callback, so contain it: an escaping exception would abort the process.
         try
@@ -859,7 +946,11 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             self.LogFormatHandlerThrew(ex);
 
             if (!self._disposed && self._stream is not null)
-                Native.pw_stream_set_error(self._stream, -NativeLibc.EINVAL, $"format handler failed: {ex.Message}");
+                Native.pw_stream_set_error(
+                    self._stream,
+                    -NativeLibc.EINVAL,
+                    $"format handler failed: {ex.Message}"
+                );
         }
     }
 
@@ -886,7 +977,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// </summary>
     internal void SetActive(bool active)
     {
-        if (_disposed || _stream is null) return;
+        if (_disposed || _stream is null)
+            return;
 
         using (_ctx.Lock())
         {
@@ -901,7 +993,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// </summary>
     internal void SetActiveFromCallback(bool active)
     {
-        if (_disposed || _stream is null) return;
+        if (_disposed || _stream is null)
+            return;
 
         Native.pw_stream_set_active(_stream, active);
     }
@@ -927,8 +1020,14 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     private static unsafe void OnDrained(void* data)
     {
         PipeWireStreamCore? self;
-        try { self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target; }
-        catch (Exception) { return; }
+        try
+        {
+            self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target;
+        }
+        catch (Exception)
+        {
+            return;
+        }
         self?._drained?.TrySetResult();
     }
 
@@ -946,29 +1045,51 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     private static unsafe void OnCommandArrived(void* data, spa_command* command)
     {
         PipeWireStreamCore? self;
-        try { self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target; }
-        catch (Exception) { return; }
-        if (self is null || command is null) return;
+        try
+        {
+            self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target;
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        if (self is null || command is null)
+            return;
 
         // SPA_COMMAND_ID: the id only means a node command when the body says it is one, and a
         // command of another type reuses the same numbers for different things.
-        if (command->body.body.type != (uint)SpaType.CommandNode) return;
+        if (command->body.body.type != (uint)SpaType.CommandNode)
+            return;
 
         CommandHandler? handler = self._onCommand;
-        if (handler is null) return;
+        if (handler is null)
+            return;
 
         // A native callback frame: an escaping exception aborts the process.
-        try { handler((SpaNodeCommand)command->body.body.id); }
-        catch (Exception ex) { self.LogCommandHandlerThrew(ex); }
+        try
+        {
+            handler((SpaNodeCommand)command->body.body.id);
+        }
+        catch (Exception ex)
+        {
+            self.LogCommandHandlerThrew(ex);
+        }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnTriggerDone(void* data)
     {
         PipeWireStreamCore? self;
-        try { self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target; }
-        catch (Exception) { return; }
-        if (self is null) return;
+        try
+        {
+            self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target;
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        if (self is null)
+            return;
         self.LogTriggerDone(self._triggerDone is { Task.IsCompleted: false });
         self._triggerDone?.TrySetResult();
     }
@@ -976,7 +1097,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// <summary>Drains what is queued and waits for the daemon to say it has played out.</summary>
     internal Task DrainAsync(CancellationToken cancellationToken)
     {
-        if (_disposed || _stream is null) return Task.CompletedTask;
+        if (_disposed || _stream is null)
+            return Task.CompletedTask;
 
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _drained = done;
@@ -987,14 +1109,18 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// <summary>Runs one cycle and waits for it to finish. Only meaningful while driving.</summary>
     internal Task TriggerAndWaitAsync(CancellationToken cancellationToken)
     {
-        if (_disposed || _stream is null) return Task.CompletedTask;
+        if (_disposed || _stream is null)
+            return Task.CompletedTask;
 
         // stream.c emits trigger_done only for a driving stream (driver_end && using_trigger), so a
         // follower's wait would never end. Refused up front rather than left to the caller's timeout.
         if (!IsDriving)
-            return Task.FromException(new InvalidOperationException(
-                "the stream is not the graph's driver, so no triggered cycle will report completion; "
-                + "connect with driver: true and wait for IsDriving"));
+            return Task.FromException(
+                new InvalidOperationException(
+                    "the stream is not the graph's driver, so no triggered cycle will report completion; "
+                        + "connect with driver: true and wait for IsDriving"
+                )
+            );
 
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _triggerDone = done;
@@ -1008,7 +1134,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         using (_ctx.Lock())
         {
             pw_stream* stream = _stream;
-            if (_disposed || stream is null) return;
+            if (_disposed || stream is null)
+                return;
             Native.pw_stream_flush(stream, drain: true);
         }
     }
@@ -1019,19 +1146,28 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     private static unsafe void OnIoChanged(void* data, uint id, void* area, uint size)
     {
         PipeWireStreamCore? self;
-        try { self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target; }
-        catch (Exception) { return; }
-        if (self is null || self._disposed) return;
+        try
+        {
+            self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target;
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        if (self is null || self._disposed)
+            return;
 
         // A null area means the graph took it away, which happens on disconnect; keeping the old
         // pointer would read freed memory on the next look.
         switch (id)
         {
             case (uint)SpaIoType.Position:
-                self._ioPosition = size >= (uint)sizeof(spa_io_position) ? (spa_io_position*)area : null;
+                self._ioPosition =
+                    size >= (uint)sizeof(spa_io_position) ? (spa_io_position*)area : null;
                 break;
             case (uint)SpaIoType.RateMatch:
-                self._ioRateMatch = size >= (uint)sizeof(spa_io_rate_match) ? (spa_io_rate_match*)area : null;
+                self._ioRateMatch =
+                    size >= (uint)sizeof(spa_io_rate_match) ? (spa_io_rate_match*)area : null;
                 break;
         }
     }
@@ -1041,17 +1177,25 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     {
         get
         {
-            if (_disposed) return null;
+            if (_disposed)
+                return null;
 
             using (_ctx.Lock())
             {
                 spa_io_position* p = _ioPosition;
-                if (_disposed || p is null) return null;
+                if (_disposed || p is null)
+                    return null;
 
                 return new PipeWireGraphClock(
-                    p->clock.nsec, p->clock.position, p->clock.duration,
-                    p->clock.rate.num, p->clock.rate.denom,
-                    p->clock.delay, p->clock.rate_diff, p->clock.next_nsec);
+                    p->clock.nsec,
+                    p->clock.position,
+                    p->clock.duration,
+                    p->clock.rate.num,
+                    p->clock.rate.denom,
+                    p->clock.delay,
+                    p->clock.rate_diff,
+                    p->clock.next_nsec
+                );
             }
         }
     }
@@ -1061,12 +1205,14 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     {
         get
         {
-            if (_disposed) return null;
+            if (_disposed)
+                return null;
 
             using (_ctx.Lock())
             {
                 spa_io_rate_match* r = _ioRateMatch;
-                if (_disposed || r is null) return null;
+                if (_disposed || r is null)
+                    return null;
 
                 return new PipeWireRateMatch(r->delay, r->size, r->rate, r->flags);
             }
@@ -1076,13 +1222,15 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// <summary>Applies a rate correction, 1.0 being none.</summary>
     internal unsafe void SetRate(double rate, CancellationToken cancellationToken)
     {
-        if (_disposed || _stream is null) return;
+        if (_disposed || _stream is null)
+            return;
         cancellationToken.ThrowIfCancellationRequested();
 
         using (_ctx.Lock())
         {
             pw_stream* stream = _stream;
-            if (_disposed || stream is null) return;
+            if (_disposed || stream is null)
+                return;
             Native.pw_stream_set_rate(stream, rate);
         }
     }
@@ -1096,9 +1244,14 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// told about. PipeWire's own rtp and tunnel modules announce both of these together, which is
     /// why both are taken here rather than one.
     /// </remarks>
-    internal unsafe void AnnounceLatency(PipeWireLatency latency, PipeWireProcessLatency? process, CancellationToken cancellationToken)
+    internal unsafe void AnnounceLatency(
+        PipeWireLatency latency,
+        PipeWireProcessLatency? process,
+        CancellationToken cancellationToken
+    )
     {
-        if (_disposed || _stream is null) return;
+        if (_disposed || _stream is null)
+            return;
         cancellationToken.ThrowIfCancellationRequested();
 
         byte[] latencyPod = SpaPod.ToBytes(latency.ToParameter());
@@ -1107,7 +1260,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         using (_ctx.Lock())
         {
             pw_stream* stream = _stream;
-            if (_disposed || stream is null) return;
+            if (_disposed || stream is null)
+                return;
 
             fixed (byte* lp = latencyPod)
             fixed (byte* pp = processPod)
@@ -1115,7 +1269,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
                 spa_pod** pods = stackalloc spa_pod*[2];
                 uint n = 0;
                 pods[n++] = (spa_pod*)lp;
-                if (processPod is not null) pods[n++] = (spa_pod*)pp;
+                if (processPod is not null)
+                    pods[n++] = (spa_pod*)pp;
 
                 Native.pw_stream_update_params(stream, pods, n);
             }
@@ -1139,17 +1294,26 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     private static unsafe void OnDriveTimer(void* data, ulong expirations)
     {
         PipeWireStreamCore? self;
-        try { self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target; }
-        catch (Exception) { return; }
-        if (self is null || self._disposed) return;
+        try
+        {
+            self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target;
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        if (self is null || self._disposed)
+            return;
 
         pw_stream* stream = self._stream;
-        if (stream is null) return;
+        if (stream is null)
+            return;
 
         // Already on the data loop, and trigger_process does its own hop, so no lock is taken:
         // taking the main loop lock from the data thread is the deadlock this path exists to avoid.
         // The clock is published first, on this same thread, as upstream's pipewiresink does.
-        if (Native.pw_stream_is_driving(stream)) self.PublishDriverClock(stream);
+        if (Native.pw_stream_is_driving(stream))
+            self.PublishDriverClock(stream);
         Native.pw_stream_trigger_process(stream);
     }
 
@@ -1183,11 +1347,13 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     private unsafe void PublishDriverClock(pw_stream* stream)
     {
         spa_io_position* p = _ioPosition;
-        if (p is null) return;
+        if (p is null)
+            return;
 
         ulong duration = p->clock.target_duration;
         spa_fraction rate = p->clock.target_rate;
-        if (duration == 0 || rate.denom == 0) return;
+        if (duration == 0 || rate.denom == 0)
+            return;
 
         ulong now = Native.pw_stream_get_nsec(stream);
 
@@ -1197,18 +1363,29 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         p->clock.nsec = now;
         p->clock.duration = duration;
         p->clock.rate = rate;
-        p->clock.next_nsec = now + (ulong)((UInt128)duration * rate.num * 1_000_000_000UL / rate.denom);
+        p->clock.next_nsec =
+            now + (ulong)((UInt128)duration * rate.num * 1_000_000_000UL / rate.denom);
         p->clock.rate_diff = 1.0;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe int DoPublishDriverClock(spa_loop* loop, bool async, uint seq, void* data, nuint size, void* userData)
+    private static unsafe int DoPublishDriverClock(
+        spa_loop* loop,
+        bool async,
+        uint seq,
+        void* data,
+        nuint size,
+        void* userData
+    )
     {
         // Runs under the data loop's lock, called from C: nothing may escape.
         try
         {
-            if (GCHandle.FromIntPtr((IntPtr)userData).Target is PipeWireStreamCore self
-                && !self._disposed && self._stream is not null)
+            if (
+                GCHandle.FromIntPtr((IntPtr)userData).Target is PipeWireStreamCore self
+                && !self._disposed
+                && self._stream is not null
+            )
             {
                 self.PublishDriverClock(self._stream);
             }
@@ -1242,18 +1419,22 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// </remarks>
     internal static unsafe void StampPresentationTime(pw_buffer* buf, long pts)
     {
-        if (pts < 0 || buf is null) return;
+        if (pts < 0 || buf is null)
+            return;
 
         spa_buffer* sb = buf->buffer;
-        if (sb is null || sb->metas is null) return;
+        if (sb is null || sb->metas is null)
+            return;
 
         uint metas = Math.Min(sb->n_metas, 64u);
         for (uint i = 0; i < metas; i++)
         {
             spa_meta* m = &sb->metas[i];
-            if (m->type != (uint)SpaMetaType.Header
+            if (
+                m->type != (uint)SpaMetaType.Header
                 || m->data is null
-                || m->size < (uint)sizeof(spa_meta_header))
+                || m->size < (uint)sizeof(spa_meta_header)
+            )
             {
                 continue;
             }
@@ -1283,7 +1464,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// </remarks>
     internal unsafe bool DriveAt(TimeSpan interval)
     {
-        if (_disposed || _stream is null) return false;
+        if (_disposed || _stream is null)
+            return false;
 
         _driveInterval = interval > TimeSpan.Zero ? interval : TimeSpan.Zero;
 
@@ -1295,27 +1477,36 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// <summary>Arms or disarms the drive timer to match the stream's state.</summary>
     private unsafe bool ApplyDriveTimer(PipeWireStreamState state)
     {
-        if (_disposed) return false;
+        if (_disposed)
+            return false;
 
         bool shouldRun = state == PipeWireStreamState.Streaming && _driveInterval > TimeSpan.Zero;
-        if (!shouldRun && _driveTimer is null) return true;
+        if (!shouldRun && _driveTimer is null)
+            return true;
 
         using (_ctx.Lock())
         {
             pw_stream* stream = _stream;
-            if (_disposed || stream is null) return false;
+            if (_disposed || stream is null)
+                return false;
 
             pw_loop* loop = Native.pw_stream_get_data_loop(stream);
-            if (loop is null || loop->utils is null) return false;
+            if (loop is null || loop->utils is null)
+                return false;
 
             if (_driveTimer is null)
             {
-                if (!shouldRun) return true;
+                if (!shouldRun)
+                    return true;
 
                 _driveTimer = Native.spa_loop_utils_add_timer(
-                    loop->utils, &OnDriveTimer, (void*)GCHandle.ToIntPtr(_selfHandle));
+                    loop->utils,
+                    &OnDriveTimer,
+                    (void*)GCHandle.ToIntPtr(_selfHandle)
+                );
 
-                if (_driveTimer is null) return false;
+                if (_driveTimer is null)
+                    return false;
             }
 
             PosixTimespec value = default;
@@ -1324,7 +1515,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             if (shouldRun)
             {
                 long ns = (long)(_driveInterval.TotalMilliseconds * 1_000_000.0);
-                if (ns <= 0) ns = 1;
+                if (ns <= 0)
+                    ns = 1;
                 value.tv_sec = (nint)(ns / 1_000_000_000);
                 value.tv_nsec = (nint)(ns % 1_000_000_000);
                 period = value;
@@ -1332,7 +1524,12 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
             // Both zero disarms, which is what a null pair means to the loop as well.
             return Native.spa_loop_utils_update_timer(
-                loop->utils, _driveTimer, &value, &period, absolute: false) == 0;
+                    loop->utils,
+                    _driveTimer,
+                    &value,
+                    &period,
+                    absolute: false
+                ) == 0;
         }
     }
 
@@ -1349,12 +1546,14 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// </remarks>
     internal unsafe int RequestFormats(ReadOnlySpan<byte> enumFormatPod)
     {
-        if (_disposed || _stream is null || enumFormatPod.IsEmpty) return -NativeLibc.EINVAL;
+        if (_disposed || _stream is null || enumFormatPod.IsEmpty)
+            return -NativeLibc.EINVAL;
 
         using (_ctx.Lock())
         {
             pw_stream* stream = _stream;
-            if (_disposed || stream is null) return -NativeLibc.EINVAL;
+            if (_disposed || stream is null)
+                return -NativeLibc.EINVAL;
 
             fixed (byte* p = enumFormatPod)
             {
@@ -1370,18 +1569,25 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     {
         get
         {
-            if (_disposed || _stream is null) return null;
+            if (_disposed || _stream is null)
+                return null;
 
             using (_ctx.Lock())
             {
                 pw_stream* stream = _stream;
-                if (_disposed || stream is null) return null;
+                if (_disposed || stream is null)
+                    return null;
 
                 pw_time t;
                 if (Native.pw_stream_get_time_n(stream, &t, (nuint)sizeof(pw_time)) != 0)
                     return null;
 
-                return new PipeWireStreamQueue(t.queued, t.buffered, t.queued_buffers, t.avail_buffers);
+                return new PipeWireStreamQueue(
+                    t.queued,
+                    t.buffered,
+                    t.queued_buffers,
+                    t.avail_buffers
+                );
             }
         }
     }
@@ -1398,12 +1604,14 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     {
         get
         {
-            if (_disposed || _stream is null) return false;
+            if (_disposed || _stream is null)
+                return false;
 
             using (_ctx.Lock())
             {
                 pw_stream* stream = _stream;
-                if (_disposed || stream is null) return false;
+                if (_disposed || stream is null)
+                    return false;
                 return Native.pw_stream_is_lazy(stream);
             }
         }
@@ -1420,7 +1628,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     internal unsafe int UpdateProperties(IReadOnlyDictionary<string, string> properties)
     {
         ArgumentNullException.ThrowIfNull(properties);
-        if (_disposed || _stream is null || properties.Count == 0) return 0;
+        if (_disposed || _stream is null || properties.Count == 0)
+            return 0;
 
         // Sized from the input rather than a fixed scratch: a caller retagging with a long
         // media.name would otherwise silently lose the tail. UTF-8 is at most 4 bytes per char,
@@ -1441,7 +1650,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         using (_ctx.Lock())
         {
             pw_stream* stream = _stream;
-            if (_disposed || stream is null) return 0;
+            if (_disposed || stream is null)
+                return 0;
             return Native.pw_stream_update_properties(stream, &native);
         }
     }
@@ -1450,12 +1660,14 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     {
         get
         {
-            if (_disposed || _stream is null) return false;
+            if (_disposed || _stream is null)
+                return false;
 
             using (_ctx.Lock())
             {
                 pw_stream* stream = _stream;
-                if (_disposed || stream is null) return false;
+                if (_disposed || stream is null)
+                    return false;
                 return Native.pw_stream_is_driving(stream);
             }
         }
@@ -1467,7 +1679,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// </summary>
     internal void TriggerProcess()
     {
-        if (_disposed || _stream is null) return;
+        if (_disposed || _stream is null)
+            return;
 
         using (_ctx.Lock())
         {
@@ -1475,14 +1688,16 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             // concurrent disposal clears, and taking the lock is exactly the window in which that
             // happens, so a pointer read after it can be null where the one before it was not.
             pw_stream* stream = _stream;
-            if (_disposed || stream is null) return;
+            if (_disposed || stream is null)
+                return;
 
             // Only a driving stream may trigger. Upstream routes the request to whichever node is
             // actually driving the graph, and asking a node that does not implement RequestProcess
             // - an audio adapter, typically - produces an error per call, so a caller pacing at
             // frame rate turns into an error per frame in the daemon's log for no effect. Whether
             // this stream drives is the daemon's answer, not ours: it depends on the graph.
-            if (!Native.pw_stream_is_driving(stream)) return;
+            if (!Native.pw_stream_is_driving(stream))
+                return;
 
             // The clock is written under the data loop's lock rather than from here directly: the
             // processing thread reads that area, and this is the main thread. Synchronous, so the
@@ -1490,7 +1705,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             _ = Native.pw_loop_locked(
                 Native.pw_stream_get_data_loop(stream),
                 &DoPublishDriverClock,
-                (void*)GCHandle.ToIntPtr(_selfHandle));
+                (void*)GCHandle.ToIntPtr(_selfHandle)
+            );
 
             int rc = Native.pw_stream_trigger_process(stream);
             LogTriggered(rc);
@@ -1509,10 +1725,12 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// <param name="count">How many pods are in the buffer.</param>
     internal int RequestParamsFromCallback(ReadOnlySpan<byte> pods, int count)
     {
-        if (pods.IsEmpty || count <= 0) return -NativeLibc.EINVAL;
+        if (pods.IsEmpty || count <= 0)
+            return -NativeLibc.EINVAL;
 
         pw_stream* stream = _stream;
-        if (_disposed || stream is null) return -NativeLibc.EINVAL;
+        if (_disposed || stream is null)
+            return -NativeLibc.EINVAL;
 
         fixed (byte* start = pods)
         {
@@ -1522,7 +1740,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
             for (int i = 0; i < count; i++)
             {
-                if (p + sizeof(spa_pod) > end) return -NativeLibc.EINVAL;
+                if (p + sizeof(spa_pod) > end)
+                    return -NativeLibc.EINVAL;
 
                 arr[i] = (spa_pod*)p;
 
@@ -1531,7 +1750,8 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
                 advance = (advance + 7) & ~(nuint)7;
                 p += advance;
 
-                if (p > end && i + 1 < count) return -NativeLibc.EINVAL;
+                if (p > end && i + 1 < count)
+                    return -NativeLibc.EINVAL;
             }
 
             return Native.pw_stream_update_params(stream, arr, (uint)count);
@@ -1552,24 +1772,35 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     /// The daemon's result, negative on failure, or <c>-EINVAL</c> when there was nothing to send.
     /// </returns>
     internal int RequestParamsFromCallback(
-        ReadOnlySpan<byte> pod0, ReadOnlySpan<byte> pod1 = default, ReadOnlySpan<byte> pod2 = default,
-        ReadOnlySpan<byte> pod3 = default, ReadOnlySpan<byte> pod4 = default, ReadOnlySpan<byte> pod5 = default)
+        ReadOnlySpan<byte> pod0,
+        ReadOnlySpan<byte> pod1 = default,
+        ReadOnlySpan<byte> pod2 = default,
+        ReadOnlySpan<byte> pod3 = default,
+        ReadOnlySpan<byte> pod4 = default,
+        ReadOnlySpan<byte> pod5 = default
+    )
     {
         // An empty span fixes to a null pointer, and handing the daemon an array of one null pod
         // with a count of one is a dereference on its side, not ours. Snapshotted once for the same
         // reason OnProcess does: the field can be cleared by a disposal between the two reads.
-        if (pod0.IsEmpty) return -NativeLibc.EINVAL;
+        if (pod0.IsEmpty)
+            return -NativeLibc.EINVAL;
 
         // A gap would put a null in the middle of the array, which is the same dereference one
         // position along. Refused rather than compacted: a caller passing the third and not the
         // second has miscounted, and silently sending two pods hides that.
-        if (pod1.IsEmpty && !pod2.IsEmpty) return -NativeLibc.EINVAL;
-        if (pod2.IsEmpty && !pod3.IsEmpty) return -NativeLibc.EINVAL;
-        if (pod3.IsEmpty && !pod4.IsEmpty) return -NativeLibc.EINVAL;
-        if (pod4.IsEmpty && !pod5.IsEmpty) return -NativeLibc.EINVAL;
+        if (pod1.IsEmpty && !pod2.IsEmpty)
+            return -NativeLibc.EINVAL;
+        if (pod2.IsEmpty && !pod3.IsEmpty)
+            return -NativeLibc.EINVAL;
+        if (pod3.IsEmpty && !pod4.IsEmpty)
+            return -NativeLibc.EINVAL;
+        if (pod4.IsEmpty && !pod5.IsEmpty)
+            return -NativeLibc.EINVAL;
 
         pw_stream* stream = _stream;
-        if (_disposed || stream is null) return -NativeLibc.EINVAL;
+        if (_disposed || stream is null)
+            return -NativeLibc.EINVAL;
 
         fixed (byte* p0 = pod0)
         fixed (byte* p1 = pod1)
@@ -1581,11 +1812,16 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             spa_pod** arr = stackalloc spa_pod*[6];
             int count = 0;
             arr[count++] = (spa_pod*)p0;
-            if (!pod1.IsEmpty) arr[count++] = (spa_pod*)p1;
-            if (!pod2.IsEmpty) arr[count++] = (spa_pod*)p2;
-            if (!pod3.IsEmpty) arr[count++] = (spa_pod*)p3;
-            if (!pod4.IsEmpty) arr[count++] = (spa_pod*)p4;
-            if (!pod5.IsEmpty) arr[count++] = (spa_pod*)p5;
+            if (!pod1.IsEmpty)
+                arr[count++] = (spa_pod*)p1;
+            if (!pod2.IsEmpty)
+                arr[count++] = (spa_pod*)p2;
+            if (!pod3.IsEmpty)
+                arr[count++] = (spa_pod*)p3;
+            if (!pod4.IsEmpty)
+                arr[count++] = (spa_pod*)p4;
+            if (!pod5.IsEmpty)
+                arr[count++] = (spa_pod*)p5;
 
             return Native.pw_stream_update_params(stream, arr, (uint)count);
         }
@@ -1604,10 +1840,16 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     [LoggerMessage(Level = LogLevel.Trace, Message = "param_changed id={Id}")]
     private partial void LogParamChanged(uint id);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "first buffer: n_datas={Blocks} type={DataType} size={Size} maxsize={MaxSize}")]
+    [LoggerMessage(
+        Level = LogLevel.Debug,
+        Message = "first buffer: n_datas={Blocks} type={DataType} size={Size} maxsize={MaxSize}"
+    )]
     private partial void LogFirstBuffer(uint blocks, uint dataType, uint size, uint maxSize);
 
-    [LoggerMessage(Level = LogLevel.Trace, Message = "process: no buffer dequeued (producer underrun or not yet started)")]
+    [LoggerMessage(
+        Level = LogLevel.Trace,
+        Message = "process: no buffer dequeued (producer underrun or not yet started)"
+    )]
     private partial void LogDequeueEmpty();
 
     [LoggerMessage(Level = LogLevel.Error, Message = "a node command handler threw")]
@@ -1616,20 +1858,37 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     [LoggerMessage(Level = LogLevel.Error, Message = "a stream state handler threw")]
     private partial void LogStateHandlerThrew(Exception ex);
 
-    [LoggerMessage(EventId = 34990, Level = LogLevel.Error,
-        Message = "a control_info callback threw")]
+    [LoggerMessage(
+        EventId = 34990,
+        Level = LogLevel.Error,
+        Message = "a control_info callback threw"
+    )]
     private partial void LogControlInfoThrew(Exception ex);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "a format handler threw; negotiation continued with defaults")]
+    [LoggerMessage(
+        Level = LogLevel.Error,
+        Message = "a format handler threw; negotiation continued with defaults"
+    )]
     private partial void LogFormatHandlerThrew(Exception ex);
 
-    [LoggerMessage(EventId = 34992, Level = LogLevel.Trace, Message = "trigger_process -> {Result}")]
+    [LoggerMessage(
+        EventId = 34992,
+        Level = LogLevel.Trace,
+        Message = "trigger_process -> {Result}"
+    )]
     private partial void LogTriggered(int result);
 
-    [LoggerMessage(EventId = 34993, Level = LogLevel.Trace, Message = "trigger_done (a wait was pending: {Pending})")]
+    [LoggerMessage(
+        EventId = 34993,
+        Level = LogLevel.Trace,
+        Message = "trigger_done (a wait was pending: {Pending})"
+    )]
     private partial void LogTriggerDone(bool pending);
 
-    [LoggerMessage(EventId = 34991, Level = LogLevel.Error,
-        Message = "the peer-capability handler threw; an INACTIVE stream stays inactive")]
+    [LoggerMessage(
+        EventId = 34991,
+        Level = LogLevel.Error,
+        Message = "the peer-capability handler threw; an INACTIVE stream stays inactive"
+    )]
     private partial void LogPeerHandlerThrew(Exception ex);
 }

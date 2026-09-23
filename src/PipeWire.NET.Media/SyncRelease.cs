@@ -26,7 +26,9 @@ namespace PipeWire.NET.Media;
 internal readonly struct SyncRelease
 {
     // 0 is "nothing promised", which is what default(SyncRelease) must mean.
-    private const byte None = 0, Syncobj = 1, Eventfd = 2;
+    private const byte None = 0,
+        Syncobj = 1,
+        Eventfd = 2;
 
     private readonly byte _kind;
     private readonly uint _handle;
@@ -50,7 +52,8 @@ internal readonly struct SyncRelease
     /// </summary>
     internal static SyncRelease For(int releaseFd, ulong point)
     {
-        if (releaseFd < 0 || point == 0) return default;
+        if (releaseFd < 0 || point == 0)
+            return default;
 
         return SyncTimeline.Classify(releaseFd, out uint handle, out _) switch
         {

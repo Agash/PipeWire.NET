@@ -59,11 +59,19 @@ public sealed class GeneratedKeyRoundTripTests
         string description = $"description-{Guid.NewGuid():N}";
         string role = "Production";
 
-        await using var ctx = new PipeWireContext("pwnet-keyroundtrip", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-keyroundtrip",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var output = new PipeWireAudioOutput(
-            ctx, nodeName, Rate, Channels, AudioSampleFormat.F32Le);
+            ctx,
+            nodeName,
+            Rate,
+            Channels,
+            AudioSampleFormat.F32Le
+        );
 
         output.FillSamples += (_, samples, _, _, _) =>
         {
@@ -77,11 +85,13 @@ public sealed class GeneratedKeyRoundTripTests
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         // Retag while running, which is the path that writes the keys through to the daemon.
-        int changed = output.UpdateProperties(new Dictionary<string, string>
-        {
-            [PipeWireKeys.PW_KEY_NODE_DESCRIPTION] = description,
-            [PipeWireKeys.PW_KEY_MEDIA_ROLE] = role,
-        });
+        int changed = output.UpdateProperties(
+            new Dictionary<string, string>
+            {
+                [PipeWireKeys.PW_KEY_NODE_DESCRIPTION] = description,
+                [PipeWireKeys.PW_KEY_MEDIA_ROLE] = role,
+            }
+        );
 
         Assert.IsTrue(changed > 0, "the daemon accepted no property change");
 
@@ -89,8 +99,14 @@ public sealed class GeneratedKeyRoundTripTests
         for (var attempt = 0; attempt < 40 && seen is null; attempt++)
         {
             PwDump dump = await PwDump.CaptureAsync(cts.Token);
-            seen = dump.OfKind("Node").FirstOrDefault(
-                e => string.Equals(e.Prop(PipeWireKeys.PW_KEY_NODE_NAME), nodeName, StringComparison.Ordinal));
+            seen = dump.OfKind("Node")
+                .FirstOrDefault(e =>
+                    string.Equals(
+                        e.Prop(PipeWireKeys.PW_KEY_NODE_NAME),
+                        nodeName,
+                        StringComparison.Ordinal
+                    )
+                );
 
             if (seen is null || seen.Prop(PipeWireKeys.PW_KEY_NODE_DESCRIPTION) is null)
             {
@@ -106,17 +122,20 @@ public sealed class GeneratedKeyRoundTripTests
         Assert.AreEqual(
             description,
             seen!.Prop(PipeWireKeys.PW_KEY_NODE_DESCRIPTION),
-            $"'{PipeWireKeys.PW_KEY_NODE_DESCRIPTION}' is not the name the daemon stored it under");
+            $"'{PipeWireKeys.PW_KEY_NODE_DESCRIPTION}' is not the name the daemon stored it under"
+        );
 
         Assert.AreEqual(
             role,
             seen.Prop(PipeWireKeys.PW_KEY_MEDIA_ROLE),
-            $"'{PipeWireKeys.PW_KEY_MEDIA_ROLE}' is not the name the daemon stored it under");
+            $"'{PipeWireKeys.PW_KEY_MEDIA_ROLE}' is not the name the daemon stored it under"
+        );
 
         Assert.AreEqual(
             nodeName,
             seen.Prop(PipeWireKeys.PW_KEY_NODE_NAME),
-            $"'{PipeWireKeys.PW_KEY_NODE_NAME}' is not the name the daemon stored it under");
+            $"'{PipeWireKeys.PW_KEY_NODE_NAME}' is not the name the daemon stored it under"
+        );
     }
 
     /// <summary>
@@ -138,26 +157,32 @@ public sealed class GeneratedKeyRoundTripTests
         // A sink of our own, so the set below does not depend on the session having hardware. A
         // headless runner has no card and therefore no ports at all, which made this fail for a
         // reason that says nothing about whether the generated names match the wire.
-        await using var ctx = new PipeWireContext("pwnet-typenames", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-typenames",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         PipeWireNode sink = await reg.CreateVirtualSinkAsync(
-            "pwnet type names", cancellationToken: cts.Token);
+            "pwnet type names",
+            cancellationToken: cts.Token
+        );
 
         for (var i = 0; i < 100 && !reg.Current.Ports.Any(p => p.NodeId == sink.NodeId); i++)
             await Task.Delay(50, cts.Token);
 
         Assert.IsTrue(
             reg.Current.Ports.Any(p => p.NodeId == sink.NodeId),
-            "the virtual sink never published a port, so there is nothing to compare against");
+            "the virtual sink never published a port, so there is nothing to compare against"
+        );
 
         PwDump dump = await PwDump.CaptureAsync(cts.Token);
 
         // pw-dump prints the full "PipeWire:Interface:Node" in each entry's type field.
-        var types = dump.Entries
-            .Select(e => e.Type)
+        var types = dump
+            .Entries.Select(e => e.Type)
             .Where(t => t.StartsWith("PipeWire:Interface:", StringComparison.Ordinal))
             .ToHashSet(StringComparer.Ordinal);
 
@@ -165,20 +190,23 @@ public sealed class GeneratedKeyRoundTripTests
 
         // Only the ones a live session is certain to contain. A daemon with no security context or
         // profiler bound would make those absent for reasons that are not this library's fault.
-        foreach (string expected in new[]
-                 {
-                     PipeWireKeys.PW_TYPE_INTERFACE_Core,
-                     PipeWireKeys.PW_TYPE_INTERFACE_Node,
-                     PipeWireKeys.PW_TYPE_INTERFACE_Port,
-                     PipeWireKeys.PW_TYPE_INTERFACE_Client,
-                     PipeWireKeys.PW_TYPE_INTERFACE_Module,
-                     PipeWireKeys.PW_TYPE_INTERFACE_Factory,
-                 })
+        foreach (
+            string expected in new[]
+            {
+                PipeWireKeys.PW_TYPE_INTERFACE_Core,
+                PipeWireKeys.PW_TYPE_INTERFACE_Node,
+                PipeWireKeys.PW_TYPE_INTERFACE_Port,
+                PipeWireKeys.PW_TYPE_INTERFACE_Client,
+                PipeWireKeys.PW_TYPE_INTERFACE_Module,
+                PipeWireKeys.PW_TYPE_INTERFACE_Factory,
+            }
+        )
         {
             Assert.IsTrue(
                 types.Contains(expected),
                 $"the daemon reports no object of type '{expected}'; the generated name does not "
-                + $"match the wire. Present: {string.Join(", ", types.Order(StringComparer.Ordinal))}");
+                    + $"match the wire. Present: {string.Join(", ", types.Order(StringComparer.Ordinal))}"
+            );
         }
 
         await reg.DestroyGlobalAsync(sink.NodeId, cts.Token);
@@ -199,13 +227,21 @@ public sealed class GeneratedKeyRoundTripTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-clockadvance", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-clockadvance",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         string nodeName = $"pwnet-clockadvance-{Environment.ProcessId}";
 
         await using var output = new PipeWireAudioOutput(
-            ctx, nodeName, Rate, Channels, AudioSampleFormat.F32Le);
+            ctx,
+            nodeName,
+            Rate,
+            Channels,
+            AudioSampleFormat.F32Le
+        );
 
         output.FillSamples += (_, samples, _, _, _) =>
         {
@@ -234,25 +270,29 @@ public sealed class GeneratedKeyRoundTripTests
 
         Assert.IsTrue(
             readings.Count >= 6,
-            $"the graph clock produced only {readings.Count} distinct readings in two seconds");
+            $"the graph clock produced only {readings.Count} distinct readings in two seconds"
+        );
 
         for (var i = 1; i < readings.Count; i++)
         {
             Assert.IsTrue(
                 readings[i].TimeNs > readings[i - 1].TimeNs,
                 $"the clock went backwards at reading {i}: "
-                + $"{readings[i - 1].TimeNs} then {readings[i].TimeNs}");
+                    + $"{readings[i - 1].TimeNs} then {readings[i].TimeNs}"
+            );
 
             Assert.IsTrue(
                 readings[i].Position >= readings[i - 1].Position,
-                $"the graph position went backwards at reading {i}");
+                $"the graph position went backwards at reading {i}"
+            );
         }
 
         // Sampled over roughly two seconds of wall clock, so the reported time has to have moved
         // by a real amount rather than by a tick or two of jitter.
         Assert.IsTrue(
             readings[^1].TimeNs - readings[0].TimeNs > 100_000_000,
-            "the graph clock advanced by under 100ms while streaming for two seconds");
+            "the graph clock advanced by under 100ms while streaming for two seconds"
+        );
     }
 
     /// <summary>
@@ -270,14 +310,22 @@ public sealed class GeneratedKeyRoundTripTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-drivetimer", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-drivetimer",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         string nodeName = $"pwnet-drivetimer-{Environment.ProcessId}";
         var cycles = 0;
 
         await using var output = new PipeWireAudioOutput(
-            ctx, nodeName, Rate, Channels, AudioSampleFormat.F32Le);
+            ctx,
+            nodeName,
+            Rate,
+            Channels,
+            AudioSampleFormat.F32Le
+        );
 
         output.FillSamples += (_, samples, _, _, _) =>
         {

@@ -30,7 +30,11 @@ internal sealed unsafe class PipeWireCoreHandle : SafeHandle
     private bool _loopReferenced;
     private bool _contextReferenced;
 
-    internal PipeWireCoreHandle(pw_core* core, PipeWireLoopHandle loop, PipeWireContextHandle context)
+    internal PipeWireCoreHandle(
+        pw_core* core,
+        PipeWireLoopHandle loop,
+        PipeWireContextHandle context
+    )
         : base((IntPtr)core, ownsHandle: true)
     {
         ArgumentNullException.ThrowIfNull(loop);
@@ -48,8 +52,16 @@ internal sealed unsafe class PipeWireCoreHandle : SafeHandle
         }
         catch
         {
-            if (_contextReferenced) { context.DangerousRelease(); _contextReferenced = false; }
-            if (_loopReferenced) { loop.DangerousRelease(); _loopReferenced = false; }
+            if (_contextReferenced)
+            {
+                context.DangerousRelease();
+                _contextReferenced = false;
+            }
+            if (_loopReferenced)
+            {
+                loop.DangerousRelease();
+                _loopReferenced = false;
+            }
             throw;
         }
     }
@@ -67,7 +79,8 @@ internal sealed unsafe class PipeWireCoreHandle : SafeHandle
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _deterministic = true;
+        if (disposing)
+            _deterministic = true;
         base.Dispose(disposing);
     }
 
@@ -87,7 +100,8 @@ internal sealed unsafe class PipeWireCoreHandle : SafeHandle
     private bool NeedsLoop(out nint loop)
     {
         loop = 0;
-        if (handle == IntPtr.Zero || !_loopReferenced || _loop.IsInvalid) return false;
+        if (handle == IntPtr.Zero || !_loopReferenced || _loop.IsInvalid)
+            return false;
         loop = (nint)_loop.Loop;
         return loop != 0;
     }

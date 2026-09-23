@@ -25,7 +25,9 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken cancellationToken)
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -36,20 +38,26 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
 
     // Unique names per process: the session manager restores volume and mute by node.name,
     // so reusing a fixed name lets a previous leg's values race the assertions below.
-    private static string Unique(string p) => $"{p}_{Environment.ProcessId}_{Random.Shared.Next():x}";
+    private static string Unique(string p) =>
+        $"{p}_{Environment.ProcessId}_{Random.Shared.Next():x}";
 
     [TestMethod]
     public async Task AVirtualSink_ReportsAVolumeAndAcceptsANewOne()
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-params", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-params",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             // A node we create ourselves, so nothing in the session is disturbed by changing it.
-            PipeWireNode node = await registry.CreateVirtualSink("Params")
-                .WithName(Unique("pwnet_param_sink")).ExecuteAsync(cts.Token);
+            PipeWireNode node = await registry
+                .CreateVirtualSink("Params")
+                .WithName(Unique("pwnet_param_sink"))
+                .ExecuteAsync(cts.Token);
 
             await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
@@ -82,12 +90,17 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-mute", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-mute",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("Mute")
-                .WithName(Unique("pwnet_mute_sink")).ExecuteAsync(cts.Token);
+            PipeWireNode node = await registry
+                .CreateVirtualSink("Mute")
+                .WithName(Unique("pwnet_mute_sink"))
+                .ExecuteAsync(cts.Token);
 
             await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
@@ -115,9 +128,11 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
                 await control.SetChannelVolumesAsync([0.4f, 0.6f], cts.Token);
 
                 after = await control.GetChannelVolumesAsync(cts.Token);
-                if (after.Length == 2
+                if (
+                    after.Length == 2
                     && Math.Abs(after[0] - 0.4f) <= 0.01f
-                    && Math.Abs(after[1] - 0.6f) <= 0.01f)
+                    && Math.Abs(after[1] - 0.6f) <= 0.01f
+                )
                 {
                     break;
                 }
@@ -138,12 +153,17 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-propinfo", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-propinfo",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("PropInfo")
-                .WithName("pwnet_propinfo_sink").ExecuteAsync(cts.Token);
+            PipeWireNode node = await registry
+                .CreateVirtualSink("PropInfo")
+                .WithName("pwnet_propinfo_sink")
+                .ExecuteAsync(cts.Token);
 
             await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
@@ -151,9 +171,10 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             Assert.IsTrue(info.Length > 0, "a sink must describe the properties it supports");
 
             // Each entry says which property it describes.
-            uint[] described = [.. info.Select(o => o[(uint)SpaPropInfo.Id])
-                                       .OfType<SpaId>()
-                                       .Select(id => id.Value)];
+            uint[] described =
+            [
+                .. info.Select(o => o[(uint)SpaPropInfo.Id]).OfType<SpaId>().Select(id => id.Value),
+            ];
 
             CollectionAssert.Contains(described, (uint)SpaProp.Volume);
             CollectionAssert.Contains(described, (uint)SpaProp.Mute);
@@ -168,12 +189,17 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-noparam", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-noparam",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("NoParam")
-                .WithName("pwnet_noparam_sink").ExecuteAsync(cts.Token);
+            PipeWireNode node = await registry
+                .CreateVirtualSink("NoParam")
+                .WithName("pwnet_noparam_sink")
+                .ExecuteAsync(cts.Token);
 
             await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
@@ -182,11 +208,14 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             // A node has no profiles - that is a device parameter - and PipeWire answers an
             // unsupported parameter with an error rather than an empty result. Check what the
             // object advertises first, which is what CanRead exists for.
-            Assert.IsFalse(control.CanRead(SpaParamType.EnumProfile),
-                "a node must not advertise a device parameter");
+            Assert.IsFalse(
+                control.CanRead(SpaParamType.EnumProfile),
+                "a node must not advertise a device parameter"
+            );
 
-            await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
-                async () => await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token));
+            await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(async () =>
+                await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token)
+            );
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
@@ -197,12 +226,17 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-bindkind", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-bindkind",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("BindKind")
-                .WithName("pwnet_bindkind_sink").ExecuteAsync(cts.Token);
+            PipeWireNode node = await registry
+                .CreateVirtualSink("BindKind")
+                .WithName("pwnet_bindkind_sink")
+                .ExecuteAsync(cts.Token);
 
             // Binding a node as a device would hand the daemon a proxy of the wrong interface and
             // misbehave later; catching it here turns that into an argument error.
@@ -219,12 +253,16 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-device", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-device",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireDevice? card = registry.Current.Devices
-                .FirstOrDefault(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal));
+            PipeWireDevice? card = registry.Current.Devices.FirstOrDefault(d =>
+                string.Equals(d.Api, "alsa", StringComparison.Ordinal)
+            );
 
             if (card is null)
                 Assert.Inconclusive("this session has no ALSA card to enumerate.");
@@ -237,10 +275,14 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             // Every profile names itself, which is what a profile switcher shows.
             foreach (SpaObject profile in profiles)
             {
-                Assert.IsInstanceOfType<SpaInt>(profile[(uint)SpaParamProfile.Index],
-                    "a profile must carry its index");
-                Assert.IsInstanceOfType<SpaString>(profile[(uint)SpaParamProfile.Name],
-                    "a profile must carry its name");
+                Assert.IsInstanceOfType<SpaInt>(
+                    profile[(uint)SpaParamProfile.Index],
+                    "a profile must carry its index"
+                );
+                Assert.IsInstanceOfType<SpaString>(
+                    profile[(uint)SpaParamProfile.Name],
+                    "a profile must carry its name"
+                );
             }
 
             SpaObject? current = await control.GetProfileAsync(cts.Token);
@@ -254,7 +296,10 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-metadata", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-metadata",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -282,18 +327,24 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
                 for (int i = 0; i < 50 && sink is null; i++)
                 {
                     sink = store.DefaultAudioSink;
-                    if (sink is null) await Task.Delay(100, cts.Token);
+                    if (sink is null)
+                        await Task.Delay(100, cts.Token);
                 }
 
                 if (sink is null)
                     Assert.Inconclusive("this session has no default sink set.");
 
                 // The daemon stores JSON, not a bare name, which is the trap this accessor exists for.
-                Assert.IsTrue(sink!.Value!.Contains("name", StringComparison.Ordinal),
-                    "the raw value is JSON");
+                Assert.IsTrue(
+                    sink!.Value!.Contains("name", StringComparison.Ordinal),
+                    "the raw value is JSON"
+                );
                 Assert.IsNotNull(sink.NameValue, "the node name must be readable out of the JSON");
-                Assert.AreEqual(PipeWireMetadataProxy.SubjectCore, sink.Subject,
-                    "a session-wide default is about the daemon, not about one object");
+                Assert.AreEqual(
+                    PipeWireMetadataProxy.SubjectCore,
+                    sink.Subject,
+                    "a session-wide default is about the daemon, not about one object"
+                );
 
                 // And it names a node that is actually in the graph when the session is coherent.
                 // A session whose ALSA device is held by something else keeps a default naming a
@@ -302,8 +353,9 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
                 {
                     Assert.Inconclusive(
                         $"the session's default sink is '{sink.NameValue}', which is not a node in "
-                        + "the graph. The session manager's state is inconsistent, which says "
-                        + "nothing about the value this store read.");
+                            + "the graph. The session manager's state is inconsistent, which says "
+                            + "nothing about the value this store read."
+                    );
                 }
             }
         }
@@ -314,7 +366,10 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-settings", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-settings",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -326,8 +381,14 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             {
                 await store.ReadyAsync(cts.Token);
 
-                Assert.IsTrue(store.Entries.Count > 0, "the settings store must report its entries");
-                Assert.IsNotNull(store.Get("clock.rate"), "the graph clock rate is a settings entry");
+                Assert.IsTrue(
+                    store.Entries.Count > 0,
+                    "the settings store must report its entries"
+                );
+                Assert.IsNotNull(
+                    store.Get("clock.rate"),
+                    "the graph clock rate is a settings entry"
+                );
             }
         }
     }
@@ -337,29 +398,38 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-subscribe", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-subscribe",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("Subscribe")
-                .WithName("pwnet_subscribe_sink").ExecuteAsync(cts.Token);
+            PipeWireNode node = await registry
+                .CreateVirtualSink("Subscribe")
+                .WithName("pwnet_subscribe_sink")
+                .ExecuteAsync(cts.Token);
 
             await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
             var changed = new TaskCompletionSource<SpaObject>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
+                TaskCreationOptions.RunContinuationsAsynchronously
+            );
 
             control.ParameterChanged += (_, value) =>
             {
-                if (value.ObjectId == SpaParamType.Props) changed.TrySetResult(value);
+                if (value.ObjectId == SpaParamType.Props)
+                    changed.TrySetResult(value);
             };
 
             control.SubscribeParameters(SpaParamType.Props);
             await control.SetVolumeAsync(0.5f, cts.Token);
 
             SpaObject props = await changed.Task.WaitAsync(cts.Token);
-            Assert.IsNotNull(props[(uint)SpaProp.Volume],
-                "a subscribed Props change must carry the volume that changed");
+            Assert.IsNotNull(
+                props[(uint)SpaProp.Volume],
+                "a subscribed Props change must carry the volume that changed"
+            );
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
@@ -370,19 +440,27 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-bindrace", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-bindrace",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("BindRace")
-                .WithName("pwnet_bindrace_sink").ExecuteAsync(cts.Token);
+            PipeWireNode node = await registry
+                .CreateVirtualSink("BindRace")
+                .WithName("pwnet_bindrace_sink")
+                .ExecuteAsync(cts.Token);
 
             PipeWireNodeProxy control = registry.BindNode(node.NodeId);
             Task<float?> reading = control.GetVolumeAsync(cts.Token);
             await control.DisposeAsync();
 
             // Either answer is acceptable; hanging or aborting the process is not.
-            try { await reading.WaitAsync(TimeSpan.FromSeconds(5), cts.Token); }
+            try
+            {
+                await reading.WaitAsync(TimeSpan.FromSeconds(5), cts.Token);
+            }
             catch (ObjectDisposedException) { }
             catch (Exception e) when (e is InvalidOperationException or PipeWireException) { }
 
@@ -395,12 +473,17 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-info", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-info",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("Info")
-                .WithName("pwnet_info_sink").ExecuteAsync(cts.Token);
+            PipeWireNode node = await registry
+                .CreateVirtualSink("Info")
+                .WithName("pwnet_info_sink")
+                .ExecuteAsync(cts.Token);
 
             await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
@@ -415,8 +498,10 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             // Format is write-only on a node: enumerating it would be an error, so the flags have to
             // distinguish the two rather than reporting a single "supported".
             Assert.IsTrue(control.CanWrite(SpaParamType.Format));
-            Assert.IsFalse(control.CanRead(SpaParamType.Format),
-                "Format is advertised write-only and must not be reported as readable");
+            Assert.IsFalse(
+                control.CanRead(SpaParamType.Format),
+                "Format is advertised write-only and must not be reported as readable"
+            );
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
@@ -427,12 +512,16 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-devinfo", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-devinfo",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireDevice? card = registry.Current.Devices
-                .FirstOrDefault(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal));
+            PipeWireDevice? card = registry.Current.Devices.FirstOrDefault(d =>
+                string.Equals(d.Api, "alsa", StringComparison.Ordinal)
+            );
 
             if (card is null)
                 Assert.Inconclusive("this session has no ALSA card.");
@@ -451,14 +540,18 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-clientprops", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-clientprops",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             // Our own client, found by the pid the daemon read off the socket rather than by any
             // name we could have made up.
-            PipeWireClient? me = registry.Current.Clients
-                .FirstOrDefault(c => c.ProcessId == Environment.ProcessId);
+            PipeWireClient? me = registry.Current.Clients.FirstOrDefault(c =>
+                c.ProcessId == Environment.ProcessId
+            );
 
             if (me is null)
                 Assert.Inconclusive("this connection is not visible as a client object.");
@@ -469,7 +562,8 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             // exercises the whole write path without needing to be a session manager.
             await control.UpdatePropertiesAsync(
                 new Dictionary<string, string> { ["application.name"] = "pwnet-renamed" },
-                cts.Token);
+                cts.Token
+            );
         }
     }
 
@@ -499,7 +593,10 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         string appName = Unique("pwnet-confined");
-        (PipeWireContext managerCtx, PipeWireRegistry manager) = await ConnectAsync("pwnet-confine-manager", cts.Token);
+        (PipeWireContext managerCtx, PipeWireRegistry manager) = await ConnectAsync(
+            "pwnet-confine-manager",
+            cts.Token
+        );
         (PipeWireContext appCtx, PipeWireRegistry app) = await ConnectAsync(appName, cts.Token);
         await using (managerCtx)
         await using (manager)
@@ -512,47 +609,76 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
                 held.Add(app.BindNode(node.NodeId));
 
             Assert.IsTrue(held.Count > 0, "the session has no nodes for the application to hold");
-            Assert.IsTrue(app.Current.Nodes.Length > 0, "the application saw no nodes to begin with");
+            Assert.IsTrue(
+                app.Current.Nodes.Length > 0,
+                "the application saw no nodes to begin with"
+            );
 
             PipeWireClient? confined = null;
             for (var i = 0; i < 100 && confined is null; i++)
             {
-                confined = manager.Current.Clients.FirstOrDefault(c => c.ApplicationName == appName);
-                if (confined is null) await Task.Delay(50, cts.Token);
+                confined = manager.Current.Clients.FirstOrDefault(c =>
+                    c.ApplicationName == appName
+                );
+                if (confined is null)
+                    await Task.Delay(50, cts.Token);
             }
 
-            Assert.IsNotNull(confined, "the application's client never reached the manager's graph");
+            Assert.IsNotNull(
+                confined,
+                "the application's client never reached the manager's graph"
+            );
 
             await using PipeWireClientProxy control = manager.BindClient(confined.Id);
             await control.ConfineToAsync(
-                [new PipeWireObjectPermission(0, PipeWirePermissions.Read)], cts.Token);
+                [new PipeWireObjectPermission(0, PipeWirePermissions.Read)],
+                cts.Token
+            );
 
             // Everything but the core is withdrawn from the application's view.
             for (var i = 0; i < 100 && app.Current.Nodes.Length > 0; i++)
                 await Task.Delay(50, cts.Token);
 
-            Assert.AreEqual(0, app.Current.Nodes.Length,
-                "the confined application still sees nodes it was never granted");
+            Assert.AreEqual(
+                0,
+                app.Current.Nodes.Length,
+                "the confined application still sees nodes it was never granted"
+            );
 
             // Read on the core is not enough to talk to it: every method needs X on its object
             // (protocol-native process_messages), so the application's sync is refused - and the
             // refusal has to reach it as one, not leave it waiting for a done that never comes.
-            PipeWireException refused = await Assert.ThrowsAsync<PipeWireException>(
-                () => Interop.CoreSync.RoundTripAsync(appCtx, cts.Token));
-            Assert.IsTrue(refused.IsPermissionDenied, $"the refused sync reported {refused.Result}, not a denial");
+            PipeWireException refused = await Assert.ThrowsAsync<PipeWireException>(() =>
+                Interop.CoreSync.RoundTripAsync(appCtx, cts.Token)
+            );
+            Assert.IsTrue(
+                refused.IsPermissionDenied,
+                $"the refused sync reported {refused.Result}, not a denial"
+            );
 
             // Granted execute on the core as well, as WirePlumber's access policy grants a sandboxed
             // client, it can talk to the daemon again and is still connected.
             await control.UpdatePermissionsAsync(
-                new[] { new PipeWireObjectPermission(0, PipeWirePermissions.Read | PipeWirePermissions.Execute) },
-                cts.Token);
+                new[]
+                {
+                    new PipeWireObjectPermission(
+                        0,
+                        PipeWirePermissions.Read | PipeWirePermissions.Execute
+                    ),
+                },
+                cts.Token
+            );
             await Interop.CoreSync.RoundTripAsync(appCtx, cts.Token);
 
             // And the manager's own view, and the daemon, are untouched.
             await manager.WaitForInitialEnumerationAsync(cts.Token);
-            Assert.IsTrue(manager.Current.Nodes.Length > 0, "confining another client emptied the manager's view");
+            Assert.IsTrue(
+                manager.Current.Nodes.Length > 0,
+                "confining another client emptied the manager's view"
+            );
 
-            foreach (PipeWireNodeProxy c in held) await c.DisposeAsync();
+            foreach (PipeWireNodeProxy c in held)
+                await c.DisposeAsync();
         }
     }
 }

@@ -29,7 +29,8 @@ public sealed record PipeWireDevice : IPipeWireObject
         uint? FactoryId,
         uint? ClientId,
         uint? ModuleId = null,
-        PipeWireProperties? Properties = null)
+        PipeWireProperties? Properties = null
+    )
     {
         this.Properties = Properties ?? PipeWireProperties.Empty;
         this.ObjectSerial = this.Properties.Serial;

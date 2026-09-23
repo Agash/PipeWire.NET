@@ -16,7 +16,8 @@ public sealed record PipeWireProfiler : IPipeWireObject
         uint Id,
         PipeWirePermissions Permissions,
         uint InterfaceVersion,
-        PipeWireProperties? Properties = null)
+        PipeWireProperties? Properties = null
+    )
     {
         this.Properties = Properties ?? PipeWireProperties.Empty;
         this.ObjectSerial = this.Properties.Serial;
@@ -42,5 +43,4 @@ public sealed record PipeWireProfiler : IPipeWireObject
 
     /// <inheritdoc/>
     public ulong? ObjectSerial { get; }
-
 }

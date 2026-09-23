@@ -15,7 +15,8 @@ public sealed class PulledVideoFrameTests
     private static PulledVideoFrame HostFrame(
         ImmutableArray<byte>? pixels = null,
         PixelFormat format = PixelFormat.Bgra,
-        long? presentationTimestampNs = 1234) =>
+        long? presentationTimestampNs = 1234
+    ) =>
         new(
             pixels: pixels ?? [1, 2, 3, 4],
             planes: ImmutableArray<PulledVideoPlane>.Empty,
@@ -34,7 +35,8 @@ public sealed class PulledVideoFrameTests
             streamPositionNs: 9012,
             delayNs: 42,
             crop: new VideoRegion(1, 2, 3, 4),
-            transform: SpaMetaVideotransformValue.Rotate90);
+            transform: SpaMetaVideotransformValue.Rotate90
+        );
 
     [TestMethod]
     public void AHostFrameCarriesItsBytesAndNoDescriptors()
@@ -100,7 +102,10 @@ public sealed class PulledVideoFrameTests
         // disposes on any platform while still exercising the plane-carrying path.
         using PulledVideoFrame frame = new(
             pixels: ImmutableArray<byte>.Empty,
-            planes: [new PulledVideoPlane(new SafeDescriptorHandle(), 0, 1920 * 4, 1920 * 1080 * 4)],
+            planes:
+            [
+                new PulledVideoPlane(new SafeDescriptorHandle(), 0, 1920 * 4, 1920 * 1080 * 4),
+            ],
             stride: 1920 * 4,
             width: 1920,
             height: 1080,
@@ -116,7 +121,8 @@ public sealed class PulledVideoFrameTests
             streamPositionNs: null,
             delayNs: 0,
             crop: null,
-            transform: SpaMetaVideotransformValue.None);
+            transform: SpaMetaVideotransformValue.None
+        );
 
         Assert.IsTrue(frame.IsFdBacked);
         Assert.IsTrue(frame.Pixels.IsEmpty, "a dmabuf frame must not carry a pixel copy");
@@ -151,7 +157,8 @@ public sealed class PulledVideoFrameTests
             streamPositionNs: null,
             delayNs: 0,
             crop: null,
-            transform: SpaMetaVideotransformValue.None);
+            transform: SpaMetaVideotransformValue.None
+        );
 
         Assert.AreEqual(2, frame.Planes.Length);
         // The UV plane sits at an offset inside the same allocation, not at zero.

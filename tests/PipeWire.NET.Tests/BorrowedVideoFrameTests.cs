@@ -21,11 +21,22 @@ public sealed class BorrowedVideoFrameTests
         ];
 
         return new BorrowedVideoFrame(
-            planes, 1920, 1920, 1080, PixelFormat.Nv12,
-            DrmFormat.FromPixelFormat(PixelFormat.Nv12), DrmFormatModifier.Linear,
-            sequenceNumber: 3, presentationTimestampNs: 111, queuedTimeNs: 555, graphTimeNs: 222,
-            streamPositionNs: 333, delayNs: 44, crop: null,
-            transform: SpaMetaVideotransformValue.None);
+            planes,
+            1920,
+            1920,
+            1080,
+            PixelFormat.Nv12,
+            DrmFormat.FromPixelFormat(PixelFormat.Nv12),
+            DrmFormatModifier.Linear,
+            sequenceNumber: 3,
+            presentationTimestampNs: 111,
+            queuedTimeNs: 555,
+            graphTimeNs: 222,
+            streamPositionNs: 333,
+            delayNs: 44,
+            crop: null,
+            transform: SpaMetaVideotransformValue.None
+        );
     }
 
     [TestMethod]
@@ -131,13 +142,30 @@ public sealed class BorrowedVideoFrameTests
     {
         ReadOnlySpan<BorrowedVideoPlane> many =
         [
-            new(1, 0, 16, 16), new(2, 0, 16, 16), new(3, 0, 16, 16),
-            new(4, 0, 16, 16), new(5, 0, 16, 16),
+            new(1, 0, 16, 16),
+            new(2, 0, 16, 16),
+            new(3, 0, 16, 16),
+            new(4, 0, 16, 16),
+            new(5, 0, 16, 16),
         ];
 
         BorrowedVideoFrame frame = new(
-            many, 16, 4, 4, PixelFormat.Bgra, 0, DrmFormatModifier.Invalid,
-            0, null, null, null, null, 0, null, SpaMetaVideotransformValue.None);
+            many,
+            16,
+            4,
+            4,
+            PixelFormat.Bgra,
+            0,
+            DrmFormatModifier.Invalid,
+            0,
+            null,
+            null,
+            null,
+            null,
+            0,
+            null,
+            SpaMetaVideotransformValue.None
+        );
 
         Assert.AreEqual(4, frame.PlaneCount);
         Assert.AreEqual(4, frame[3].Fd);

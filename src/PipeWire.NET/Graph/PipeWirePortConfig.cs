@@ -27,7 +27,8 @@ public sealed record PipeWirePortConfig(
     SpaParamPortConfigMode Mode,
     bool Monitor = false,
     bool Control = false,
-    SpaObject? Format = null)
+    SpaObject? Format = null
+)
 {
     /// <summary>Reads one out of a <c>SPA_PARAM_PortConfig</c> object, or null if it is not one.</summary>
     /// <remarks>
@@ -36,14 +37,16 @@ public sealed record PipeWirePortConfig(
     /// </remarks>
     public static PipeWirePortConfig? From(SpaObject? param)
     {
-        if (param is null || param.ObjectType != SpaType.ObjectParamPortConfig) return null;
+        if (param is null || param.ObjectType != SpaType.ObjectParamPortConfig)
+            return null;
 
         return new PipeWirePortConfig(
             (SpaDirection)(param[(uint)SpaParamPortConfig.Direction] is SpaId d ? d.Value : 0),
             (SpaParamPortConfigMode)(param[(uint)SpaParamPortConfig.Mode] is SpaId m ? m.Value : 0),
             param[(uint)SpaParamPortConfig.Monitor] is SpaBool mon && mon.Value,
             param[(uint)SpaParamPortConfig.Control] is SpaBool ctl && ctl.Value,
-            param[(uint)SpaParamPortConfig.Format] as SpaObject);
+            param[(uint)SpaParamPortConfig.Format] as SpaObject
+        );
     }
 
     /// <summary>This configuration as the parameter object the daemon expects.</summary>
@@ -64,6 +67,10 @@ public sealed record PipeWirePortConfig(
         if (Format is not null)
             properties.Add(new SpaPodProperty((uint)SpaParamPortConfig.Format, 0, Format));
 
-        return new SpaObject(SpaType.ObjectParamPortConfig, SpaParamType.PortConfig, [.. properties]);
+        return new SpaObject(
+            SpaType.ObjectParamPortConfig,
+            SpaParamType.PortConfig,
+            [.. properties]
+        );
     }
 }

@@ -19,7 +19,8 @@ public sealed class DrmFormatTests
     {
         uint v = fourcc & ~NativeLibdrm.DRM_FORMAT_BIG_ENDIAN;
         StringBuilder sb = new(4);
-        for (int i = 0; i < 4; i++) sb.Append((char)((v >> (8 * i)) & 0xFF));
+        for (int i = 0; i < 4; i++)
+            sb.Append((char)((v >> (8 * i)) & 0xFF));
         return sb.ToString();
     }
 
@@ -39,14 +40,32 @@ public sealed class DrmFormatTests
     [TestMethod]
     public void ByteOrderIsReversedBetweenSpaAndDrmNames()
     {
-        Assert.AreEqual(NativeLibdrm.DRM_FORMAT_ABGR8888, DrmFormat.FromVideoFormat(SpaVideoFormat.Rgba));
-        Assert.AreEqual(NativeLibdrm.DRM_FORMAT_ARGB8888, DrmFormat.FromVideoFormat(SpaVideoFormat.Bgra));
-        Assert.AreEqual(NativeLibdrm.DRM_FORMAT_RGBA8888, DrmFormat.FromVideoFormat(SpaVideoFormat.Abgr));
-        Assert.AreEqual(NativeLibdrm.DRM_FORMAT_BGRA8888, DrmFormat.FromVideoFormat(SpaVideoFormat.Argb));
+        Assert.AreEqual(
+            NativeLibdrm.DRM_FORMAT_ABGR8888,
+            DrmFormat.FromVideoFormat(SpaVideoFormat.Rgba)
+        );
+        Assert.AreEqual(
+            NativeLibdrm.DRM_FORMAT_ARGB8888,
+            DrmFormat.FromVideoFormat(SpaVideoFormat.Bgra)
+        );
+        Assert.AreEqual(
+            NativeLibdrm.DRM_FORMAT_RGBA8888,
+            DrmFormat.FromVideoFormat(SpaVideoFormat.Abgr)
+        );
+        Assert.AreEqual(
+            NativeLibdrm.DRM_FORMAT_BGRA8888,
+            DrmFormat.FromVideoFormat(SpaVideoFormat.Argb)
+        );
 
         // Same reversal on the 24-bit pair, where it is easiest to get backwards.
-        Assert.AreEqual(NativeLibdrm.DRM_FORMAT_BGR888, DrmFormat.FromVideoFormat(SpaVideoFormat.Rgb));
-        Assert.AreEqual(NativeLibdrm.DRM_FORMAT_RGB888, DrmFormat.FromVideoFormat(SpaVideoFormat.Bgr));
+        Assert.AreEqual(
+            NativeLibdrm.DRM_FORMAT_BGR888,
+            DrmFormat.FromVideoFormat(SpaVideoFormat.Rgb)
+        );
+        Assert.AreEqual(
+            NativeLibdrm.DRM_FORMAT_RGB888,
+            DrmFormat.FromVideoFormat(SpaVideoFormat.Bgr)
+        );
     }
 
     [TestMethod]
@@ -68,8 +87,8 @@ public sealed class DrmFormatTests
     [DataRow(SpaVideoFormat.Rgbx, "XB24")]
     [DataRow(SpaVideoFormat.P010_10Le, "P010")]
     [DataRow(SpaVideoFormat.Gray8, "R8  ")]
-    public void MapsToTheFourccUpstreamNames(SpaVideoFormat format, string expected)
-        => Assert.AreEqual(expected, Tag(DrmFormat.FromVideoFormat(format)));
+    public void MapsToTheFourccUpstreamNames(SpaVideoFormat format, string expected) =>
+        Assert.AreEqual(expected, Tag(DrmFormat.FromVideoFormat(format)));
 
     /// <summary>
     /// The big-endian grey pair share a fourcc and are told apart only by the high bit. Dropping it
@@ -83,7 +102,10 @@ public sealed class DrmFormatTests
 
         Assert.AreNotEqual(le, be, "the two grey layouts must not share a fourcc");
         Assert.AreEqual(0u, le & NativeLibdrm.DRM_FORMAT_BIG_ENDIAN);
-        Assert.AreEqual(NativeLibdrm.DRM_FORMAT_BIG_ENDIAN, be & NativeLibdrm.DRM_FORMAT_BIG_ENDIAN);
+        Assert.AreEqual(
+            NativeLibdrm.DRM_FORMAT_BIG_ENDIAN,
+            be & NativeLibdrm.DRM_FORMAT_BIG_ENDIAN
+        );
         Assert.AreEqual(le, be & ~NativeLibdrm.DRM_FORMAT_BIG_ENDIAN);
     }
 
@@ -92,8 +114,8 @@ public sealed class DrmFormatTests
     /// maps neither, and SPA's own <c>Ayuv</c> must not be attached to it.
     /// </summary>
     [TestMethod]
-    public void AyuvIsNotMappedBecauseItIsADifferentChannelOrder()
-        => Assert.AreEqual(DrmFormat.Invalid, DrmFormat.FromVideoFormat(SpaVideoFormat.Ayuv));
+    public void AyuvIsNotMappedBecauseItIsADifferentChannelOrder() =>
+        Assert.AreEqual(DrmFormat.Invalid, DrmFormat.FromVideoFormat(SpaVideoFormat.Ayuv));
 
     /// <summary>
     /// Walks the whole SPA enum. Two properties hold across it: the mapping never throws for any
@@ -115,7 +137,8 @@ public sealed class DrmFormatTests
             mapped++;
             Assert.IsFalse(
                 seen.TryGetValue(fourcc, out SpaVideoFormat other),
-                $"{format} and {other} both map to {Tag(fourcc)}");
+                $"{format} and {other} both map to {Tag(fourcc)}"
+            );
             seen[fourcc] = format;
         }
 

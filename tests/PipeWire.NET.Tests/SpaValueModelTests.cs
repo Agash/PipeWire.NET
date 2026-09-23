@@ -24,24 +24,33 @@ public sealed class SpaValueModelTests : PipeWireTestBase
         Assert.AreEqual(new SpaBitmap([9, 8]), new SpaBitmap([9, 8]));
         Assert.AreEqual(
             new SpaArray(SpaType.Int, [new SpaInt(1), new SpaInt(2)]),
-            new SpaArray(SpaType.Int, [new SpaInt(1), new SpaInt(2)]));
+            new SpaArray(SpaType.Int, [new SpaInt(1), new SpaInt(2)])
+        );
         Assert.AreEqual(
             new SpaStruct([new SpaInt(1), new SpaString("x")]),
-            new SpaStruct([new SpaInt(1), new SpaString("x")]));
+            new SpaStruct([new SpaInt(1), new SpaString("x")])
+        );
         Assert.AreEqual(
             new SpaChoice(SpaChoiceType.Enum, SpaType.Id, [new SpaId(7)]),
-            new SpaChoice(SpaChoiceType.Enum, SpaType.Id, [new SpaId(7)]));
+            new SpaChoice(SpaChoiceType.Enum, SpaType.Id, [new SpaId(7)])
+        );
         Assert.AreEqual(
             new SpaSequence(1, [new SpaControl(0, 2, new SpaFloat(0.5f))]),
-            new SpaSequence(1, [new SpaControl(0, 2, new SpaFloat(0.5f))]));
+            new SpaSequence(1, [new SpaControl(0, 2, new SpaFloat(0.5f))])
+        );
+        Assert.AreEqual(new SpaUnknown((SpaType)999, [4, 5]), new SpaUnknown((SpaType)999, [4, 5]));
         Assert.AreEqual(
-            new SpaUnknown((SpaType)999, [4, 5]),
-            new SpaUnknown((SpaType)999, [4, 5]));
-        Assert.AreEqual(
-            new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-                [new SpaPodProperty(1, 0, new SpaFloat(1f))]),
-            new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-                [new SpaPodProperty(1, 0, new SpaFloat(1f))]));
+            new SpaObject(
+                SpaType.ObjectProps,
+                SpaParamType.Props,
+                [new SpaPodProperty(1, 0, new SpaFloat(1f))]
+            ),
+            new SpaObject(
+                SpaType.ObjectProps,
+                SpaParamType.Props,
+                [new SpaPodProperty(1, 0, new SpaFloat(1f))]
+            )
+        );
     }
 
     [TestMethod]
@@ -51,10 +60,10 @@ public sealed class SpaValueModelTests : PipeWireTestBase
         // so a mismatch is not something the format can express. Refused where it is written rather
         // than at write time, where the value is truncated or padded to fit and the result is a
         // wrong number rather than an error.
-        Assert.ThrowsExactly<ArgumentException>(
-            () => new SpaArray(SpaType.Id, [new SpaInt(1)]));
-        Assert.ThrowsExactly<ArgumentException>(
-            () => new SpaChoice(SpaChoiceType.Enum, SpaType.Long, [new SpaInt(1)]));
+        Assert.ThrowsExactly<ArgumentException>(() => new SpaArray(SpaType.Id, [new SpaInt(1)]));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new SpaChoice(SpaChoiceType.Enum, SpaType.Long, [new SpaInt(1)])
+        );
 
         // An empty union declares a type and carries nothing, which is legal and is what a choice
         // with no alternatives parses as.
@@ -74,17 +83,28 @@ public sealed class SpaValueModelTests : PipeWireTestBase
         // anything else.
         Assert.AreNotEqual(
             new SpaArray(SpaType.Int, [new SpaInt(1)]),
-            new SpaArray(SpaType.Id, [new SpaId(1)]));
+            new SpaArray(SpaType.Id, [new SpaId(1)])
+        );
 
         // Same three values, different kind: the kind is what says how to read the positions, so
         // these two describe different things and must not compare equal.
         Assert.AreNotEqual(
-            new SpaChoice(SpaChoiceType.Enum, SpaType.Int, [new SpaInt(1), new SpaInt(0), new SpaInt(9)]),
-            new SpaChoice(SpaChoiceType.Range, SpaType.Int, [new SpaInt(1), new SpaInt(0), new SpaInt(9)]));
+            new SpaChoice(
+                SpaChoiceType.Enum,
+                SpaType.Int,
+                [new SpaInt(1), new SpaInt(0), new SpaInt(9)]
+            ),
+            new SpaChoice(
+                SpaChoiceType.Range,
+                SpaType.Int,
+                [new SpaInt(1), new SpaInt(0), new SpaInt(9)]
+            )
+        );
 
         Assert.AreNotEqual(
             new SpaObject(SpaType.ObjectProps, SpaParamType.Props, []),
-            new SpaObject(SpaType.ObjectProps, SpaParamType.Format, []));
+            new SpaObject(SpaType.ObjectProps, SpaParamType.Format, [])
+        );
 
         Assert.AreNotEqual(new SpaUnknown((SpaType)1, [1]), new SpaUnknown((SpaType)2, [1]));
         Assert.AreNotEqual(new SpaSequence(1, []), new SpaSequence(2, []));
@@ -99,8 +119,10 @@ public sealed class SpaValueModelTests : PipeWireTestBase
             [new SpaBytes([7, 7])] = "bytes",
         };
 
-        Assert.AreEqual("volumes",
-            seen[new SpaArray(SpaType.Float, [new SpaFloat(0.5f), new SpaFloat(0.25f)])]);
+        Assert.AreEqual(
+            "volumes",
+            seen[new SpaArray(SpaType.Float, [new SpaFloat(0.5f), new SpaFloat(0.25f)])]
+        );
         Assert.AreEqual("bytes", seen[new SpaBytes([7, 7])]);
     }
 
@@ -134,16 +156,23 @@ public sealed class SpaValueModelTests : PipeWireTestBase
         SpaValue[] values =
         [
             new SpaBitmap([0b1010_1010, 0b0101_0101]),
-            new SpaSequence(1, [new SpaControl(0, 2, new SpaFloat(0.5f)),
-                                new SpaControl(480, 2, new SpaFloat(1.0f))]),
+            new SpaSequence(
+                1,
+                [
+                    new SpaControl(0, 2, new SpaFloat(0.5f)),
+                    new SpaControl(480, 2, new SpaFloat(1.0f)),
+                ]
+            ),
             new SpaNestedPod(new SpaInt(42)),
             new SpaStruct([new SpaInt(1), new SpaString("two"), new SpaFloat(3f)]),
         ];
 
         foreach (SpaValue value in values)
         {
-            Assert.IsTrue(SpaPod.TryParse(SpaPod.ToBytes(value), out SpaValue? read),
-                $"{value.GetType().Name} did not parse back");
+            Assert.IsTrue(
+                SpaPod.TryParse(SpaPod.ToBytes(value), out SpaValue? read),
+                $"{value.GetType().Name} did not parse back"
+            );
             Assert.AreEqual(value, read, $"{value.GetType().Name} changed on the way through");
         }
     }
@@ -167,9 +196,16 @@ public sealed class SpaValueModelTests : PipeWireTestBase
         var empty = new SpaChoice(SpaChoiceType.Enum, SpaType.Int, []);
         Assert.IsNull(empty.Default);
 
-        var populated = new SpaChoice(SpaChoiceType.Step, SpaType.Int,
-            [new SpaInt(5), new SpaInt(0), new SpaInt(10), new SpaInt(1)]);
-        Assert.AreEqual(new SpaInt(5), populated.Default, "the first entry is the default, whatever the kind");
+        var populated = new SpaChoice(
+            SpaChoiceType.Step,
+            SpaType.Int,
+            [new SpaInt(5), new SpaInt(0), new SpaInt(10), new SpaInt(1)]
+        );
+        Assert.AreEqual(
+            new SpaInt(5),
+            populated.Default,
+            "the first entry is the default, whatever the kind"
+        );
     }
 
     [TestMethod]
@@ -265,11 +301,18 @@ public sealed class SpaValueModelTests : PipeWireTestBase
     [TestMethod]
     public void FindingAPropertyIsByKeyAlone_WhicheverEnumSpelledIt()
     {
-        var props = new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-        [
-            new SpaPodProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.5f)),
-            new SpaPodProperty((uint)SpaProp.Mute, SpaPodPropFlags.Readonly, new SpaBool(false)),
-        ]);
+        var props = new SpaObject(
+            SpaType.ObjectProps,
+            SpaParamType.Props,
+            [
+                new SpaPodProperty((uint)SpaProp.Volume, 0, new SpaFloat(0.5f)),
+                new SpaPodProperty(
+                    (uint)SpaProp.Mute,
+                    SpaPodPropFlags.Readonly,
+                    new SpaBool(false)
+                ),
+            ]
+        );
 
         Assert.AreEqual(new SpaFloat(0.5f), props[SpaProp.Volume]);
         Assert.AreEqual(SpaPodPropFlags.Readonly, props.Find(SpaProp.Mute)!.Flags);
@@ -285,7 +328,8 @@ public sealed class SpaValueModelTests : PipeWireTestBase
         // either its minimum or its maximum and there is nothing in the pod to say which, so the
         // daemon reads whatever is at position 1 as the minimum.
         ArgumentException e = Assert.ThrowsExactly<ArgumentException>(() =>
-            _ = new SpaChoice(SpaChoiceType.Range, SpaType.Int, [new SpaInt(1), new SpaInt(0)]));
+            _ = new SpaChoice(SpaChoiceType.Range, SpaType.Int, [new SpaInt(1), new SpaInt(0)])
+        );
 
         StringAssert.Contains(e.Message, "exactly 3");
     }
@@ -293,13 +337,18 @@ public sealed class SpaValueModelTests : PipeWireTestBase
     [TestMethod]
     public void AStepChoiceWithoutItsFourValues_IsRefused() =>
         Assert.ThrowsExactly<ArgumentException>(() =>
-            _ = new SpaChoice(SpaChoiceType.Step, SpaType.Int,
-                [new SpaInt(1), new SpaInt(0), new SpaInt(9)]));
+            _ = new SpaChoice(
+                SpaChoiceType.Step,
+                SpaType.Int,
+                [new SpaInt(1), new SpaInt(0), new SpaInt(9)]
+            )
+        );
 
     [TestMethod]
     public void ANoneChoiceCarryingMoreThanOneValue_IsRefused() =>
         Assert.ThrowsExactly<ArgumentException>(() =>
-            _ = new SpaChoice(SpaChoiceType.None, SpaType.Int, [new SpaInt(1), new SpaInt(2)]));
+            _ = new SpaChoice(SpaChoiceType.None, SpaType.Int, [new SpaInt(1), new SpaInt(2)])
+        );
 
     [TestMethod]
     public void TheChoicesWhoseArityIsNotFixed_TakeAnyCount()
@@ -307,11 +356,22 @@ public sealed class SpaValueModelTests : PipeWireTestBase
         // The other side of the check: Enum and Flags are lists, so a count rule would refuse pods
         // the daemon sends. An empty choice is refused by the writers, not here.
         _ = new SpaChoice(SpaChoiceType.Enum, SpaType.Int, [new SpaInt(1)]);
-        _ = new SpaChoice(SpaChoiceType.Enum, SpaType.Int, [new SpaInt(1), new SpaInt(2), new SpaInt(3)]);
+        _ = new SpaChoice(
+            SpaChoiceType.Enum,
+            SpaType.Int,
+            [new SpaInt(1), new SpaInt(2), new SpaInt(3)]
+        );
         _ = new SpaChoice(SpaChoiceType.Flags, SpaType.Int, [new SpaInt(1), new SpaInt(2)]);
         _ = new SpaChoice(SpaChoiceType.None, SpaType.Int, [new SpaInt(1)]);
-        _ = new SpaChoice(SpaChoiceType.Range, SpaType.Int, [new SpaInt(5), new SpaInt(0), new SpaInt(9)]);
-        _ = new SpaChoice(SpaChoiceType.Step, SpaType.Int,
-            [new SpaInt(5), new SpaInt(0), new SpaInt(9), new SpaInt(1)]);
+        _ = new SpaChoice(
+            SpaChoiceType.Range,
+            SpaType.Int,
+            [new SpaInt(5), new SpaInt(0), new SpaInt(9)]
+        );
+        _ = new SpaChoice(
+            SpaChoiceType.Step,
+            SpaType.Int,
+            [new SpaInt(5), new SpaInt(0), new SpaInt(9), new SpaInt(1)]
+        );
     }
 }

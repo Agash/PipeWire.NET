@@ -27,7 +27,8 @@ public sealed record PipeWirePort : IPipeWireObject
         string? ObjectPath = null,
         PipeWirePermissions Permissions = PipeWirePermissions.None,
         uint InterfaceVersion = 0,
-        PipeWireProperties? Properties = null)
+        PipeWireProperties? Properties = null
+    )
     {
         this.Properties = Properties ?? PipeWireProperties.Empty;
         this.ObjectSerial = this.Properties.Serial;

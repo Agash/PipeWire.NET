@@ -16,8 +16,17 @@ public sealed class VideoMetadataTypeTests
     {
         ReadOnlySpan<byte> pixels = [1, 2, 3, 4];
         VideoCursor cursor = new(
-            id: 7, x: 100, y: 200, hotspotX: 3, hotspotY: 4,
-            format: PixelFormat.Bgra, width: 32, height: 32, stride: 128, pixels: pixels);
+            id: 7,
+            x: 100,
+            y: 200,
+            hotspotX: 3,
+            hotspotY: 4,
+            format: PixelFormat.Bgra,
+            width: 32,
+            height: 32,
+            stride: 128,
+            pixels: pixels
+        );
 
         // Position and hotspot are different things: the hotspot is the offset within the bitmap
         // that actually points, so swapping them draws the cursor up and to the left of the mouse.
@@ -41,8 +50,17 @@ public sealed class VideoMetadataTypeTests
     public void ACursorThatMovedWithoutChangingImageHasNoPixels()
     {
         VideoCursor cursor = new(
-            id: 1, x: 5, y: 6, hotspotX: 0, hotspotY: 0,
-            format: PixelFormat.Unknown, width: 0, height: 0, stride: 0, pixels: default);
+            id: 1,
+            x: 5,
+            y: 6,
+            hotspotX: 0,
+            hotspotY: 0,
+            format: PixelFormat.Unknown,
+            width: 0,
+            height: 0,
+            stride: 0,
+            pixels: default
+        );
 
         Assert.IsTrue(cursor.Pixels.IsEmpty);
         Assert.AreEqual(0u, cursor.Width);

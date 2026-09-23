@@ -40,18 +40,29 @@ public sealed partial class PipeWireSecurityContextProxy : IDisposable, IAsyncDi
     public uint Id { get; }
 
     internal static unsafe PipeWireSecurityContextProxy Bind(
-        PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger)
+        PipeWireContext ctx,
+        pw_registry* registry,
+        uint id,
+        uint version,
+        ILogger logger
+    )
     {
         var control = new PipeWireSecurityContextProxy(ctx, id, logger);
 
         // No events are subscribed: the interface's only event is a lifecycle signal this type has
         // no use for, and the zeroed table keeps the binding shape the same as every other.
         control._bound = BoundProxy.Bind(
-            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_SecurityContext, version, NativeConstants.PW_VERSION_SECURITY_CONTEXT,
+            ctx,
+            registry,
+            id,
+            PipeWireKeys.PW_TYPE_INTERFACE_SecurityContext,
+            version,
+            NativeConstants.PW_VERSION_SECURITY_CONTEXT,
             sizeof(pw_security_context_events),
             events => ((pw_security_context_events*)events)->version = 0,
             static (_, _, _, _) => 0,
-            control);
+            control
+        );
 
         control._bound.Removed = control.RaiseRemoved;
 
@@ -72,13 +83,18 @@ public sealed partial class PipeWireSecurityContextProxy : IDisposable, IAsyncDi
     private void RaiseRemoved()
     {
         Action? handler = Removed;
-        if (handler is null) return;
+        if (handler is null)
+            return;
 
         // A native callback frame, so nothing may escape it.
-        try { handler(); }
-        catch (Exception) { /* a subscriber that throws must not reach the daemon */ }
+        try
+        {
+            handler();
+        }
+        catch (Exception)
+        { /* a subscriber that throws must not reach the daemon */
+        }
     }
-
 
     /// <summary>
     /// Opens a sandboxed connection point.
@@ -103,19 +119,29 @@ public sealed partial class PipeWireSecurityContextProxy : IDisposable, IAsyncDi
         SafeHandle listenFd,
         SafeHandle closeFd,
         IReadOnlyDictionary<string, string> properties,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(listenFd);
         ArgumentNullException.ThrowIfNull(closeFd);
         if (listenFd.IsInvalid)
-            throw new ArgumentException("the handle does not carry a valid descriptor", nameof(listenFd));
+            throw new ArgumentException(
+                "the handle does not carry a valid descriptor",
+                nameof(listenFd)
+            );
         if (closeFd.IsInvalid)
-            throw new ArgumentException("the handle does not carry a valid descriptor", nameof(closeFd));
+            throw new ArgumentException(
+                "the handle does not carry a valid descriptor",
+                nameof(closeFd)
+            );
 
         // Held for the whole round trip, not just the call that starts it: the daemon receives
         // copies over the socket and closes those, never these.
-        return FdInterop.BorrowAsync(listenFd, closeFd,
-            (listen, close) => CreateAsync(listen, close, properties, cancellationToken));
+        return FdInterop.BorrowAsync(
+            listenFd,
+            closeFd,
+            (listen, close) => CreateAsync(listen, close, properties, cancellationToken)
+        );
     }
 
     /// <summary>
@@ -130,7 +156,8 @@ public sealed partial class PipeWireSecurityContextProxy : IDisposable, IAsyncDi
         int listenFd,
         int closeFd,
         IReadOnlyDictionary<string, string> properties,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(properties);
         ArgumentOutOfRangeException.ThrowIfNegative(listenFd);
@@ -142,15 +169,22 @@ public sealed partial class PipeWireSecurityContextProxy : IDisposable, IAsyncDi
         // whatever it was given, forever, which costs the whole session.
         if (!FdInterop.IsListeningSocket(listenFd))
             throw new ArgumentException(
-                "the descriptor must be a listening socket", nameof(listenFd));
+                "the descriptor must be a listening socket",
+                nameof(listenFd)
+            );
 
-        await CoreSync.RoundTripAsync(_ctx, () => Create(listenFd, closeFd, properties), cancellationToken)
+        await CoreSync
+            .RoundTripAsync(_ctx, () => Create(listenFd, closeFd, properties), cancellationToken)
             .ConfigureAwait(false);
 
         LogCreated(Id, properties.Count);
     }
 
-    private unsafe int Create(int listenFd, int closeFd, IReadOnlyDictionary<string, string> properties)
+    private unsafe int Create(
+        int listenFd,
+        int closeFd,
+        IReadOnlyDictionary<string, string> properties
+    )
     {
         int bytes = 0;
         foreach ((string key, string value) in properties)
@@ -158,12 +192,14 @@ public sealed partial class PipeWireSecurityContextProxy : IDisposable, IAsyncDi
 
         // A stackalloc cannot move; a heap fallback can, and this array's address goes to native
         // code, so the fallback has to be pinned.
-        Span<byte> scratch = bytes <= 512
-            ? stackalloc byte[512]
-            : GC.AllocateUninitializedArray<byte>(bytes, pinned: true);
-        Span<spa_dict_item> items = properties.Count <= 16
-            ? stackalloc spa_dict_item[16]
-            : GC.AllocateUninitializedArray<spa_dict_item>(properties.Count, pinned: true);
+        Span<byte> scratch =
+            bytes <= 512
+                ? stackalloc byte[512]
+                : GC.AllocateUninitializedArray<byte>(bytes, pinned: true);
+        Span<spa_dict_item> items =
+            properties.Count <= 16
+                ? stackalloc spa_dict_item[16]
+                : GC.AllocateUninitializedArray<spa_dict_item>(properties.Count, pinned: true);
 
         var builder = new SpaDictBuilder(scratch, items);
         foreach ((string key, string value) in properties)
@@ -192,14 +228,18 @@ public sealed partial class PipeWireSecurityContextProxy : IDisposable, IAsyncDi
 
     private void DisposeCore()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
 
         _bound?.Dispose();
         _bound = null;
     }
 
-    [LoggerMessage(EventId = 34100, Level = LogLevel.Information,
-                   Message = "security context {ContextId} opened a sandbox with {PropertyCount} propertie(s)")]
+    [LoggerMessage(
+        EventId = 34100,
+        Level = LogLevel.Information,
+        Message = "security context {ContextId} opened a sandbox with {PropertyCount} propertie(s)"
+    )]
     private partial void LogCreated(uint contextId, int propertyCount);
 }

@@ -32,28 +32,49 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
         : base(ctx, id) => _logger = logger;
 
     internal static unsafe PipeWireNodeProxy Bind(
-        PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger,
-        Action<uint, PipeWireProperties>? propertiesObserved = null)
+        PipeWireContext ctx,
+        pw_registry* registry,
+        uint id,
+        uint version,
+        ILogger logger,
+        Action<uint, PipeWireProperties>? propertiesObserved = null
+    )
     {
         // The observer is in place before the proxy is bound: the first info after a bind is the
         // only one that carries the object's properties (later ones set no PROPS in their change
         // mask, so their dictionary arrives empty), and it can arrive the moment the bind is sent.
         // Assigned after Bind returned, a fast daemon's first info found no observer and the
         // properties never reached the registry.
-        var control = new PipeWireNodeProxy(ctx, id, logger) { PropertiesObserved = propertiesObserved };
-        control.Attach(BoundProxy.Bind(
-            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Node, version, NativeConstants.PW_VERSION_NODE,
-            sizeof(pw_node_events),
-            events =>
-            {
-                var table = (pw_node_events*)events;
-                table->version = NativeConstants.PW_VERSION_NODE_EVENTS;
-                table->info = &OnInfoCallback;
-                table->param = &OnParamCallback;
-            },
-            static (proxy, hook, events, data) => Native.pw_node_add_listener(
-                (pw_node*)proxy, (spa_hook*)hook, (pw_node_events*)events, (void*)data),
-            control));
+        var control = new PipeWireNodeProxy(ctx, id, logger)
+        {
+            PropertiesObserved = propertiesObserved,
+        };
+        control.Attach(
+            BoundProxy.Bind(
+                ctx,
+                registry,
+                id,
+                PipeWireKeys.PW_TYPE_INTERFACE_Node,
+                version,
+                NativeConstants.PW_VERSION_NODE,
+                sizeof(pw_node_events),
+                events =>
+                {
+                    var table = (pw_node_events*)events;
+                    table->version = NativeConstants.PW_VERSION_NODE_EVENTS;
+                    table->info = &OnInfoCallback;
+                    table->param = &OnParamCallback;
+                },
+                static (proxy, hook, events, data) =>
+                    Native.pw_node_add_listener(
+                        (pw_node*)proxy,
+                        (spa_hook*)hook,
+                        (pw_node_events*)events,
+                        (void*)data
+                    ),
+                control
+            )
+        );
 
         return control;
     }
@@ -82,7 +103,8 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     /// on top, and a device with a channel map reports per-channel values whatever that scalar says.
     /// </remarks>
     public async Task<ImmutableArray<float>> GetChannelVolumesAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         SpaObject? props = await GetParameterOrNullAsync(SpaParamType.Props, cancellationToken)
             .ConfigureAwait(false);
@@ -119,12 +141,20 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
         // NaN went into a float pod and reached the daemon as a volume.
         ArgumentOutOfRangeException.ThrowIfNegative(volume);
         if (float.IsNaN(volume))
-            throw new ArgumentOutOfRangeException(nameof(volume), volume, "a volume must be a number.");
+            throw new ArgumentOutOfRangeException(
+                nameof(volume),
+                volume,
+                "a volume must be a number."
+            );
         return SetParameterAsync(
             SpaParamType.Props,
-            new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-                [new SpaPodProperty(SpaProp.Volume, 0, new SpaFloat(volume))]),
-            cancellationToken);
+            new SpaObject(
+                SpaType.ObjectProps,
+                SpaParamType.Props,
+                [new SpaPodProperty(SpaProp.Volume, 0, new SpaFloat(volume))]
+            ),
+            cancellationToken
+        );
     }
 
     /// <summary>Sets the node's per-channel volumes.</summary>
@@ -147,27 +177,42 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     /// </remarks>
     /// <exception cref="ArgumentException"><paramref name="volumes"/> is empty or holds a negative value.</exception>
     public Task SetChannelVolumesAsync(
-        ReadOnlySpan<float> volumes, CancellationToken cancellationToken = default)
+        ReadOnlySpan<float> volumes,
+        CancellationToken cancellationToken = default
+    )
     {
         if (volumes.IsEmpty)
-            throw new ArgumentException("at least one channel volume is required.", nameof(volumes));
+            throw new ArgumentException(
+                "at least one channel volume is required.",
+                nameof(volumes)
+            );
 
         var values = ImmutableArray.CreateBuilder<SpaValue>(volumes.Length);
         foreach (float volume in volumes)
         {
             if (float.IsNegative(volume) || float.IsNaN(volume))
-                throw new ArgumentException("a channel volume must be a non-negative number.", nameof(volumes));
+                throw new ArgumentException(
+                    "a channel volume must be a non-negative number.",
+                    nameof(volumes)
+                );
             values.Add(new SpaFloat(volume));
         }
 
         return SetParameterAsync(
             SpaParamType.Props,
-            new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-            [
-                new SpaPodProperty(SpaProp.ChannelVolumes, 0,
-                    new SpaArray(SpaType.Float, values.MoveToImmutable())),
-            ]),
-            cancellationToken);
+            new SpaObject(
+                SpaType.ObjectProps,
+                SpaParamType.Props,
+                [
+                    new SpaPodProperty(
+                        SpaProp.ChannelVolumes,
+                        0,
+                        new SpaArray(SpaType.Float, values.MoveToImmutable())
+                    ),
+                ]
+            ),
+            cancellationToken
+        );
     }
 
     /// <summary>Sets the per-channel volumes, checking the count against the node first.</summary>
@@ -190,7 +235,8 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     public Task SetChannelVolumesAsync(
         ReadOnlySpan<float> volumes,
         bool matchChannelMap,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         float[] copy = volumes.ToArray();
         return matchChannelMap
@@ -200,22 +246,22 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
 
     private async Task SetCheckedAsync(float[] volumes, CancellationToken cancellationToken)
     {
-        ImmutableArray<SpaAudioChannel> map =
-            await GetChannelMapAsync(cancellationToken).ConfigureAwait(false);
-        ImmutableArray<float> current =
-            await GetChannelVolumesAsync(cancellationToken).ConfigureAwait(false);
+        ImmutableArray<SpaAudioChannel> map = await GetChannelMapAsync(cancellationToken)
+            .ConfigureAwait(false);
+        ImmutableArray<float> current = await GetChannelVolumesAsync(cancellationToken)
+            .ConfigureAwait(false);
 
         if (volumes.Length != map.Length && volumes.Length != current.Length)
         {
             throw new ArgumentException(
                 $"{volumes.Length} volumes match neither the node's channel map ({map.Length}) "
-                + $"nor the {current.Length} it currently holds.",
-                nameof(volumes));
+                    + $"nor the {current.Length} it currently holds.",
+                nameof(volumes)
+            );
         }
 
         await SetChannelVolumesAsync(volumes, cancellationToken).ConfigureAwait(false);
     }
-
 
     /// <summary>
     /// The channels this node actually has, in order, or empty if it does not say.
@@ -226,7 +272,8 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     /// Unlike the volume array, this reflects the node rather than the last thing written to it.
     /// </remarks>
     public async Task<ImmutableArray<SpaAudioChannel>> GetChannelMapAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         SpaObject? props = await GetParameterOrNullAsync(SpaParamType.Props, cancellationToken)
             .ConfigureAwait(false);
@@ -237,7 +284,8 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
         var channels = ImmutableArray.CreateBuilder<SpaAudioChannel>(map.Items.Length);
         foreach (SpaValue item in map.Items)
         {
-            if (item is SpaId id) channels.Add((SpaAudioChannel)id.Value);
+            if (item is SpaId id)
+                channels.Add((SpaAudioChannel)id.Value);
         }
 
         return channels.ToImmutable();
@@ -252,9 +300,13 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     public Task SetMutedAsync(bool muted, CancellationToken cancellationToken = default) =>
         SetParameterAsync(
             SpaParamType.Props,
-            new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-                [new SpaPodProperty(SpaProp.Mute, 0, new SpaBool(muted))]),
-            cancellationToken);
+            new SpaObject(
+                SpaType.ObjectProps,
+                SpaParamType.Props,
+                [new SpaPodProperty(SpaProp.Mute, 0, new SpaBool(muted))]
+            ),
+            cancellationToken
+        );
 
     /// <summary>
     /// The extra latency applied to this node, in nanoseconds, or <see langword="null"/> if unset.
@@ -273,18 +325,25 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     /// Abandons the wait. The request is already on its way, so cancelling does not recall
     /// it: the daemon can still apply the change after this throws.
     /// </param>
-    public Task SetLatencyOffsetAsync(long nanoseconds, CancellationToken cancellationToken = default) =>
+    public Task SetLatencyOffsetAsync(
+        long nanoseconds,
+        CancellationToken cancellationToken = default
+    ) =>
         SetParameterAsync(
             SpaParamType.Props,
-            new SpaObject(SpaType.ObjectProps, SpaParamType.Props,
-                [new SpaPodProperty(SpaProp.LatencyOffsetNsec, 0, new SpaLong(nanoseconds))]),
-            cancellationToken);
+            new SpaObject(
+                SpaType.ObjectProps,
+                SpaParamType.Props,
+                [new SpaPodProperty(SpaProp.LatencyOffsetNsec, 0, new SpaLong(nanoseconds))]
+            ),
+            cancellationToken
+        );
 
     /// <summary>The formats this node will accept, as offered for negotiation.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
     public Task<ImmutableArray<SpaObject>> EnumerateFormatsAsync(
-        CancellationToken cancellationToken = default) =>
-        EnumerateParametersAsync(SpaParamType.EnumFormat, cancellationToken);
+        CancellationToken cancellationToken = default
+    ) => EnumerateParametersAsync(SpaParamType.EnumFormat, cancellationToken);
 
     /// <summary>
     /// Describes every property this node supports: its key, its type and the values it accepts.
@@ -295,8 +354,8 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     /// so this says whether a volume slider should be shown.
     /// </remarks>
     public Task<ImmutableArray<SpaObject>> EnumeratePropertyInfoAsync(
-        CancellationToken cancellationToken = default) =>
-        EnumerateParametersAsync(SpaParamType.PropInfo, cancellationToken);
+        CancellationToken cancellationToken = default
+    ) => EnumerateParametersAsync(SpaParamType.PropInfo, cancellationToken);
 
     internal static ImmutableArray<float> ReadFloatArray(SpaObject? props, SpaProp key)
     {
@@ -306,21 +365,34 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
         var values = ImmutableArray.CreateBuilder<float>(array.Items.Length);
         foreach (SpaValue item in array.Items)
         {
-            if (item is SpaFloat value) values.Add(value.Value);
+            if (item is SpaFloat value)
+                values.Add(value.Value);
         }
 
         return values.ToImmutable();
     }
 
     private protected override unsafe int EnumParamsNative(
-        void* proxy, int seq, uint id, uint start, uint num, spa_pod* filter) =>
-        Native.pw_node_enum_params((pw_node*)proxy, seq, id, start, num, filter);
+        void* proxy,
+        int seq,
+        uint id,
+        uint start,
+        uint num,
+        spa_pod* filter
+    ) => Native.pw_node_enum_params((pw_node*)proxy, seq, id, start, num, filter);
 
-    private protected override unsafe int SetParamNative(void* proxy, uint id, uint flags, spa_pod* param) =>
-        Native.pw_node_set_param((pw_node*)proxy, id, flags, param);
+    private protected override unsafe int SetParamNative(
+        void* proxy,
+        uint id,
+        uint flags,
+        spa_pod* param
+    ) => Native.pw_node_set_param((pw_node*)proxy, id, flags, param);
 
-    private protected override unsafe int SubscribeParamsNative(void* proxy, uint* ids, uint count) =>
-        Native.pw_node_subscribe_params((pw_node*)proxy, ids, count);
+    private protected override unsafe int SubscribeParamsNative(
+        void* proxy,
+        uint* ids,
+        uint count
+    ) => Native.pw_node_subscribe_params((pw_node*)proxy, ids, count);
 
     private protected override void OnHandlerFaulted(Exception exception) =>
         LogHandlerFaulted(Id, exception);
@@ -346,7 +418,13 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnParamCallback(
-        void* data, int seq, uint id, uint index, uint next, spa_pod* param)
+        void* data,
+        int seq,
+        uint id,
+        uint index,
+        uint next,
+        spa_pod* param
+    )
     {
         // An exception escaping a reverse P/Invoke aborts the process, so nothing here may throw.
         try
@@ -369,15 +447,20 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     /// plain node reports nothing rather than failing.
     /// </remarks>
     public async Task<ImmutableArray<PipeWirePortConfig>> EnumeratePortConfigsAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ImmutableArray<SpaObject> raw = await EnumerateParametersAsync(
-            SpaParamType.EnumPortConfig, cancellationToken).ConfigureAwait(false);
+                SpaParamType.EnumPortConfig,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
 
         var configs = ImmutableArray.CreateBuilder<PipeWirePortConfig>(raw.Length);
         foreach (SpaObject param in raw)
         {
-            if (PipeWirePortConfig.From(param) is { } config) configs.Add(config);
+            if (PipeWirePortConfig.From(param) is { } config)
+                configs.Add(config);
         }
 
         return configs.ToImmutable();
@@ -386,9 +469,12 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     /// <summary>The port layout this node is currently using.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
     public async Task<PipeWirePortConfig?> GetPortConfigAsync(
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default
+    ) =>
         PipeWirePortConfig.From(
-            await GetParameterAsync(SpaParamType.PortConfig, cancellationToken).ConfigureAwait(false));
+            await GetParameterAsync(SpaParamType.PortConfig, cancellationToken)
+                .ConfigureAwait(false)
+        );
 
     /// <summary>Reconfigures the node's ports.</summary>
     /// <param name="config">The layout to apply.</param>
@@ -405,7 +491,9 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="config"/> is null.</exception>
     public Task SetPortConfigAsync(
-        PipeWirePortConfig config, CancellationToken cancellationToken = default)
+        PipeWirePortConfig config,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(config);
         return SetParameterAsync(SpaParamType.PortConfig, config.ToParameter(), cancellationToken);
@@ -417,9 +505,12 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     /// <param name="cancellationToken">Abandons the wait.</param>
     /// <returns>The declared latency, or null when the node declares none.</returns>
     public async Task<PipeWireProcessLatency?> GetProcessLatencyAsync(
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default
+    ) =>
         PipeWireProcessLatency.From(
-            await GetParameterAsync(SpaParamType.ProcessLatency, cancellationToken).ConfigureAwait(false));
+            await GetParameterAsync(SpaParamType.ProcessLatency, cancellationToken)
+                .ConfigureAwait(false)
+        );
 
     /// <summary>Declares what this node costs the graph to process.</summary>
     /// <param name="latency">The delay this node adds. See the type for which unit to use.</param>
@@ -431,24 +522,35 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="latency"/> is null.</exception>
     public Task SetProcessLatencyAsync(
-        PipeWireProcessLatency latency, CancellationToken cancellationToken = default)
+        PipeWireProcessLatency latency,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(latency);
-        return SetParameterAsync(SpaParamType.ProcessLatency, latency.ToParameter(), cancellationToken);
+        return SetParameterAsync(
+            SpaParamType.ProcessLatency,
+            latency.ToParameter(),
+            cancellationToken
+        );
     }
 
     /// <summary>The metadata travelling with this node's stream, per direction.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
     public async Task<ImmutableArray<PipeWireTag>> GetTagsAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
-        ImmutableArray<SpaObject> raw =
-            await EnumerateParametersAsync(SpaParamType.Tag, cancellationToken).ConfigureAwait(false);
+        ImmutableArray<SpaObject> raw = await EnumerateParametersAsync(
+                SpaParamType.Tag,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
 
         var tags = ImmutableArray.CreateBuilder<PipeWireTag>(raw.Length);
         foreach (SpaObject param in raw)
         {
-            if (PipeWireTag.From(param) is { } tag) tags.Add(tag);
+            if (PipeWireTag.From(param) is { } tag)
+                tags.Add(tag);
         }
 
         return tags.ToImmutable();
@@ -464,7 +566,10 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
         return SetParameterAsync(SpaParamType.Tag, tag.ToParameter(), cancellationToken);
     }
 
-    [LoggerMessage(EventId = 33000, Level = LogLevel.Error,
-                   Message = "a ParameterChanged handler for node {NodeId} threw")]
+    [LoggerMessage(
+        EventId = 33000,
+        Level = LogLevel.Error,
+        Message = "a ParameterChanged handler for node {NodeId} threw"
+    )]
     private partial void LogHandlerFaulted(uint nodeId, Exception exception);
 }

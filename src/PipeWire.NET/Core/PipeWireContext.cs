@@ -1,10 +1,10 @@
+using System.Globalization;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
-using System.Runtime.CompilerServices;
-using System.Globalization;
-using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Win32.SafeHandles;
 using PipeWire.NET.Interop;
 using PipeWire.NET.Spa;
@@ -39,7 +39,15 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     // A Lock scope held across Dispose is a contract violation, and the drain is what keeps that
     // violation a hang at the call site rather than an unlock against a destroyed loop. Do not
     // hold a scope across Dispose.
-    private enum LifecycleState { Created, Starting, Running, Stopping, Disposed }
+    private enum LifecycleState
+    {
+        Created,
+        Starting,
+        Running,
+        Stopping,
+        Disposed,
+    }
+
     private readonly Lock _lifecycle = new();
     private volatile LifecycleState _state;
     private int _activeLeases;
@@ -51,12 +59,12 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     // disposal is about to stop, so a caller waiting on one with no cancellation of its own would
     // otherwise wait for a reply that can never come.
     private readonly CancellationTokenSource _shutdown = new();
-    private PipeWireLoopHandle?    _loopHandle;
+    private PipeWireLoopHandle? _loopHandle;
     private PipeWireContextHandle? _contextHandle;
-    private PipeWireCoreHandle?   _coreHandle;
+    private PipeWireCoreHandle? _coreHandle;
     private readonly string _name;
-    private volatile bool          _started;
-    private volatile bool          _disposed;
+    private volatile bool _started;
+    private volatile bool _disposed;
 
     // The connection's own listener, distinct from the per-request one a round trip attaches.
     // A connection can die between requests - the daemon destroys our client, or the socket goes -
@@ -115,7 +123,8 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     internal unsafe void UnlockLoop(pw_thread_loop* loop)
     {
         int rc = Native.pw_thread_loop_unlock_checked(loop);
-        if (rc < 0) ReportRefusedUnlock(rc);
+        if (rc < 0)
+            ReportRefusedUnlock(rc);
     }
 
     private long _refusedUnlocks;
@@ -156,7 +165,9 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     /// </para>
     /// </remarks>
     private static readonly Lazy<bool> ProcessInit = new(
-        InitOnce, LazyThreadSafetyMode.ExecutionAndPublication);
+        InitOnce,
+        LazyThreadSafetyMode.ExecutionAndPublication
+    );
 
     private static unsafe bool InitOnce()
     {
@@ -183,16 +194,19 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     private static unsafe Version? ParseLibraryVersion()
     {
         string? text = Marshal.PtrToStringUTF8((IntPtr)Native.pw_get_library_version());
-        if (string.IsNullOrEmpty(text)) return null;
+        if (string.IsNullOrEmpty(text))
+            return null;
 
         // "1.6.8", sometimes with a suffix. Only the leading two numbers are compared.
         int firstDot = text.IndexOf('.', StringComparison.Ordinal);
-        if (firstDot <= 0) return null;
+        if (firstDot <= 0)
+            return null;
 
         int secondDot = text.IndexOf('.', firstDot + 1);
         string minorText = secondDot < 0 ? text[(firstDot + 1)..] : text[(firstDot + 1)..secondDot];
 
-        return int.TryParse(text[..firstDot], CultureInfo.InvariantCulture, out int major)
+        return
+            int.TryParse(text[..firstDot], CultureInfo.InvariantCulture, out int major)
             && int.TryParse(minorText, CultureInfo.InvariantCulture, out int minor)
             ? new Version(major, minor)
             : null;
@@ -212,12 +226,14 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     private static void RequireASupportedLibrary()
     {
         Version? runtime = ParseLibraryVersion();
-        if (runtime is null || runtime >= MinimumLibraryVersion) return;
+        if (runtime is null || runtime >= MinimumLibraryVersion)
+            return;
 
         throw new PipeWireException(
             $"libpipewire {runtime} is older than the {MinimumLibraryVersion} these bindings are "
-            + "generated against, and the combination hangs rather than failing. Upgrade PipeWire, "
-            + "or use a build of this library generated against the installed release.");
+                + "generated against, and the combination hangs rather than failing. Upgrade PipeWire, "
+                + "or use a build of this library generated against the installed release."
+        );
     }
 
     /// <summary>
@@ -258,21 +274,26 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         if (_started)
-            throw new InvalidOperationException("modules must be loaded before the context starts.");
+            throw new InvalidOperationException(
+                "modules must be loaded before the context starts."
+            );
 
         _modules.Add((name, args));
     }
 
     private unsafe void LoadQueuedModules()
     {
-        if (_modules.Count == 0) return;
+        if (_modules.Count == 0)
+            return;
 
         pw_context* context = _contextHandle!.Context;
 
         foreach ((string name, string? args) in _modules)
         {
             ReadOnlySpan<byte> nameUtf8 = Encoding.UTF8.GetBytes(name + '\0');
-            ReadOnlySpan<byte> argsUtf8 = args is null ? default : Encoding.UTF8.GetBytes(args + '\0');
+            ReadOnlySpan<byte> argsUtf8 = args is null
+                ? default
+                : Encoding.UTF8.GetBytes(args + '\0');
 
             fixed (byte* n = nameUtf8)
             fixed (byte* a = argsUtf8)
@@ -280,7 +301,9 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
                 if (Native.pw_context_load_module(context, (sbyte*)n, (sbyte*)a, null) is null)
                 {
                     throw new PipeWireInteropException(
-                        $"pw_context_load_module({name})", -NativeLibc.ENOENT);
+                        $"pw_context_load_module({name})",
+                        -NativeLibc.ENOENT
+                    );
                 }
             }
         }
@@ -316,7 +339,8 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
         get
         {
             PipeWireLoopHandle? loop = _loopHandle;
-            if (loop is null || loop.IsInvalid || loop.IsClosed) return -1;
+            if (loop is null || loop.IsInvalid || loop.IsClosed)
+                return -1;
 
             return Native.pw_loop_get_fd(Native.pw_thread_loop_get_loop(LoopHandle));
         }
@@ -365,7 +389,8 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
         {
             throw new InvalidOperationException(
                 "this context runs its own loop thread; set DriveExternally before starting it to "
-                + "drive the loop from your own.");
+                    + "drive the loop from your own."
+            );
         }
     }
 
@@ -387,7 +412,8 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
         pw_context* context = Native.pw_context_new(
             Native.pw_thread_loop_get_loop(loop),
             props: null,
-            user_data_size: 0);
+            user_data_size: 0
+        );
 
         if (context is null)
         {
@@ -405,7 +431,8 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     // reaches zero.
     private bool Admit()
     {
-        if (_state is LifecycleState.Stopping or LifecycleState.Disposed) return false;
+        if (_state is LifecycleState.Stopping or LifecycleState.Disposed)
+            return false;
         Interlocked.Increment(ref _activeLeases);
         _leasesDrained.Reset();
         return true;
@@ -528,8 +555,11 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
         lock (_lifecycle)
         {
             ObjectDisposedException.ThrowIf(
-                _disposed || _state is LifecycleState.Stopping or LifecycleState.Disposed, this);
-            if (_state == LifecycleState.Running) return Task.CompletedTask;
+                _disposed || _state is LifecycleState.Stopping or LifecycleState.Disposed,
+                this
+            );
+            if (_state == LifecycleState.Running)
+                return Task.CompletedTask;
             if (_state == LifecycleState.Created)
             {
                 _state = LifecycleState.Starting;
@@ -550,7 +580,8 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
                 _startSettled.Wait(cancellationToken);
                 lock (_lifecycle)
                 {
-                    if (_state == LifecycleState.Running) return Task.CompletedTask;
+                    if (_state == LifecycleState.Running)
+                        return Task.CompletedTask;
                     if (_state is LifecycleState.Stopping or LifecycleState.Disposed)
                         throw new ObjectDisposedException(nameof(PipeWireContext));
                     if (_state == LifecycleState.Created && Admit())
@@ -574,7 +605,8 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
                 // Back to Created so a later start can retry: StartNative stops the loop thread
                 // it started, so nothing is left running. The settle event wakes any waiter,
                 // which re-verifies the state and takes over.
-                if (_state == LifecycleState.Starting) _state = LifecycleState.Created;
+                if (_state == LifecycleState.Starting)
+                    _state = LifecycleState.Created;
             }
             _startSettled.Set();
             ReleaseLease();
@@ -633,9 +665,10 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
 
             // The descriptor the connect runs over: the duplicate's number, the caller's raw
             // number, or none of them for the default daemon socket.
-            int connectFd = duplicate is not null ? (int)duplicate.DangerousGetHandle()
-                          : rawFd >= 0 ? rawFd
-                          : -1;
+            int connectFd =
+                duplicate is not null ? (int)duplicate.DangerousGetHandle()
+                : rawFd >= 0 ? rawFd
+                : -1;
 
             pw_core* core;
 
@@ -655,13 +688,32 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
 
                 pw_properties* props = Native.pw_properties_new_dict(&native);
                 if (props is null)
-                    throw new PipeWireInteropException("pw_properties_new_dict", -NativeLibc.ENOMEM);
+                    throw new PipeWireInteropException(
+                        "pw_properties_new_dict",
+                        -NativeLibc.ENOMEM
+                    );
 
-                core = connectFd < 0
-                    ? (RunInProcess
-                        ? Native.pw_context_connect_self(_contextHandle!.Context, props, user_data_size: 0)
-                        : Native.pw_context_connect(_contextHandle!.Context, props, user_data_size: 0))
-                    : Native.pw_context_connect_fd(_contextHandle!.Context, connectFd, props, user_data_size: 0);
+                core =
+                    connectFd < 0
+                        ? (
+                            RunInProcess
+                                ? Native.pw_context_connect_self(
+                                    _contextHandle!.Context,
+                                    props,
+                                    user_data_size: 0
+                                )
+                                : Native.pw_context_connect(
+                                    _contextHandle!.Context,
+                                    props,
+                                    user_data_size: 0
+                                )
+                        )
+                        : Native.pw_context_connect_fd(
+                            _contextHandle!.Context,
+                            connectFd,
+                            props,
+                            user_data_size: 0
+                        );
             }
             finally
             {
@@ -675,15 +727,19 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
                 // disposal closes it. A raw descriptor stays the caller's; nothing here closes it.
                 throw connectFd < 0
                     ? new PipeWireConnectFailedException(
-                        "pw_context_connect", -NativeLibc.ENOENT,
+                        "pw_context_connect",
+                        -NativeLibc.ENOENT,
                         objectId: null,
-                        "ensure the PipeWire daemon is running (pipewire.service / wireplumber.service)")
+                        "ensure the PipeWire daemon is running (pipewire.service / wireplumber.service)"
+                    )
                     : new PipeWireConnectFailedException(
-                        "pw_context_connect_fd", -NativeLibc.ENOENT,
+                        "pw_context_connect_fd",
+                        -NativeLibc.ENOENT,
                         objectId: null,
                         "the fd must be a connected PipeWire socket (as returned by a portal "
-                        + "OpenPipeWireRemote request), not a plain file, and the daemon must be "
-                        + "reachable on it");
+                            + "OpenPipeWireRemote request), not a plain file, and the daemon must be "
+                            + "reachable on it"
+                    );
             }
 
             // A successful connect hands the descriptor to PipeWire: pw_context_connect_fd puts
@@ -741,7 +797,8 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
         // admitted here, and the recheck after locking observes a disposal that began in between
         // without taking the gate while the native lock is held.
         PipeWireLoopHandle? loop = _loopHandle;
-        if (loop is null) return false;
+        if (loop is null)
+            return false;
 
         // A reference, not a validity check. Testing the handle and then reading its pointer is two
         // steps, and disposal between them hands pw_thread_loop_lock a null pointer - which is a
@@ -758,7 +815,8 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
             return false;
         }
 
-        if (!referenced) return false;
+        if (!referenced)
+            return false;
 
         lock (_lifecycle)
         {
@@ -823,7 +881,8 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
         get
         {
             PipeWireLoopHandle? loop = _loopHandle;
-            if (loop is null || loop.IsInvalid) return false;
+            if (loop is null || loop.IsInvalid)
+                return false;
 
             bool referenced = false;
             try
@@ -837,7 +896,8 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
             }
             finally
             {
-                if (referenced) loop.DangerousRelease();
+                if (referenced)
+                    loop.DangerousRelease();
             }
         }
     }
@@ -871,7 +931,10 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     /// refuses to bind one of these through this connection: module-metadata would stop reading the
     /// connection until it answered a ping it can then never be heard answering.
     /// </remarks>
-    internal System.Collections.Concurrent.ConcurrentDictionary<Graph.PipeWireMetadataProvider, byte> ServedStores { get; } = new();
+    internal System.Collections.Concurrent.ConcurrentDictionary<
+        Graph.PipeWireMetadataProvider,
+        byte
+    > ServedStores { get; } = new();
 
     /// <inheritdoc/>
     /// <summary>Changes this client's own properties on a live connection.</summary>
@@ -894,7 +957,8 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     public unsafe int UpdateProperties(IReadOnlyDictionary<string, string> properties)
     {
         ArgumentNullException.ThrowIfNull(properties);
-        if (properties.Count == 0) return 0;
+        if (properties.Count == 0)
+            return 0;
 
         // Sized from the input rather than a fixed scratch: a long value would otherwise lose its
         // tail. UTF-8 is at most 4 bytes per char, plus a terminator for each key and value.
@@ -906,14 +970,16 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
         var items = new spa_dict_item[properties.Count];
 
         var builder = new SpaDictBuilder(scratch, items);
-        foreach (KeyValuePair<string, string> kv in properties) builder.Add(kv.Key, kv.Value);
+        foreach (KeyValuePair<string, string> kv in properties)
+            builder.Add(kv.Key, kv.Value);
 
         spa_dict native = builder.Build();
 
         using (Lock())
         {
             pw_core* core = CoreHandle;
-            if (core is null) throw new InvalidOperationException("the context is not connected.");
+            if (core is null)
+                throw new InvalidOperationException("the context is not connected.");
 
             return Native.pw_core_update_properties(core, &native);
         }
@@ -948,7 +1014,14 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
         _watchEvents->error = &OnConnectionError;
         _watchHook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
 
-        if (Native.pw_core_add_listener(core, _watchHook, _watchEvents, (void*)GCHandle.ToIntPtr(_watchSelf)) >= 0)
+        if (
+            Native.pw_core_add_listener(
+                core,
+                _watchHook,
+                _watchEvents,
+                (void*)GCHandle.ToIntPtr(_watchSelf)
+            ) >= 0
+        )
             return;
 
         ReleaseConnectionWatch();
@@ -967,8 +1040,14 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
             if (_loopHandle is { IsInvalid: false } loop)
             {
                 Native.pw_thread_loop_lock(loop.Loop);
-                try { Native.spa_hook_remove(_watchHook); }
-                finally { UnlockLoop(loop.Loop); }
+                try
+                {
+                    Native.spa_hook_remove(_watchHook);
+                }
+                finally
+                {
+                    UnlockLoop(loop.Loop);
+                }
             }
             else
             {
@@ -981,8 +1060,13 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
             _watchHook = null;
         }
 
-        if (_watchEvents is not null) { NativeMemory.Free(_watchEvents); _watchEvents = null; }
-        if (_watchSelf.IsAllocated) _watchSelf.Free();
+        if (_watchEvents is not null)
+        {
+            NativeMemory.Free(_watchEvents);
+            _watchEvents = null;
+        }
+        if (_watchSelf.IsAllocated)
+            _watchSelf.Free();
     }
 
     /// <summary>The daemon reporting an error against the connection, from the loop thread.</summary>
@@ -991,21 +1075,35 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     /// an object that is gone - is an answer, and the connection carries on serving.
     /// </remarks>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe void OnConnectionError(void* data, uint id, int seq, int res, sbyte* message)
+    private static unsafe void OnConnectionError(
+        void* data,
+        uint id,
+        int seq,
+        int res,
+        sbyte* message
+    )
     {
         // A native callback frame: an escaping exception aborts the process.
         try
         {
-            if (data is null) return;
-            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireContext self) return;
-            if (!IsConnectionFatal(res)) return;
+            if (data is null)
+                return;
+            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireContext self)
+                return;
+            if (!IsConnectionFatal(res))
+                return;
 
             var fault = new PipeWireConnectionClosedException(
-                "connection", res, id, message is null ? null : DaemonText.String(message));
+                "connection",
+                res,
+                id,
+                message is null ? null : DaemonText.String(message)
+            );
 
             // First one wins: the errno that ended it is the useful one, and a closing connection
             // can report several.
-            if (Interlocked.CompareExchange(ref self._fault, fault, null) is not null) return;
+            if (Interlocked.CompareExchange(ref self._fault, fault, null) is not null)
+                return;
 
             SafeCallback.Raise(self.ConnectionLost, h => h(fault), _ => { });
         }
@@ -1017,11 +1115,12 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     }
 
     /// <inheritdoc cref="CoreSync.IsConnectionFatal"/>
-    private static bool IsConnectionFatal(int result) => result is
-        -NativeLibc.EPIPE or
-        -NativeLibc.ECONNABORTED or
-        -NativeLibc.ECONNRESET or
-        -NativeLibc.ENOTCONN;
+    private static bool IsConnectionFatal(int result) =>
+        result
+            is -NativeLibc.EPIPE
+                or -NativeLibc.ECONNABORTED
+                or -NativeLibc.ECONNRESET
+                or -NativeLibc.ENOTCONN;
 
     private void DisposeCore()
     {
@@ -1034,13 +1133,15 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
         {
             throw new InvalidOperationException(
                 "A PipeWire context cannot be disposed from its own loop thread: stopping the loop "
-                + "joins that thread, so it would wait for itself. Dispose from the thread that "
-                + "created it, or hand the disposal to another thread from the callback.");
+                    + "joins that thread, so it would wait for itself. Dispose from the thread that "
+                    + "created it, or hand the disposal to another thread from the callback."
+            );
         }
 
         lock (_lifecycle)
         {
-            if (_disposed) return;
+            if (_disposed)
+                return;
             _disposed = true;
             _state = LifecycleState.Stopping;
         }
@@ -1104,8 +1205,11 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
         _loopHandle = null;
     }
 
-    [LoggerMessage(EventId = 34700, Level = LogLevel.Error,
-        Message = "the loop refused an unlock ({Result}) on managed thread {ThreadId}; the loop mutex is still held by that thread and the next thread that needs it will wait for ever. At: {StackTrace}")]
+    [LoggerMessage(
+        EventId = 34700,
+        Level = LogLevel.Error,
+        Message = "the loop refused an unlock ({Result}) on managed thread {ThreadId}; the loop mutex is still held by that thread and the next thread that needs it will wait for ever. At: {StackTrace}"
+    )]
     private partial void LogRefusedUnlock(int threadId, int result, string stackTrace);
 
     /// <summary>
@@ -1156,11 +1260,13 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
             // however many copies were made and however often Dispose runs. An unbalanced unlock
             // corrupts the native mutex the loop - and every scope after it - depends on, and a
             // missing lease release wedges disposal's drain: it waits for a scope that is gone.
-            if (Interlocked.Exchange(ref _released, 1) != 0) return;
+            if (Interlocked.Exchange(ref _released, 1) != 0)
+                return;
             try
             {
                 int rc = Native.pw_thread_loop_unlock_checked(_loop);
-                if (rc < 0) _context.ReportRefusedUnlock(rc);
+                if (rc < 0)
+                    _context.ReportRefusedUnlock(rc);
                 _handle.DangerousRelease();
             }
             finally

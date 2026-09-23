@@ -70,7 +70,8 @@ internal sealed unsafe class BoundProxy : IDisposable
         scope = default;
 
         PipeWireProxyHandle? proxy = _proxy;
-        if (_disposed != 0 || proxy is null) return false;
+        if (_disposed != 0 || proxy is null)
+            return false;
 
         bool referenced = false;
         try
@@ -82,7 +83,8 @@ internal sealed unsafe class BoundProxy : IDisposable
             return false;
         }
 
-        if (!referenced) return false;
+        if (!referenced)
+            return false;
         if (proxy.IsInvalid)
         {
             proxy.DangerousRelease();
@@ -150,7 +152,8 @@ internal sealed unsafe class BoundProxy : IDisposable
         int eventsSize,
         Action<IntPtr> fillEvents,
         Func<IntPtr, IntPtr, IntPtr, IntPtr, int> addListener,
-        object owner)
+        object owner
+    )
     {
         ArgumentNullException.ThrowIfNull(ctx);
         ArgumentNullException.ThrowIfNull(fillEvents);
@@ -177,7 +180,8 @@ internal sealed unsafe class BoundProxy : IDisposable
                 if (proxy is null)
                 {
                     throw new InvalidOperationException(
-                        $"the daemon refused to bind global {id} as {interfaceType}.");
+                        $"the daemon refused to bind global {id} as {interfaceType}."
+                    );
                 }
 
                 var handle = new PipeWireProxyHandle(proxy, ctx.LoopOwner, ctx.CoreOwner);
@@ -201,14 +205,19 @@ internal sealed unsafe class BoundProxy : IDisposable
                 handle.OwnListener(events, hook, self);
 
                 int rc = addListener(
-                    (IntPtr)proxy, (IntPtr)hook, (IntPtr)events, GCHandle.ToIntPtr(self));
+                    (IntPtr)proxy,
+                    (IntPtr)hook,
+                    (IntPtr)events,
+                    GCHandle.ToIntPtr(self)
+                );
 
                 if (rc < 0)
                     throw new PipeWireInteropException("add_listener", rc);
 
                 // A second listener, on pw_proxy itself rather than on the interface: `removed` is
                 // how the daemon says the object is gone, and it arrives nowhere else.
-                var proxyEvents = (pw_proxy_events*)NativeMemory.AllocZeroed((nuint)sizeof(pw_proxy_events));
+                var proxyEvents = (pw_proxy_events*)
+                    NativeMemory.AllocZeroed((nuint)sizeof(pw_proxy_events));
                 proxyEvents->version = NativeConstants.PW_VERSION_PROXY_EVENTS;
                 proxyEvents->removed = &OnProxyRemoved;
 
@@ -217,7 +226,11 @@ internal sealed unsafe class BoundProxy : IDisposable
                 handle.OwnProxyListener(proxyEvents, proxyHook, proxySelf);
 
                 Native.pw_proxy_add_listener(
-                    proxy, proxyHook, proxyEvents, (void*)GCHandle.ToIntPtr(proxySelf));
+                    proxy,
+                    proxyHook,
+                    proxyEvents,
+                    (void*)GCHandle.ToIntPtr(proxySelf)
+                );
             }
 
             return bound;
@@ -235,8 +248,10 @@ internal sealed unsafe class BoundProxy : IDisposable
         // An exception escaping a reverse P/Invoke aborts the process, so nothing here may throw.
         try
         {
-            if (GCHandle.FromIntPtr((nint)data).Target is not BoundProxy self) return;
-            if (Interlocked.Exchange(ref self._removed, 1) != 0) return;
+            if (GCHandle.FromIntPtr((nint)data).Target is not BoundProxy self)
+                return;
+            if (Interlocked.Exchange(ref self._removed, 1) != 0)
+                return;
 
             self.Removed?.Invoke();
         }
@@ -251,7 +266,8 @@ internal sealed unsafe class BoundProxy : IDisposable
     {
         // Claimed atomically. A check followed by a set lets two concurrent disposals both pass and
         // schedule a teardown each.
-        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
 
         // Deferred when called from the loop thread. The proxy itself survives being destroyed
         // during its own dispatch - the protocol module holds a reference across the demarshal

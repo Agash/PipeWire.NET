@@ -38,43 +38,45 @@ public static class DrmFormat
     /// Returns the DRM fourcc for <paramref name="format"/>, or <see cref="Invalid"/> when the format
     /// has no plain-layout DRM equivalent.
     /// </summary>
-    public static uint FromVideoFormat(SpaVideoFormat format) => format switch
-    {
-        SpaVideoFormat.Yuy2 => NativeLibdrm.DRM_FORMAT_YUYV,
-        SpaVideoFormat.Yvyu => NativeLibdrm.DRM_FORMAT_YVYU,
-        SpaVideoFormat.Uyvy => NativeLibdrm.DRM_FORMAT_UYVY,
-        SpaVideoFormat.Vyuy => NativeLibdrm.DRM_FORMAT_VYUY,
-        SpaVideoFormat.Nv12 => NativeLibdrm.DRM_FORMAT_NV12,
-        SpaVideoFormat.Nv21 => NativeLibdrm.DRM_FORMAT_NV21,
-        SpaVideoFormat.Nv16 => NativeLibdrm.DRM_FORMAT_NV16,
-        SpaVideoFormat.Nv61 => NativeLibdrm.DRM_FORMAT_NV61,
-        SpaVideoFormat.Nv24 => NativeLibdrm.DRM_FORMAT_NV24,
-        SpaVideoFormat.Yuv9 => NativeLibdrm.DRM_FORMAT_YUV410,
-        SpaVideoFormat.Yvu9 => NativeLibdrm.DRM_FORMAT_YVU410,
-        SpaVideoFormat.Y41B => NativeLibdrm.DRM_FORMAT_YUV411,
-        SpaVideoFormat.I420 => NativeLibdrm.DRM_FORMAT_YUV420,
-        SpaVideoFormat.Yv12 => NativeLibdrm.DRM_FORMAT_YVU420,
-        SpaVideoFormat.Y42B => NativeLibdrm.DRM_FORMAT_YUV422,
-        SpaVideoFormat.Y444 => NativeLibdrm.DRM_FORMAT_YUV444,
-        SpaVideoFormat.Rgb15 => NativeLibdrm.DRM_FORMAT_XRGB1555,
-        SpaVideoFormat.Rgb16 => NativeLibdrm.DRM_FORMAT_RGB565,
-        SpaVideoFormat.Bgr16 => NativeLibdrm.DRM_FORMAT_BGR565,
-        SpaVideoFormat.Rgb => NativeLibdrm.DRM_FORMAT_BGR888,
-        SpaVideoFormat.Bgr => NativeLibdrm.DRM_FORMAT_RGB888,
-        SpaVideoFormat.Rgba => NativeLibdrm.DRM_FORMAT_ABGR8888,
-        SpaVideoFormat.Rgbx => NativeLibdrm.DRM_FORMAT_XBGR8888,
-        SpaVideoFormat.Bgra => NativeLibdrm.DRM_FORMAT_ARGB8888,
-        SpaVideoFormat.Bgrx => NativeLibdrm.DRM_FORMAT_XRGB8888,
-        SpaVideoFormat.Argb => NativeLibdrm.DRM_FORMAT_BGRA8888,
-        SpaVideoFormat.XRgb => NativeLibdrm.DRM_FORMAT_BGRX8888,
-        SpaVideoFormat.Abgr => NativeLibdrm.DRM_FORMAT_RGBA8888,
-        SpaVideoFormat.XBgr => NativeLibdrm.DRM_FORMAT_RGBX8888,
-        SpaVideoFormat.P010_10Le => NativeLibdrm.DRM_FORMAT_P010,
-        SpaVideoFormat.Gray8 => NativeLibdrm.DRM_FORMAT_R8,
-        SpaVideoFormat.Gray16Le => NativeLibdrm.DRM_FORMAT_R16,
-        SpaVideoFormat.Gray16Be => NativeLibdrm.DRM_FORMAT_R16 | NativeLibdrm.DRM_FORMAT_BIG_ENDIAN,
-        _ => Invalid,
-    };
+    public static uint FromVideoFormat(SpaVideoFormat format) =>
+        format switch
+        {
+            SpaVideoFormat.Yuy2 => NativeLibdrm.DRM_FORMAT_YUYV,
+            SpaVideoFormat.Yvyu => NativeLibdrm.DRM_FORMAT_YVYU,
+            SpaVideoFormat.Uyvy => NativeLibdrm.DRM_FORMAT_UYVY,
+            SpaVideoFormat.Vyuy => NativeLibdrm.DRM_FORMAT_VYUY,
+            SpaVideoFormat.Nv12 => NativeLibdrm.DRM_FORMAT_NV12,
+            SpaVideoFormat.Nv21 => NativeLibdrm.DRM_FORMAT_NV21,
+            SpaVideoFormat.Nv16 => NativeLibdrm.DRM_FORMAT_NV16,
+            SpaVideoFormat.Nv61 => NativeLibdrm.DRM_FORMAT_NV61,
+            SpaVideoFormat.Nv24 => NativeLibdrm.DRM_FORMAT_NV24,
+            SpaVideoFormat.Yuv9 => NativeLibdrm.DRM_FORMAT_YUV410,
+            SpaVideoFormat.Yvu9 => NativeLibdrm.DRM_FORMAT_YVU410,
+            SpaVideoFormat.Y41B => NativeLibdrm.DRM_FORMAT_YUV411,
+            SpaVideoFormat.I420 => NativeLibdrm.DRM_FORMAT_YUV420,
+            SpaVideoFormat.Yv12 => NativeLibdrm.DRM_FORMAT_YVU420,
+            SpaVideoFormat.Y42B => NativeLibdrm.DRM_FORMAT_YUV422,
+            SpaVideoFormat.Y444 => NativeLibdrm.DRM_FORMAT_YUV444,
+            SpaVideoFormat.Rgb15 => NativeLibdrm.DRM_FORMAT_XRGB1555,
+            SpaVideoFormat.Rgb16 => NativeLibdrm.DRM_FORMAT_RGB565,
+            SpaVideoFormat.Bgr16 => NativeLibdrm.DRM_FORMAT_BGR565,
+            SpaVideoFormat.Rgb => NativeLibdrm.DRM_FORMAT_BGR888,
+            SpaVideoFormat.Bgr => NativeLibdrm.DRM_FORMAT_RGB888,
+            SpaVideoFormat.Rgba => NativeLibdrm.DRM_FORMAT_ABGR8888,
+            SpaVideoFormat.Rgbx => NativeLibdrm.DRM_FORMAT_XBGR8888,
+            SpaVideoFormat.Bgra => NativeLibdrm.DRM_FORMAT_ARGB8888,
+            SpaVideoFormat.Bgrx => NativeLibdrm.DRM_FORMAT_XRGB8888,
+            SpaVideoFormat.Argb => NativeLibdrm.DRM_FORMAT_BGRA8888,
+            SpaVideoFormat.XRgb => NativeLibdrm.DRM_FORMAT_BGRX8888,
+            SpaVideoFormat.Abgr => NativeLibdrm.DRM_FORMAT_RGBA8888,
+            SpaVideoFormat.XBgr => NativeLibdrm.DRM_FORMAT_RGBX8888,
+            SpaVideoFormat.P010_10Le => NativeLibdrm.DRM_FORMAT_P010,
+            SpaVideoFormat.Gray8 => NativeLibdrm.DRM_FORMAT_R8,
+            SpaVideoFormat.Gray16Le => NativeLibdrm.DRM_FORMAT_R16,
+            SpaVideoFormat.Gray16Be => NativeLibdrm.DRM_FORMAT_R16
+                | NativeLibdrm.DRM_FORMAT_BIG_ENDIAN,
+            _ => Invalid,
+        };
 
     /// <summary>
     /// Returns the DRM fourcc for <paramref name="format"/>, or <see cref="Invalid"/> for
@@ -84,15 +86,16 @@ public static class DrmFormat
     /// The convenience overload for the formats this library negotiates. It defers to
     /// <see cref="FromVideoFormat"/> so the two cannot drift apart.
     /// </remarks>
-    public static uint FromPixelFormat(PixelFormat format) => format switch
-    {
-        PixelFormat.Rgba => FromVideoFormat(SpaVideoFormat.Rgba),
-        PixelFormat.Bgra => FromVideoFormat(SpaVideoFormat.Bgra),
-        PixelFormat.Rgbx => FromVideoFormat(SpaVideoFormat.Rgbx),
-        PixelFormat.Bgrx => FromVideoFormat(SpaVideoFormat.Bgrx),
-        PixelFormat.Yuyv => FromVideoFormat(SpaVideoFormat.Yuy2),
-        PixelFormat.Yuv420 => FromVideoFormat(SpaVideoFormat.I420),
-        PixelFormat.Nv12 => FromVideoFormat(SpaVideoFormat.Nv12),
-        _ => Invalid,
-    };
+    public static uint FromPixelFormat(PixelFormat format) =>
+        format switch
+        {
+            PixelFormat.Rgba => FromVideoFormat(SpaVideoFormat.Rgba),
+            PixelFormat.Bgra => FromVideoFormat(SpaVideoFormat.Bgra),
+            PixelFormat.Rgbx => FromVideoFormat(SpaVideoFormat.Rgbx),
+            PixelFormat.Bgrx => FromVideoFormat(SpaVideoFormat.Bgrx),
+            PixelFormat.Yuyv => FromVideoFormat(SpaVideoFormat.Yuy2),
+            PixelFormat.Yuv420 => FromVideoFormat(SpaVideoFormat.I420),
+            PixelFormat.Nv12 => FromVideoFormat(SpaVideoFormat.Nv12),
+            _ => Invalid,
+        };
 }

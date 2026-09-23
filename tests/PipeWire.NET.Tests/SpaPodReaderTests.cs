@@ -28,10 +28,15 @@ public sealed class SpaPodReaderTests : PipeWireTestBase
     }
 
     private static byte[] IntPod(int v) => Pod(SpaType.Int, BitConverter.GetBytes(v));
+
     private static byte[] LongPod(long v) => Pod(SpaType.Long, BitConverter.GetBytes(v));
+
     private static byte[] FloatPod(float v) => Pod(SpaType.Float, BitConverter.GetBytes(v));
+
     private static byte[] DoublePod(double v) => Pod(SpaType.Double, BitConverter.GetBytes(v));
+
     private static byte[] BoolPod(bool v) => Pod(SpaType.Bool, BitConverter.GetBytes(v ? 1 : 0));
+
     private static byte[] IdPod(uint v) => Pod(SpaType.Id, BitConverter.GetBytes(v));
 
     private static byte[] RectanglePod(uint w, uint h)
@@ -80,14 +85,17 @@ public sealed class SpaPodReaderTests : PipeWireTestBase
         Assert.AreEqual(0f, new SpaPodReader(FloatPod(0f)).ReadFloat());
         Assert.AreEqual(float.MaxValue, new SpaPodReader(FloatPod(float.MaxValue)).ReadFloat());
         Assert.IsTrue(float.IsNaN(new SpaPodReader(FloatPod(float.NaN)).ReadFloat()));
-        Assert.IsTrue(double.IsNegativeInfinity(
-            new SpaPodReader(DoublePod(double.NegativeInfinity)).ReadDouble()));
+        Assert.IsTrue(
+            double.IsNegativeInfinity(
+                new SpaPodReader(DoublePod(double.NegativeInfinity)).ReadDouble()
+            )
+        );
     }
 
     [TestMethod]
     [DataRow(0, false)]
     [DataRow(1, true)]
-    [DataRow(2, true)]      // SPA writes 0/1, but anything non-zero must not read as false
+    [DataRow(2, true)] // SPA writes 0/1, but anything non-zero must not read as false
     [DataRow(-1, true)]
     public void ReadBool_TreatsAnyNonZeroAsTrue(int raw, bool expected)
     {
@@ -118,10 +126,18 @@ public sealed class SpaPodReaderTests : PipeWireTestBase
     public void ReadingTheWrongType_Throws()
     {
         // A Long pod read as an Int would otherwise silently return the low four bytes.
-        Assert.ThrowsExactly<InvalidOperationException>(() => new SpaPodReader(LongPod(1)).ReadInt());
-        Assert.ThrowsExactly<InvalidOperationException>(() => new SpaPodReader(IntPod(1)).ReadLong());
-        Assert.ThrowsExactly<InvalidOperationException>(() => new SpaPodReader(IntPod(1)).ReadFloat());
-        Assert.ThrowsExactly<InvalidOperationException>(() => new SpaPodReader(IntPod(1)).ReadRectangle());
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            new SpaPodReader(LongPod(1)).ReadInt()
+        );
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            new SpaPodReader(IntPod(1)).ReadLong()
+        );
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            new SpaPodReader(IntPod(1)).ReadFloat()
+        );
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            new SpaPodReader(IntPod(1)).ReadRectangle()
+        );
     }
 
     [TestMethod]
@@ -140,8 +156,10 @@ public sealed class SpaPodReaderTests : PipeWireTestBase
         for (int len = 0; len < 8; len++)
         {
             var reader = new SpaPodReader(new byte[len]);
-            Assert.IsFalse(reader.EnterObject(out _, out _, out _),
-                $"a {len}-byte buffer cannot contain a pod header");
+            Assert.IsFalse(
+                reader.EnterObject(out _, out _, out _),
+                $"a {len}-byte buffer cannot contain a pod header"
+            );
         }
     }
 
@@ -153,8 +171,10 @@ public sealed class SpaPodReaderTests : PipeWireTestBase
         BitConverter.TryWriteBytes(pod.AsSpan(4, 4), (uint)SpaType.Object);
 
         var reader = new SpaPodReader(pod);
-        Assert.IsFalse(reader.EnterObject(out _, out _, out _),
-            "a pod declaring more body than the buffer holds must be refused, not reported");
+        Assert.IsFalse(
+            reader.EnterObject(out _, out _, out _),
+            "a pod declaring more body than the buffer holds must be refused, not reported"
+        );
     }
 
     [TestMethod]
@@ -169,8 +189,10 @@ public sealed class SpaPodReaderTests : PipeWireTestBase
         BitConverter.TryWriteBytes(pod.AsSpan(4, 4), (uint)SpaType.Object);
 
         var reader = new SpaPodReader(pod);
-        Assert.IsFalse(reader.EnterObject(out _, out _, out uint bodySize),
-            $"an object declaring {declaredSize} bytes cannot hold its own type and id");
+        Assert.IsFalse(
+            reader.EnterObject(out _, out _, out uint bodySize),
+            $"an object declaring {declaredSize} bytes cannot hold its own type and id"
+        );
         Assert.AreEqual(0u, bodySize, "a refused read must not report a body size");
     }
 
@@ -189,7 +211,8 @@ public sealed class SpaPodReaderTests : PipeWireTestBase
         byte[] body = BuildObjectBody(
             (key: 1u, flags: 0u, value: IntPod(42)),
             (key: 2u, flags: 0u, value: LongPod(7)),
-            (key: 3u, flags: 0u, value: RectanglePod(640, 480)));
+            (key: 3u, flags: 0u, value: RectanglePod(640, 480))
+        );
 
         var reader = new SpaPodReader(body);
         Assert.IsTrue(reader.EnterObject(out _, out _, out _));
@@ -206,20 +229,28 @@ public sealed class SpaPodReaderTests : PipeWireTestBase
         Assert.AreEqual(3u, k3.Value);
         Assert.AreEqual((640u, 480u), v3.ReadRectangle());
 
-        Assert.IsFalse(reader.TryReadProperty(out _, out _), "the object had exactly three properties");
+        Assert.IsFalse(
+            reader.TryReadProperty(out _, out _),
+            "the object had exactly three properties"
+        );
     }
 
     [TestMethod]
     public void TryReadProperty_SurfacesTheFlagsThatGateFixation()
     {
-        byte[] body = BuildObjectBody((key: 9u, flags: (uint)SpaPodPropFlags.DontFixate, value: IntPod(1)));
+        byte[] body = BuildObjectBody(
+            (key: 9u, flags: (uint)SpaPodPropFlags.DontFixate, value: IntPod(1))
+        );
 
         var reader = new SpaPodReader(body);
         Assert.IsTrue(reader.EnterObject(out _, out _, out _));
         Assert.IsTrue(reader.TryReadProperty(out SpaKey key, out SpaPodPropFlags flags, out _));
         Assert.AreEqual(9u, key.Value);
-        Assert.AreEqual(SpaPodPropFlags.DontFixate, flags & SpaPodPropFlags.DontFixate,
-            "DontFixate must survive; it is what says a modifier list is still a choice");
+        Assert.AreEqual(
+            SpaPodPropFlags.DontFixate,
+            flags & SpaPodPropFlags.DontFixate,
+            "DontFixate must survive; it is what says a modifier list is still a choice"
+        );
     }
 
     [TestMethod]
@@ -230,11 +261,17 @@ public sealed class SpaPodReaderTests : PipeWireTestBase
         for (int cut = 8; cut < full.Length; cut++)
         {
             var reader = new SpaPodReader(full.AsSpan(0, cut).ToArray());
-            if (!reader.EnterObject(out _, out _, out _)) continue;
+            if (!reader.EnterObject(out _, out _, out _))
+                continue;
 
             // Whatever it decides, it must not throw an out-of-range: it either reads or declines.
-            try { _ = reader.TryReadProperty(out _, out _); }
-            catch (InvalidOperationException) { /* a declared type/size mismatch is a fair refusal */ }
+            try
+            {
+                _ = reader.TryReadProperty(out _, out _);
+            }
+            catch (InvalidOperationException)
+            { /* a declared type/size mismatch is a fair refusal */
+            }
         }
     }
 
@@ -264,14 +301,15 @@ public sealed class SpaPodReaderTests : PipeWireTestBase
     private static byte[] BuildObjectBody(params (uint key, uint flags, byte[] value)[] props)
     {
         var body = new List<byte>();
-        body.AddRange(BitConverter.GetBytes(0u));   // object type
-        body.AddRange(BitConverter.GetBytes(0u));   // object id
+        body.AddRange(BitConverter.GetBytes(0u)); // object type
+        body.AddRange(BitConverter.GetBytes(0u)); // object id
         foreach ((uint key, uint flags, byte[] value) in props)
         {
             body.AddRange(BitConverter.GetBytes(key));
             body.AddRange(BitConverter.GetBytes(flags));
             body.AddRange(value);
-            while (body.Count % 8 != 0) body.Add(0);
+            while (body.Count % 8 != 0)
+                body.Add(0);
         }
         return Pod(SpaType.Object, CollectionsMarshal.AsSpan(body));
     }

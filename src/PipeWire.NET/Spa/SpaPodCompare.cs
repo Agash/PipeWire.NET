@@ -33,25 +33,29 @@ internal static class SpaPodCompare
     /// arrays - is compared the way upstream's default arm compares it, by its bytes, which can
     /// only say equal or not.
     /// </remarks>
-    internal static int CompareValue(SpaValue a, SpaValue b) => (a, b) switch
-    {
-        (SpaBool x, SpaBool y) => (x.Value ? 1 : 0).CompareTo(y.Value ? 1 : 0),
-        (SpaId x, SpaId y) => x.Value.CompareTo(y.Value),
-        (SpaInt x, SpaInt y) => x.Value.CompareTo(y.Value),
-        (SpaLong x, SpaLong y) => x.Value.CompareTo(y.Value),
-        (SpaFloat x, SpaFloat y) => x.Value.CompareTo(y.Value),
-        (SpaDouble x, SpaDouble y) => x.Value.CompareTo(y.Value),
-        (SpaString x, SpaString y) => Math.Sign(string.CompareOrdinal(x.Value, y.Value)),
-        (SpaRectangle x, SpaRectangle y) => CompareRectangle(x, y),
-        (SpaFraction x, SpaFraction y) =>
-            ((ulong)x.Numerator * y.Denominator).CompareTo((ulong)y.Numerator * x.Denominator),
-        _ => BytesEqual(a, b) ? 0 : 1,
-    };
+    internal static int CompareValue(SpaValue a, SpaValue b) =>
+        (a, b) switch
+        {
+            (SpaBool x, SpaBool y) => (x.Value ? 1 : 0).CompareTo(y.Value ? 1 : 0),
+            (SpaId x, SpaId y) => x.Value.CompareTo(y.Value),
+            (SpaInt x, SpaInt y) => x.Value.CompareTo(y.Value),
+            (SpaLong x, SpaLong y) => x.Value.CompareTo(y.Value),
+            (SpaFloat x, SpaFloat y) => x.Value.CompareTo(y.Value),
+            (SpaDouble x, SpaDouble y) => x.Value.CompareTo(y.Value),
+            (SpaString x, SpaString y) => Math.Sign(string.CompareOrdinal(x.Value, y.Value)),
+            (SpaRectangle x, SpaRectangle y) => CompareRectangle(x, y),
+            (SpaFraction x, SpaFraction y) => ((ulong)x.Numerator * y.Denominator).CompareTo(
+                (ulong)y.Numerator * x.Denominator
+            ),
+            _ => BytesEqual(a, b) ? 0 : 1,
+        };
 
     private static int CompareRectangle(SpaRectangle x, SpaRectangle y)
     {
-        ulong a1 = (ulong)x.Width * x.Height, a2 = (ulong)y.Width * y.Height;
-        if (a1 != a2) return a1 < a2 ? -1 : 1;
+        ulong a1 = (ulong)x.Width * x.Height,
+            a2 = (ulong)y.Width * y.Height;
+        if (a1 != a2)
+            return a1 < a2 ? -1 : 1;
         return x.Width.CompareTo(y.Width);
     }
 
@@ -67,20 +71,22 @@ internal static class SpaPodCompare
 
     /// <summary><c>spa_pod_compare_is_step_of</c>: 1 when a whole number of steps, 0 when not,
     /// -1 when the step itself is invalid (below 1) or the type cannot step.</summary>
-    internal static int IsStepOf(SpaValue value, SpaValue step) => (value, step) switch
-    {
-        (SpaInt v, SpaInt s) => s.Value < 1 ? -1 : (v.Value % s.Value == 0 ? 1 : 0),
-        (SpaLong v, SpaLong s) => s.Value < 1 ? -1 : (v.Value % s.Value == 0 ? 1 : 0),
-        (SpaRectangle v, SpaRectangle s) => s.Width < 1 || s.Height < 1
-            ? -1
-            : (v.Width % s.Width == 0 && v.Height % s.Height == 0 ? 1 : 0),
-        _ => -1,
-    };
+    internal static int IsStepOf(SpaValue value, SpaValue step) =>
+        (value, step) switch
+        {
+            (SpaInt v, SpaInt s) => s.Value < 1 ? -1 : (v.Value % s.Value == 0 ? 1 : 0),
+            (SpaLong v, SpaLong s) => s.Value < 1 ? -1 : (v.Value % s.Value == 0 ? 1 : 0),
+            (SpaRectangle v, SpaRectangle s) => s.Width < 1 || s.Height < 1
+                ? -1
+                : (v.Width % s.Width == 0 && v.Height % s.Height == 0 ? 1 : 0),
+            _ => -1,
+        };
 
     /// <summary><c>spa_pod_compare_is_in_range</c>: 1 inside, 0 outside, -1 on an invalid step.</summary>
     internal static int IsInRange(SpaValue value, SpaValue min, SpaValue max, SpaValue? step)
     {
-        if (CompareValue(value, min) < 0 || CompareValue(value, max) > 0) return 0;
+        if (CompareValue(value, min) < 0 || CompareValue(value, max) > 0)
+            return 0;
         return step is null ? 1 : IsStepOf(value, step);
     }
 
@@ -90,7 +96,11 @@ internal static class SpaPodCompare
     /// An enumeration is tested against its members only, from index 1: index 0 is the default, and
     /// upstream does not count a default that is not also listed. Flags accept anything.
     /// </remarks>
-    internal static bool IsValidChoice(SpaValue value, ImmutableArray<SpaValue> alts, SpaChoiceType kind)
+    internal static bool IsValidChoice(
+        SpaValue value,
+        ImmutableArray<SpaValue> alts,
+        SpaChoiceType kind
+    )
     {
         switch (kind)
         {
@@ -99,7 +109,8 @@ internal static class SpaPodCompare
 
             case SpaChoiceType.Enum:
                 for (var i = 1; i < alts.Length; i++)
-                    if (CompareValue(value, alts[i]) == 0) return true;
+                    if (CompareValue(value, alts[i]) == 0)
+                        return true;
                 return false;
 
             case SpaChoiceType.Range:
@@ -118,10 +129,11 @@ internal static class SpaPodCompare
 
     /// <summary><c>spa_pod_filter_flags_value</c>: the bitwise AND of two flag values, or null when
     /// it is zero or the type cannot hold flags.</summary>
-    internal static SpaValue? AndFlags(SpaValue a, SpaValue b) => (a, b) switch
-    {
-        (SpaInt x, SpaInt y) when (x.Value & y.Value) != 0 => new SpaInt(x.Value & y.Value),
-        (SpaLong x, SpaLong y) when (x.Value & y.Value) != 0 => new SpaLong(x.Value & y.Value),
-        _ => null,
-    };
+    internal static SpaValue? AndFlags(SpaValue a, SpaValue b) =>
+        (a, b) switch
+        {
+            (SpaInt x, SpaInt y) when (x.Value & y.Value) != 0 => new SpaInt(x.Value & y.Value),
+            (SpaLong x, SpaLong y) when (x.Value & y.Value) != 0 => new SpaLong(x.Value & y.Value),
+            _ => null,
+        };
 }

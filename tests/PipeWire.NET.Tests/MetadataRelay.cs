@@ -40,13 +40,17 @@ internal static class MetadataRelay
         PipeWireMetadataProxy reader,
         string key,
         Func<Task> write,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
-        var arrived = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var arrived = new TaskCompletionSource<string?>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
 
         void OnChanged(PipeWireMetadataProxy _, PipeWireMetadataEntry entry)
         {
-            if (entry.Key == key) arrived.TrySetResult(entry.Value);
+            if (entry.Key == key)
+                arrived.TrySetResult(entry.Value);
         }
 
         reader.EntryChanged += OnChanged;
@@ -56,7 +60,9 @@ internal static class MetadataRelay
 
             try
             {
-                return await arrived.Task.WaitAsync(Budget, cancellationToken).ConfigureAwait(false);
+                return await arrived
+                    .Task.WaitAsync(Budget, cancellationToken)
+                    .ConfigureAwait(false);
             }
             catch (TimeoutException)
             {
@@ -65,14 +71,16 @@ internal static class MetadataRelay
                 {
                     Assert.Fail(
                         $"the reader's store holds '{key}' = '{inStore}' but never raised the change, "
-                        + "so the event path dropped it");
+                            + "so the event path dropped it"
+                    );
                 }
 
                 Assert.Inconclusive(
                     $"the session manager did not relay '{key}' to a second client within {Budget}. "
-                    + "The value never reached the reader's store either, so nothing about this "
-                    + "library can be concluded from it.");
-                throw;   // unreachable; Inconclusive throws
+                        + "The value never reached the reader's store either, so nothing about this "
+                        + "library can be concluded from it."
+                );
+                throw; // unreachable; Inconclusive throws
             }
         }
         finally

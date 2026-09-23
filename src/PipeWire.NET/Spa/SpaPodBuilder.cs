@@ -38,33 +38,75 @@ internal ref struct SpaPodBuilder
     private int _depth;
 
     [InlineArray(8)]
-    private struct OffsetStack { private int _e; }
+    private struct OffsetStack
+    {
+        private int _e;
+    }
 
     public SpaPodBuilder(Span<byte> buffer)
     {
-        _buf   = buffer;
-        _pos   = 0;
+        _buf = buffer;
+        _pos = 0;
         _depth = 0;
     }
 
     // - Bare primitive values (rarely used directly; prefer the keyed overloads) -
 
-    public void AddInt(int value)       => WritePod(SpaType.Int,    value);
-    public void AddFloat(float value)   => WritePod(SpaType.Float,  value);
+    public void AddInt(int value) => WritePod(SpaType.Int, value);
+
+    public void AddFloat(float value) => WritePod(SpaType.Float, value);
+
     public void AddDouble(double value) => WritePod(SpaType.Double, value);
-    public void AddBool(bool value)     => WritePod(SpaType.Bool,   value ? 1 : 0);
-    public void AddId(SpaIdValue id)    => WritePod(SpaType.Id,     (int)id.Value);
-    public void AddLong(long value)     => WritePodLong(value);
+
+    public void AddBool(bool value) => WritePod(SpaType.Bool, value ? 1 : 0);
+
+    public void AddId(SpaIdValue id) => WritePod(SpaType.Id, (int)id.Value);
+
+    public void AddLong(long value) => WritePodLong(value);
 
     // - Keyed properties (inside an Object) -
 
-    public void AddId(SpaKey key, SpaIdValue value)            { WritePropHeader(key); AddId(value); }
-    public void AddInt(SpaKey key, int value)            { WritePropHeader(key); AddInt(value); }
-    public void AddInt(SpaKey key, int value, SpaPodPropFlags propFlags) { WritePropHeader(key, propFlags); AddInt(value); }
-    public void AddLong(SpaKey key, long value)          { WritePropHeader(key); AddLong(value); }
-    public void AddLong(SpaKey key, long value, SpaPodPropFlags propFlags) { WritePropHeader(key, propFlags); AddLong(value); }
-    public void AddFraction(SpaKey key, uint n, uint d)  { WritePropHeader(key); WriteFraction(n, d); }
-    public void AddRectangle(SpaKey key, uint w, uint h) { WritePropHeader(key); WriteRectangle(w, h); }
+    public void AddId(SpaKey key, SpaIdValue value)
+    {
+        WritePropHeader(key);
+        AddId(value);
+    }
+
+    public void AddInt(SpaKey key, int value)
+    {
+        WritePropHeader(key);
+        AddInt(value);
+    }
+
+    public void AddInt(SpaKey key, int value, SpaPodPropFlags propFlags)
+    {
+        WritePropHeader(key, propFlags);
+        AddInt(value);
+    }
+
+    public void AddLong(SpaKey key, long value)
+    {
+        WritePropHeader(key);
+        AddLong(value);
+    }
+
+    public void AddLong(SpaKey key, long value, SpaPodPropFlags propFlags)
+    {
+        WritePropHeader(key, propFlags);
+        AddLong(value);
+    }
+
+    public void AddFraction(SpaKey key, uint n, uint d)
+    {
+        WritePropHeader(key);
+        WriteFraction(n, d);
+    }
+
+    public void AddRectangle(SpaKey key, uint w, uint h)
+    {
+        WritePropHeader(key);
+        WriteRectangle(w, h);
+    }
 
     // - Choice: Enum over Long (DRM format modifiers) -
 
@@ -76,7 +118,11 @@ internal ref struct SpaPodBuilder
     /// to what it supports without fixating, then re-offer a single modifier to fixate.
     /// </summary>
     /// <exception cref="ArgumentException"><paramref name="values"/> is empty.</exception>
-    public void AddChoiceEnumLong(SpaKey key, ReadOnlySpan<long> values, SpaPodPropFlags propFlags = SpaPodPropFlags.None)
+    public void AddChoiceEnumLong(
+        SpaKey key,
+        ReadOnlySpan<long> values,
+        SpaPodPropFlags propFlags = SpaPodPropFlags.None
+    )
     {
         // A choice with no children is a header claiming alternatives it does not carry. Our own
         // reader rejects it, and a producer reading it has nothing to select, so refuse to write
@@ -86,12 +132,12 @@ internal ref struct SpaPodBuilder
 
         WritePropHeader(key, propFlags);
         int start = _pos;
-        WriteU32(0u);                // pod size - back-patched
+        WriteU32(0u); // pod size - back-patched
         WriteU32(SpaType.Choice);
         WriteU32(SpaChoiceType.Enum);
-        WriteU32(0u);                // choice flags
-        WriteU32(8);                // child.size - Long is 8 bytes
-        WriteU32(SpaType.Long);     // child.type
+        WriteU32(0u); // choice flags
+        WriteU32(8); // child.size - Long is 8 bytes
+        WriteU32(SpaType.Long); // child.type
         // SPA Choice Enum layout is { default, alt0, alt1, ... }: the FIRST child is the default/preferred
         // value and the rest are the selectable alternatives, so the default must also appear among the
         // alternatives. Emit values[0] once as the default and then every value. A single modifier written
@@ -121,12 +167,12 @@ internal ref struct SpaPodBuilder
         //   [value0][value1][...]                          <- raw values, child.size each
         WritePropHeader(key);
         int start = _pos;
-        WriteU32(0u);                // pod size - back-patched
+        WriteU32(0u); // pod size - back-patched
         WriteU32(SpaType.Choice);
         WriteU32(SpaChoiceType.Enum);
-        WriteU32(0u);                // flags
-        WriteU32(4);                // child.size - Id is 4 bytes
-        WriteU32(SpaType.Id);       // child.type
+        WriteU32(0u); // flags
+        WriteU32(4); // child.size - Id is 4 bytes
+        WriteU32(SpaType.Id); // child.type
 
         // { default, alt0, alt1, ... }: the first child is the preferred value and the rest are the
         // selectable alternatives, so the default has to appear again among them. Written once, the
@@ -148,10 +194,12 @@ internal ref struct SpaPodBuilder
         WriteU32(0u);
         WriteU32(SpaType.Choice);
         WriteU32(SpaChoiceType.Range);
-        WriteU32(0u);                // flags
-        WriteU32(4);                // child.size - Int = 4
+        WriteU32(0u); // flags
+        WriteU32(4); // child.size - Int = 4
         WriteU32(SpaType.Int);
-        WriteU32((uint)def); WriteU32((uint)min); WriteU32((uint)max);
+        WriteU32((uint)def);
+        WriteU32((uint)min);
+        WriteU32((uint)max);
         PatchSize(start);
         Align8();
     }
@@ -169,8 +217,8 @@ internal ref struct SpaPodBuilder
         WriteU32(0u);
         WriteU32(SpaType.Choice);
         WriteU32(SpaChoiceType.Flags);
-        WriteU32(0u);                // flags
-        WriteU32(4);                // child.size - Int = 4
+        WriteU32(0u); // flags
+        WriteU32(4); // child.size - Int = 4
         WriteU32(SpaType.Int);
         WriteU32((uint)flags);
         PatchSize(start);
@@ -179,42 +227,58 @@ internal ref struct SpaPodBuilder
 
     // - Choice: Range (default, min, max) -
 
-    public void AddChoiceRangeRectangle(SpaKey key,
-        uint defaultW, uint defaultH,
-        uint minW,     uint minH,
-        uint maxW,     uint maxH)
+    public void AddChoiceRangeRectangle(
+        SpaKey key,
+        uint defaultW,
+        uint defaultH,
+        uint minW,
+        uint minH,
+        uint maxW,
+        uint maxH
+    )
     {
         WritePropHeader(key);
         int start = _pos;
         WriteU32(0u);
         WriteU32(SpaType.Choice);
         WriteU32(SpaChoiceType.Range);
-        WriteU32(0u);                // flags
-        WriteU32(8);                // child.size - Rectangle = 8 bytes
+        WriteU32(0u); // flags
+        WriteU32(8); // child.size - Rectangle = 8 bytes
         WriteU32(SpaType.Rectangle);
-        WriteU32(defaultW); WriteU32(defaultH);
-        WriteU32(minW);     WriteU32(minH);
-        WriteU32(maxW);     WriteU32(maxH);
+        WriteU32(defaultW);
+        WriteU32(defaultH);
+        WriteU32(minW);
+        WriteU32(minH);
+        WriteU32(maxW);
+        WriteU32(maxH);
         PatchSize(start);
         Align8();
     }
 
-    public void AddChoiceRangeFraction(SpaKey key,
-        uint defaultNum, uint defaultDenom,
-        uint minNum,     uint minDenom,
-        uint maxNum,     uint maxDenom)
+    public void AddChoiceRangeFraction(
+        SpaKey key,
+        uint defaultNum,
+        uint defaultDenom,
+        uint minNum,
+        uint minDenom,
+        uint maxNum,
+        uint maxDenom
+    )
     {
         WritePropHeader(key);
         int start = _pos;
         WriteU32(0u);
         WriteU32(SpaType.Choice);
         WriteU32(SpaChoiceType.Range);
-        WriteU32(0u);                // flags
-        WriteU32(8);                // child.size - Fraction = 8 bytes
+        WriteU32(0u); // flags
+        WriteU32(8); // child.size - Fraction = 8 bytes
         WriteU32(SpaType.Fraction);
-        WriteU32(defaultNum); WriteU32(defaultDenom);
-        WriteU32(minNum);     WriteU32(minDenom);
-        WriteU32(maxNum);     WriteU32(maxDenom);
+        WriteU32(defaultNum);
+        WriteU32(defaultDenom);
+        WriteU32(minNum);
+        WriteU32(minDenom);
+        WriteU32(maxNum);
+        WriteU32(maxDenom);
         PatchSize(start);
         Align8();
     }
@@ -224,7 +288,7 @@ internal ref struct SpaPodBuilder
     public void PushObject(SpaType objectType, SpaParamType paramId)
     {
         Push(_pos);
-        WriteU32(0u);                // size placeholder - back-patched in Pop
+        WriteU32(0u); // size placeholder - back-patched in Pop
         WriteU32(SpaType.Object);
         WriteU32((uint)objectType);
         WriteU32((uint)paramId);
@@ -251,10 +315,10 @@ internal ref struct SpaPodBuilder
     public void PushSequence(uint unit = 0)
     {
         Push(_pos);
-        WriteU32(0u);                // size placeholder - back-patched in Pop
+        WriteU32(0u); // size placeholder - back-patched in Pop
         WriteU32(SpaType.Sequence);
         WriteU32(unit);
-        WriteU32(0u);                // pad
+        WriteU32(0u); // pad
     }
 
     /// <summary>Writes a control header. The caller writes its value pod next.</summary>
@@ -293,7 +357,11 @@ internal ref struct SpaPodBuilder
     /// which is how upstream's video-src-fixate writes it (<c>spa_pod_builder_bytes(b, &amp;device_id,
     /// sizeof device_id)</c>).
     /// </remarks>
-    public void AddBytes(SpaKey key, scoped ReadOnlySpan<byte> data, SpaPodPropFlags propFlags = SpaPodPropFlags.None)
+    public void AddBytes(
+        SpaKey key,
+        scoped ReadOnlySpan<byte> data,
+        SpaPodPropFlags propFlags = SpaPodPropFlags.None
+    )
     {
         WritePropHeader(key, propFlags);
         AddBytes(data);
@@ -327,13 +395,15 @@ internal ref struct SpaPodBuilder
     /// <summary>Closes anything still open and returns the complete POD bytes.</summary>
     public ReadOnlySpan<byte> GetPod()
     {
-        while (_depth > 0) Pop();
+        while (_depth > 0)
+            Pop();
         return _buf[.._pos];
     }
 
     // - Private helpers -
 
-    private void WritePod<T>(SpaType type, T value) where T : struct
+    private void WritePod<T>(SpaType type, T value)
+        where T : struct
     {
         int size = Unsafe.SizeOf<T>();
         WriteU32((uint)size);
@@ -348,23 +418,23 @@ internal ref struct SpaPodBuilder
     {
         WriteU32(8);
         WriteU32(SpaType.Long);
-        WriteI64(value);            // already 8-byte aligned
+        WriteI64(value); // already 8-byte aligned
     }
 
     private void WriteFraction(uint num, uint denom)
     {
-        WriteU32(8);                // sizeof(spa_fraction) = 2xuint32
+        WriteU32(8); // sizeof(spa_fraction) = 2xuint32
         WriteU32(SpaType.Fraction);
         WriteU32(num);
-        WriteU32(denom);            // already aligned
+        WriteU32(denom); // already aligned
     }
 
     private void WriteRectangle(uint width, uint height)
     {
-        WriteU32(8);                // sizeof(spa_rectangle) = 2xuint32
+        WriteU32(8); // sizeof(spa_rectangle) = 2xuint32
         WriteU32(SpaType.Rectangle);
         WriteU32(width);
-        WriteU32(height);           // already aligned
+        WriteU32(height); // already aligned
     }
 
     private void WritePropHeader(SpaKey key, SpaPodPropFlags flags = SpaPodPropFlags.None)
@@ -390,7 +460,8 @@ internal ref struct SpaPodBuilder
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     // Typed overloads so the body of a writer names the SPA type it is emitting rather than
     // casting it to a number at every call.
-    private void WriteU32(SpaType value)       => WriteU32((uint)value);
+    private void WriteU32(SpaType value) => WriteU32((uint)value);
+
     private void WriteU32(SpaChoiceType value) => WriteU32((uint)value);
 
     private void WriteU32(uint value)
@@ -417,7 +488,8 @@ internal ref struct SpaPodBuilder
     private void Align8()
     {
         int rem = _pos & 7;
-        if (rem == 0) return;
+        if (rem == 0)
+            return;
 
         int pad = 8 - rem;
         EnsureRoom(pad);
@@ -440,11 +512,13 @@ internal ref struct SpaPodBuilder
     private static void ThrowBufferExhausted(int needed, int left, int capacity) =>
         throw new InvalidOperationException(
             $"SpaPodBuilder needs {needed} more bytes and {left} of {capacity} remain; "
-            + "size the buffer to the pod.");
+                + "size the buffer to the pod."
+        );
 
     private void Push(int offset)
     {
-        if (_depth >= 8) ThrowNestingOverflow();
+        if (_depth >= 8)
+            ThrowNestingOverflow();
         _stack[_depth++] = offset;
     }
 

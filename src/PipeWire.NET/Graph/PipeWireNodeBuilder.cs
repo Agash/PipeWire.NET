@@ -27,7 +27,11 @@ public readonly struct PipeWireNodeBuilder
     private readonly PipeWireObjectOptions _options;
 
     internal PipeWireNodeBuilder(
-        PipeWireRegistry registry, string description, string? name, PipeWireObjectOptions options)
+        PipeWireRegistry registry,
+        string description,
+        string? name,
+        PipeWireObjectOptions options
+    )
     {
         _registry = registry;
         _description = description;
@@ -82,11 +86,19 @@ public readonly struct PipeWireNodeBuilder
         ArgumentNullException.ThrowIfNull(value);
         PipeWireObjectOptions.ThrowIfReserved(key, forLink: false);
 
-        ImmutableArray<KeyValuePair<string, string>> existing =
-            _options.Properties.IsDefault ? [] : _options.Properties;
+        ImmutableArray<KeyValuePair<string, string>> existing = _options.Properties.IsDefault
+            ? []
+            : _options.Properties;
 
-        return new(_registry, _description, _name,
-            _options with { Properties = existing.Add(new(key, value)) });
+        return new(
+            _registry,
+            _description,
+            _name,
+            _options with
+            {
+                Properties = existing.Add(new(key, value)),
+            }
+        );
     }
 
     /// <summary>Sets <c>media.class</c>: whether the node is read from or written to.</summary>
@@ -135,8 +147,9 @@ public readonly struct PipeWireNodeBuilder
         {
             throw new ArgumentException(
                 $"node {node.NodeId} has no node.name, so there is nothing to target it by. "
-                + "Target it by object.serial instead.",
-                nameof(node));
+                    + "Target it by object.serial instead.",
+                nameof(node)
+            );
         }
 
         return WithTarget(node.NodeName!);

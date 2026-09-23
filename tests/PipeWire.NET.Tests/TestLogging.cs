@@ -60,25 +60,33 @@ internal sealed class ConsoleTestLoggerFactory : ILoggerFactory
         Enum.TryParse<LogLevel>(
             Environment.GetEnvironmentVariable("PWNET_TEST_LOG_LEVEL"),
             ignoreCase: true,
-            out LogLevel level)
+            out LogLevel level
+        )
             ? level
             : LogLevel.Trace;
 
     private sealed class ConsoleTestLogger(string category) : ILogger
     {
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
 
         public bool IsEnabled(LogLevel logLevel) => logLevel >= MinimumLevel;
 
-        public void Log<TState>(LogLevel level, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter)
+        public void Log<TState>(
+            LogLevel level,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter
+        )
         {
             string line = $"[{level}] {category}: {formatter(state, exception)}";
             if (level >= LogLevel.Error)
             {
                 lock (Errors)
                 {
-                    if (_collecting) Errors.Add(line);
+                    if (_collecting)
+                        Errors.Add(line);
                 }
             }
 

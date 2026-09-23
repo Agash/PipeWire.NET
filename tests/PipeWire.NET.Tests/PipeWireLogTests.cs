@@ -32,7 +32,10 @@ public sealed class PipeWireLogTests : PipeWireTestBase
         // diagnose a startup failure has nowhere else to put the call.
         PipeWireLog.SetLevel(PipeWireLogLevel.Warn);
 
-        await using var ctx = new PipeWireContext("pwnet-loglevel", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-loglevel",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         foreach (PipeWireLogLevel level in Enum.GetValues<PipeWireLogLevel>())
@@ -55,7 +58,11 @@ public sealed class PipeWireLogTests : PipeWireTestBase
     {
         RequireLinux();
 
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => PipeWireLog.SetLevel((PipeWireLogLevel)99));
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => PipeWireLog.SetLevel((PipeWireLogLevel)(-1)));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            PipeWireLog.SetLevel((PipeWireLogLevel)99)
+        );
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            PipeWireLog.SetLevel((PipeWireLogLevel)(-1))
+        );
     }
 }

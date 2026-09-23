@@ -38,11 +38,13 @@ internal static unsafe partial class Native
     internal static void GetInterface<TMethods>(
         void* obj,
         out TMethods* methods,
-        out void* userData) where TMethods : unmanaged
+        out void* userData
+    )
+        where TMethods : unmanaged
     {
         ArgumentNullException.ThrowIfNull(obj);
         var iface = (spa_interface*)obj;
-        methods  = (TMethods*)iface->cb.funcs;
+        methods = (TMethods*)iface->cb.funcs;
         userData = iface->cb.data;
     }
 
@@ -64,7 +66,8 @@ internal static unsafe partial class Native
     /// </remarks>
     internal static int pw_loop_get_fd(pw_loop* loop)
     {
-        if (loop is null || loop->control is null) return -1;
+        if (loop is null || loop->control is null)
+            return -1;
         GetInterface(loop->control, out spa_loop_control_methods* m, out void* data);
         return m is null || m->get_fd is null ? -1 : m->get_fd(data);
     }
@@ -73,7 +76,8 @@ internal static unsafe partial class Native
     /// <remarks>A zero timeout is the non-blocking form a host loop uses after the fd signalled.</remarks>
     internal static int pw_loop_iterate(pw_loop* loop, int timeoutMs)
     {
-        if (loop is null || loop->control is null) return -1;
+        if (loop is null || loop->control is null)
+            return -1;
         GetInterface(loop->control, out spa_loop_control_methods* m, out void* data);
         return m is null || m->iterate is null ? -1 : m->iterate(data, timeoutMs);
     }
@@ -86,17 +90,21 @@ internal static unsafe partial class Native
     /// </remarks>
     internal static void pw_loop_enter(pw_loop* loop)
     {
-        if (loop is null || loop->control is null) return;
+        if (loop is null || loop->control is null)
+            return;
         GetInterface(loop->control, out spa_loop_control_methods* m, out void* data);
-        if (m is not null && m->enter is not null) m->enter(data);
+        if (m is not null && m->enter is not null)
+            m->enter(data);
     }
 
     /// <inheritdoc cref="pw_loop_enter"/>
     internal static void pw_loop_leave(pw_loop* loop)
     {
-        if (loop is null || loop->control is null) return;
+        if (loop is null || loop->control is null)
+            return;
         GetInterface(loop->control, out spa_loop_control_methods* m, out void* data);
-        if (m is not null && m->leave is not null) m->leave(data);
+        if (m is not null && m->leave is not null)
+            m->leave(data);
     }
 
     /// <summary>
@@ -114,9 +122,11 @@ internal static unsafe partial class Native
     /// </remarks>
     internal static int pw_loop_unlock(pw_loop* loop)
     {
-        if (loop is null || loop->control is null) return -NativeLibc.EINVAL;
+        if (loop is null || loop->control is null)
+            return -NativeLibc.EINVAL;
         GetInterface(loop->control, out spa_loop_control_methods* m, out void* data);
-        if (m is null || m->unlock is null) return -NativeLibc.EOPNOTSUPP;
+        if (m is null || m->unlock is null)
+            return -NativeLibc.EOPNOTSUPP;
         return m->unlock(data);
     }
 
@@ -140,11 +150,14 @@ internal static unsafe partial class Native
     internal static int pw_loop_locked(
         pw_loop* loop,
         delegate* unmanaged[Cdecl]<spa_loop*, bool, uint, void*, nuint, void*, int> func,
-        void* userData)
+        void* userData
+    )
     {
-        if (loop is null || loop->loop is null) return -NativeLibc.EOPNOTSUPP;
+        if (loop is null || loop->loop is null)
+            return -NativeLibc.EOPNOTSUPP;
         GetInterface(loop->loop, out spa_loop_methods* m, out void* data);
-        if (m is null || m->locked is null) return -NativeLibc.EOPNOTSUPP;
+        if (m is null || m->locked is null)
+            return -NativeLibc.EOPNOTSUPP;
 
         return m->locked(data, func, NativeConstants.SPA_ID_INVALID, null, 0, userData);
     }
@@ -163,13 +176,18 @@ internal static unsafe partial class Native
         (result & NativeConstants.SPA_ASYNC_MASK) == NativeConstants.SPA_ASYNC_BIT;
 
     /// <summary>The sequence number carried by an async result.</summary>
-    internal static int SPA_RESULT_ASYNC_SEQ(int result) => result & NativeConstants.SPA_ASYNC_SEQ_MASK;
+    internal static int SPA_RESULT_ASYNC_SEQ(int result) =>
+        result & NativeConstants.SPA_ASYNC_SEQ_MASK;
 
     /// <summary>
     /// Calls <c>pw_core_methods.get_registry</c> via SPA interface dispatch.
     /// Equivalent to the C macro <c>pw_core_get_registry()</c>.
     /// </summary>
-    internal static pw_registry* pw_core_get_registry(pw_core* core, uint version, nuint userDataSize)
+    internal static pw_registry* pw_core_get_registry(
+        pw_core* core,
+        uint version,
+        nuint userDataSize
+    )
     {
         GetInterface(core, out pw_core_methods* methods, out void* data);
         if (methods is null || methods->get_registry is null)
@@ -185,7 +203,8 @@ internal static unsafe partial class Native
         pw_registry* registry,
         spa_hook* listener,
         pw_registry_events* events,
-        void* data)
+        void* data
+    )
     {
         GetInterface(registry, out pw_registry_methods* methods, out void* userData);
         if (methods is null || methods->add_listener is null)
@@ -204,12 +223,14 @@ internal static unsafe partial class Native
         sbyte* type,
         uint version,
         spa_dict* props,
-        nuint userDataSize)
+        nuint userDataSize
+    )
     {
         GetInterface(core, out pw_core_methods* methods, out void* data);
         if (methods is null || methods->create_object is null)
             throw new PipeWireInteropException("pw_core_create_object", -NativeLibc.ENOSYS);
-        return (pw_proxy*)methods->create_object(data, factoryName, type, version, props, userDataSize);
+        return (pw_proxy*)
+            methods->create_object(data, factoryName, type, version, props, userDataSize);
     }
 
     /// <summary>
@@ -247,7 +268,8 @@ internal static unsafe partial class Native
         pw_core* core,
         spa_hook* listener,
         pw_core_events* events,
-        void* data)
+        void* data
+    )
     {
         GetInterface(core, out pw_core_methods* methods, out void* userData);
         if (methods is null || methods->add_listener is null)
@@ -267,7 +289,12 @@ internal static unsafe partial class Native
     /// </remarks>
     /// <returns>The proxy, or <see langword="null"/> if the daemon refused.</returns>
     internal static pw_proxy* pw_registry_bind(
-        pw_registry* registry, uint id, sbyte* type, uint version, nuint userDataSize)
+        pw_registry* registry,
+        uint id,
+        sbyte* type,
+        uint version,
+        nuint userDataSize
+    )
     {
         GetInterface(registry, out pw_registry_methods* methods, out void* data);
         if (methods is null || methods->bind is null)
@@ -278,7 +305,11 @@ internal static unsafe partial class Native
     // - Module -
 
     internal static int pw_module_add_listener(
-        pw_module* module, spa_hook* listener, pw_module_events* events, void* data)
+        pw_module* module,
+        spa_hook* listener,
+        pw_module_events* events,
+        void* data
+    )
     {
         GetInterface(module, out pw_module_methods* methods, out void* userData);
         if (methods is null || methods->add_listener is null)
@@ -289,7 +320,11 @@ internal static unsafe partial class Native
     // - Node -
 
     internal static int pw_node_add_listener(
-        pw_node* node, spa_hook* listener, pw_node_events* events, void* data)
+        pw_node* node,
+        spa_hook* listener,
+        pw_node_events* events,
+        void* data
+    )
     {
         GetInterface(node, out pw_node_methods* methods, out void* userData);
         if (methods is null || methods->add_listener is null)
@@ -307,7 +342,13 @@ internal static unsafe partial class Native
     /// <c>param</c> the request produced.
     /// </remarks>
     internal static int pw_node_enum_params(
-        pw_node* node, int seq, uint id, uint start, uint num, spa_pod* filter)
+        pw_node* node,
+        int seq,
+        uint id,
+        uint start,
+        uint num,
+        spa_pod* filter
+    )
     {
         GetInterface(node, out pw_node_methods* methods, out void* data);
         if (methods is null || methods->enum_params is null)
@@ -338,7 +379,11 @@ internal static unsafe partial class Native
     // - Device -
 
     internal static int pw_device_add_listener(
-        pw_device* device, spa_hook* listener, pw_device_events* events, void* data)
+        pw_device* device,
+        spa_hook* listener,
+        pw_device_events* events,
+        void* data
+    )
     {
         GetInterface(device, out pw_device_methods* methods, out void* userData);
         if (methods is null || methods->add_listener is null)
@@ -348,7 +393,13 @@ internal static unsafe partial class Native
 
     /// <inheritdoc cref="pw_node_enum_params"/>
     internal static int pw_device_enum_params(
-        pw_device* device, int seq, uint id, uint start, uint num, spa_pod* filter)
+        pw_device* device,
+        int seq,
+        uint id,
+        uint start,
+        uint num,
+        spa_pod* filter
+    )
     {
         GetInterface(device, out pw_device_methods* methods, out void* data);
         if (methods is null || methods->enum_params is null)
@@ -385,14 +436,19 @@ internal static unsafe partial class Native
     /// </remarks>
     [System.Runtime.InteropServices.LibraryImport("libpipewire-0.3")]
     [System.Runtime.InteropServices.UnmanagedCallConv(
-        CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+        CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)]
+    )]
     internal static partial void pw_log_set_level(int level);
 
     // - Port -
 
     /// <summary>Attaches a listener to a port proxy.</summary>
     internal static int pw_port_add_listener(
-        pw_port* port, spa_hook* listener, pw_port_events* events, void* data)
+        pw_port* port,
+        spa_hook* listener,
+        pw_port_events* events,
+        void* data
+    )
     {
         GetInterface(port, out pw_port_methods* methods, out void* userData);
         if (methods is null || methods->add_listener is null)
@@ -402,7 +458,13 @@ internal static unsafe partial class Native
 
     /// <summary>Asks a port for a parameter. The answers arrive on the param event.</summary>
     internal static int pw_port_enum_params(
-        pw_port* port, int seq, uint id, uint start, uint num, spa_pod* filter)
+        pw_port* port,
+        int seq,
+        uint id,
+        uint start,
+        uint num,
+        spa_pod* filter
+    )
     {
         GetInterface(port, out pw_port_methods* methods, out void* userData);
         if (methods is null || methods->enum_params is null)
@@ -429,7 +491,11 @@ internal static unsafe partial class Native
     /// dispatched here the same way the node, device and client listeners are.
     /// </remarks>
     internal static int pw_link_add_listener(
-        pw_link* link, spa_hook* listener, pw_link_events* events, void* data)
+        pw_link* link,
+        spa_hook* listener,
+        pw_link_events* events,
+        void* data
+    )
     {
         GetInterface(link, out pw_link_methods* methods, out void* userData);
         if (methods is null || methods->add_listener is null)
@@ -440,7 +506,11 @@ internal static unsafe partial class Native
     // - Client -
 
     internal static int pw_client_add_listener(
-        pw_client* client, spa_hook* listener, pw_client_events* events, void* data)
+        pw_client* client,
+        spa_hook* listener,
+        pw_client_events* events,
+        void* data
+    )
     {
         GetInterface(client, out pw_client_methods* methods, out void* userData);
         if (methods is null || methods->add_listener is null)
@@ -458,7 +528,10 @@ internal static unsafe partial class Native
     /// bits than it had loses the difference.
     /// </remarks>
     internal static int pw_client_update_permissions(
-        pw_client* client, uint nPermissions, pw_permission* permissions)
+        pw_client* client,
+        uint nPermissions,
+        pw_permission* permissions
+    )
     {
         GetInterface(client, out pw_client_methods* methods, out void* data);
         if (methods is null || methods->update_permissions is null)
@@ -487,7 +560,11 @@ internal static unsafe partial class Native
 
     /// <summary>Attaches a listener to a profiler, whose only event is the profiling pod.</summary>
     internal static int pw_profiler_add_listener(
-        void* profiler, spa_hook* listener, pw_profiler_events* events, void* data)
+        void* profiler,
+        spa_hook* listener,
+        pw_profiler_events* events,
+        void* data
+    )
     {
         GetInterface(profiler, out pw_profiler_methods* methods, out void* userData);
         if (methods is null || methods->add_listener is null)
@@ -505,7 +582,11 @@ internal static unsafe partial class Native
     /// permissions described by the properties, not the creator's.
     /// </remarks>
     internal static int pw_security_context_create(
-        void* context, int listenFd, int closeFd, spa_dict* props)
+        void* context,
+        int listenFd,
+        int closeFd,
+        spa_dict* props
+    )
     {
         GetInterface(context, out pw_security_context_methods* methods, out void* userData);
         if (methods is null || methods->create is null)
@@ -514,7 +595,11 @@ internal static unsafe partial class Native
     }
 
     internal static int pw_metadata_add_listener(
-        pw_metadata* metadata, spa_hook* listener, pw_metadata_events* events, void* data)
+        pw_metadata* metadata,
+        spa_hook* listener,
+        pw_metadata_events* events,
+        void* data
+    )
     {
         GetInterface(metadata, out pw_metadata_methods* methods, out void* userData);
         if (methods is null || methods->add_listener is null)
@@ -531,7 +616,12 @@ internal static unsafe partial class Native
     /// <see cref="NativeConstants.PW_ID_CORE"/> is the subject for daemon-wide settings such as the default sink.
     /// </remarks>
     internal static int pw_metadata_set_property(
-        pw_metadata* metadata, uint subject, sbyte* key, sbyte* type, sbyte* value)
+        pw_metadata* metadata,
+        uint subject,
+        sbyte* key,
+        sbyte* type,
+        sbyte* value
+    )
     {
         GetInterface(metadata, out pw_metadata_methods* methods, out void* data);
         if (methods is null || methods->set_property is null)
@@ -562,8 +652,17 @@ internal static unsafe partial class Native
     /// quiet, and the peer waits for a negotiation that will never finish.
     /// </para>
     /// </remarks>
-    [DllImport("libpipewire-0.3", EntryPoint = "pw_stream_set_error", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern unsafe int pw_stream_set_error_raw(pw_stream* stream, int res, sbyte* error);
+    [DllImport(
+        "libpipewire-0.3",
+        EntryPoint = "pw_stream_set_error",
+        CallingConvention = CallingConvention.Cdecl,
+        ExactSpelling = true
+    )]
+    internal static extern unsafe int pw_stream_set_error_raw(
+        pw_stream* stream,
+        int res,
+        sbyte* error
+    );
 
     /// <summary>The version string of the libpipewire this process actually loaded.</summary>
     /// <remarks>
@@ -571,7 +670,12 @@ internal static unsafe partial class Native
     /// because the bindings are produced against one release and the library resolved at runtime is
     /// whatever the machine has, and the two disagreeing is not always a clean failure.
     /// </remarks>
-    [DllImport("libpipewire-0.3", EntryPoint = "pw_get_library_version", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [DllImport(
+        "libpipewire-0.3",
+        EntryPoint = "pw_get_library_version",
+        CallingConvention = CallingConvention.Cdecl,
+        ExactSpelling = true
+    )]
     internal static extern unsafe sbyte* pw_get_library_version();
 
     /// <summary>
@@ -582,8 +686,17 @@ internal static unsafe partial class Native
     /// the same reason. A filter that cannot proceed and says nothing leaves its peers waiting on
     /// a graph cycle that will not come.
     /// </remarks>
-    [DllImport("libpipewire-0.3", EntryPoint = "pw_filter_set_error", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern unsafe int pw_filter_set_error_raw(pw_filter* filter, int res, sbyte* error);
+    [DllImport(
+        "libpipewire-0.3",
+        EntryPoint = "pw_filter_set_error",
+        CallingConvention = CallingConvention.Cdecl,
+        ExactSpelling = true
+    )]
+    internal static extern unsafe int pw_filter_set_error_raw(
+        pw_filter* filter,
+        int res,
+        sbyte* error
+    );
 
     /// <summary>Reports a filter error, with the message escaped so it cannot be read as a format.</summary>
     internal static unsafe int pw_filter_set_error(pw_filter* filter, int res, string message)
@@ -614,7 +727,8 @@ internal static unsafe partial class Native
     /// </remarks>
     internal static void spa_hook_remove(spa_hook* hook)
     {
-        if (hook is null) return;
+        if (hook is null)
+            return;
 
         // spa_list_is_initialized: a hook that was never attached has a null prev. Both ends are
         // checked because a half-unlinked hook would otherwise be dereferenced through a null next.
@@ -632,28 +746,42 @@ internal static unsafe partial class Native
 
     /// <summary>Adds a timer source to a loop, returning null when the loop cannot be dispatched.</summary>
     internal static unsafe spa_source* spa_loop_utils_add_timer(
-        spa_loop_utils* utils, delegate* unmanaged[Cdecl]<void*, ulong, void> func, void* data)
+        spa_loop_utils* utils,
+        delegate* unmanaged[Cdecl]<void*, ulong, void> func,
+        void* data
+    )
     {
         spa_loop_utils_methods* m = LoopUtilsMethods(utils);
-        if (m is null || m->add_timer is null) return null;
+        if (m is null || m->add_timer is null)
+            return null;
         return m->add_timer(utils->iface.cb.data, func, data);
     }
 
     /// <summary>Arms or disarms a timer source.</summary>
     /// <returns>0 on success, a negative errno otherwise.</returns>
     internal static unsafe int spa_loop_utils_update_timer(
-        spa_loop_utils* utils, spa_source* source, PosixTimespec* value, PosixTimespec* interval, bool absolute)
+        spa_loop_utils* utils,
+        spa_source* source,
+        PosixTimespec* value,
+        PosixTimespec* interval,
+        bool absolute
+    )
     {
         spa_loop_utils_methods* m = LoopUtilsMethods(utils);
-        if (m is null || m->update_timer is null) return -NativeLibc.EOPNOTSUPP;
+        if (m is null || m->update_timer is null)
+            return -NativeLibc.EOPNOTSUPP;
         return m->update_timer(utils->iface.cb.data, source, value, interval, absolute);
     }
 
     /// <summary>Destroys a source previously added to a loop.</summary>
-    internal static unsafe void spa_loop_utils_destroy_source(spa_loop_utils* utils, spa_source* source)
+    internal static unsafe void spa_loop_utils_destroy_source(
+        spa_loop_utils* utils,
+        spa_source* source
+    )
     {
         spa_loop_utils_methods* m = LoopUtilsMethods(utils);
-        if (m is null || m->destroy_source is null) return;
+        if (m is null || m->destroy_source is null)
+            return;
         m->destroy_source(utils->iface.cb.data, source);
     }
 
@@ -668,10 +796,12 @@ internal static unsafe partial class Native
     /// </remarks>
     private static unsafe spa_loop_utils_methods* LoopUtilsMethods(spa_loop_utils* utils)
     {
-        if (utils is null) return null;
+        if (utils is null)
+            return null;
 
         var m = (spa_loop_utils_methods*)utils->iface.cb.funcs;
-        if (m is null || m->version != NativeConstants.SPA_VERSION_LOOP_UTILS_METHODS) return null;
+        if (m is null || m->version != NativeConstants.SPA_VERSION_LOOP_UTILS_METHODS)
+            return null;
 
         return m;
     }

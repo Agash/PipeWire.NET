@@ -50,7 +50,10 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
 {
     private readonly PipeWireContext _ctx;
     private readonly ILogger _logger;
-    private readonly ConcurrentDictionary<(uint Subject, string Key), PipeWireMetadataEntry> _entries = new();
+    private readonly ConcurrentDictionary<
+        (uint Subject, string Key),
+        PipeWireMetadataEntry
+    > _entries = new();
 
     private PipeWireImplMetadataHandle? _handle;
 
@@ -90,7 +93,9 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
     public string? Get(string key, uint subject = PipeWireMetadataProxy.SubjectCore)
     {
         ArgumentNullException.ThrowIfNull(key);
-        return _entries.TryGetValue((subject, key), out PipeWireMetadataEntry? entry) ? entry.Value : null;
+        return _entries.TryGetValue((subject, key), out PipeWireMetadataEntry? entry)
+            ? entry.Value
+            : null;
     }
 
     /// <summary>
@@ -129,12 +134,20 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
     /// </remarks>
     /// <exception cref="ArgumentException"><paramref name="name"/> is null or empty.</exception>
     /// <exception cref="PipeWireException">The daemon refused to register it.</exception>
-    public static PipeWireMetadataProvider Create(PipeWireContext ctx, string name, bool export = true)
+    public static PipeWireMetadataProvider Create(
+        PipeWireContext ctx,
+        string name,
+        bool export = true
+    )
     {
         ArgumentNullException.ThrowIfNull(ctx);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        var provider = new PipeWireMetadataProvider(ctx, name, ctx.LoggerFactory.CreateLogger("PipeWire.NET.MetadataProvider"))
+        var provider = new PipeWireMetadataProvider(
+            ctx,
+            name,
+            ctx.LoggerFactory.CreateLogger("PipeWire.NET.MetadataProvider")
+        )
         {
             _export = export,
         };
@@ -168,10 +181,17 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
             pw_impl_metadata* impl;
             fixed (byte* n = nameUtf8)
                 impl = Native.pw_context_create_metadata(
-                    _ctx.ContextHandle, (sbyte*)n, Native.pw_properties_new_dict(&dict), 0);
+                    _ctx.ContextHandle,
+                    (sbyte*)n,
+                    Native.pw_properties_new_dict(&dict),
+                    0
+                );
 
             if (impl is null)
-                throw new PipeWireInteropException("pw_context_create_metadata", -NativeLibc.ENOMEM);
+                throw new PipeWireInteropException(
+                    "pw_context_create_metadata",
+                    -NativeLibc.ENOMEM
+                );
 
             _handle = new PipeWireImplMetadataHandle(impl, _ctx.LoopOwner);
 
@@ -185,13 +205,21 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
 
             _handle.OwnListener(_events, _hook, _self);
 
-            Native.pw_impl_metadata_add_listener(impl, _hook, table, (void*)GCHandle.ToIntPtr(_self));
+            Native.pw_impl_metadata_add_listener(
+                impl,
+                _hook,
+                table,
+                (void*)GCHandle.ToIntPtr(_self)
+            );
 
             // Register publishes a global in this client's own context. Exporting is what makes it
             // reach the daemon, and through it every other client.
             if (!_export)
             {
-                int rc = Native.pw_impl_metadata_register(impl, Native.pw_properties_new_dict(&dict));
+                int rc = Native.pw_impl_metadata_register(
+                    impl,
+                    Native.pw_properties_new_dict(&dict)
+                );
                 if (rc < 0)
                     throw new PipeWireInteropException("pw_impl_metadata_register", rc);
             }
@@ -208,7 +236,9 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
             exportProps.Add(NativeConstants.PW_KEY_METADATA_NAME, Name);
             spa_dict exportDict = exportProps.Build();
 
-            ReadOnlySpan<byte> typeUtf8 = Encoding.UTF8.GetBytes(PipeWireKeys.PW_TYPE_INTERFACE_Metadata + '\0');
+            ReadOnlySpan<byte> typeUtf8 = Encoding.UTF8.GetBytes(
+                PipeWireKeys.PW_TYPE_INTERFACE_Metadata + '\0'
+            );
 
             pw_proxy* exported = null;
             if (_export)
@@ -220,12 +250,20 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
                 pw_metadata* implementation = Native.pw_impl_metadata_get_implementation(impl);
 
                 if (implementation is null)
-                    throw new PipeWireInteropException("pw_impl_metadata_get_implementation", -NativeLibc.EINVAL);
+                    throw new PipeWireInteropException(
+                        "pw_impl_metadata_get_implementation",
+                        -NativeLibc.EINVAL
+                    );
 
                 fixed (byte* t = typeUtf8)
                 {
                     exported = Native.pw_core_export(
-                        _ctx.CoreHandle, (sbyte*)t, &exportDict, implementation, 0);
+                        _ctx.CoreHandle,
+                        (sbyte*)t,
+                        &exportDict,
+                        implementation,
+                        0
+                    );
                 }
             }
 
@@ -250,7 +288,8 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
         get
         {
             PipeWireProxyHandle? exported = _exported;
-            if (exported is null || exported.IsInvalid) return null;
+            if (exported is null || exported.IsInvalid)
+                return null;
             uint id = Native.pw_proxy_get_bound_id(exported.Proxy);
             return id == NativeConstants.SPA_ID_INVALID ? null : id;
         }
@@ -296,7 +335,8 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
         string key,
         string? value,
         string? type = null,
-        uint subject = PipeWireMetadataProxy.SubjectCore)
+        uint subject = PipeWireMetadataProxy.SubjectCore
+    )
     {
         ArgumentNullException.ThrowIfNull(key);
         ThrowIfContainsNul(key, nameof(key));
@@ -325,7 +365,9 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
 
         ReadOnlySpan<byte> keyUtf8 = key is null ? default : Encoding.UTF8.GetBytes(key + '\0');
         ReadOnlySpan<byte> typeUtf8 = type is null ? default : Encoding.UTF8.GetBytes(type + '\0');
-        ReadOnlySpan<byte> valueUtf8 = value is null ? default : Encoding.UTF8.GetBytes(value + '\0');
+        ReadOnlySpan<byte> valueUtf8 = value is null
+            ? default
+            : Encoding.UTF8.GetBytes(value + '\0');
 
         // No round-trip: the store is ours, so the write lands in this process and the callback
         // that updates the cache runs before this returns.
@@ -339,12 +381,15 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
             fixed (byte* v = valueUtf8)
             {
                 int rc = Native.pw_impl_metadata_set_property(
-                    _handle.Metadata, subject,
+                    _handle.Metadata,
+                    subject,
                     key is null ? null : (sbyte*)k,
                     type is null ? null : (sbyte*)t,
-                    value is null ? null : (sbyte*)v);
+                    value is null ? null : (sbyte*)v
+                );
 
-                if (rc < 0) throw new PipeWireInteropException("pw_impl_metadata_set_property", rc);
+                if (rc < 0)
+                    throw new PipeWireInteropException("pw_impl_metadata_set_property", rc);
             }
         }
     }
@@ -370,15 +415,23 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static int OnPropertyCallback(void* data, uint subject, sbyte* key, sbyte* type, sbyte* value)
+    private static int OnPropertyCallback(
+        void* data,
+        uint subject,
+        sbyte* key,
+        sbyte* type,
+        sbyte* value
+    )
     {
-        if (data is null) return 0;
+        if (data is null)
+            return 0;
 
         PipeWireMetadataProvider self;
         try
         {
             // A freed handle throws out of the lookup, and this is a native frame.
-            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireMetadataProvider found) return 0;
+            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireMetadataProvider found)
+                return 0;
             self = found;
         }
         catch (Exception)
@@ -416,9 +469,12 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
 
             foreach ((uint Subject, string Key) existing in _entries.Keys)
             {
-                if (!everySubject && existing.Subject != subject) continue;
+                if (!everySubject && existing.Subject != subject)
+                    continue;
                 if (_entries.TryRemove(existing, out PipeWireMetadataEntry? removed))
-                    Raise(new PipeWireMetadataEntry(removed.Subject, removed.Key, removed.Type, null));
+                    Raise(
+                        new PipeWireMetadataEntry(removed.Subject, removed.Key, removed.Type, null)
+                    );
             }
 
             return;
@@ -426,8 +482,10 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
 
         var entry = new PipeWireMetadataEntry(subject, key, type, value);
 
-        if (value is null) _entries.TryRemove((subject, key), out _);
-        else _entries[(subject, key)] = entry;
+        if (value is null)
+            _entries.TryRemove((subject, key), out _);
+        else
+            _entries[(subject, key)] = entry;
 
         Raise(entry);
     }
@@ -449,7 +507,8 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
 
     private void DisposeCore()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
 
         // The listener's memory goes with the handle, freed after the implementation is destroyed.
@@ -466,23 +525,40 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
         _entries.Clear();
     }
 
-    [LoggerMessage(EventId = 34203, Level = LogLevel.Information,
-        Message = "exported metadata store {Name}; other clients can bind it")]
+    [LoggerMessage(
+        EventId = 34203,
+        Level = LogLevel.Information,
+        Message = "exported metadata store {Name}; other clients can bind it"
+    )]
     private partial void LogExported(string name);
 
-    [LoggerMessage(EventId = 34204, Level = LogLevel.Warning,
+    [LoggerMessage(
+        EventId = 34204,
+        Level = LogLevel.Warning,
         Message = "metadata store {Name} could not be exported, so only this client can see it. "
-                + "The context has no export type for Metadata, which libpipewire-module-metadata "
-                + "registers and client.conf loads unless module.metadata is turned off.")]
+            + "The context has no export type for Metadata, which libpipewire-module-metadata "
+            + "registers and client.conf loads unless module.metadata is turned off."
+    )]
     private partial void LogNotExported(string name);
 
-    [LoggerMessage(EventId = 34200, Level = LogLevel.Information, Message = "serving metadata store {Name}")]
+    [LoggerMessage(
+        EventId = 34200,
+        Level = LogLevel.Information,
+        Message = "serving metadata store {Name}"
+    )]
     private partial void LogRegistered(string name);
 
-    [LoggerMessage(EventId = 34201, Level = LogLevel.Error, Message = "dispatching a metadata change failed")]
+    [LoggerMessage(
+        EventId = 34201,
+        Level = LogLevel.Error,
+        Message = "dispatching a metadata change failed"
+    )]
     private partial void LogDispatchFailed(Exception ex);
 
-    [LoggerMessage(EventId = 34202, Level = LogLevel.Error,
-                   Message = "an EntryChanged handler for store {Name} threw")]
+    [LoggerMessage(
+        EventId = 34202,
+        Level = LogLevel.Error,
+        Message = "an EntryChanged handler for store {Name} threw"
+    )]
     private partial void LogHandlerFaulted(string name, Exception ex);
 }

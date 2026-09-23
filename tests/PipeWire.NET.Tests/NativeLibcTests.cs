@@ -56,14 +56,23 @@ public sealed class NativeLibcTests
             // than blocking the test thread forever. That ordering is the producer/consumer shape
             // explicit sync uses.
             Assert.AreEqual(0, Descriptors.SignalEventfd(fd), "the signal was refused");
-            Assert.AreEqual(SyncWaitOutcome.Reached, Descriptors.WaitEventfd(fd, TimeSpan.FromSeconds(1)).Outcome);
+            Assert.AreEqual(
+                SyncWaitOutcome.Reached,
+                Descriptors.WaitEventfd(fd, TimeSpan.FromSeconds(1)).Outcome
+            );
 
             // And again, to show the counter was actually taken down rather than left set.
             Assert.AreEqual(0, Descriptors.SignalEventfd(fd), "the second signal was refused");
-            Assert.AreEqual(SyncWaitOutcome.Reached, Descriptors.WaitEventfd(fd, TimeSpan.FromSeconds(1)).Outcome);
+            Assert.AreEqual(
+                SyncWaitOutcome.Reached,
+                Descriptors.WaitEventfd(fd, TimeSpan.FromSeconds(1)).Outcome
+            );
 
             // Taken down to zero, so a third wait has nothing to take and must time out.
-            Assert.AreEqual(SyncWaitOutcome.TimedOut, Descriptors.WaitEventfd(fd, TimeSpan.FromMilliseconds(50)).Outcome);
+            Assert.AreEqual(
+                SyncWaitOutcome.TimedOut,
+                Descriptors.WaitEventfd(fd, TimeSpan.FromMilliseconds(50)).Outcome
+            );
         }
         finally
         {
@@ -96,7 +105,8 @@ public sealed class NativeLibcTests
         Assert.AreEqual(
             EBADF,
             Marshal.GetLastPInvokeError(),
-            "errno was not captured - SetLastError is not in effect on the libc imports");
+            "errno was not captured - SetLastError is not in effect on the libc imports"
+        );
     }
 
     /// <summary>The EINTR the retry loops compare against is the one this system defines.</summary>
@@ -118,17 +128,23 @@ public sealed class NativeLibcTests
         ];
 
         string? header = candidates.FirstOrDefault(File.Exists);
-        if (header is null) Assert.Inconclusive("no errno header installed to check against.");
+        if (header is null)
+            Assert.Inconclusive("no errno header installed to check against.");
 
         Match match = Regex.Match(
-            File.ReadAllText(header!), @"^#define\s+EINTR\s+(\d+)", RegexOptions.Multiline);
+            File.ReadAllText(header!),
+            @"^#define\s+EINTR\s+(\d+)",
+            RegexOptions.Multiline
+        );
 
-        if (!match.Success) Assert.Inconclusive($"EINTR is not defined directly in {header}.");
+        if (!match.Success)
+            Assert.Inconclusive($"EINTR is not defined directly in {header}.");
 
         Assert.AreEqual(
             NativeLibc.EINTR,
             int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture),
-            $"{header} defines a different EINTR than the retry loops compare against");
+            $"{header} defines a different EINTR than the retry loops compare against"
+        );
     }
 
     /// <summary>A duplicated descriptor is a new one, is usable, and carries close-on-exec.</summary>
@@ -159,11 +175,15 @@ public sealed class NativeLibcTests
             Assert.AreEqual(
                 FdCloexec,
                 flags & FdCloexec,
-                "the duplicate does not carry close-on-exec, so it leaks into child processes");
+                "the duplicate does not carry close-on-exec, so it leaks into child processes"
+            );
 
             // Both still name the same object: signalling one is taken through the other.
             Assert.AreEqual(0, Descriptors.SignalEventfd(original));
-            Assert.AreEqual(SyncWaitOutcome.Reached, Descriptors.WaitEventfd(copy, TimeSpan.FromSeconds(1)).Outcome);
+            Assert.AreEqual(
+                SyncWaitOutcome.Reached,
+                Descriptors.WaitEventfd(copy, TimeSpan.FromSeconds(1)).Outcome
+            );
         }
         finally
         {
@@ -209,7 +229,8 @@ public sealed class NativeLibcTests
         Assert.AreEqual(
             2 * IntPtr.Size,
             Unsafe.SizeOf<PosixTimespec>(),
-            "timespec is not two pointer-width fields, so every time conversion is misreading it");
+            "timespec is not two pointer-width fields, so every time conversion is misreading it"
+        );
     }
 
     /// <summary>
@@ -235,7 +256,10 @@ public sealed class NativeLibcTests
 
             Assert.AreEqual(SyncWaitOutcome.TimedOut, wait.Outcome);
             Assert.AreEqual(NativeLibc.ETIME, wait.Errno);
-            Assert.IsTrue(elapsed >= 150, $"the wait returned after {elapsed}ms, before its 200ms deadline");
+            Assert.IsTrue(
+                elapsed >= 150,
+                $"the wait returned after {elapsed}ms, before its 200ms deadline"
+            );
         }
         finally
         {
@@ -260,7 +284,11 @@ public sealed class NativeLibcTests
 
         Assert.AreEqual(SyncWaitOutcome.Failed, wait.Outcome);
         Assert.AreEqual(NativeLibc.EBADF, wait.Errno);
-        Assert.AreNotEqual(0, Descriptors.SignalEventfd(fd), "a signal into a closed descriptor reported success");
+        Assert.AreNotEqual(
+            0,
+            Descriptors.SignalEventfd(fd),
+            "a signal into a closed descriptor reported success"
+        );
     }
 
     /// <summary>The kernel's own description separates an eventfd from any other descriptor.</summary>
@@ -270,11 +298,18 @@ public sealed class NativeLibcTests
         RequireLinux();
 
         int fd = Descriptors.CreateEventfd();
-        using SafeFileHandle devNull = File.OpenHandle("/dev/null", FileMode.Open, FileAccess.ReadWrite);
+        using SafeFileHandle devNull = File.OpenHandle(
+            "/dev/null",
+            FileMode.Open,
+            FileAccess.ReadWrite
+        );
         try
         {
             Assert.IsTrue(Descriptors.IsEventfd(fd), "an eventfd was not recognised");
-            Assert.IsFalse(Descriptors.IsEventfd((int)devNull.DangerousGetHandle()), "/dev/null was taken for an eventfd");
+            Assert.IsFalse(
+                Descriptors.IsEventfd((int)devNull.DangerousGetHandle()),
+                "/dev/null was taken for an eventfd"
+            );
             Assert.IsFalse(Descriptors.IsEventfd(-1));
         }
         finally
@@ -298,16 +333,30 @@ public sealed class NativeLibcTests
     {
         RequireLinux();
 
-        using SafeFileHandle devNull = File.OpenHandle("/dev/null", FileMode.Open, FileAccess.ReadWrite);
+        using SafeFileHandle devNull = File.OpenHandle(
+            "/dev/null",
+            FileMode.Open,
+            FileAccess.ReadWrite
+        );
         int fd = (int)devNull.DangerousGetHandle();
 
-        Assert.AreEqual(SyncTimelineKind.Unknown, SyncTimeline.Classify(fd, out uint handle, out _));
+        Assert.AreEqual(
+            SyncTimelineKind.Unknown,
+            SyncTimeline.Classify(fd, out uint handle, out _)
+        );
         Assert.AreEqual(0u, handle);
 
         SyncWait wait = SyncTimeline.Wait(fd, 1, TimeSpan.FromMilliseconds(200));
-        Assert.AreEqual(SyncWaitOutcome.Failed, wait.Outcome, "a descriptor of neither kind was reported as reached");
+        Assert.AreEqual(
+            SyncWaitOutcome.Failed,
+            wait.Outcome,
+            "a descriptor of neither kind was reported as reached"
+        );
         Assert.AreNotEqual(0, wait.Errno, "the failure carries no errno to say why");
 
-        Assert.IsFalse(SyncRelease.For(fd, 1).IsPending, "a release was promised on a descriptor nothing can signal");
+        Assert.IsFalse(
+            SyncRelease.For(fd, 1).IsPending,
+            "a release was promised on a descriptor nothing can signal"
+        );
     }
 }

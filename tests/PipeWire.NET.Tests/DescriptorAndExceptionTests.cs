@@ -41,8 +41,11 @@ public sealed partial class DescriptorAndExceptionTests : PipeWireTestBase
 
             int flags = Fcntl(copy.Descriptor, FGetFd);
             Assert.IsTrue(flags >= 0, "F_GETFD failed on the duplicate");
-            Assert.AreEqual(FdCloexec, flags & FdCloexec,
-                "the duplicate would be inherited across exec");
+            Assert.AreEqual(
+                FdCloexec,
+                flags & FdCloexec,
+                "the duplicate would be inherited across exec"
+            );
         }
         finally
         {
@@ -59,7 +62,12 @@ public sealed partial class DescriptorAndExceptionTests : PipeWireTestBase
         try
         {
             using SafeFileHandle file = File.OpenHandle(path);
-            SafeDescriptorHandle owned = new VideoPlane(file.DangerousGetHandle(), 0, 4, 1).DuplicateFd();
+            SafeDescriptorHandle owned = new VideoPlane(
+                file.DangerousGetHandle(),
+                0,
+                4,
+                1
+            ).DuplicateFd();
             int raw = owned.Descriptor;
 
             Assert.IsTrue(Fcntl(raw, FGetFd) >= 0, "the duplicate is not open");
@@ -95,14 +103,21 @@ public sealed partial class DescriptorAndExceptionTests : PipeWireTestBase
         ];
 
         foreach (PipeWireException e in all)
-            Assert.IsInstanceOfType<PipeWireException>(e, $"{e.GetType().Name} is outside the hierarchy");
+            Assert.IsInstanceOfType<PipeWireException>(
+                e,
+                $"{e.GetType().Name} is outside the hierarchy"
+            );
 
         Assert.IsInstanceOfType<PipeWireConnectionException>(all[0]);
         Assert.IsInstanceOfType<PipeWireConnectionException>(all[1]);
-        Assert.IsNotInstanceOfType<PipeWireConnectionException>(all[2],
-            "a refusal is not a connection failure");
-        Assert.IsNotInstanceOfType<PipeWireConnectionException>(all[3],
-            "a local call is not a connection failure");
+        Assert.IsNotInstanceOfType<PipeWireConnectionException>(
+            all[2],
+            "a refusal is not a connection failure"
+        );
+        Assert.IsNotInstanceOfType<PipeWireConnectionException>(
+            all[3],
+            "a local call is not a connection failure"
+        );
     }
 
     [TestMethod]
@@ -139,14 +154,17 @@ public sealed partial class DescriptorAndExceptionTests : PipeWireTestBase
     {
         var inner = new InvalidOperationException("inner");
 
-        foreach (Type type in (Type[])[
-            typeof(PipeWireException),
-            typeof(PipeWireConnectionException),
-            typeof(PipeWireConnectFailedException),
-            typeof(PipeWireConnectionClosedException),
-            typeof(PipeWireRequestRefusedException),
-            typeof(PipeWireInteropException),
-        ])
+        foreach (
+            Type type in (Type[])
+                [
+                    typeof(PipeWireException),
+                    typeof(PipeWireConnectionException),
+                    typeof(PipeWireConnectFailedException),
+                    typeof(PipeWireConnectionClosedException),
+                    typeof(PipeWireRequestRefusedException),
+                    typeof(PipeWireInteropException),
+                ]
+        )
         {
             var bare = (PipeWireException)Activator.CreateInstance(type)!;
             Assert.AreEqual("unknown", bare.Operation, type.Name);
@@ -165,18 +183,26 @@ public sealed partial class DescriptorAndExceptionTests : PipeWireTestBase
     public async Task BorrowAsync_HoldsTheHandleUntilTheWorkCompletes()
     {
         RequireLinux();
-        using var listening = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        using var listening = new Socket(
+            AddressFamily.Unix,
+            SocketType.Stream,
+            ProtocolType.Unspecified
+        );
         SafeHandle handle = listening.SafeHandle;
 
         var released = new TaskCompletionSource();
         bool openDuringAwait = false;
 
-        Task borrow = FdInterop.BorrowAsync(handle, handle, async (first, second) =>
-        {
-            Assert.AreEqual(first, second);
-            await released.Task.ConfigureAwait(false);
-            openDuringAwait = Fcntl(first, FGetFd) >= 0;
-        });
+        Task borrow = FdInterop.BorrowAsync(
+            handle,
+            handle,
+            async (first, second) =>
+            {
+                Assert.AreEqual(first, second);
+                await released.Task.ConfigureAwait(false);
+                openDuringAwait = Fcntl(first, FGetFd) >= 0;
+            }
+        );
 
         released.SetResult();
         await borrow;
@@ -188,7 +214,11 @@ public sealed partial class DescriptorAndExceptionTests : PipeWireTestBase
     public void Borrow_ReturnsWhatTheWorkProducedAndReleasesAfterwards()
     {
         RequireLinux();
-        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        using var socket = new Socket(
+            AddressFamily.Unix,
+            SocketType.Stream,
+            ProtocolType.Unspecified
+        );
 
         int seen = FdInterop.Borrow(socket.SafeHandle, fd => fd);
 

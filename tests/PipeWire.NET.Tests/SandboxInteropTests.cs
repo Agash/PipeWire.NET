@@ -54,16 +54,26 @@ public sealed class SandboxInteropTests : PipeWireTestBase
 
         await using Sandbox sandbox = await Sandbox.StartAsync(cts.Token);
 
-        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        using var socket = new Socket(
+            AddressFamily.Unix,
+            SocketType.Stream,
+            ProtocolType.Unspecified
+        );
         await socket.ConnectAsync(new UnixDomainSocketEndPoint(sandbox.SocketPath), cts.Token);
 
-        await using var context = new PipeWireContext("pwnet-sandboxed", ConsoleTestLoggerFactory.Instance);
+        await using var context = new PipeWireContext(
+            "pwnet-sandboxed",
+            ConsoleTestLoggerFactory.Instance
+        );
         await context.StartAsync(socket.SafeHandle, cts.Token);
 
         await using var registry = new PipeWireRegistry(context);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        Assert.IsTrue(registry.Current.Nodes.Length >= 0, "the sandboxed connection enumerated nothing at all");
+        Assert.IsTrue(
+            registry.Current.Nodes.Length >= 0,
+            "the sandboxed connection enumerated nothing at all"
+        );
 
         // Borrowed, as everywhere else: the connection took a duplicate.
         Assert.IsFalse(socket.SafeHandle.IsClosed);
@@ -102,26 +112,39 @@ public sealed class SandboxInteropTests : PipeWireTestBase
         CliTool.Require("pw-cli");
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var context = new PipeWireContext("pwnet-sandbox-host", ConsoleTestLoggerFactory.Instance);
+        await using var context = new PipeWireContext(
+            "pwnet-sandbox-host",
+            ConsoleTestLoggerFactory.Instance
+        );
         await context.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(context);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
         PipeWireSecurityContext? available = registry.Current.SecurityContext;
-        if (available is null) Assert.Inconclusive("this daemon exposes no security context.");
+        if (available is null)
+            Assert.Inconclusive("this daemon exposes no security context.");
 
-        await using PipeWireSecurityContextProxy control = registry.BindSecurityContext(available!.Id);
+        await using PipeWireSecurityContextProxy control = registry.BindSecurityContext(
+            available!.Id
+        );
 
         string path = Path.Combine(Path.GetTempPath(), $"pwnet-sandbox-{Environment.ProcessId}");
         File.Delete(path);
 
-        using var listening = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        using var listening = new Socket(
+            AddressFamily.Unix,
+            SocketType.Stream,
+            ProtocolType.Unspecified
+        );
         listening.Bind(new UnixDomainSocketEndPoint(path));
         listening.Listen(4);
 
         // A pipe, as pw-container uses: the daemon watches this for hangup to learn the sandbox is
         // gone, and holding the other end is what keeps it alive.
-        using var closeSide = new AnonymousPipeServerStream(PipeDirection.Out, HandleInheritability.None);
+        using var closeSide = new AnonymousPipeServerStream(
+            PipeDirection.Out,
+            HandleInheritability.None
+        );
 
         try
         {
@@ -133,14 +156,20 @@ public sealed class SandboxInteropTests : PipeWireTestBase
                     ["pipewire.access"] = "restricted",
                     ["pipewire.sec.engine"] = "org.pipewire.Test",
                 },
-                cts.Token);
+                cts.Token
+            );
 
             string sandboxed = await CoreInfoAsync(path, cts.Token);
 
-            StringAssert.Contains(sandboxed, "permissions",
-                "a third-party client could not read the core through our sandbox");
-            Assert.IsFalse(HasMetadata(sandboxed),
-                $"our sandbox did not restrict the client, got: {sandboxed}");
+            StringAssert.Contains(
+                sandboxed,
+                "permissions",
+                "a third-party client could not read the core through our sandbox"
+            );
+            Assert.IsFalse(
+                HasMetadata(sandboxed),
+                $"our sandbox did not restrict the client, got: {sandboxed}"
+            );
         }
         finally
         {
@@ -156,14 +185,18 @@ public sealed class SandboxInteropTests : PipeWireTestBase
     }
 
     /// <summary>The core's permission line as pw-cli reports it, optionally through a socket.</summary>
-    private static async Task<string> CoreInfoAsync(string? remote, CancellationToken cancellationToken)
+    private static async Task<string> CoreInfoAsync(
+        string? remote,
+        CancellationToken cancellationToken
+    )
     {
         var psi = new ProcessStartInfo("/usr/bin/pw-cli", "info 0")
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        if (remote is not null) psi.Environment["PIPEWIRE_REMOTE"] = remote;
+        if (remote is not null)
+            psi.Environment["PIPEWIRE_REMOTE"] = remote;
 
         using Process process = Process.Start(psi)!;
 
@@ -194,8 +227,8 @@ public sealed class SandboxInteropTests : PipeWireTestBase
     {
         private readonly Process _process;
 
-        private Sandbox(Process process, string socketPath)
-            => (_process, SocketPath) = (process, socketPath);
+        private Sandbox(Process process, string socketPath) =>
+            (_process, SocketPath) = (process, socketPath);
 
         public string SocketPath { get; }
 
@@ -217,7 +250,9 @@ public sealed class SandboxInteropTests : PipeWireTestBase
             Process process = Process.Start(psi)!;
 
             string? path = null;
-            using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            using (
+                var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+            )
             {
                 deadline.CancelAfter(TimeSpan.FromSeconds(15));
                 try
@@ -227,10 +262,12 @@ public sealed class SandboxInteropTests : PipeWireTestBase
                         if (File.Exists(marker))
                         {
                             string text = File.ReadAllText(marker).Trim();
-                            if (text.Length > 0) path = text;
+                            if (text.Length > 0)
+                                path = text;
                         }
 
-                        if (path is null) await Task.Delay(100, deadline.Token).ConfigureAwait(false);
+                        if (path is null)
+                            await Task.Delay(100, deadline.Token).ConfigureAwait(false);
                     }
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -247,8 +284,13 @@ public sealed class SandboxInteropTests : PipeWireTestBase
 
         private static void Kill(Process process)
         {
-            try { process.Kill(entireProcessTree: true); }
-            catch (InvalidOperationException) { /* already gone */ }
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            { /* already gone */
+            }
             process.Dispose();
         }
 
@@ -259,7 +301,9 @@ public sealed class SandboxInteropTests : PipeWireTestBase
                 _process.Kill(entireProcessTree: true);
                 await _process.WaitForExitAsync().ConfigureAwait(false);
             }
-            catch (InvalidOperationException) { /* already gone */ }
+            catch (InvalidOperationException)
+            { /* already gone */
+            }
             finally
             {
                 _process.Dispose();

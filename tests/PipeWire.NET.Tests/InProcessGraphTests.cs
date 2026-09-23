@@ -55,7 +55,10 @@ public sealed class InProcessGraphTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-inprocess", ConsoleTestLoggerFactory.Instance)
+        await using var ctx = new PipeWireContext(
+            "pwnet-inprocess",
+            ConsoleTestLoggerFactory.Instance
+        )
         {
             RunInProcess = true,
         };
@@ -74,25 +77,30 @@ public sealed class InProcessGraphTests
 
         Assert.IsNotNull(graph.Core, "the in-process graph has no core object");
 
-        string[] factories = [.. graph.Factories
-            .Select(f => f.FactoryName)
-            .Where(n => n is not null)
-            .Select(n => n!)];
+        string[] factories =
+        [
+            .. graph.Factories.Select(f => f.FactoryName).Where(n => n is not null).Select(n => n!),
+        ];
 
         Assert.IsTrue(
             factories.Contains("spa-node-factory", StringComparer.Ordinal),
             $"the spa-node-factory module did not load; factories present: "
-            + $"{string.Join(", ", factories)}");
+                + $"{string.Join(", ", factories)}"
+        );
 
         Assert.IsTrue(
             factories.Contains("link-factory", StringComparer.Ordinal),
             $"the link-factory module did not load; factories present: "
-            + $"{string.Join(", ", factories)}");
+                + $"{string.Join(", ", factories)}"
+        );
 
         Assert.IsFalse(
-            graph.Nodes.Any(n => n.NodeName?.StartsWith("alsa_", StringComparison.Ordinal) ?? false),
+            graph.Nodes.Any(n =>
+                n.NodeName?.StartsWith("alsa_", StringComparison.Ordinal) ?? false
+            ),
             "the graph contains the session's ALSA nodes, so this connected to a daemon rather "
-            + "than running its own graph");
+                + "than running its own graph"
+        );
     }
 
     /// <summary>
@@ -109,7 +117,10 @@ public sealed class InProcessGraphTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-inprocess-late", ConsoleTestLoggerFactory.Instance)
+        await using var ctx = new PipeWireContext(
+            "pwnet-inprocess-late",
+            ConsoleTestLoggerFactory.Instance
+        )
         {
             RunInProcess = true,
         };
@@ -117,8 +128,9 @@ public sealed class InProcessGraphTests
         ctx.LoadModule("libpipewire-module-spa-node-factory");
         await ctx.StartAsync(cts.Token);
 
-        Assert.ThrowsExactly<InvalidOperationException>(
-            () => ctx.LoadModule("libpipewire-module-link-factory"));
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            ctx.LoadModule("libpipewire-module-link-factory")
+        );
     }
 
     /// <summary>A module that does not exist fails at start, naming what could not be loaded.</summary>
@@ -128,18 +140,23 @@ public sealed class InProcessGraphTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-inprocess-missing", ConsoleTestLoggerFactory.Instance)
+        await using var ctx = new PipeWireContext(
+            "pwnet-inprocess-missing",
+            ConsoleTestLoggerFactory.Instance
+        )
         {
             RunInProcess = true,
         };
 
         ctx.LoadModule("libpipewire-module-pwnet-does-not-exist");
 
-        PipeWireException ex = await Assert.ThrowsExactlyAsync<PipeWireInteropException>(
-            () => ctx.StartAsync(cts.Token));
+        PipeWireException ex = await Assert.ThrowsExactlyAsync<PipeWireInteropException>(() =>
+            ctx.StartAsync(cts.Token)
+        );
 
         Assert.IsTrue(
             ex.Message.Contains("pwnet-does-not-exist", StringComparison.Ordinal),
-            $"the failure did not name the module that could not be loaded: {ex.Message}");
+            $"the failure did not name the module that could not be loaded: {ex.Message}"
+        );
     }
 }

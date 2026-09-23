@@ -41,11 +41,13 @@ internal static class SessionGates
     internal static void RequireDaemonAtLeast(int major, int minor, int patch)
     {
         string? reported = Environment.GetEnvironmentVariable("PWNET_DAEMON_VERSION");
-        if (reported is null) return;
+        if (reported is null)
+            return;
         if (CompareVersions(reported, major, minor, patch) < 0)
             Assert.Inconclusive(
-                $"needs a PipeWire daemon at least {major}.{minor}.{patch}, " +
-                $"this session reports {reported}.");
+                $"needs a PipeWire daemon at least {major}.{minor}.{patch}, "
+                    + $"this session reports {reported}."
+            );
     }
 
     /// <summary>
@@ -55,22 +57,27 @@ internal static class SessionGates
     /// the same as no card.
     /// </summary>
     internal static async Task RequireAudioRouteAsync(
-        PipeWireRegistry registry, CancellationToken cancellationToken)
+        PipeWireRegistry registry,
+        CancellationToken cancellationToken
+    )
     {
-        if (HasAudioRoute(registry.Current)) return;
+        if (HasAudioRoute(registry.Current))
+            return;
 
         // Bounded by its own clock, not the caller's: eating the whole test budget here would
         // leave nothing for the waits the test itself still needs afterwards.
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken, timeout.Token);
+            cancellationToken,
+            timeout.Token
+        );
         try
         {
             while (!HasAudioRoute(registry.Current))
                 await Task.Delay(250, linked.Token).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (timeout.IsCancellationRequested
-                                                 && !cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
+            when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             // Our own timeout and nobody else's: fall through to Inconclusive below.
             // Anything else (notably the caller's own cancellation) keeps propagating.
@@ -78,7 +85,8 @@ internal static class SessionGates
 
         if (!HasAudioRoute(registry.Current))
             Assert.Inconclusive(
-                "this session offers no audio route for loopback streams (headless, no devices).");
+                "this session offers no audio route for loopback streams (headless, no devices)."
+            );
     }
 
     /// <summary>Whether the session has an audio sink and an audio source to route through.</summary>
@@ -88,9 +96,12 @@ internal static class SessionGates
         bool source = false;
         foreach (PipeWireNode node in graph.Nodes)
         {
-            if (node.Media != PipeWireMediaKind.Audio) continue;
-            if (node.Flow == PipeWireMediaFlow.Sink) sink = true;
-            if (node.Flow == PipeWireMediaFlow.Source) source = true;
+            if (node.Media != PipeWireMediaKind.Audio)
+                continue;
+            if (node.Flow == PipeWireMediaFlow.Sink)
+                sink = true;
+            if (node.Flow == PipeWireMediaFlow.Source)
+                source = true;
         }
 
         return sink && source;
@@ -112,7 +123,8 @@ internal static class SessionGates
             }
             else if (c == '.' && digits)
             {
-                if (part < 3) got[part] = value;
+                if (part < 3)
+                    got[part] = value;
                 part++;
                 value = 0;
                 digits = false;
@@ -123,11 +135,13 @@ internal static class SessionGates
             }
         }
 
-        if (digits && part < 3) got[part] = value;
+        if (digits && part < 3)
+            got[part] = value;
 
         for (int i = 0; i < 3; i++)
         {
-            if (got[i] != want[i]) return got[i].CompareTo(want[i]);
+            if (got[i] != want[i])
+                return got[i].CompareTo(want[i]);
         }
 
         return 0;

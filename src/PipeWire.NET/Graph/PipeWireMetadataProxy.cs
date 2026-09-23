@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
-using System.Globalization;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -38,7 +38,10 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
 
     private readonly PipeWireContext _ctx;
     private readonly ILogger _logger;
-    private readonly ConcurrentDictionary<(uint Subject, string Key), PipeWireMetadataEntry> _entries = new();
+    private readonly ConcurrentDictionary<
+        (uint Subject, string Key),
+        PipeWireMetadataEntry
+    > _entries = new();
 
     private readonly MetadataReconciler _reconciler = new(TimeSpan.FromSeconds(5));
 
@@ -67,11 +70,21 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
     public event Action<PipeWireMetadataProxy, PipeWireMetadataEntry>? EntryChanged;
 
     internal static unsafe PipeWireMetadataProxy Bind(
-        PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger)
+        PipeWireContext ctx,
+        pw_registry* registry,
+        uint id,
+        uint version,
+        ILogger logger
+    )
     {
         var store = new PipeWireMetadataProxy(ctx, id, logger);
         store._bound = BoundProxy.Bind(
-            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Metadata, version, NativeConstants.PW_VERSION_METADATA,
+            ctx,
+            registry,
+            id,
+            PipeWireKeys.PW_TYPE_INTERFACE_Metadata,
+            version,
+            NativeConstants.PW_VERSION_METADATA,
             sizeof(pw_metadata_events),
             events =>
             {
@@ -79,9 +92,15 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
                 table->version = NativeConstants.PW_VERSION_METADATA_EVENTS;
                 table->property = &OnPropertyCallback;
             },
-            static (proxy, hook, events, data) => Native.pw_metadata_add_listener(
-                (pw_metadata*)proxy, (spa_hook*)hook, (pw_metadata_events*)events, (void*)data),
-            store);
+            static (proxy, hook, events, data) =>
+                Native.pw_metadata_add_listener(
+                    (pw_metadata*)proxy,
+                    (spa_hook*)hook,
+                    (pw_metadata_events*)events,
+                    (void*)data
+                ),
+            store
+        );
 
         store._bound.Removed = store.RaiseRemoved;
 
@@ -102,13 +121,18 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
     private void RaiseRemoved()
     {
         Action? handler = Removed;
-        if (handler is null) return;
+        if (handler is null)
+            return;
 
         // A native callback frame, so nothing may escape it.
-        try { handler(); }
-        catch (Exception) { /* a subscriber that throws must not reach the daemon */ }
+        try
+        {
+            handler();
+        }
+        catch (Exception)
+        { /* a subscriber that throws must not reach the daemon */
+        }
     }
-
 
     /// <summary>
     /// Waits for the store to have sent everything it holds.
@@ -151,7 +175,9 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
     public string? Get(string key, uint subject = SubjectCore)
     {
         ArgumentNullException.ThrowIfNull(key);
-        return _entries.TryGetValue((subject, key), out PipeWireMetadataEntry? entry) ? entry.Value : null;
+        return _entries.TryGetValue((subject, key), out PipeWireMetadataEntry? entry)
+            ? entry.Value
+            : null;
     }
 
     /// <summary>
@@ -186,7 +212,8 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
         string? value,
         string? type = null,
         uint subject = SubjectCore,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(key);
         ThrowIfContainsNul(key, nameof(key));
@@ -227,7 +254,8 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
                     issued = true;
                     return Write(subject, key, type, value);
                 },
-                cancellationToken);
+                cancellationToken
+            );
 
             // Raised here, not when the echo lands. A write superseded before its echo arrives
             // never gets one, and a caller should still be told about a change it made. Skipped
@@ -258,8 +286,10 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
             // does not roll back - the request is already on its way and the daemon may still apply
             // it, so the optimistic value remains the better guess there.
             Rollback(subject, key, applied, previous, didApply);
-            if (!issued) _reconciler.Forget(subject, key, pending);
-            else _reconciler.Settle(subject, key);
+            if (!issued)
+                _reconciler.Forget(subject, key, pending);
+            else
+                _reconciler.Settle(subject, key);
             throw;
         }
         catch
@@ -279,8 +309,10 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
             // Records age from acknowledgement, and a write that went out and then failed will
             // never get one. Starting the clock here is what keeps it from being kept for ever;
             // it stays recognisable for the window, which is the whole reason it was not forgotten.
-            if (!issued) _reconciler.Forget(subject, key, pending);
-            else _reconciler.Settle(subject, key);
+            if (!issued)
+                _reconciler.Forget(subject, key, pending);
+            else
+                _reconciler.Settle(subject, key);
             throw;
         }
     }
@@ -299,9 +331,11 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
         string key,
         PipeWireMetadataEntry applied,
         PipeWireMetadataEntry? previous,
-        bool didApply)
+        bool didApply
+    )
     {
-        if (!didApply) return;
+        if (!didApply)
+            return;
 
         lock (_clearGate)
         {
@@ -310,9 +344,10 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
             bool stillOurs = now is null
                 ? applied.Value is null
                 : string.Equals(now.Value, applied.Value, StringComparison.Ordinal)
-                  && string.Equals(now.Type, applied.Type, StringComparison.Ordinal);
+                    && string.Equals(now.Type, applied.Type, StringComparison.Ordinal);
 
-            if (!stillOurs) return;
+            if (!stillOurs)
+                return;
 
             if (previous is null)
                 _entries.TryRemove((subject, key), out _);
@@ -400,8 +435,13 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
     public Task SetForcedQuantumAsync(int samples, CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(samples);
-        return SetAsync("clock.force-quantum", samples.ToString(CultureInfo.InvariantCulture),
-            null, SubjectCore, cancellationToken);
+        return SetAsync(
+            "clock.force-quantum",
+            samples.ToString(CultureInfo.InvariantCulture),
+            null,
+            SubjectCore,
+            cancellationToken
+        );
     }
 
     /// <summary>Pins the graph to one sample rate, or releases it.</summary>
@@ -417,13 +457,19 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
     public Task SetForcedRateAsync(int hz, CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(hz);
-        return SetAsync("clock.force-rate", hz.ToString(CultureInfo.InvariantCulture),
-            null, SubjectCore, cancellationToken);
+        return SetAsync(
+            "clock.force-rate",
+            hz.ToString(CultureInfo.InvariantCulture),
+            null,
+            SubjectCore,
+            cancellationToken
+        );
     }
 
     /// <summary>Reads a settings value that is a bare integer, or null if it is absent or not one.</summary>
     private int? Integer(string key) =>
-        Find(key)?.Value is { } raw && int.TryParse(raw, CultureInfo.InvariantCulture, out int value)
+        Find(key)?.Value is { } raw
+        && int.TryParse(raw, CultureInfo.InvariantCulture, out int value)
             ? value
             : null;
 
@@ -438,11 +484,19 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
     /// objects come and go, so a default stored by id would drift onto a different device.
     /// </remarks>
     /// <exception cref="ArgumentException"><paramref name="nodeName"/> is null or empty.</exception>
-    public Task SetDefaultAudioSinkAsync(string nodeName, CancellationToken cancellationToken = default)
+    public Task SetDefaultAudioSinkAsync(
+        string nodeName,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentException.ThrowIfNullOrEmpty(nodeName);
-        return SetAsync("default.audio.sink", NameJson(nodeName), "Spa:String:JSON",
-            SubjectCore, cancellationToken);
+        return SetAsync(
+            "default.audio.sink",
+            NameJson(nodeName),
+            "Spa:String:JSON",
+            SubjectCore,
+            cancellationToken
+        );
     }
 
     /// <summary>Sets the default audio source by node name.</summary>
@@ -453,11 +507,19 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
     /// </param>
     /// <inheritdoc cref="SetDefaultAudioSinkAsync" path="/remarks"/>
     /// <exception cref="ArgumentException"><paramref name="nodeName"/> is null or empty.</exception>
-    public Task SetDefaultAudioSourceAsync(string nodeName, CancellationToken cancellationToken = default)
+    public Task SetDefaultAudioSourceAsync(
+        string nodeName,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentException.ThrowIfNullOrEmpty(nodeName);
-        return SetAsync("default.audio.source", NameJson(nodeName), "Spa:String:JSON",
-            SubjectCore, cancellationToken);
+        return SetAsync(
+            "default.audio.source",
+            NameJson(nodeName),
+            "Spa:String:JSON",
+            SubjectCore,
+            cancellationToken
+        );
     }
 
     /// <summary>Removes every entry in the store.</summary>
@@ -512,7 +574,9 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
     {
         ReadOnlySpan<byte> keyUtf8 = Encoding.UTF8.GetBytes(key + '\0');
         ReadOnlySpan<byte> typeUtf8 = type is null ? default : Encoding.UTF8.GetBytes(type + '\0');
-        ReadOnlySpan<byte> valueUtf8 = value is null ? default : Encoding.UTF8.GetBytes(value + '\0');
+        ReadOnlySpan<byte> valueUtf8 = value is null
+            ? default
+            : Encoding.UTF8.GetBytes(value + '\0');
 
         // Referenced for the duration of the call. Destroying a proxy clears its pointer before it
         // takes the loop lock, so the lock alone does not stop this becoming null mid-call.
@@ -527,9 +591,12 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
             fixed (byte* v = valueUtf8)
             {
                 return Native.pw_metadata_set_property(
-                    (pw_metadata*)proxy.Object, subject, (sbyte*)k,
+                    (pw_metadata*)proxy.Object,
+                    subject,
+                    (sbyte*)k,
                     type is null ? null : (sbyte*)t,
-                    value is null ? null : (sbyte*)v);
+                    value is null ? null : (sbyte*)v
+                );
             }
         }
     }
@@ -558,9 +625,12 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
             // that the entries went.
             foreach ((uint Subject, string Key) existing in _entries.Keys)
             {
-                if (!everySubject && existing.Subject != subject) continue;
+                if (!everySubject && existing.Subject != subject)
+                    continue;
                 if (_entries.TryRemove(existing, out PipeWireMetadataEntry? removed))
-                    Raise(new PipeWireMetadataEntry(removed.Subject, removed.Key, removed.Type, null));
+                    Raise(
+                        new PipeWireMetadataEntry(removed.Subject, removed.Key, removed.Type, null)
+                    );
             }
 
             return;
@@ -569,38 +639,51 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
         var entry = new PipeWireMetadataEntry(subject, key, type, value);
 
         MetadataReconciler.EchoAction action = _reconciler.Classify(subject, key, type, value);
-        if (action == MetadataReconciler.EchoAction.Drop) return;
+        if (action == MetadataReconciler.EchoAction.Drop)
+            return;
 
         lock (_clearGate)
         {
             // A clear landed between this event being dispatched and being handled, so whatever
             // this reports is from before the store was emptied. Applying it now would put a
             // cleared entry back, and the correcting event for that never comes.
-            if (Volatile.Read(ref _epoch) != epoch) return;
+            if (Volatile.Read(ref _epoch) != epoch)
+                return;
 
             Apply(entry);
         }
 
         // Outside the gate. Subscribers are user code running on the loop thread, and holding a
         // lock across them lets one that waits on anything else stall every writer.
-        if (action != MetadataReconciler.EchoAction.AlreadyKnown) Raise(entry);
+        if (action != MetadataReconciler.EchoAction.AlreadyKnown)
+            Raise(entry);
     }
 
     /// <summary>Reports one change to subscribers, isolating a handler that throws.</summary>
     private void Raise(PipeWireMetadataEntry entry)
     {
-        SafeCallback.Raise(EntryChanged, h => h(this, entry), ex => LogHandlerFaulted(Id, entry.Key, ex));
+        SafeCallback.Raise(
+            EntryChanged,
+            h => h(this, entry),
+            ex => LogHandlerFaulted(Id, entry.Key, ex)
+        );
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe int OnPropertyCallback(
-        void* data, uint subject, sbyte* key, sbyte* type, sbyte* value)
+        void* data,
+        uint subject,
+        sbyte* key,
+        sbyte* type,
+        sbyte* value
+    )
     {
         // An exception escaping a reverse P/Invoke aborts the process, so nothing here may throw.
         try
         {
             var self = (PipeWireMetadataProxy?)GCHandle.FromIntPtr((nint)data).Target;
-            if (self is null || self._disposed) return 0;
+            if (self is null || self._disposed)
+                return 0;
 
             self.OnProperty(subject, Utf8(key), Utf8(type), Utf8(value));
         }
@@ -612,8 +695,7 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
         return 0;
 
         static string? Utf8(sbyte* p) =>
-            p is null ? null : Encoding.UTF8.GetString(
-                DaemonText.Bytes((sbyte*)p));
+            p is null ? null : Encoding.UTF8.GetString(DaemonText.Bytes((sbyte*)p));
     }
 
     /// <inheritdoc/>
@@ -634,7 +716,8 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
 
     private void DisposeCore()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
 
         _bound?.Dispose();
@@ -645,7 +728,10 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
         GC.SuppressFinalize(this);
     }
 
-    [LoggerMessage(EventId = 33200, Level = LogLevel.Error,
-                   Message = "an EntryChanged handler for store {StoreId} key {Key} threw")]
+    [LoggerMessage(
+        EventId = 33200,
+        Level = LogLevel.Error,
+        Message = "an EntryChanged handler for store {StoreId} key {Key} threw"
+    )]
     private partial void LogHandlerFaulted(uint storeId, string key, Exception exception);
 }

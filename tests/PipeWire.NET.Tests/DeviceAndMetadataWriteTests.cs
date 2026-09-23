@@ -29,7 +29,9 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken cancellationToken)
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -43,15 +45,20 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-latency", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-latency",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             // A unique name: a session manager restores properties by node.name, so reusing one
             // would read back whatever a previous run left rather than what this one wrote.
             string name = $"pwnet_latency_{Environment.ProcessId}_{Random.Shared.Next():x}";
-            PipeWireNode node = await registry.CreateVirtualSink("Latency")
-                .WithName(name).ExecuteAsync(cts.Token);
+            PipeWireNode node = await registry
+                .CreateVirtualSink("Latency")
+                .WithName(name)
+                .ExecuteAsync(cts.Token);
 
             await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
             await control.ReadyAsync(cts.Token);
@@ -63,16 +70,18 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 await control.EnumeratePropertyInfoAsync(cts.Token);
 
             bool advertised = info.Select(o => o[SpaPropInfo.Id])
-                                  .OfType<SpaId>()
-                                  .Any(id => id.Value == (uint)SpaProp.LatencyOffsetNsec);
+                .OfType<SpaId>()
+                .Any(id => id.Value == (uint)SpaProp.LatencyOffsetNsec);
 
             Assert.IsFalse(advertised, "this node kind does not advertise a latency offset");
             Assert.IsNull(await control.GetLatencyOffsetAsync(cts.Token));
 
             // Writing it is not an error - the daemon accepts and ignores it - and it stays absent.
             await control.SetLatencyOffsetAsync(2_000_000, cts.Token);
-            Assert.IsNull(await control.GetLatencyOffsetAsync(cts.Token),
-                "an unsupported property must not appear to have been set");
+            Assert.IsNull(
+                await control.GetLatencyOffsetAsync(cts.Token),
+                "an unsupported property must not appear to have been set"
+            );
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
@@ -86,23 +95,35 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     /// routes - so every route test skipped without ever exercising the code it was written for.
     /// </remarks>
     private static async Task<PipeWireDeviceProxy?> BindCardWithRoutesAsync(
-        PipeWireRegistry registry, CancellationToken cancellationToken)
+        PipeWireRegistry registry,
+        CancellationToken cancellationToken
+    )
     {
-        foreach (PipeWireDevice card in registry.Current.Devices
-                     .Where(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal)))
+        foreach (
+            PipeWireDevice card in registry.Current.Devices.Where(d =>
+                string.Equals(d.Api, "alsa", StringComparison.Ordinal)
+            )
+        )
         {
             // The snapshot is a moment, and on a session whose ALSA devices are being destroyed and
             // recreated the card can be gone before this binds it. BindDevice reports that as an
             // ArgumentException naming the id, which is indistinguishable here from being handed
             // nonsense, so the only thing to do is try the next card.
             PipeWireDeviceProxy control;
-            try { control = registry.BindDevice(card.Id); }
-            catch (ArgumentException) { continue; }
+            try
+            {
+                control = registry.BindDevice(card.Id);
+            }
+            catch (ArgumentException)
+            {
+                continue;
+            }
 
             try
             {
                 await control.ReadyAsync(cancellationToken);
-                if (!(await control.GetActiveRoutesAsync(cancellationToken)).IsEmpty) return control;
+                if (!(await control.GetActiveRoutesAsync(cancellationToken)).IsEmpty)
+                    return control;
             }
             catch (PipeWireException)
             {
@@ -120,7 +141,10 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-setroute", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-setroute",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -132,7 +156,10 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             ImmutableArray<SpaObject> active = await control.GetActiveRoutesAsync(cts.Token);
 
             SpaObject route = active[0];
-            if (route[SpaParamRoute.Index] is not SpaInt index || route[SpaParamRoute.Device] is not SpaInt device)
+            if (
+                route[SpaParamRoute.Index] is not SpaInt index
+                || route[SpaParamRoute.Device] is not SpaInt device
+            )
             {
                 Assert.Inconclusive("the active route does not report an index and device port.");
                 return;
@@ -149,7 +176,11 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             ImmutableArray<SpaObject> after;
             try
             {
-                await control.SetRouteAsync(index.Value, device.Value, cancellationToken: cts.Token);
+                await control.SetRouteAsync(
+                    index.Value,
+                    device.Value,
+                    cancellationToken: cts.Token
+                );
                 after = await control.GetActiveRoutesAsync(cts.Token);
             }
             catch (PipeWireException e) when (e.IsObjectGone)
@@ -159,8 +190,11 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             }
 
             Assert.IsFalse(after.IsEmpty, "the card lost its active route");
-            Assert.AreEqual(index.Value, ((SpaInt)after[0][SpaParamRoute.Index]!).Value,
-                "re-selecting the active route must leave it selected");
+            Assert.AreEqual(
+                index.Value,
+                ((SpaInt)after[0][SpaParamRoute.Index]!).Value,
+                "re-selecting the active route must leave it selected"
+            );
         }
     }
 
@@ -169,15 +203,18 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-routes", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-routes",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             // Lowest id, not "whichever came first". Enumeration order is not stable across
             // processes, so an unordered pick makes two runs exercise different cards, and a
             // machine with more than one ALSA card then passes or fails on which it landed on.
-            PipeWireDevice? card = registry.Current.Devices
-                .Where(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal))
+            PipeWireDevice? card = registry
+                .Current.Devices.Where(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal))
                 .OrderBy(d => d.Id)
                 .FirstOrDefault();
 
@@ -195,8 +232,14 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             // needed to select it, so their absence would make the route API unusable.
             foreach (SpaObject route in routes)
             {
-                Assert.IsInstanceOfType<SpaInt>(route[SpaParamRoute.Index], "a route must carry its index");
-                Assert.IsInstanceOfType<SpaId>(route[SpaParamRoute.Direction], "a route must say which way it faces");
+                Assert.IsInstanceOfType<SpaInt>(
+                    route[SpaParamRoute.Index],
+                    "a route must carry its index"
+                );
+                Assert.IsInstanceOfType<SpaId>(
+                    route[SpaParamRoute.Direction],
+                    "a route must say which way it faces"
+                );
                 Assert.IsNotNull(route[SpaParamRoute.Name], "a route must be nameable in a UI");
             }
 
@@ -210,7 +253,8 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 {
                     Assert.IsTrue(
                         props[SpaProp.ChannelVolumes] is SpaArray or null,
-                        "a route's volume is per channel when it has one at all");
+                        "a route's volume is per channel when it has one at all"
+                    );
                 }
             }
         }
@@ -221,15 +265,18 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-profiles", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-profiles",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             // Lowest id, not "whichever came first". Enumeration order is not stable across
             // processes, so an unordered pick makes two runs exercise different cards, and a
             // machine with more than one ALSA card then passes or fails on which it landed on.
-            PipeWireDevice? card = registry.Current.Devices
-                .Where(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal))
+            PipeWireDevice? card = registry
+                .Current.Devices.Where(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal))
                 .OrderBy(d => d.Id)
                 .FirstOrDefault();
 
@@ -248,8 +295,11 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             // would match nothing in the list it shows.
             int currentIndex = ((SpaInt)current![SpaParamProfile.Index]!).Value;
             int[] offered = [.. profiles.Select(p => ((SpaInt)p[SpaParamProfile.Index]!).Value)];
-            CollectionAssert.Contains(offered, currentIndex,
-                "the active profile must be one of the enumerated ones");
+            CollectionAssert.Contains(
+                offered,
+                currentIndex,
+                "the active profile must be one of the enumerated ones"
+            );
         }
     }
 
@@ -258,7 +308,10 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-metawrite", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-metawrite",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -273,22 +326,33 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 // A key of our own, so nothing the session relies on is touched.
                 string key = $"pwnet.test.{Environment.ProcessId}";
                 var changes = new List<PipeWireMetadataEntry>();
-                var removalSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var removalSeen = new TaskCompletionSource(
+                    TaskCreationOptions.RunContinuationsAsynchronously
+                );
                 store.EntryChanged += (_, entry) =>
                 {
-                    if (entry.Key != key) return;
-                    lock (changes) changes.Add(entry);
-                    if (entry.Value is null) removalSeen.TrySetResult();
+                    if (entry.Key != key)
+                        return;
+                    lock (changes)
+                        changes.Add(entry);
+                    if (entry.Value is null)
+                        removalSeen.TrySetResult();
                 };
 
                 try
                 {
-                    await store.SetAsync(key, "hello", subject: PipeWireMetadataProxy.SubjectCore,
-                        cancellationToken: cts.Token);
+                    await store.SetAsync(
+                        key,
+                        "hello",
+                        subject: PipeWireMetadataProxy.SubjectCore,
+                        cancellationToken: cts.Token
+                    );
                 }
                 catch (PipeWireException e)
                 {
-                    Assert.Inconclusive($"this client may not write metadata on this daemon: {e.Message}");
+                    Assert.Inconclusive(
+                        $"this client may not write metadata on this daemon: {e.Message}"
+                    );
                 }
 
                 Assert.AreEqual("hello", store.Get(key));
@@ -308,8 +372,10 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 {
                     Assert.IsTrue(changes.Count > 0, "the change must be reported at all");
                     Assert.IsNull(changes[^1].Value, "a removal is reported as a null value");
-                    Assert.IsTrue(changes.Any(c => c.Value == "hello"),
-                        "the value that was written must have been reported too");
+                    Assert.IsTrue(
+                        changes.Any(c => c.Value == "hello"),
+                        "the value that was written must have been reported too"
+                    );
                 }
             }
         }
@@ -320,7 +386,10 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-defsink", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-defsink",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -340,7 +409,8 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 for (int i = 0; i < 50 && currentName is null; i++)
                 {
                     currentName = store.DefaultAudioSink?.NameValue;
-                    if (currentName is null) await Task.Delay(100, cts.Token);
+                    if (currentName is null)
+                        await Task.Delay(100, cts.Token);
                 }
 
                 if (currentName is null)
@@ -354,12 +424,17 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 }
                 catch (PipeWireException e)
                 {
-                    Assert.Inconclusive($"this client may not write metadata on this daemon: {e.Message}");
+                    Assert.Inconclusive(
+                        $"this client may not write metadata on this daemon: {e.Message}"
+                    );
                 }
 
                 await store.ReadyAsync(cts.Token);
-                Assert.AreEqual(currentName, store.DefaultAudioSink?.NameValue,
-                    "the default sink must still name the same node");
+                Assert.AreEqual(
+                    currentName,
+                    store.DefaultAudioSink?.NameValue,
+                    "the default sink must still name the same node"
+                );
             }
         }
     }
@@ -369,7 +444,10 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-jsonesc", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-jsonesc",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -388,19 +466,35 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
 
                 try
                 {
-                    await store.SetAsync(key, $$"""{ "name": "{{awkward.Replace("\\", "\\\\").Replace("\"", "\\\"")}}" }""",
-                        "Spa:String:JSON", PipeWireMetadataProxy.SubjectCore, cts.Token);
+                    await store.SetAsync(
+                        key,
+                        $$"""{ "name": "{{awkward.Replace("\\", "\\\\").Replace("\"", "\\\"")}}" }""",
+                        "Spa:String:JSON",
+                        PipeWireMetadataProxy.SubjectCore,
+                        cts.Token
+                    );
                 }
                 catch (PipeWireException e)
                 {
-                    Assert.Inconclusive($"this client may not write metadata on this daemon: {e.Message}");
+                    Assert.Inconclusive(
+                        $"this client may not write metadata on this daemon: {e.Message}"
+                    );
                 }
 
                 string? raw = store.Get(key);
                 Assert.IsNotNull(raw);
 
-                var entry = new PipeWireMetadataEntry(PipeWireMetadataProxy.SubjectCore, key, null, raw);
-                Assert.AreEqual(awkward, entry.NameValue, "the escaping did not survive the round trip");
+                var entry = new PipeWireMetadataEntry(
+                    PipeWireMetadataProxy.SubjectCore,
+                    key,
+                    null,
+                    raw
+                );
+                Assert.AreEqual(
+                    awkward,
+                    entry.NameValue,
+                    "the escaping did not survive the round trip"
+                );
 
                 await store.SetAsync(key, null, cancellationToken: cts.Token);
             }
@@ -412,13 +506,19 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     {
         // The daemon writes what it likes into a metadata value; an accessor that parsed it as JSON
         // and threw would take down whatever was enumerating the store.
-        foreach (string? value in (string?[])[null, "", "not json", "{", "[]", "{\"other\":1}", "\"bare\""])
+        foreach (
+            string? value in (string?[])
+                [null, "", "not json", "{", "[]", "{\"other\":1}", "\"bare\""]
+        )
         {
             var entry = new PipeWireMetadataEntry(0, "k", null, value);
             Assert.IsNull(entry.NameValue, $"'{value}' must not yield a name");
         }
 
-        Assert.AreEqual("x", new PipeWireMetadataEntry(0, "k", null, """{ "name": "x" }""").NameValue);
+        Assert.AreEqual(
+            "x",
+            new PipeWireMetadataEntry(0, "k", null, """{ "name": "x" }""").NameValue
+        );
     }
 
     [TestMethod]
@@ -426,15 +526,18 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-profileswitch", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-profileswitch",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             // Lowest id, not "whichever came first". Enumeration order is not stable across
             // processes, so an unordered pick makes two runs exercise different cards, and a
             // machine with more than one ALSA card then passes or fails on which it landed on.
-            PipeWireDevice? card = registry.Current.Devices
-                .Where(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal))
+            PipeWireDevice? card = registry
+                .Current.Devices.Where(d => string.Equals(d.Api, "alsa", StringComparison.Ordinal))
                 .OrderBy(d => d.Id)
                 .FirstOrDefault();
             if (card is null)
@@ -459,8 +562,10 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             int[] candidates =
             [
                 .. profiles
-                    .Where(p => p[SpaParamProfile.Available] is not SpaId a
-                                || a.Value != (uint)SpaParamAvailability.No)
+                    .Where(p =>
+                        p[SpaParamProfile.Available] is not SpaId a
+                        || a.Value != (uint)SpaParamAvailability.No
+                    )
                     .Select(p => (p[SpaParamProfile.Index] as SpaInt)?.Value ?? -1)
                     .Where(i => i >= 0 && i != originalIndex),
             ];
@@ -482,9 +587,13 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             // test is actually asking. The test's own warning that "any node id held across it is
             // stale" applies to the test as much as to a caller.
             List<ulong> CardNodes() =>
-                [.. registry.Current.Nodes
-                    .Where(n => n.DeviceId == card.Id && n.ObjectSerial is not null)
-                    .Select(n => n.ObjectSerial!.Value)];
+                [
+                    .. registry
+                        .Current.Nodes.Where(n =>
+                            n.DeviceId == card.Id && n.ObjectSerial is not null
+                        )
+                        .Select(n => n.ObjectSerial!.Value),
+                ];
 
             // Names, for the restore half. Serials answer "are these the same node instances",
             // which is the right question on the way out and the wrong one on the way back: a
@@ -493,10 +602,12 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             // with the same names under new serials. Comparing serials there reports every
             // restored node as a leftover, and no amount of waiting clears it.
             List<string> CardNodeNames() =>
-                [.. registry.Current.Nodes
-                    .Where(n => n.DeviceId == card.Id && n.NodeName is not null)
-                    .Select(n => n.NodeName!)
-                    .OrderBy(n => n, StringComparer.Ordinal)];
+                [
+                    .. registry
+                        .Current.Nodes.Where(n => n.DeviceId == card.Id && n.NodeName is not null)
+                        .Select(n => n.NodeName!)
+                        .OrderBy(n => n, StringComparer.Ordinal),
+                ];
 
             List<ulong> before = CardNodes();
             List<string> beforeNames = CardNodeNames();
@@ -509,8 +620,11 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 await registry.WaitForInitialEnumerationAsync(cts.Token);
 
                 SpaObject? now = await control.GetProfileAsync(cts.Token);
-                Assert.AreEqual(candidates[0], ((SpaInt)now![SpaParamProfile.Index]!).Value,
-                    "the card did not switch profile");
+                Assert.AreEqual(
+                    candidates[0],
+                    ((SpaInt)now![SpaParamProfile.Index]!).Value,
+                    "the card did not switch profile"
+                );
 
                 // A profile that offers different endpoints exchanges the card's nodes rather than
                 // adding to them, so an id held across the switch is stale.
@@ -530,7 +644,11 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 for (int attempt = 0; attempt < 100; attempt++)
                 {
                     List<ulong> seen = CardNodes();
-                    if (seen.Count > 0 && !seen.Intersect(before).Any() && seen.SequenceEqual(settled))
+                    if (
+                        seen.Count > 0
+                        && !seen.Intersect(before).Any()
+                        && seen.SequenceEqual(settled)
+                    )
                     {
                         if (++stableSamples >= 5)
                             break;
@@ -544,9 +662,11 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                     await Task.Delay(100, cts.Token);
                 }
 
-                Assert.IsFalse(before.Intersect(CardNodes()).Any(),
+                Assert.IsFalse(
+                    before.Intersect(CardNodes()).Any(),
                     "the old profile's nodes are still on the card after the switch: "
-                    + string.Join(", ", before.Intersect(CardNodes())));
+                        + string.Join(", ", before.Intersect(CardNodes()))
+                );
 
                 // The device is still coherent afterwards: it still enumerates, and its routes are
                 // the new profile's rather than a mixture.
@@ -556,7 +676,8 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             catch (PipeWireException ex)
             {
                 cardGone = await CardGoneAsync(registry, control.Id, cts.Token);
-                if (!cardGone) throw;
+                if (!cardGone)
+                    throw;
                 Assert.Inconclusive($"the card left the graph mid-test: {ex.Message}");
             }
             finally
@@ -569,13 +690,21 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 {
                     try
                     {
-                        await control.SetProfileAsync(originalIndex, cancellationToken: CancellationToken.None);
+                        await control.SetProfileAsync(
+                            originalIndex,
+                            cancellationToken: CancellationToken.None
+                        );
                         await registry.WaitForInitialEnumerationAsync(CancellationToken.None);
                     }
                     catch (PipeWireException)
                     {
-                        cardGone = await CardGoneAsync(registry, control.Id, CancellationToken.None);
-                        if (!cardGone) throw;
+                        cardGone = await CardGoneAsync(
+                            registry,
+                            control.Id,
+                            CancellationToken.None
+                        );
+                        if (!cardGone)
+                            throw;
                     }
                 }
             }
@@ -583,8 +712,11 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             if (!cardGone)
             {
                 SpaObject? restored = await control.GetProfileAsync(cts.Token);
-                Assert.AreEqual(originalIndex, ((SpaInt)restored![SpaParamProfile.Index]!).Value,
-                    "the original profile must have been restored");
+                Assert.AreEqual(
+                    originalIndex,
+                    ((SpaInt)restored![SpaParamProfile.Index]!).Value,
+                    "the original profile must have been restored"
+                );
 
                 // Teardown is not synchronous with the profile write, so the set is given time to
                 // settle before anything is claimed about it.
@@ -592,7 +724,8 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 for (int attempt = 0; attempt < 100; attempt++)
                 {
                     stale = [.. CardNodeNames().Except(beforeNames)];
-                    if (stale.Count == 0) break;
+                    if (stale.Count == 0)
+                        break;
                     await Task.Delay(100, cts.Token);
                 }
 
@@ -600,9 +733,12 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 // nodes stay on the card is not a restore: they remain as candidate sinks and
                 // sources for everything that runs afterwards, which is how they went unnoticed
                 // while this test asserted the profile index alone.
-                Assert.AreEqual(0, stale.Count,
+                Assert.AreEqual(
+                    0,
+                    stale.Count,
                     "nodes the other profile added outlived the switch back: "
-                    + string.Join(", ", stale));
+                        + string.Join(", ", stale)
+                );
             }
         }
     }
@@ -612,7 +748,10 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-routevol", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-routevol",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
@@ -626,7 +765,8 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             SpaObject? route = active.FirstOrDefault(r =>
                 r[SpaParamRoute.Props] is SpaObject props
                 && props[SpaProp.ChannelVolumes] is SpaArray volumes
-                && !volumes.Items.IsDefaultOrEmpty);
+                && !volumes.Items.IsDefaultOrEmpty
+            );
 
             if (route is null)
                 Assert.Inconclusive("no active route on this card carries a volume.");
@@ -659,19 +799,29 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                 {
                     float[] test = [.. restore.Select(_ => 0.37f)];
                     await control.SetRouteVolumeAsync(
-                        index, device, test, originalMute, save: false, cts.Token);
+                        index,
+                        device,
+                        test,
+                        originalMute,
+                        save: false,
+                        cts.Token
+                    );
 
                     ImmutableArray<SpaObject> after = await control.GetActiveRoutesAsync(cts.Token);
                     changed = after.FirstOrDefault(r =>
-                        r[SpaParamRoute.Index] is SpaInt i && i.Value == index);
+                        r[SpaParamRoute.Index] is SpaInt i && i.Value == index
+                    );
 
-                    if (changed?[SpaParamRoute.Props] is SpaObject routeProps
+                    if (
+                        changed?[SpaParamRoute.Props] is SpaObject routeProps
                         && routeProps[SpaProp.ChannelVolumes] is SpaArray volumes
                         && !volumes.Items.IsDefaultOrEmpty
-                        && volumes.Items[0] is SpaFloat value)
+                        && volumes.Items[0] is SpaFloat value
+                    )
                     {
                         first = value.Value;
-                        if (Math.Abs(first - 0.37f) <= 0.02f) break;
+                        if (Math.Abs(first - 0.37f) <= 0.02f)
+                            break;
                     }
 
                     await Task.Delay(100, cts.Token);
@@ -683,7 +833,8 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             catch (PipeWireException ex)
             {
                 cardGone = await CardGoneAsync(registry, control.Id, cts.Token);
-                if (!cardGone) throw;
+                if (!cardGone)
+                    throw;
                 Assert.Inconclusive($"the card left the graph mid-test: {ex.Message}");
             }
             finally
@@ -695,12 +846,23 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
                     try
                     {
                         await control.SetRouteVolumeAsync(
-                            index, device, restore, originalMute, save: false, CancellationToken.None);
+                            index,
+                            device,
+                            restore,
+                            originalMute,
+                            save: false,
+                            CancellationToken.None
+                        );
                     }
                     catch (PipeWireException)
                     {
-                        cardGone = await CardGoneAsync(registry, control.Id, CancellationToken.None);
-                        if (!cardGone) throw;
+                        cardGone = await CardGoneAsync(
+                            registry,
+                            control.Id,
+                            CancellationToken.None
+                        );
+                        if (!cardGone)
+                            throw;
                     }
                 }
             }
@@ -709,7 +871,10 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
 
     /// <summary>Whether a card is still in the graph, after giving the registry a beat to notice.</summary>
     private static async Task<bool> CardGoneAsync(
-        PipeWireRegistry registry, uint cardId, CancellationToken cancellationToken)
+        PipeWireRegistry registry,
+        uint cardId,
+        CancellationToken cancellationToken
+    )
     {
         await registry.WaitForInitialEnumerationAsync(cancellationToken);
         return registry.Current.Devices.All(d => d.Id != cardId);

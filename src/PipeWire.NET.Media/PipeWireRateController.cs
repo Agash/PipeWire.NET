@@ -27,8 +27,12 @@ public sealed class PipeWireRateController
     /// <summary>The narrowest bandwidth upstream uses; steadiest, slowest to converge.</summary>
     public const double MinBandwidth = 0.016;
 
-    private double _z1, _z2, _z3;
-    private double _w0, _w1, _w2;
+    private double _z1,
+        _z2,
+        _z3;
+    private double _w0,
+        _w1,
+        _w2;
 
     /// <summary>The bandwidth currently in effect.</summary>
     public double Bandwidth { get; private set; }

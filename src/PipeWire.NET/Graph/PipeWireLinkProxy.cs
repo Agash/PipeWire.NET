@@ -27,8 +27,9 @@ namespace PipeWire.NET.Graph;
 public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
 {
     private readonly ILogger _logger;
-    private readonly TaskCompletionSource _ready =
-        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _ready = new(
+        TaskCreationOptions.RunContinuationsAsynchronously
+    );
 
     private BoundProxy? _bound;
     private volatile bool _disposed;
@@ -53,7 +54,8 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
         uint OutputNodeId,
         uint OutputPortId,
         uint InputNodeId,
-        uint InputPortId);
+        uint InputPortId
+    );
 
     /// <summary>The global id of the link this is bound to.</summary>
     public uint LinkId { get; }
@@ -112,8 +114,13 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
     public event Action<PipeWireLinkProxy>? StateChanged;
 
     internal static unsafe PipeWireLinkProxy Bind(
-        PipeWireContext ctx, pw_registry* registry, uint id, uint version, ILogger logger,
-        Action<uint, PipeWireProperties>? propertiesObserved = null)
+        PipeWireContext ctx,
+        pw_registry* registry,
+        uint id,
+        uint version,
+        ILogger logger,
+        Action<uint, PipeWireProperties>? propertiesObserved = null
+    )
     {
         // The observer is in place before the proxy is bound: the first info after a bind is the
         // only one that carries the object's properties (later ones set no PROPS in their change
@@ -122,7 +129,12 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
         // properties never reached the registry.
         var control = new PipeWireLinkProxy(id, logger) { PropertiesObserved = propertiesObserved };
         control._bound = BoundProxy.Bind(
-            ctx, registry, id, PipeWireKeys.PW_TYPE_INTERFACE_Link, version, NativeConstants.PW_VERSION_LINK,
+            ctx,
+            registry,
+            id,
+            PipeWireKeys.PW_TYPE_INTERFACE_Link,
+            version,
+            NativeConstants.PW_VERSION_LINK,
             sizeof(pw_link_events),
             events =>
             {
@@ -130,9 +142,15 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
                 table->version = NativeConstants.PW_VERSION_LINK_EVENTS;
                 table->info = &OnInfo;
             },
-            static (proxy, hook, events, data) => Native.pw_link_add_listener(
-                (pw_link*)proxy, (spa_hook*)hook, (pw_link_events*)events, (void*)data),
-            control);
+            static (proxy, hook, events, data) =>
+                Native.pw_link_add_listener(
+                    (pw_link*)proxy,
+                    (spa_hook*)hook,
+                    (pw_link_events*)events,
+                    (void*)data
+                ),
+            control
+        );
 
         control._bound.Removed = control.RaiseRemoved;
 
@@ -153,13 +171,18 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
     private void RaiseRemoved()
     {
         Action? handler = Removed;
-        if (handler is null) return;
+        if (handler is null)
+            return;
 
         // A native callback frame, so nothing may escape it.
-        try { handler(); }
-        catch (Exception) { /* a subscriber that throws must not reach the daemon */ }
+        try
+        {
+            handler();
+        }
+        catch (Exception)
+        { /* a subscriber that throws must not reach the daemon */
+        }
     }
-
 
     /// <summary>Waits for the daemon's first report about this link.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
@@ -174,19 +197,21 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
     }
 
     [System.Runtime.InteropServices.UnmanagedCallersOnly(
-        CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+        CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)]
+    )]
     private static unsafe void OnInfo(void* data, pw_link_info* info)
     {
         // An exception escaping a reverse P/Invoke aborts the process, so nothing below may throw.
         try
         {
-            if (data is null || info is null) return;
-            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireLinkProxy self) return;
-            if (self._disposed) return;
+            if (data is null || info is null)
+                return;
+            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireLinkProxy self)
+                return;
+            if (self._disposed)
+                return;
 
-            string? error = info->error is null
-                ? null
-                : DaemonText.String(info->error);
+            string? error = info->error is null ? null : DaemonText.String(info->error);
 
             // The error only means anything in the error state. Carrying a stale one alongside a
             // recovered link would have a caller reporting a failure that is over.
@@ -196,7 +221,8 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
                 info->output_node_id,
                 info->output_port_id,
                 info->input_node_id,
-                info->input_port_id);
+                info->input_port_id
+            );
 
             self._snapshot = snapshot;
             self._ready.TrySetResult();
@@ -211,15 +237,21 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
         {
             // Reached only if the marshalling above fails, which would mean the daemon sent
             // something the struct does not describe.
-            try { Console.Error.WriteLine($"PipeWire.NET link info callback faulted: {ex}"); }
-            catch (IOException) { /* Deliberately not logged: nothing left that could report it. */ }
+            try
+            {
+                Console.Error.WriteLine($"PipeWire.NET link info callback faulted: {ex}");
+            }
+            catch (IOException)
+            { /* Deliberately not logged: nothing left that could report it. */
+            }
         }
     }
 
     /// <inheritdoc/>
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
 
         _ready.TrySetCanceled();
@@ -234,11 +266,17 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
         return ValueTask.CompletedTask;
     }
 
-    [LoggerMessage(EventId = 34500, Level = LogLevel.Debug,
-        Message = "link {LinkId} is {State}{Error}")]
+    [LoggerMessage(
+        EventId = 34500,
+        Level = LogLevel.Debug,
+        Message = "link {LinkId} is {State}{Error}"
+    )]
     private partial void LogState(uint linkId, PipeWireLinkState state, string? error);
 
-    [LoggerMessage(EventId = 34501, Level = LogLevel.Warning,
-        Message = "a link state handler threw")]
+    [LoggerMessage(
+        EventId = 34501,
+        Level = LogLevel.Warning,
+        Message = "a link state handler threw"
+    )]
     private partial void LogHandlerFaulted(Exception exception);
 }

@@ -4,7 +4,6 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
 using Microsoft.Win32.SafeHandles;
-
 using PipeWire.NET.Graph;
 using PipeWire.NET.Interop;
 
@@ -56,8 +55,10 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
         // caller's handle is untouched, which is what this pins.
         _ = await TryStartOverAsync(context, stream.SafeFileHandle);
 
-        Assert.IsFalse(stream.SafeFileHandle.IsClosed,
-            "the caller's handle is only borrowed and must never be closed by the library");
+        Assert.IsFalse(
+            stream.SafeFileHandle.IsClosed,
+            "the caller's handle is only borrowed and must never be closed by the library"
+        );
 
         await context.DisposeAsync();
 
@@ -65,8 +66,11 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
         // connect, or the connection teardown the context disposal ran - none of it may
         // survive the context, and the caller's own descriptor is the only one left pointing
         // at the file.
-        Assert.AreEqual(1, FdsPointingTo(path),
-            "the library-owned duplicate must not outlive the connection");
+        Assert.AreEqual(
+            1,
+            FdsPointingTo(path),
+            "the library-owned duplicate must not outlive the connection"
+        );
         stream.Seek(0, SeekOrigin.Begin);
         stream.WriteByte(0x2A);
         stream.Flush();
@@ -78,8 +82,7 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
         RequireLinux();
         await using PipeWireContext context = new("fd-ownership-test");
 
-        Assert.ThrowsExactly<ArgumentNullException>(
-            () => context.StartAsync((SafeHandle)null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() => context.StartAsync((SafeHandle)null!));
     }
 
     [TestMethod]
@@ -89,8 +92,7 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
         await using PipeWireContext context = new("fd-ownership-test");
         using SafeFileHandle invalid = new(new IntPtr(-1), ownsHandle: true);
 
-        Assert.ThrowsExactly<ArgumentException>(
-            () => context.StartAsync(invalid));
+        Assert.ThrowsExactly<ArgumentException>(() => context.StartAsync(invalid));
     }
 
     /// <summary>
@@ -116,9 +118,16 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
         // native code that reads PIPEWIRE_REMOTE at connect time; setenv goes through libc
         // directly. Disposing the scope restores the variable's previous state - the value it
         // held before, or its absence.
-        using (ScopedNativeEnv remote = ScopedNativeEnv.Override("PIPEWIRE_REMOTE", "fd-ownership-test-absent"))
+        using (
+            ScopedNativeEnv remote = ScopedNativeEnv.Override(
+                "PIPEWIRE_REMOTE",
+                "fd-ownership-test-absent"
+            )
+        )
         {
-            await Assert.ThrowsExactlyAsync<PipeWireConnectFailedException>(() => context.StartAsync());
+            await Assert.ThrowsExactlyAsync<PipeWireConnectFailedException>(() =>
+                context.StartAsync()
+            );
         }
 
         // The failed attempt fell back to Created rather than wedging the context: a start over
@@ -246,13 +255,19 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
         using Socket socket = await ConnectDaemonSocketAsync(cts.Token);
         SafeHandle borrowed = socket.SafeHandle;
 
-        await using PipeWireContext context = new("fd-ownership-test", ConsoleTestLoggerFactory.Instance);
+        await using PipeWireContext context = new(
+            "fd-ownership-test",
+            ConsoleTestLoggerFactory.Instance
+        );
         await context.StartAsync(borrowed, cts.Token);
 
         // The connection is live: the registry enumerated the graph over it.
         await using PipeWireRegistry registry = new(context);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
-        Assert.IsTrue(registry.Current.Version >= 0, "an enumerated graph carries a snapshot version");
+        Assert.IsTrue(
+            registry.Current.Version >= 0,
+            "an enumerated graph carries a snapshot version"
+        );
 
         // Borrow-only: while the connection is up, the caller's socket still refers to a live
         // descriptor the caller may act on.
@@ -282,9 +297,13 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
 
         using Socket socket = await ConnectDaemonSocketAsync(cts.Token);
         using SafeFileHandle duplicate = FdInterop.DuplicateWithCloseOnExec(
-            (int)socket.SafeHandle.DangerousGetHandle());
+            (int)socket.SafeHandle.DangerousGetHandle()
+        );
 
-        await using PipeWireContext context = new("fd-ownership-test", ConsoleTestLoggerFactory.Instance);
+        await using PipeWireContext context = new(
+            "fd-ownership-test",
+            ConsoleTestLoggerFactory.Instance
+        );
         await context.StartAsync((int)duplicate.DangerousGetHandle(), cts.Token);
 
         // The handed-over number is the duplicate, so the caller-side Socket still owns the
@@ -312,8 +331,14 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
     }
 
     private static FileStream OpenTempFile(string path) =>
-        new(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, bufferSize: 1,
-            FileOptions.DeleteOnClose);
+        new(
+            path,
+            FileMode.CreateNew,
+            FileAccess.ReadWrite,
+            FileShare.None,
+            bufferSize: 1,
+            FileOptions.DeleteOnClose
+        );
 
     /// <summary>A descriptor already connected to the daemon socket, no handshake attempted.</summary>
     /// <remarks>
@@ -322,8 +347,11 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
     /// </remarks>
     private static async Task<Socket> ConnectDaemonSocketAsync(CancellationToken ct)
     {
-        string runtimeDir = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR")
-            ?? throw new AssertFailedException("XDG_RUNTIME_DIR is not set; where is the daemon socket?");
+        string runtimeDir =
+            Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR")
+            ?? throw new AssertFailedException(
+                "XDG_RUNTIME_DIR is not set; where is the daemon socket?"
+            );
         string socketPath = Path.Combine(runtimeDir, "pipewire-0");
         if (!File.Exists(socketPath))
             Assert.Inconclusive($"no PipeWire daemon socket at {socketPath}.");
@@ -335,7 +363,8 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
 
     /// <summary>Descriptors of this process whose link target is <paramref name="path"/>.</summary>
     private static int FdsPointingTo(string path) =>
-        Directory.GetFiles("/proc/self/fd")
+        Directory
+            .GetFiles("/proc/self/fd")
             .Select(fd => new FileInfo(fd).LinkTarget)
             .Count(target => string.Equals(target, path, StringComparison.Ordinal));
 }

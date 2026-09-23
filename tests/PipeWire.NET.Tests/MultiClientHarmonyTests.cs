@@ -57,12 +57,16 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
 
     /// <summary>Polls a condition that depends on another client's change reaching this one.</summary>
     private static async Task<bool> EventuallyAsync(
-        Func<Task<bool>> condition, TimeSpan within, CancellationToken cancellationToken)
+        Func<Task<bool>> condition,
+        TimeSpan within,
+        CancellationToken cancellationToken
+    )
     {
         long deadline = Environment.TickCount64 + (long)within.TotalMilliseconds;
         while (Environment.TickCount64 < deadline)
         {
-            if (await condition()) return true;
+            if (await condition())
+                return true;
             await Task.Delay(50, cancellationToken);
         }
 
@@ -80,31 +84,40 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
         // else, and each is meant to be an independent client of the daemon.
         Client[] clients =
         [
-            .. await Task.WhenAll(Enumerable.Range(0, 8)
-                .Select(i => ConnectAsync($"pwnet-harmony-{i}", cts.Token))),
+            .. await Task.WhenAll(
+                Enumerable.Range(0, 8).Select(i => ConnectAsync($"pwnet-harmony-{i}", cts.Token))
+            ),
         ];
 
         try
         {
             // A node created through one of them has to become visible to all of them, by id.
-            PipeWireNode node = await clients[0].Registry.CreateVirtualSink("Harmony")
+            PipeWireNode node = await clients[0]
+                .Registry.CreateVirtualSink("Harmony")
                 .WithName(Unique("pwnet_harmony"))
                 .ExecuteAsync(cts.Token);
 
             foreach (Client c in clients)
             {
-                bool saw = await EventuallyAsync(async () =>
-                {
-                    await c.Registry.WaitForInitialEnumerationAsync(cts.Token);
-                    return c.Registry.Current.GetNode(node.NodeId) is not null;
-                }, TimeSpan.FromSeconds(10), cts.Token);
+                bool saw = await EventuallyAsync(
+                    async () =>
+                    {
+                        await c.Registry.WaitForInitialEnumerationAsync(cts.Token);
+                        return c.Registry.Current.GetNode(node.NodeId) is not null;
+                    },
+                    TimeSpan.FromSeconds(10),
+                    cts.Token
+                );
 
                 Assert.IsTrue(saw, "a node created by one client was never seen by another");
             }
 
             // And every one of them must be able to bind and drive it at the same time: eight
             // proxies to one global, eight independent parameter caches.
-            PipeWireNodeProxy[] controls = [.. clients.Select(c => c.Registry.BindNode(node.NodeId))];
+            PipeWireNodeProxy[] controls =
+            [
+                .. clients.Select(c => c.Registry.BindNode(node.NodeId)),
+            ];
             try
             {
                 await Task.WhenAll(controls.Select(c => c.ReadyAsync(cts.Token)));
@@ -114,11 +127,18 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
 
                 // The last write wins and everyone must agree on which that was, rather than each
                 // believing whatever it wrote itself.
-                bool agreed = await EventuallyAsync(async () =>
-                {
-                    float?[] seen = await Task.WhenAll(controls.Select(c => c.GetVolumeAsync(cts.Token)));
-                    return Array.TrueForAll(seen, v => v is not null) && seen.Distinct().Count() == 1;
-                }, TimeSpan.FromSeconds(15), cts.Token);
+                bool agreed = await EventuallyAsync(
+                    async () =>
+                    {
+                        float?[] seen = await Task.WhenAll(
+                            controls.Select(c => c.GetVolumeAsync(cts.Token))
+                        );
+                        return Array.TrueForAll(seen, v => v is not null)
+                            && seen.Distinct().Count() == 1;
+                    },
+                    TimeSpan.FromSeconds(15),
+                    cts.Token
+                );
 
                 Assert.IsTrue(agreed, "eight controls on one node did not converge on one volume");
             }
@@ -134,11 +154,15 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
             // in its snapshot hands out ids that fail on the next bind.
             foreach (Client c in clients)
             {
-                bool gone = await EventuallyAsync(async () =>
-                {
-                    await c.Registry.WaitForInitialEnumerationAsync(cts.Token);
-                    return c.Registry.Current.GetNode(node.NodeId) is null;
-                }, TimeSpan.FromSeconds(10), cts.Token);
+                bool gone = await EventuallyAsync(
+                    async () =>
+                    {
+                        await c.Registry.WaitForInitialEnumerationAsync(cts.Token);
+                        return c.Registry.Current.GetNode(node.NodeId) is null;
+                    },
+                    TimeSpan.FromSeconds(10),
+                    cts.Token
+                );
 
                 Assert.IsTrue(gone, "a removed node stayed in another client's snapshot");
             }
@@ -160,18 +184,23 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
         await using Client a = await ConnectAsync("pwnet-fight-a", cts.Token);
         await using Client b = await ConnectAsync("pwnet-fight-b", cts.Token);
 
-        PipeWireNode node = await a.Registry.CreateVirtualSink("Contended")
+        PipeWireNode node = await a
+            .Registry.CreateVirtualSink("Contended")
             .WithName(Unique("pwnet_contended"))
             .ExecuteAsync(cts.Token);
 
         // b is a separate connection and learns about a's new node from the daemon, so it has to
         // be waited for: binding is against the caller's own snapshot, and on a loaded machine
         // b's has not caught up by the time the create returns on a.
-        bool visibleToB = await EventuallyAsync(async () =>
-        {
-            await b.Registry.WaitForInitialEnumerationAsync(cts.Token);
-            return b.Registry.Current.GetNode(node.NodeId) is not null;
-        }, TimeSpan.FromSeconds(10), cts.Token);
+        bool visibleToB = await EventuallyAsync(
+            async () =>
+            {
+                await b.Registry.WaitForInitialEnumerationAsync(cts.Token);
+                return b.Registry.Current.GetNode(node.NodeId) is not null;
+            },
+            TimeSpan.FromSeconds(10),
+            cts.Token
+        );
         Assert.IsTrue(visibleToB, "the second client never saw the contended node");
 
         await using PipeWireNodeProxy ca = a.Registry.BindNode(node.NodeId);
@@ -183,31 +212,55 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
         // with each other or with the daemon.
         var faults = new ConcurrentQueue<string>();
 
-        Task writerA = Task.Run(async () =>
-        {
-            for (int i = 0; i < 40; i++)
+        Task writerA = Task.Run(
+            async () =>
             {
-                try { await ca.SetVolumeAsync(0.20f, cts.Token); }
-                catch (Exception ex) { faults.Enqueue($"a: {ex.GetType().Name}: {ex.Message}"); return; }
-            }
-        }, cts.Token);
+                for (int i = 0; i < 40; i++)
+                {
+                    try
+                    {
+                        await ca.SetVolumeAsync(0.20f, cts.Token);
+                    }
+                    catch (Exception ex)
+                    {
+                        faults.Enqueue($"a: {ex.GetType().Name}: {ex.Message}");
+                        return;
+                    }
+                }
+            },
+            cts.Token
+        );
 
-        Task writerB = Task.Run(async () =>
-        {
-            for (int i = 0; i < 40; i++)
+        Task writerB = Task.Run(
+            async () =>
             {
-                try { await cb.SetVolumeAsync(0.60f, cts.Token); }
-                catch (Exception ex) { faults.Enqueue($"b: {ex.GetType().Name}: {ex.Message}"); return; }
-            }
-        }, cts.Token);
+                for (int i = 0; i < 40; i++)
+                {
+                    try
+                    {
+                        await cb.SetVolumeAsync(0.60f, cts.Token);
+                    }
+                    catch (Exception ex)
+                    {
+                        faults.Enqueue($"b: {ex.GetType().Name}: {ex.Message}");
+                        return;
+                    }
+                }
+            },
+            cts.Token
+        );
 
-        Task writerCli = Task.Run(async () =>
-        {
-            for (int i = 0; i < 12; i++)
-                await PwTools.SetNodeVolumeAsync(node.NodeId, 0.90f, cts.Token);
-        }, cts.Token);
+        Task writerCli = Task.Run(
+            async () =>
+            {
+                for (int i = 0; i < 12; i++)
+                    await PwTools.SetNodeVolumeAsync(node.NodeId, 0.90f, cts.Token);
+            },
+            cts.Token
+        );
 
-        await Task.WhenAll(writerA, writerB, writerCli).WaitAsync(TimeSpan.FromSeconds(60), cts.Token);
+        await Task.WhenAll(writerA, writerB, writerCli)
+            .WaitAsync(TimeSpan.FromSeconds(60), cts.Token);
         Assert.IsTrue(faults.IsEmpty, string.Join("; ", faults));
 
         // Now nobody is writing. One more write settles the argument, and both caches have to report
@@ -215,14 +268,21 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
         // write instead.
         await ca.SetVolumeAsync(0.33f, cts.Token);
 
-        bool converged = await EventuallyAsync(async () =>
-        {
-            float? va = await ca.GetVolumeAsync(cts.Token);
-            float? vb = await cb.GetVolumeAsync(cts.Token);
-            return va is not null && vb is not null && Math.Abs(va.Value - vb.Value) < 0.001f;
-        }, TimeSpan.FromSeconds(20), cts.Token);
+        bool converged = await EventuallyAsync(
+            async () =>
+            {
+                float? va = await ca.GetVolumeAsync(cts.Token);
+                float? vb = await cb.GetVolumeAsync(cts.Token);
+                return va is not null && vb is not null && Math.Abs(va.Value - vb.Value) < 0.001f;
+            },
+            TimeSpan.FromSeconds(20),
+            cts.Token
+        );
 
-        Assert.IsTrue(converged, "two clients did not agree on the volume after the writes stopped");
+        Assert.IsTrue(
+            converged,
+            "two clients did not agree on the volume after the writes stopped"
+        );
 
         await a.Registry.DestroyGlobalAsync(node.NodeId, cts.Token);
     }
@@ -251,7 +311,8 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
             var seenByB = new ConcurrentQueue<string?>();
             sb.EntryChanged += (_, e) =>
             {
-                if (string.Equals(e.Key, key, StringComparison.Ordinal)) seenByB.Enqueue(e.Value);
+                if (string.Equals(e.Key, key, StringComparison.Ordinal))
+                    seenByB.Enqueue(e.Value);
             };
 
             // Our client writes; the other one must see it. Waited on the change event rather than
@@ -261,8 +322,16 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
             string? relayed = await MetadataRelay.AwaitRelayAsync(
                 sb,
                 key,
-                () => sa.SetAsync(key, "from-a", "Spa:String", PipeWireMetadataProxy.SubjectCore, cts.Token),
-                cts.Token);
+                () =>
+                    sa.SetAsync(
+                        key,
+                        "from-a",
+                        "Spa:String",
+                        PipeWireMetadataProxy.SubjectCore,
+                        cts.Token
+                    ),
+                cts.Token
+            );
 
             Assert.AreEqual("from-a", relayed, "the relayed write carried the wrong value");
 
@@ -272,18 +341,28 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
             await PwTools.SetMetadataAsync(key, "from-pw-metadata", cts.Token);
 
             Assert.IsTrue(
-                await EventuallyAsync(() => Task.FromResult(sa.Get(key) == "from-pw-metadata"),
-                    TimeSpan.FromSeconds(10), cts.Token),
-                "an external write was not applied by the client that had just written the key");
+                await EventuallyAsync(
+                    () => Task.FromResult(sa.Get(key) == "from-pw-metadata"),
+                    TimeSpan.FromSeconds(10),
+                    cts.Token
+                ),
+                "an external write was not applied by the client that had just written the key"
+            );
             Assert.IsTrue(
-                await EventuallyAsync(() => Task.FromResult(sb.Get(key) == "from-pw-metadata"),
-                    TimeSpan.FromSeconds(10), cts.Token),
-                "an external write was not applied by the observing client");
+                await EventuallyAsync(
+                    () => Task.FromResult(sb.Get(key) == "from-pw-metadata"),
+                    TimeSpan.FromSeconds(10),
+                    cts.Token
+                ),
+                "an external write was not applied by the observing client"
+            );
 
             // The event has to have fired too, not just the cache updated: an application that only
             // listens would otherwise never learn of the change.
-            Assert.IsTrue(seenByB.Contains("from-pw-metadata"),
-                "the external write updated the cache but raised no event");
+            Assert.IsTrue(
+                seenByB.Contains("from-pw-metadata"),
+                "the external write updated the cache but raised no event"
+            );
 
             // A burst from both of ours at once, then a single external write on top. Whatever the
             // interleaving, the external value is the last one written and must be where everyone
@@ -291,26 +370,54 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
             // count instead drops values whose echoes are still in flight, and those echoes then
             // read as somebody else's change and put an old value back.
             await Task.WhenAll(
-                Task.Run(async () =>
-                {
-                    for (int i = 0; i < 30; i++)
-                        await sa.SetAsync(key, $"a-{i}", "Spa:String", PipeWireMetadataProxy.SubjectCore, cts.Token);
-                }, cts.Token),
-                Task.Run(async () =>
-                {
-                    for (int i = 0; i < 30; i++)
-                        await sb.SetAsync(key, $"b-{i}", "Spa:String", PipeWireMetadataProxy.SubjectCore, cts.Token);
-                }, cts.Token));
+                Task.Run(
+                    async () =>
+                    {
+                        for (int i = 0; i < 30; i++)
+                            await sa.SetAsync(
+                                key,
+                                $"a-{i}",
+                                "Spa:String",
+                                PipeWireMetadataProxy.SubjectCore,
+                                cts.Token
+                            );
+                    },
+                    cts.Token
+                ),
+                Task.Run(
+                    async () =>
+                    {
+                        for (int i = 0; i < 30; i++)
+                            await sb.SetAsync(
+                                key,
+                                $"b-{i}",
+                                "Spa:String",
+                                PipeWireMetadataProxy.SubjectCore,
+                                cts.Token
+                            );
+                    },
+                    cts.Token
+                )
+            );
 
             await PwTools.SetMetadataAsync(key, "final", cts.Token);
 
             Assert.IsTrue(
                 await EventuallyAsync(
                     () => Task.FromResult(sa.Get(key) == "final" && sb.Get(key) == "final"),
-                    TimeSpan.FromSeconds(25), cts.Token),
-                $"after a burst the clients settled on a='{sa.Get(key)}' b='{sb.Get(key)}', not the last write");
+                    TimeSpan.FromSeconds(25),
+                    cts.Token
+                ),
+                $"after a burst the clients settled on a='{sa.Get(key)}' b='{sb.Get(key)}', not the last write"
+            );
 
-            await sa.SetAsync(key, null, "Spa:String", PipeWireMetadataProxy.SubjectCore, cts.Token);
+            await sa.SetAsync(
+                key,
+                null,
+                "Spa:String",
+                PipeWireMetadataProxy.SubjectCore,
+                cts.Token
+            );
         }
     }
 
@@ -329,9 +436,11 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
 
         string sourceName = Unique("pwnet_chain_src");
         await using GstTestSource producer = await GstTestSource.StartAsync(
-            dsp.Context, sourceName,
+            dsp.Context,
+            sourceName,
             "audiotestsrc is-live=true wave=sine ! audio/x-raw,format=F32LE,channels=2,rate=48000",
-            "Audio/Source");
+            "Audio/Source"
+        );
 
         long cycles = 0;
         string dspName = Unique("pwnet_chain_dsp");
@@ -348,20 +457,26 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
 
         // The observer - a completely separate connection - must see both of them, without either
         // having told it anything.
-        bool sawBoth = await EventuallyAsync(async () =>
-        {
-            await observer.Registry.WaitForInitialEnumerationAsync(cts.Token);
-            PipeWireGraphSnapshot g = observer.Registry.Current;
-            return g.GetNode(producer.NodeId) is not null && g.GetNode(filterNodeId) is not null;
-        }, TimeSpan.FromSeconds(20), cts.Token);
+        bool sawBoth = await EventuallyAsync(
+            async () =>
+            {
+                await observer.Registry.WaitForInitialEnumerationAsync(cts.Token);
+                PipeWireGraphSnapshot g = observer.Registry.Current;
+                return g.GetNode(producer.NodeId) is not null
+                    && g.GetNode(filterNodeId) is not null;
+            },
+            TimeSpan.FromSeconds(20),
+            cts.Token
+        );
 
         if (!sawBoth)
         {
             PipeWireGraphSnapshot g = observer.Registry.Current;
             Assert.Fail(
                 $"an independent observer did not see both: producer id={producer.NodeId} "
-                + $"seen={g.GetNode(producer.NodeId) is not null}, filter id={filterNodeId} "
-                + $"seen={g.GetNode(filterNodeId) is not null}, observer knows {g.Nodes.Length} nodes");
+                    + $"seen={g.GetNode(producer.NodeId) is not null}, filter id={filterNodeId} "
+                    + $"seen={g.GetNode(filterNodeId) is not null}, observer knows {g.Nodes.Length} nodes"
+            );
         }
 
         // Wired with pw-link, so the links are ones this library did not create and must still
@@ -373,57 +488,77 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
         ImmutableArray<PipeWirePort> srcPorts = [];
         ImmutableArray<PipeWirePort> dspPorts = [];
 
-        bool wired = await EventuallyAsync(async () =>
-        {
-            await observer.Registry.WaitForInitialEnumerationAsync(cts.Token);
-            PipeWireGraphSnapshot g = observer.Registry.Current;
+        bool wired = await EventuallyAsync(
+            async () =>
+            {
+                await observer.Registry.WaitForInitialEnumerationAsync(cts.Token);
+                PipeWireGraphSnapshot g = observer.Registry.Current;
 
-            srcPorts =
-            [
-                .. g.GetPortsForNode(producer.NodeId)
-                    .Where(p => p.PortDirection == PipeWirePortDirection.Out && !p.IsMonitor)
-                    .OrderBy(p => p.PortName, StringComparer.Ordinal),
-            ];
-            dspPorts =
-            [
-                .. g.GetPortsForNode(filterNodeId)
-                    .Where(p => p.PortDirection == PipeWirePortDirection.In)
-                    .OrderBy(p => p.PortName, StringComparer.Ordinal),
-            ];
+                srcPorts =
+                [
+                    .. g.GetPortsForNode(producer.NodeId)
+                        .Where(p => p.PortDirection == PipeWirePortDirection.Out && !p.IsMonitor)
+                        .OrderBy(p => p.PortName, StringComparer.Ordinal),
+                ];
+                dspPorts =
+                [
+                    .. g.GetPortsForNode(filterNodeId)
+                        .Where(p => p.PortDirection == PipeWirePortDirection.In)
+                        .OrderBy(p => p.PortName, StringComparer.Ordinal),
+                ];
 
-            return srcPorts.Length >= 2 && dspPorts.Length >= 2;
-        }, TimeSpan.FromSeconds(20), cts.Token);
+                return srcPorts.Length >= 2 && dspPorts.Length >= 2;
+            },
+            TimeSpan.FromSeconds(20),
+            cts.Token
+        );
 
-        Assert.IsTrue(wired,
+        Assert.IsTrue(
+            wired,
             $"producer id={producer.NodeId} published {srcPorts.Length} output port(s) and filter "
-            + $"id={filterNodeId} {dspPorts.Length} input port(s); both need two");
+                + $"id={filterNodeId} {dspPorts.Length} input port(s); both need two"
+        );
 
         for (int i = 0; i < 2; i++)
         {
             await PwTools.LinkAsync(
                 srcPorts[i].PortId.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 dspPorts[i].PortId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                cts.Token);
+                cts.Token
+            );
         }
 
         // Samples have to actually flow through the managed callback.
         Assert.IsTrue(
-            await EventuallyAsync(() => Task.FromResult(Interlocked.Read(ref cycles) > 20),
-                TimeSpan.FromSeconds(25), cts.Token),
-            $"the filter ran {Interlocked.Read(ref cycles)} cycles with a real producer linked into it");
+            await EventuallyAsync(
+                () => Task.FromResult(Interlocked.Read(ref cycles) > 20),
+                TimeSpan.FromSeconds(25),
+                cts.Token
+            ),
+            $"the filter ran {Interlocked.Read(ref cycles)} cycles with a real producer linked into it"
+        );
 
         // And the observer's view of the links has to match pw-link's exactly - a graph it played no
         // part in building.
         Assert.IsTrue(
-            await EventuallyAsync(async () =>
-            {
-                await observer.Registry.WaitForInitialEnumerationAsync(cts.Token);
-                List<(uint Link, uint Output, uint Input)> theirs = await PwTools.ListLinksAsync(cts.Token);
-                ImmutableArray<PipeWireLink> ours = observer.Registry.Current.Links;
+            await EventuallyAsync(
+                async () =>
+                {
+                    await observer.Registry.WaitForInitialEnumerationAsync(cts.Token);
+                    List<(uint Link, uint Output, uint Input)> theirs =
+                        await PwTools.ListLinksAsync(cts.Token);
+                    ImmutableArray<PipeWireLink> ours = observer.Registry.Current.Links;
 
-                return theirs.Select(l => l.Link).Order().SequenceEqual(ours.Select(l => l.LinkId).Order());
-            }, TimeSpan.FromSeconds(20), cts.Token),
-            "an observing client's link list did not match pw-link's");
+                    return theirs
+                        .Select(l => l.Link)
+                        .Order()
+                        .SequenceEqual(ours.Select(l => l.LinkId).Order());
+                },
+                TimeSpan.FromSeconds(20),
+                cts.Token
+            ),
+            "an observing client's link list did not match pw-link's"
+        );
     }
 
     [TestMethod]
@@ -440,42 +575,60 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
         var created = new ConcurrentBag<uint>();
         var faults = new ConcurrentQueue<string>();
         using var churning = new CancellationTokenSource();
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(churning.Token, cts.Token);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+            churning.Token,
+            cts.Token
+        );
 
-        Task churn = Task.Run(async () =>
-        {
-            try
+        Task churn = Task.Run(
+            async () =>
             {
-                while (!linked.Token.IsCancellationRequested)
+                try
                 {
-                    PipeWireNode n = await churner.Registry.CreateVirtualSink("Churn")
-                        .WithName(Unique("pwnet_churn"))
-                        .ExecuteAsync(linked.Token);
+                    while (!linked.Token.IsCancellationRequested)
+                    {
+                        PipeWireNode n = await churner
+                            .Registry.CreateVirtualSink("Churn")
+                            .WithName(Unique("pwnet_churn"))
+                            .ExecuteAsync(linked.Token);
 
-                    created.Add(n.NodeId);
-                    try
-                    {
-                        await Task.Delay(30, linked.Token);
-                    }
-                    finally
-                    {
-                        // Uncancellable, and in a finally: cancellation lands between the create and
-                        // the remove often enough that a cancellable removal strands a node, which
-                        // the assertion after the churn then reads as the graph having gone stale.
-                        await churner.Registry.DestroyGlobalAsync(n.NodeId, CancellationToken.None);
+                        created.Add(n.NodeId);
+                        try
+                        {
+                            await Task.Delay(30, linked.Token);
+                        }
+                        finally
+                        {
+                            // Uncancellable, and in a finally: cancellation lands between the create and
+                            // the remove often enough that a cancellable removal strands a node, which
+                            // the assertion after the churn then reads as the graph having gone stale.
+                            await churner.Registry.DestroyGlobalAsync(
+                                n.NodeId,
+                                CancellationToken.None
+                            );
+                        }
                     }
                 }
-            }
-            catch (OperationCanceledException) { /* the churn is stopped by cancellation. */ }
-            catch (Exception ex) { faults.Enqueue($"churn: {ex.GetType().Name}: {ex.Message}"); }
-        }, cts.Token);
+                catch (OperationCanceledException)
+                { /* the churn is stopped by cancellation. */
+                }
+                catch (Exception ex)
+                {
+                    faults.Enqueue($"churn: {ex.GetType().Name}: {ex.Message}");
+                }
+            },
+            cts.Token
+        );
 
         // Twenty short-lived clients arriving into the middle of that.
         for (int round = 0; round < 20; round++)
         {
             try
             {
-                await using Client transient = await ConnectAsync($"pwnet-transient-{round}", cts.Token);
+                await using Client transient = await ConnectAsync(
+                    $"pwnet-transient-{round}",
+                    cts.Token
+                );
                 Assert.IsTrue(transient.Registry.Current.Version > 0);
             }
             catch (Exception ex)
@@ -492,13 +645,20 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
         // nodes - each was removed, and a stale global would show up here as a node that is gone.
         await using Client after = await ConnectAsync("pwnet-after-churn", cts.Token);
 
-        bool clean = await EventuallyAsync(async () =>
-        {
-            await after.Registry.WaitForInitialEnumerationAsync(cts.Token);
-            return !created.Any(id => after.Registry.Current.GetNode(id) is not null);
-        }, TimeSpan.FromSeconds(20), cts.Token);
+        bool clean = await EventuallyAsync(
+            async () =>
+            {
+                await after.Registry.WaitForInitialEnumerationAsync(cts.Token);
+                return !created.Any(id => after.Registry.Current.GetNode(id) is not null);
+            },
+            TimeSpan.FromSeconds(20),
+            cts.Token
+        );
 
-        Assert.IsTrue(clean, "a client connecting after the churn still saw nodes that had been removed");
+        Assert.IsTrue(
+            clean,
+            "a client connecting after the churn still saw nodes that had been removed"
+        );
     }
 
     [TestMethod]
@@ -518,7 +678,8 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
         {
             Client doomed = await ConnectAsync($"pwnet-doomed-{round}", cts.Token);
 
-            PipeWireNode n = await doomed.Registry.CreateVirtualSink("Doomed")
+            PipeWireNode n = await doomed
+                .Registry.CreateVirtualSink("Doomed")
                 .WithName(Unique("pwnet_doomed"))
                 .ExecuteAsync(cts.Token);
 
@@ -531,10 +692,19 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
             Task<float?> reading = control.GetVolumeAsync(cts.Token);
             await doomed.DisposeAsync();
 
-            try { await reading.WaitAsync(TimeSpan.FromSeconds(15), cts.Token); }
-            catch (ObjectDisposedException) { /* the expected outcome. */ }
-            catch (Exception e) when (e is InvalidOperationException or PipeWireException) { /* the connection went while the request was open. */ }
-            catch (OperationCanceledException) { /* likewise. */ }
+            try
+            {
+                await reading.WaitAsync(TimeSpan.FromSeconds(15), cts.Token);
+            }
+            catch (ObjectDisposedException)
+            { /* the expected outcome. */
+            }
+            catch (Exception e) when (e is InvalidOperationException or PipeWireException)
+            { /* the connection went while the request was open. */
+            }
+            catch (OperationCanceledException)
+            { /* likewise. */
+            }
 
             await control.DisposeAsync();
         }
@@ -542,14 +712,20 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
         // The survivor is still usable, and the daemon's cleanup of the dead clients' nodes has
         // reached it.
         Assert.IsTrue(
-            await EventuallyAsync(async () =>
-            {
-                await survivor.Registry.WaitForInitialEnumerationAsync(cts.Token);
-                return !abandoned.Any(id => survivor.Registry.Current.GetNode(id) is not null);
-            }, TimeSpan.FromSeconds(25), cts.Token),
-            "nodes owned by clients that went away stayed in the surviving client's graph");
+            await EventuallyAsync(
+                async () =>
+                {
+                    await survivor.Registry.WaitForInitialEnumerationAsync(cts.Token);
+                    return !abandoned.Any(id => survivor.Registry.Current.GetNode(id) is not null);
+                },
+                TimeSpan.FromSeconds(25),
+                cts.Token
+            ),
+            "nodes owned by clients that went away stayed in the surviving client's graph"
+        );
 
-        PipeWireNode fresh = await survivor.Registry.CreateVirtualSink("Survivor")
+        PipeWireNode fresh = await survivor
+            .Registry.CreateVirtualSink("Survivor")
             .WithName(Unique("pwnet_survivor"))
             .ExecuteAsync(cts.Token);
 

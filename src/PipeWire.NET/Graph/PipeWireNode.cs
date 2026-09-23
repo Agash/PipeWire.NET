@@ -22,7 +22,8 @@ public sealed record PipeWireNode : IPipeWireObject
         string? ObjectPath = null,
         int? DriverPriority = null,
         int? SessionPriority = null,
-        PipeWireProperties? Properties = null)
+        PipeWireProperties? Properties = null
+    )
     {
         this.Properties = Properties ?? PipeWireProperties.Empty;
         this.ObjectSerial = this.Properties.Serial;

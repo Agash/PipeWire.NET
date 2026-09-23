@@ -22,7 +22,8 @@ public static class SessionHygiene
     {
         foreach (string prefix in TestKeyPrefixes)
         {
-            if (key.StartsWith(prefix, StringComparison.Ordinal)) return true;
+            if (key.StartsWith(prefix, StringComparison.Ordinal))
+                return true;
         }
 
         return false;
@@ -31,12 +32,15 @@ public static class SessionHygiene
     [AssemblyCleanup]
     public static async Task RemoveOurMetadataKeysAsync()
     {
-        if (!OperatingSystem.IsLinux()) return;
+        if (!OperatingSystem.IsLinux())
+            return;
 
         // Nothing to clean after a run that never had a daemon, and connecting only to find that
         // out costs the whole 30-second budget on a host that has none. The unit leg runs here too.
-        if (Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is not { Length: > 0 } runtimeDir
-            || !Directory.EnumerateFiles(runtimeDir, "pipewire-*").Any())
+        if (
+            Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is not { Length: > 0 } runtimeDir
+            || !Directory.EnumerateFiles(runtimeDir, "pipewire-*").Any()
+        )
         {
             return;
         }
@@ -44,13 +48,17 @@ public static class SessionHygiene
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         try
         {
-            await using var ctx = new PipeWireContext("pwnet-hygiene", ConsoleTestLoggerFactory.Instance);
+            await using var ctx = new PipeWireContext(
+                "pwnet-hygiene",
+                ConsoleTestLoggerFactory.Instance
+            );
             await ctx.StartAsync(cts.Token);
             await using var registry = new PipeWireRegistry(ctx);
             await registry.WaitForInitialEnumerationAsync(cts.Token);
 
             PipeWireMetadataProxy? store = registry.BindMetadata("default");
-            if (store is null) return;
+            if (store is null)
+                return;
 
             await using (store)
             {
@@ -58,13 +66,18 @@ public static class SessionHygiene
 
                 foreach (PipeWireMetadataEntry entry in store.Entries)
                 {
-                    if (!IsOurs(entry.Key)) continue;
+                    if (!IsOurs(entry.Key))
+                        continue;
 
                     // A null value is the removal. One key failing to clear must not stop the rest.
                     try
                     {
-                        await store.SetAsync(entry.Key, null, subject: entry.Subject,
-                            cancellationToken: cts.Token);
+                        await store.SetAsync(
+                            entry.Key,
+                            null,
+                            subject: entry.Subject,
+                            cancellationToken: cts.Token
+                        );
                     }
                     catch (PipeWireException)
                     {

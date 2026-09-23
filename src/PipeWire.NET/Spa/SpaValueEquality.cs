@@ -17,10 +17,12 @@ internal static class SpaValueEquality
     /// <summary>Compares two arrays element by element, treating default and empty as equal.</summary>
     internal static bool SequenceEqual<T>(ImmutableArray<T> left, ImmutableArray<T>? right)
     {
-        if (right is not { } other) return false;
+        if (right is not { } other)
+            return false;
         if (left.IsDefaultOrEmpty || other.IsDefaultOrEmpty)
             return left.IsDefaultOrEmpty && other.IsDefaultOrEmpty;
-        if (left.Length != other.Length) return false;
+        if (left.Length != other.Length)
+            return false;
 
         for (int i = 0; i < left.Length; i++)
         {
@@ -39,7 +41,8 @@ internal static class SpaValueEquality
     /// </remarks>
     internal static int Combine<T>(ImmutableArray<T> values)
     {
-        if (values.IsDefaultOrEmpty) return 0;
+        if (values.IsDefaultOrEmpty)
+            return 0;
 
         var hash = new HashCode();
         hash.Add(values.Length);

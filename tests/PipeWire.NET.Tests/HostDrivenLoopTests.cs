@@ -62,7 +62,10 @@ public sealed partial class HostDrivenLoopTests
         RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
 
-        await using var ctx = new PipeWireContext("pwnet-hostloop", ConsoleTestLoggerFactory.Instance)
+        await using var ctx = new PipeWireContext(
+            "pwnet-hostloop",
+            ConsoleTestLoggerFactory.Instance
+        )
         {
             DriveExternally = true,
         };
@@ -91,8 +94,7 @@ public sealed partial class HostDrivenLoopTests
                 var pfd = new PollFd { Fd = fd, Events = PollIn };
                 if (Poll(ref pfd, 1, 50) > 0 && (pfd.Revents & PollIn) != 0)
                 {
-                    Assert.IsTrue(
-                        ctx.IterateLoop(0) >= 0, "iterating the loop failed");
+                    Assert.IsTrue(ctx.IterateLoop(0) >= 0, "iterating the loop failed");
 
                     iterations++;
                 }
@@ -101,22 +103,25 @@ public sealed partial class HostDrivenLoopTests
                 cts.Token.ThrowIfCancellationRequested();
             }
 
-            Assert.IsTrue(iterations > 0, "the loop descriptor never signalled, so nothing was pumped");
+            Assert.IsTrue(
+                iterations > 0,
+                "the loop descriptor never signalled, so nothing was pumped"
+            );
 
             Assert.IsTrue(
                 graph.Nodes.Any(),
-                "the graph never filled, so the host's pumping delivered no daemon events");
+                "the graph never filled, so the host's pumping delivered no daemon events"
+            );
 
             // The whole point: the events arrived on the thread that pumped, not a PipeWire one.
-            Assert.IsTrue(
-                callbackThreads.Count > 0,
-                "no graph change was observed at all");
+            Assert.IsTrue(callbackThreads.Count > 0, "no graph change was observed at all");
 
             CollectionAssert.AreEquivalent(
                 new[] { drivingThread },
                 callbackThreads.ToArray(),
                 "events were dispatched on a thread other than the one driving the loop, so a UI "
-                + "host would still have to marshal");
+                    + "host would still have to marshal"
+            );
         }
         finally
         {
@@ -138,7 +143,10 @@ public sealed partial class HostDrivenLoopTests
         RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
-        await using var ctx = new PipeWireContext("pwnet-hostloop-refuse", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-hostloop-refuse",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         Assert.ThrowsExactly<InvalidOperationException>(() => ctx.IterateLoop());

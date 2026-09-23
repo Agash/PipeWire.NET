@@ -28,12 +28,18 @@ public sealed class SpaPodChoiceRoundTripTests : PipeWireTestBase
         build(ref builder);
         builder.Pop();
 
-        Assert.IsTrue(SpaPod.TryParse(builder.GetPod(), out SpaValue? parsed),
-            "the builder wrote a pod the parser rejects");
+        Assert.IsTrue(
+            SpaPod.TryParse(builder.GetPod(), out SpaValue? parsed),
+            "the builder wrote a pod the parser rejects"
+        );
 
         var obj = parsed as SpaObject;
         Assert.IsNotNull(obj, "the pod did not read back as an object");
-        Assert.AreEqual(1, obj!.Properties.Length, "expected exactly the one property that was written");
+        Assert.AreEqual(
+            1,
+            obj!.Properties.Length,
+            "expected exactly the one property that was written"
+        );
 
         return obj.Properties[0];
     }
@@ -41,7 +47,10 @@ public sealed class SpaPodChoiceRoundTripTests : PipeWireTestBase
     private static SpaChoice AsChoice(SpaPodProperty property)
     {
         var choice = property.Value as SpaChoice;
-        Assert.IsNotNull(choice, $"the property read back as {property.Value.GetType().Name}, not a choice");
+        Assert.IsNotNull(
+            choice,
+            $"the property read back as {property.Value.GetType().Name}, not a choice"
+        );
         return choice!;
     }
 
@@ -52,8 +61,15 @@ public sealed class SpaPodChoiceRoundTripTests : PipeWireTestBase
         // rest are what may be selected, so the default appears twice. Writing it once leaves a
         // default with no alternatives, which is a negotiation that fails with "no more input
         // formats" rather than an error anybody can read.
-        SpaPodProperty p = RoundTrip((ref SpaPodBuilder b) =>
-            b.AddChoiceEnum(SpaFormat.VideoFormat, SpaVideoFormat.Bgra, SpaVideoFormat.Rgba, SpaVideoFormat.Nv12));
+        SpaPodProperty p = RoundTrip(
+            (ref SpaPodBuilder b) =>
+                b.AddChoiceEnum(
+                    SpaFormat.VideoFormat,
+                    SpaVideoFormat.Bgra,
+                    SpaVideoFormat.Rgba,
+                    SpaVideoFormat.Nv12
+                )
+        );
 
         SpaChoice choice = AsChoice(p);
         Assert.AreEqual(SpaChoiceType.Enum, choice.Kind);
@@ -63,10 +79,13 @@ public sealed class SpaPodChoiceRoundTripTests : PipeWireTestBase
             new[]
             {
                 (uint)SpaVideoFormat.Bgra,
-                (uint)SpaVideoFormat.Bgra, (uint)SpaVideoFormat.Rgba, (uint)SpaVideoFormat.Nv12,
+                (uint)SpaVideoFormat.Bgra,
+                (uint)SpaVideoFormat.Rgba,
+                (uint)SpaVideoFormat.Nv12,
             },
             (uint[])[.. choice.Alternatives.Cast<SpaId>().Select(v => v.Value)],
-            "the default must lead, and every offered value must follow it in order");
+            "the default must lead, and every offered value must follow it in order"
+        );
     }
 
     [TestMethod]
@@ -74,8 +93,9 @@ public sealed class SpaPodChoiceRoundTripTests : PipeWireTestBase
     {
         long[] modifiers = [0x0100000000000001L, 0x0100000000000002L, 0L];
 
-        SpaPodProperty p = RoundTrip((ref SpaPodBuilder b) =>
-            b.AddChoiceEnumLong(SpaFormat.VideoModifier, modifiers));
+        SpaPodProperty p = RoundTrip(
+            (ref SpaPodBuilder b) => b.AddChoiceEnumLong(SpaFormat.VideoModifier, modifiers)
+        );
 
         SpaChoice choice = AsChoice(p);
         Assert.AreEqual(SpaChoiceType.Enum, choice.Kind);
@@ -83,7 +103,8 @@ public sealed class SpaPodChoiceRoundTripTests : PipeWireTestBase
         CollectionAssert.AreEqual(
             (long[])[modifiers[0], .. modifiers],
             (long[])[.. choice.Alternatives.Cast<SpaLong>().Select(v => v.Value)],
-            "a single modifier written once would be a default with nothing to select");
+            "a single modifier written once would be a default with nothing to select"
+        );
     }
 
     [TestMethod]
@@ -94,8 +115,9 @@ public sealed class SpaPodChoiceRoundTripTests : PipeWireTestBase
         // it survives.
         SpaPodPropFlags flags = SpaPodPropFlags.Mandatory | SpaPodPropFlags.DontFixate;
 
-        SpaPodProperty p = RoundTrip((ref SpaPodBuilder b) =>
-            b.AddChoiceEnumLong(SpaFormat.VideoModifier, [1L, 2L], flags));
+        SpaPodProperty p = RoundTrip(
+            (ref SpaPodBuilder b) => b.AddChoiceEnumLong(SpaFormat.VideoModifier, [1L, 2L], flags)
+        );
 
         Assert.AreEqual(flags, p.Flags, "the property flags did not survive the round trip");
     }
@@ -103,8 +125,10 @@ public sealed class SpaPodChoiceRoundTripTests : PipeWireTestBase
     [TestMethod]
     public void ChoiceRangeOverInts_ReadsBackAsDefaultMinMax()
     {
-        SpaPodProperty p = RoundTrip((ref SpaPodBuilder b) =>
-            b.AddChoiceRangeInt(SpaFormat.VideoFormat, def: 44100, min: 8000, max: 192000));
+        SpaPodProperty p = RoundTrip(
+            (ref SpaPodBuilder b) =>
+                b.AddChoiceRangeInt(SpaFormat.VideoFormat, def: 44100, min: 8000, max: 192000)
+        );
 
         SpaChoice choice = AsChoice(p);
         Assert.AreEqual(SpaChoiceType.Range, choice.Kind);
@@ -112,7 +136,8 @@ public sealed class SpaPodChoiceRoundTripTests : PipeWireTestBase
         CollectionAssert.AreEqual(
             new[] { 44100, 8000, 192000 },
             (int[])[.. choice.Alternatives.Cast<SpaInt>().Select(v => v.Value)],
-            "Range is three values in the order default, min, max");
+            "Range is three values in the order default, min, max"
+        );
     }
 
     [TestMethod]
@@ -120,21 +145,28 @@ public sealed class SpaPodChoiceRoundTripTests : PipeWireTestBase
     {
         // The header documents Flags as carrying its flags in the first value, singular, unlike
         // Range and Enum.
-        SpaPodProperty p = RoundTrip((ref SpaPodBuilder b) =>
-            b.AddChoiceFlagsInt(SpaFormat.VideoFormat, 0b1011));
+        SpaPodProperty p = RoundTrip(
+            (ref SpaPodBuilder b) => b.AddChoiceFlagsInt(SpaFormat.VideoFormat, 0b1011)
+        );
 
         SpaChoice choice = AsChoice(p);
         Assert.AreEqual(SpaChoiceType.Flags, choice.Kind);
         Assert.AreEqual(SpaType.Int, choice.ChildType);
-        Assert.AreEqual(1, choice.Alternatives.Length, "Flags carries one value, not a default and a mask");
+        Assert.AreEqual(
+            1,
+            choice.Alternatives.Length,
+            "Flags carries one value, not a default and a mask"
+        );
         Assert.AreEqual(0b1011, ((SpaInt)choice.Alternatives[0]).Value);
     }
 
     [TestMethod]
     public void ChoiceRangeOverRectangles_ReadsBackAsDefaultMinMax()
     {
-        SpaPodProperty p = RoundTrip((ref SpaPodBuilder b) =>
-            b.AddChoiceRangeRectangle(SpaFormat.VideoSize, 1920, 1080, 320, 240, 3840, 2160));
+        SpaPodProperty p = RoundTrip(
+            (ref SpaPodBuilder b) =>
+                b.AddChoiceRangeRectangle(SpaFormat.VideoSize, 1920, 1080, 320, 240, 3840, 2160)
+        );
 
         SpaChoice choice = AsChoice(p);
         Assert.AreEqual(SpaChoiceType.Range, choice.Kind);
@@ -150,8 +182,10 @@ public sealed class SpaPodChoiceRoundTripTests : PipeWireTestBase
     [TestMethod]
     public void ChoiceRangeOverFractions_ReadsBackAsDefaultMinMax()
     {
-        SpaPodProperty p = RoundTrip((ref SpaPodBuilder b) =>
-            b.AddChoiceRangeFraction(SpaFormat.VideoFramerate, 30, 1, 1, 1, 240, 1));
+        SpaPodProperty p = RoundTrip(
+            (ref SpaPodBuilder b) =>
+                b.AddChoiceRangeFraction(SpaFormat.VideoFramerate, 30, 1, 1, 1, 240, 1)
+        );
 
         SpaChoice choice = AsChoice(p);
         Assert.AreEqual(SpaChoiceType.Range, choice.Kind);
@@ -176,13 +210,15 @@ public sealed class SpaPodChoiceRoundTripTests : PipeWireTestBase
         {
             long[] values = [.. Enumerable.Range(0, count).Select(_ => (long)random.Next())];
 
-            SpaPodProperty p = RoundTrip((ref SpaPodBuilder b) =>
-                b.AddChoiceEnumLong(SpaFormat.VideoModifier, values));
+            SpaPodProperty p = RoundTrip(
+                (ref SpaPodBuilder b) => b.AddChoiceEnumLong(SpaFormat.VideoModifier, values)
+            );
 
             CollectionAssert.AreEqual(
                 (long[])[values[0], .. values],
                 (long[])[.. AsChoice(p).Alternatives.Cast<SpaLong>().Select(v => v.Value)],
-                $"a choice of {count} values did not survive");
+                $"a choice of {count} values did not survive"
+            );
         }
     }
 
@@ -206,14 +242,21 @@ public sealed class SpaPodChoiceRoundTripTests : PipeWireTestBase
         Assert.IsTrue(SpaPod.TryParse(builder.GetPod(), out SpaValue? parsed));
         var obj = (SpaObject)parsed!;
 
-        Assert.AreEqual(5, obj.Properties.Length, "a property was lost, so a choice reported the wrong size");
+        Assert.AreEqual(
+            5,
+            obj.Properties.Length,
+            "a property was lost, so a choice reported the wrong size"
+        );
 
         var size = obj.Properties[2].Value as SpaRectangle;
         Assert.IsNotNull(size, "the property after a choice did not read back as itself");
         Assert.AreEqual((1920u, 1080u), (size!.Width, size.Height));
 
         var subtype = obj.Properties[4].Value as SpaId;
-        Assert.IsNotNull(subtype, "the property after the second choice did not read back as itself");
+        Assert.IsNotNull(
+            subtype,
+            "the property after the second choice did not read back as itself"
+        );
         Assert.AreEqual((uint)SpaMediaSubtype.Raw, subtype!.Value);
     }
 }

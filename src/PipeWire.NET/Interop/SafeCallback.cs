@@ -17,10 +17,12 @@ internal static class SafeCallback
     internal static void Raise<TDelegate>(
         TDelegate? handlers,
         Action<TDelegate> invoke,
-        Action<Exception> onFault)
+        Action<Exception> onFault
+    )
         where TDelegate : Delegate
     {
-        if (handlers is null) return;
+        if (handlers is null)
+            return;
 
         foreach (Delegate handler in handlers.GetInvocationList())
         {
@@ -31,8 +33,13 @@ internal static class SafeCallback
             catch (Exception ex)
             {
                 // The reporter runs on the same native frame, so it has the same obligation.
-                try { onFault(ex); }
-                catch (Exception) { /* Deliberately not logged: nothing left that could report it. */ }
+                try
+                {
+                    onFault(ex);
+                }
+                catch (Exception)
+                { /* Deliberately not logged: nothing left that could report it. */
+                }
             }
         }
     }
@@ -53,10 +60,12 @@ internal static class SafeCallback
         TDelegate? handlers,
         TState state,
         Action<TDelegate, TState> invoke,
-        Action<TState, Exception> onFault)
+        Action<TState, Exception> onFault
+    )
         where TDelegate : Delegate
     {
-        if (handlers is null) return;
+        if (handlers is null)
+            return;
 
         foreach (Delegate handler in handlers.GetInvocationList())
         {
@@ -66,8 +75,13 @@ internal static class SafeCallback
             }
             catch (Exception ex)
             {
-                try { onFault(state, ex); }
-                catch (Exception) { /* Deliberately not logged: nothing left that could report it. */ }
+                try
+                {
+                    onFault(state, ex);
+                }
+                catch (Exception)
+                { /* Deliberately not logged: nothing left that could report it. */
+                }
             }
         }
     }

@@ -30,7 +30,9 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken cancellationToken)
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -40,7 +42,10 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     }
 
     private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry, Func<PipeWireGraphSnapshot, bool> until, CancellationToken cancellationToken)
+        PipeWireRegistry registry,
+        Func<PipeWireGraphSnapshot, bool> until,
+        CancellationToken cancellationToken
+    )
     {
         await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
             if (until(graph))
@@ -54,7 +59,10 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-throwall", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-throwall",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
@@ -62,14 +70,19 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
             // If any of them escapes, this process is gone.
             var raised = new Dictionary<string, int>
             {
-                ["NodeAdded"] = 0, ["PortAdded"] = 0, ["LinkAdded"] = 0,
-                ["NodeRemoved"] = 0, ["PortRemoved"] = 0, ["LinkRemoved"] = 0,
+                ["NodeAdded"] = 0,
+                ["PortAdded"] = 0,
+                ["LinkAdded"] = 0,
+                ["NodeRemoved"] = 0,
+                ["PortRemoved"] = 0,
+                ["LinkRemoved"] = 0,
                 ["GraphChanged"] = 0,
             };
 
             void Bang(string which)
             {
-                lock (raised) raised[which]++;
+                lock (raised)
+                    raised[which]++;
                 throw new InvalidOperationException($"{which} handler is hostile");
             }
 
@@ -81,18 +94,36 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
             registry.LinkRemoved += _ => Bang("LinkRemoved");
             registry.GraphChanged += (_, _) => Bang("GraphChanged");
 
-            PipeWireNode a = await registry.CreateVirtualSinkAsync("HA", "pwnet_hostile_a", cts.Token);
-            PipeWireNode b = await registry.CreateVirtualSinkAsync("HB", "pwnet_hostile_b", cts.Token);
+            PipeWireNode a = await registry.CreateVirtualSinkAsync(
+                "HA",
+                "pwnet_hostile_a",
+                cts.Token
+            );
+            PipeWireNode b = await registry.CreateVirtualSinkAsync(
+                "HB",
+                "pwnet_hostile_b",
+                cts.Token
+            );
 
             PipeWireGraphSnapshot ready = await WaitForAsync(
                 registry,
-                g => g.GetPortsForNode(a.NodeId).Length == 4 && g.GetPortsForNode(b.NodeId).Length == 4,
-                cts.Token);
+                g =>
+                    g.GetPortsForNode(a.NodeId).Length == 4
+                    && g.GetPortsForNode(b.NodeId).Length == 4,
+                cts.Token
+            );
 
             PipeWireLink link = await registry.CreateLinkAsync(
-                ready.GetPortsForNode(a.NodeId, PipeWirePortDirection.Out).OrderBy(p => p.PortId).First(),
-                ready.GetPortsForNode(b.NodeId, PipeWirePortDirection.In).OrderBy(p => p.PortId).First(),
-                cts.Token);
+                ready
+                    .GetPortsForNode(a.NodeId, PipeWirePortDirection.Out)
+                    .OrderBy(p => p.PortId)
+                    .First(),
+                ready
+                    .GetPortsForNode(b.NodeId, PipeWirePortDirection.In)
+                    .OrderBy(p => p.PortId)
+                    .First(),
+                cts.Token
+            );
 
             await registry.DestroyGlobalAsync(link.LinkId, cts.Token);
             await registry.DestroyGlobalAsync(a.NodeId, cts.Token);
@@ -100,16 +131,26 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
 
             PipeWireGraphSnapshot end = await WaitForAsync(
                 registry,
-                g => g.GetNode(a.NodeId) is null && g.GetNode(b.NodeId) is null && g.GetLink(link.LinkId) is null,
-                cts.Token);
+                g =>
+                    g.GetNode(a.NodeId) is null
+                    && g.GetNode(b.NodeId) is null
+                    && g.GetLink(link.LinkId) is null,
+                cts.Token
+            );
 
             lock (raised)
             {
                 foreach ((string which, int count) in raised)
-                    Assert.IsTrue(count > 0, $"{which} never fired, so its throwing path was not exercised");
+                    Assert.IsTrue(
+                        count > 0,
+                        $"{which} never fired, so its throwing path was not exercised"
+                    );
             }
 
-            Assert.IsNull(end.GetNode(a.NodeId), "removals must still land despite hostile handlers");
+            Assert.IsNull(
+                end.GetNode(a.NodeId),
+                "removals must still land despite hostile handlers"
+            );
             Assert.IsNull(end.GetLink(link.LinkId));
         }
     }
@@ -119,7 +160,10 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-consistent", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-consistent",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
@@ -127,9 +171,16 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
             registry.GraphChanged += (_, _) => throw new InvalidOperationException("no");
             registry.PortAdded += _ => throw new InvalidOperationException("no");
 
-            PipeWireNode node = await registry.CreateVirtualSinkAsync("C", "pwnet_consistent", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync(
+                "C",
+                "pwnet_consistent",
+                cts.Token
+            );
             PipeWireGraphSnapshot graph = await WaitForAsync(
-                registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
+                registry,
+                g => g.GetPortsForNode(node.NodeId).Length == 4,
+                cts.Token
+            );
 
             // A handler failing must not leave a partially indexed snapshot behind.
             foreach (PipeWirePort port in graph.GetPortsForNode(node.NodeId))
@@ -146,7 +197,10 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-starve", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-starve",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
@@ -163,13 +217,26 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
             registry.PortAdded += _ => throw new InvalidOperationException("hostile");
             registry.PortAdded += port => seenPorts.Add(port.NodeId);
 
-            PipeWireNode node = await registry.CreateVirtualSinkAsync("SV", "pwnet_starve", cts.Token);
-            await WaitForAsync(registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync(
+                "SV",
+                "pwnet_starve",
+                cts.Token
+            );
+            await WaitForAsync(
+                registry,
+                g => g.GetPortsForNode(node.NodeId).Length == 4,
+                cts.Token
+            );
 
-            Assert.IsTrue(Volatile.Read(ref good) > 0,
-                "a subscriber registered after a throwing one still has to be called");
-            Assert.AreEqual(4, seenPorts.Count(id => id == node.NodeId),
-                "every port event for this node must reach the well-behaved subscriber");
+            Assert.IsTrue(
+                Volatile.Read(ref good) > 0,
+                "a subscriber registered after a throwing one still has to be called"
+            );
+            Assert.AreEqual(
+                4,
+                seenPorts.Count(id => id == node.NodeId),
+                "every port event for this node must reach the well-behaved subscriber"
+            );
         }
     }
 
@@ -178,7 +245,10 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-watchstarve", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-watchstarve",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
@@ -187,9 +257,16 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
             // hostile handler registered first must not stop the stream.
             registry.GraphChanged += (_, _) => throw new InvalidOperationException("hostile");
 
-            PipeWireNode node = await registry.CreateVirtualSinkAsync("WS", "pwnet_watchstarve", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync(
+                "WS",
+                "pwnet_watchstarve",
+                cts.Token
+            );
             PipeWireGraphSnapshot graph = await WaitForAsync(
-                registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
+                registry,
+                g => g.GetPortsForNode(node.NodeId).Length == 4,
+                cts.Token
+            );
 
             Assert.AreEqual(4, graph.GetPortsForNode(node.NodeId).Length);
         }
@@ -200,26 +277,43 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-suicidal", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-suicidal",
+            cts.Token
+        );
 
         await using (context)
         {
             // Disposal from a callback means taking the loop lock while already holding it. The
             // mutex is recursive, so this is legal; the point is that nothing hangs or aborts.
-            var disposedFromHandler = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var disposedFromHandler = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously
+            );
             var once = 0;
 
             registry.NodeAdded += node =>
             {
-                if (node.NodeName != "pwnet_suicidal") return;
-                if (Interlocked.Exchange(ref once, 1) != 0) return;
+                if (node.NodeName != "pwnet_suicidal")
+                    return;
+                if (Interlocked.Exchange(ref once, 1) != 0)
+                    return;
 
                 // Fire and forget: awaiting from the loop thread would be the deadlock.
-                _ = Task.Run(async () =>
-                {
-                    try { await registry.DisposeAsync(); disposedFromHandler.TrySetResult(); }
-                    catch (Exception ex) { disposedFromHandler.TrySetException(ex); }
-                }, CancellationToken.None);
+                _ = Task.Run(
+                    async () =>
+                    {
+                        try
+                        {
+                            await registry.DisposeAsync();
+                            disposedFromHandler.TrySetResult();
+                        }
+                        catch (Exception ex)
+                        {
+                            disposedFromHandler.TrySetException(ex);
+                        }
+                    },
+                    CancellationToken.None
+                );
             };
 
             try
@@ -235,7 +329,8 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
 
             Assert.ThrowsExactly<ObjectDisposedException>(
                 () => registry.DestroyGlobalAsync(1, CancellationToken.None),
-                "the registry really is disposed afterwards");
+                "the registry really is disposed afterwards"
+            );
         }
     }
 
@@ -244,26 +339,38 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-dirs", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-dirs",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
         {
             PipeWireNode node = await registry.CreateVirtualSinkAsync("D", "pwnet_dirs", cts.Token);
             PipeWireGraphSnapshot graph = await WaitForAsync(
-                registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
+                registry,
+                g => g.GetPortsForNode(node.NodeId).Length == 4,
+                cts.Token
+            );
 
-            PipeWirePort output = graph.GetPortsForNode(node.NodeId, PipeWirePortDirection.Out).First();
-            PipeWirePort input = graph.GetPortsForNode(node.NodeId, PipeWirePortDirection.In).First();
+            PipeWirePort output = graph
+                .GetPortsForNode(node.NodeId, PipeWirePortDirection.Out)
+                .First();
+            PipeWirePort input = graph
+                .GetPortsForNode(node.NodeId, PipeWirePortDirection.In)
+                .First();
 
             // An input in the output slot, and an output in the input slot, are separate checks and
             // each must name the argument at fault rather than failing generically.
-            ArgumentException swapped = Assert.ThrowsExactly<ArgumentException>(
-                () => registry.CreateLink(input, output));
+            ArgumentException swapped = Assert.ThrowsExactly<ArgumentException>(() =>
+                registry.CreateLink(input, output)
+            );
             Assert.AreEqual("output", swapped.ParamName);
 
-            ArgumentException badInput = Assert.ThrowsExactly<ArgumentException>(
-                () => registry.CreateLink(output, output));
+            ArgumentException badInput = Assert.ThrowsExactly<ArgumentException>(() =>
+                registry.CreateLink(output, output)
+            );
             Assert.AreEqual("input", badInput.ParamName);
         }
     }
@@ -273,15 +380,27 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-nullports", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-nullports",
+            cts.Token
+        );
 
         await using (context)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSinkAsync("N", "pwnet_nullports", cts.Token);
+            PipeWireNode node = await registry.CreateVirtualSinkAsync(
+                "N",
+                "pwnet_nullports",
+                cts.Token
+            );
             PipeWireGraphSnapshot graph = await WaitForAsync(
-                registry, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
-            PipeWirePort real = graph.GetPortsForNode(node.NodeId, PipeWirePortDirection.Out).First();
+                registry,
+                g => g.GetPortsForNode(node.NodeId).Length == 4,
+                cts.Token
+            );
+            PipeWirePort real = graph
+                .GetPortsForNode(node.NodeId, PipeWirePortDirection.Out)
+                .First();
 
             Assert.ThrowsExactly<ArgumentNullException>(() => registry.CreateLink(null!, real));
             Assert.ThrowsExactly<ArgumentNullException>(() => registry.CreateLink(real, null!));
@@ -293,7 +412,10 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync("pwnet-afterdispose", cts.Token);
+        (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-afterdispose",
+            cts.Token
+        );
 
         await using (context)
         {
@@ -301,14 +423,19 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
             await registry.DisposeAsync();
 
             // Reads keep working: the snapshot is immutable and holding it is legal after disposal.
-            Assert.AreEqual(last.Version, registry.Current.Version,
-                "the last published snapshot survives disposal");
+            Assert.AreEqual(
+                last.Version,
+                registry.Current.Version,
+                "the last published snapshot survives disposal"
+            );
 
             // Mutations do not.
-            Assert.ThrowsExactly<ObjectDisposedException>(
-                () => registry.DestroyGlobalAsync(1, CancellationToken.None));
-            await Assert.ThrowsExactlyAsync<ObjectDisposedException>(
-                () => registry.CreateVirtualSinkAsync("X", "pwnet_after", CancellationToken.None));
+            Assert.ThrowsExactly<ObjectDisposedException>(() =>
+                registry.DestroyGlobalAsync(1, CancellationToken.None)
+            );
+            await Assert.ThrowsExactlyAsync<ObjectDisposedException>(() =>
+                registry.CreateVirtualSinkAsync("X", "pwnet_after", CancellationToken.None)
+            );
         }
     }
 }

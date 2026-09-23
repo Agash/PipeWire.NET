@@ -1,4 +1,3 @@
-
 namespace PipeWire.NET.Media;
 
 /// <summary>

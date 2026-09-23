@@ -72,8 +72,11 @@ public sealed unsafe class SpaDictBuilderTests : PipeWireTestBase
         spa_dict dict = builder.Build();
 
         Assert.AreEqual("value", Read(ref dict, "plain"u8));
-        Assert.AreEqual("vålue", Read(ref dict, "nøn-ascii"u8),
-            "a key with a multi-byte character did not round trip");
+        Assert.AreEqual(
+            "vålue",
+            Read(ref dict, "nøn-ascii"u8),
+            "a key with a multi-byte character did not round trip"
+        );
         Assert.AreEqual("4294967295", Read(ref dict, "id"u8));
     }
 
@@ -169,8 +172,11 @@ public sealed unsafe class SpaDictBuilderTests : PipeWireTestBase
         builder.Add("empty"u8, ""u8);
         spa_dict dict = builder.Build();
 
-        Assert.AreEqual(string.Empty, Read(ref dict, "empty"u8),
-            "the key must be present with an empty value, not absent");
+        Assert.AreEqual(
+            string.Empty,
+            Read(ref dict, "empty"u8),
+            "the key must be present with an empty value, not absent"
+        );
     }
 
     [TestMethod]
@@ -201,8 +207,11 @@ public sealed unsafe class SpaDictBuilderTests : PipeWireTestBase
 
         spa_dict dict = builder.Build();
 
-        Assert.AreEqual("one", Read(ref dict, "first"u8),
-            "the first value must stop at its own terminator, not run into the next key");
+        Assert.AreEqual(
+            "one",
+            Read(ref dict, "first"u8),
+            "the first value must stop at its own terminator, not run into the next key"
+        );
         Assert.AreEqual("two", Read(ref dict, "second"u8));
     }
 

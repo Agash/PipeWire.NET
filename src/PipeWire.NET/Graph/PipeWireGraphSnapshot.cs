@@ -30,7 +30,8 @@ public sealed class PipeWireGraphSnapshot
         IEnumerable<PipeWireNode> nodes,
         IEnumerable<PipeWirePort> ports,
         IEnumerable<PipeWireLink> links,
-        IEnumerable<IPipeWireObject>? others = null)
+        IEnumerable<IPipeWireObject>? others = null
+    )
     {
         Version = version;
         Nodes = [.. nodes];
@@ -67,42 +68,78 @@ public sealed class PipeWireGraphSnapshot
     private object? _objectsByIdLock;
 
     private FrozenDictionary<uint, PipeWireNode> NodesById =>
-        LazyInitializer.EnsureInitialized(ref _nodesById, ref _nodesByIdLock,
-            () => Nodes.ToFrozenDictionary(static n => n.NodeId));
+        LazyInitializer.EnsureInitialized(
+            ref _nodesById,
+            ref _nodesByIdLock,
+            () => Nodes.ToFrozenDictionary(static n => n.NodeId)
+        );
 
     private FrozenDictionary<uint, PipeWirePort> PortsById =>
-        LazyInitializer.EnsureInitialized(ref _portsById, ref _portsByIdLock,
-            () => Ports.ToFrozenDictionary(static p => p.PortId));
+        LazyInitializer.EnsureInitialized(
+            ref _portsById,
+            ref _portsByIdLock,
+            () => Ports.ToFrozenDictionary(static p => p.PortId)
+        );
 
     private FrozenDictionary<uint, PipeWireLink> LinksById =>
-        LazyInitializer.EnsureInitialized(ref _linksById, ref _linksByIdLock,
-            () => Links.ToFrozenDictionary(static l => l.LinkId));
+        LazyInitializer.EnsureInitialized(
+            ref _linksById,
+            ref _linksByIdLock,
+            () => Links.ToFrozenDictionary(static l => l.LinkId)
+        );
 
     private FrozenDictionary<uint, ImmutableArray<PipeWireLink>> LinksByNode =>
-        LazyInitializer.EnsureInitialized(ref _linksByNode, ref _linksByNodeLock,
-            () => Links.SelectMany(l => new[] { (Node: l.InputNodeId, Link: l), (Node: l.OutputNodeId, Link: l) })
-                       .GroupBy(static x => x.Node)
-                       .ToFrozenDictionary(static g => g.Key,
-                                           static g => g.Select(static x => x.Link).Distinct().ToImmutableArray()));
+        LazyInitializer.EnsureInitialized(
+            ref _linksByNode,
+            ref _linksByNodeLock,
+            () =>
+                Links
+                    .SelectMany(l =>
+                        new[] { (Node: l.InputNodeId, Link: l), (Node: l.OutputNodeId, Link: l) }
+                    )
+                    .GroupBy(static x => x.Node)
+                    .ToFrozenDictionary(
+                        static g => g.Key,
+                        static g => g.Select(static x => x.Link).Distinct().ToImmutableArray()
+                    )
+        );
 
     private FrozenDictionary<uint, ImmutableArray<PipeWirePort>> PortsByNode =>
-        LazyInitializer.EnsureInitialized(ref _portsByNode, ref _portsByNodeLock,
-            () => Ports.GroupBy(static p => p.NodeId)
-                       .ToFrozenDictionary(static g => g.Key, static g => g.ToImmutableArray()));
+        LazyInitializer.EnsureInitialized(
+            ref _portsByNode,
+            ref _portsByNodeLock,
+            () =>
+                Ports
+                    .GroupBy(static p => p.NodeId)
+                    .ToFrozenDictionary(static g => g.Key, static g => g.ToImmutableArray())
+        );
 
     private FrozenDictionary<uint, ImmutableArray<PipeWireLink>> InputLinksByPort =>
-        LazyInitializer.EnsureInitialized(ref _inputLinksByPort, ref _inputLinksByPortLock,
-            () => Links.GroupBy(static l => l.InputPortId)
-                       .ToFrozenDictionary(static g => g.Key, static g => g.ToImmutableArray()));
+        LazyInitializer.EnsureInitialized(
+            ref _inputLinksByPort,
+            ref _inputLinksByPortLock,
+            () =>
+                Links
+                    .GroupBy(static l => l.InputPortId)
+                    .ToFrozenDictionary(static g => g.Key, static g => g.ToImmutableArray())
+        );
 
     private FrozenDictionary<uint, ImmutableArray<PipeWireLink>> OutputLinksByPort =>
-        LazyInitializer.EnsureInitialized(ref _outputLinksByPort, ref _outputLinksByPortLock,
-            () => Links.GroupBy(static l => l.OutputPortId)
-                       .ToFrozenDictionary(static g => g.Key, static g => g.ToImmutableArray()));
+        LazyInitializer.EnsureInitialized(
+            ref _outputLinksByPort,
+            ref _outputLinksByPortLock,
+            () =>
+                Links
+                    .GroupBy(static l => l.OutputPortId)
+                    .ToFrozenDictionary(static g => g.Key, static g => g.ToImmutableArray())
+        );
 
     private FrozenDictionary<uint, IPipeWireObject> ObjectsById =>
-        LazyInitializer.EnsureInitialized(ref _objectsById, ref _objectsByIdLock,
-            () => Objects.ToFrozenDictionary(static o => o.Id));
+        LazyInitializer.EnsureInitialized(
+            ref _objectsById,
+            ref _objectsByIdLock,
+            () => Objects.ToFrozenDictionary(static o => o.Id)
+        );
 
     /// <summary>
     /// Increases by one per published snapshot. A local counter for spotting missed publications;
@@ -142,8 +179,7 @@ public sealed class PipeWireGraphSnapshot
     public ImmutableArray<PipeWireModule> Modules => OfKind<PipeWireModule>(ref _modules);
 
     /// <summary>Every metadata store, such as <c>default</c> and <c>settings</c>.</summary>
-    public ImmutableArray<PipeWireMetadata> Metadata =>
-        OfKind<PipeWireMetadata>(ref _metadata);
+    public ImmutableArray<PipeWireMetadata> Metadata => OfKind<PipeWireMetadata>(ref _metadata);
 
     /// <summary>The daemon core, or <see langword="null"/> if it has not been seen yet.</summary>
     public PipeWireCore? Core => Single<PipeWireCore>();
@@ -176,17 +212,20 @@ public sealed class PipeWireGraphSnapshot
         where T : class, IPipeWireObject
     {
         ImmutableArray<T> current = cache;
-        if (!current.IsDefault) return current;
+        if (!current.IsDefault)
+            return current;
 
         ImmutableInterlocked.InterlockedInitialize(ref cache, [.. Objects.OfType<T>()]);
         return cache;
     }
 
-    private T? Single<T>() where T : class, IPipeWireObject
+    private T? Single<T>()
+        where T : class, IPipeWireObject
     {
         foreach (IPipeWireObject candidate in Objects)
         {
-            if (candidate is T match) return match;
+            if (candidate is T match)
+                return match;
         }
 
         return null;
@@ -214,16 +253,20 @@ public sealed class PipeWireGraphSnapshot
         LinksById.TryGetValue(id, out value);
 
     /// <summary>The device with this id, or <see langword="null"/> if the graph has none.</summary>
-    public PipeWireDevice? GetDevice(uint id) => ObjectsById.GetValueOrDefault(id) as PipeWireDevice;
+    public PipeWireDevice? GetDevice(uint id) =>
+        ObjectsById.GetValueOrDefault(id) as PipeWireDevice;
 
     /// <summary>The client with this id, or <see langword="null"/> if the graph has none.</summary>
-    public PipeWireClient? GetClient(uint id) => ObjectsById.GetValueOrDefault(id) as PipeWireClient;
+    public PipeWireClient? GetClient(uint id) =>
+        ObjectsById.GetValueOrDefault(id) as PipeWireClient;
 
     /// <summary>The factory with this id, or <see langword="null"/> if the graph has none.</summary>
-    public PipeWireFactory? GetFactory(uint id) => ObjectsById.GetValueOrDefault(id) as PipeWireFactory;
+    public PipeWireFactory? GetFactory(uint id) =>
+        ObjectsById.GetValueOrDefault(id) as PipeWireFactory;
 
     /// <summary>The module with this id, or <see langword="null"/> if the graph has none.</summary>
-    public PipeWireModule? GetModule(uint id) => ObjectsById.GetValueOrDefault(id) as PipeWireModule;
+    public PipeWireModule? GetModule(uint id) =>
+        ObjectsById.GetValueOrDefault(id) as PipeWireModule;
 
     /// <summary>The metadata store with this name, or <see langword="null"/> if there is none.</summary>
     /// <param name="name">The store name, such as <c>default</c>.</param>
@@ -241,10 +284,11 @@ public sealed class PipeWireGraphSnapshot
     /// <summary>Looks up any object by id, whatever kind it is.</summary>
     public bool TryGetObject(uint id, [NotNullWhen(true)] out IPipeWireObject? value)
     {
-        value = GetNode(id)
-                ?? (IPipeWireObject?)GetPort(id)
-                ?? GetLink(id)
-                ?? ObjectsById.GetValueOrDefault(id);
+        value =
+            GetNode(id)
+            ?? (IPipeWireObject?)GetPort(id)
+            ?? GetLink(id)
+            ?? ObjectsById.GetValueOrDefault(id);
         return value is not null;
     }
 

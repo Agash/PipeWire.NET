@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Runtime.Versioning;
-using PipeWire.NET.Graph;
 using PipeWire.NET;
+using PipeWire.NET.Graph;
 
 namespace PipeWire.NET.SampleConsole;
 
@@ -12,14 +12,17 @@ internal static class GraphCommands
 {
     public static async Task<int> ListAsync(CancellationToken cancellationToken)
     {
-        await using var session = await Session.ConnectAsync(
-            "sample-list", cancellationToken).ConfigureAwait(false);
+        await using var session = await Session
+            .ConnectAsync("sample-list", cancellationToken)
+            .ConfigureAwait(false);
         PipeWireGraphSnapshot graph = session.Registry.Current;
 
-        Console.WriteLine($"Graph version {graph.Version}: " +
-            $"{graph.Nodes.Length} nodes, {graph.Ports.Length} ports, " +
-            $"{graph.Links.Length} links, {graph.Devices.Length} devices, " +
-            $"{graph.Clients.Length} clients.");
+        Console.WriteLine(
+            $"Graph version {graph.Version}: "
+                + $"{graph.Nodes.Length} nodes, {graph.Ports.Length} ports, "
+                + $"{graph.Links.Length} links, {graph.Devices.Length} devices, "
+                + $"{graph.Clients.Length} clients."
+        );
 
         Console.WriteLine("Nodes:");
         foreach (PipeWireNode node in graph.Nodes)
@@ -28,17 +31,23 @@ internal static class GraphCommands
             foreach (PipeWirePort _ in graph.GetPortsForNode(node.NodeId))
                 ports++;
 
-            Console.WriteLine($"  [{node.NodeId,4}] {node.Description ?? node.NodeName ?? "<no name>"}");
-            Console.WriteLine($"           class={node.MediaClass ?? "?"} " +
-                $"media={node.Media} flow={node.Flow} ports={ports}");
+            Console.WriteLine(
+                $"  [{node.NodeId, 4}] {node.Description ?? node.NodeName ?? "<no name>"}"
+            );
+            Console.WriteLine(
+                $"           class={node.MediaClass ?? "?"} "
+                    + $"media={node.Media} flow={node.Flow} ports={ports}"
+            );
         }
 
         if (graph.Devices.Length > 0)
         {
             Console.WriteLine("Devices:");
             foreach (PipeWireDevice device in graph.Devices)
-                Console.WriteLine($"  [{device.Id,4}] {device.Description ?? device.DeviceName} " +
-                    $"({device.Api ?? "?"})");
+                Console.WriteLine(
+                    $"  [{device.Id, 4}] {device.Description ?? device.DeviceName} "
+                        + $"({device.Api ?? "?"})"
+                );
         }
 
         if (graph.Links.Length > 0)
@@ -47,9 +56,11 @@ internal static class GraphCommands
             foreach (PipeWireLink link in graph.Links)
             {
                 (PipeWirePort? output, PipeWirePort? input) = graph.GetEndpoints(link);
-                Console.WriteLine($"  [{link.LinkId,4}] " +
-                    $"{output?.NodeId}:{output?.PortName ?? "?"} -> " +
-                    $"{input?.NodeId}:{input?.PortName ?? "?"}");
+                Console.WriteLine(
+                    $"  [{link.LinkId, 4}] "
+                        + $"{output?.NodeId}:{output?.PortName ?? "?"} -> "
+                        + $"{input?.NodeId}:{input?.PortName ?? "?"}"
+                );
             }
         }
 
@@ -65,35 +76,46 @@ internal static class GraphCommands
         // a graph that can no longer change.
         using var lost = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        await using var session = await Session.ConnectAsync(
-            "sample-monitor", lost, cancellationToken).ConfigureAwait(false);
+        await using var session = await Session
+            .ConnectAsync("sample-monitor", lost, cancellationToken)
+            .ConfigureAwait(false);
 
         Console.WriteLine("Watching the graph; Ctrl+C stops.");
 
         // A watcher hears about every global going away. A proxy hears about its own object only,
         // which is the signal you get when you hold one object and never built a snapshot. Bound
         // here against whatever sink is present so the sample shows both in one run.
-        PipeWireNode? watched = session.Registry.Current.Nodes
-            .FirstOrDefault(n => n.MediaClass == "Audio/Sink");
+        PipeWireNode? watched = session.Registry.Current.Nodes.FirstOrDefault(n =>
+            n.MediaClass == "Audio/Sink"
+        );
 
         PipeWireNodeProxy? proxy = null;
         if (watched is not null)
         {
             proxy = session.Registry.BindNode(watched.NodeId);
             proxy.Removed += () =>
-                Console.WriteLine($"  the daemon destroyed node {watched.NodeId} ('{watched.NodeName}')");
+                Console.WriteLine(
+                    $"  the daemon destroyed node {watched.NodeId} ('{watched.NodeName}')"
+                );
 
-            Console.WriteLine($"Also watching node {watched.NodeId} ('{watched.NodeName}') for removal.");
+            Console.WriteLine(
+                $"Also watching node {watched.NodeId} ('{watched.NodeName}') for removal."
+            );
         }
 
         try
         {
-            await foreach (PipeWireGraphSnapshot graph in session.Registry
-                .WatchAsync(lost.Token).ConfigureAwait(false))
+            await foreach (
+                PipeWireGraphSnapshot graph in session
+                    .Registry.WatchAsync(lost.Token)
+                    .ConfigureAwait(false)
+            )
             {
-                Console.WriteLine($"[{graph.Version}] nodes={graph.Nodes.Length} " +
-                    $"ports={graph.Ports.Length} links={graph.Links.Length} " +
-                    $"devices={graph.Devices.Length} clients={graph.Clients.Length}");
+                Console.WriteLine(
+                    $"[{graph.Version}] nodes={graph.Nodes.Length} "
+                        + $"ports={graph.Ports.Length} links={graph.Links.Length} "
+                        + $"devices={graph.Devices.Length} clients={graph.Clients.Length}"
+                );
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -104,7 +126,8 @@ internal static class GraphCommands
         {
             if (proxy is not null)
             {
-                if (proxy.IsRemoved) Console.WriteLine("  the watched node is gone.");
+                if (proxy.IsRemoved)
+                    Console.WriteLine("  the watched node is gone.");
                 await proxy.DisposeAsync().ConfigureAwait(false);
             }
         }
@@ -122,9 +145,17 @@ internal static class GraphCommands
         float setLevel = 0;
         if (setRaw is not null)
         {
-            if (!float.TryParse(setRaw, NumberStyles.Float,
-                    CultureInfo.InvariantCulture, out setLevel)
-                || float.IsNaN(setLevel) || setLevel < 0 || setLevel > 1)
+            if (
+                !float.TryParse(
+                    setRaw,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out setLevel
+                )
+                || float.IsNaN(setLevel)
+                || setLevel < 0
+                || setLevel > 1
+            )
             {
                 Console.Error.WriteLine($"--set takes a volume from 0 to 1, not '{setRaw}'.");
                 return 2;
@@ -137,17 +168,20 @@ internal static class GraphCommands
             return 2;
         }
 
-        await using var session = await Session.ConnectAsync(
-            "sample-volume", cancellationToken).ConfigureAwait(false);
+        await using var session = await Session
+            .ConnectAsync("sample-volume", cancellationToken)
+            .ConfigureAwait(false);
 
         PipeWireNode? node = target is null
             ? await DefaultSinkNodeAsync(session, cancellationToken).ConfigureAwait(false)
             : FindNode(session, target);
         if (node is null)
         {
-            Console.Error.WriteLine(target is null
-                ? "No default sink in this session; name a node explicitly."
-                : $"No node matches '{target}'.");
+            Console.Error.WriteLine(
+                target is null
+                    ? "No default sink in this session; name a node explicitly."
+                    : $"No node matches '{target}'."
+            );
             return Program.NothingToDo;
         }
 
@@ -179,13 +213,16 @@ internal static class GraphCommands
 
     public static async Task<int> DefaultsAsync(CancellationToken cancellationToken)
     {
-        await using var session = await Session.ConnectAsync(
-            "sample-defaults", cancellationToken).ConfigureAwait(false);
+        await using var session = await Session
+            .ConnectAsync("sample-defaults", cancellationToken)
+            .ConfigureAwait(false);
 
         PipeWireMetadataProxy? store = session.Registry.BindMetadata("default");
         if (store is null)
         {
-            Console.Error.WriteLine("No 'default' metadata store; this session has no session manager.");
+            Console.Error.WriteLine(
+                "No 'default' metadata store; this session has no session manager."
+            );
             return Program.NothingToDo;
         }
 
@@ -196,7 +233,9 @@ internal static class GraphCommands
             Console.WriteLine($"Default source: {store.DefaultAudioSource?.NameValue ?? "<none>"}");
             Console.WriteLine($"Clock rate:     {Render(store.ClockRate)} Hz");
             Console.WriteLine($"Clock quantum:  {Render(store.ClockQuantum)}");
-            Console.WriteLine($"Quantum range:  {Render(store.ClockMinQuantum)}..{Render(store.ClockMaxQuantum)}");
+            Console.WriteLine(
+                $"Quantum range:  {Render(store.ClockMinQuantum)}..{Render(store.ClockMaxQuantum)}"
+            );
             Console.WriteLine($"Forced rate:    {Render(store.ClockForcedRate)}");
             Console.WriteLine($"Forced quantum: {Render(store.ClockForcedQuantum)}");
         }
@@ -206,7 +245,9 @@ internal static class GraphCommands
 
     // The default sink node: metadata names the node, the registry resolves it.
     internal static async Task<PipeWireNode?> DefaultSinkNodeAsync(
-        Session session, CancellationToken cancellationToken)
+        Session session,
+        CancellationToken cancellationToken
+    )
     {
         PipeWireMetadataProxy? store = session.Registry.BindMetadata("default");
         if (store is null)
@@ -226,8 +267,7 @@ internal static class GraphCommands
     // Numeric id first, then a case-insensitive fragment of the node or description.
     internal static PipeWireNode? FindNode(Session session, string target)
     {
-        if (uint.TryParse(target, NumberStyles.Integer,
-                CultureInfo.InvariantCulture, out uint id))
+        if (uint.TryParse(target, NumberStyles.Integer, CultureInfo.InvariantCulture, out uint id))
         {
             foreach (PipeWireNode node in session.Registry.Nodes)
             {

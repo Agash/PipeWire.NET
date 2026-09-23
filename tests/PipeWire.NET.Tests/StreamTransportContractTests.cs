@@ -45,8 +45,14 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
         {
             foreach (string line in File.ReadLines($"/proc/self/fdinfo/{fd}"))
             {
-                if (line.StartsWith("ino:", StringComparison.Ordinal)
-                    && ulong.TryParse(line.AsSpan(4).Trim(), System.Globalization.CultureInfo.InvariantCulture, out ulong ino))
+                if (
+                    line.StartsWith("ino:", StringComparison.Ordinal)
+                    && ulong.TryParse(
+                        line.AsSpan(4).Trim(),
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out ulong ino
+                    )
+                )
                 {
                     return ino;
                 }
@@ -65,8 +71,10 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
 
     private static GbmAllocator RequireGbm()
     {
-        if (!OperatingSystem.IsLinux()) Assert.Inconclusive("PipeWire is a Linux daemon.");
-        if (!File.Exists("/dev/dri/renderD128")) Assert.Inconclusive("No GPU render node.");
+        if (!OperatingSystem.IsLinux())
+            Assert.Inconclusive("PipeWire is a Linux daemon.");
+        if (!File.Exists("/dev/dri/renderD128"))
+            Assert.Inconclusive("No GPU render node.");
 
         try
         {
@@ -93,17 +101,27 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task AProducersPixels_ReachTheConsumerUnaltered()
     {
-        if (!OperatingSystem.IsLinux()) Assert.Inconclusive("PipeWire is a Linux daemon.");
+        if (!OperatingSystem.IsLinux())
+            Assert.Inconclusive("PipeWire is a Linux daemon.");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
 
-        await using var ctx = new PipeWireContext("pwnet-content", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-content",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         var produced = 0;
 
         await using var output = new PipeWireVideoOutput(
-            ctx, "pwnet-content-src", Width, Height, PixelFormat.Bgra, 30);
+            ctx,
+            "pwnet-content-src",
+            Width,
+            Height,
+            PixelFormat.Bgra,
+            30
+        );
 
         output.FillFrame += (_, pixels, stride, width, height, _) =>
         {
@@ -113,7 +131,8 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
             for (var y = 0; y < height; y++)
             {
                 Span<byte> row = pixels.Slice(y * stride, width * 4);
-                for (var x = 0; x < row.Length; x++) row[x] = (byte)(tag ^ (x & 0xFF));
+                for (var x = 0; x < row.Length; x++)
+                    row[x] = (byte)(tag ^ (x & 0xFF));
             }
 
             return true;
@@ -125,7 +144,8 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
         for (var i = 0; i < 60 && nodeId is null; i++)
         {
             nodeId = output.NodeId;
-            if (nodeId is null) await Task.Delay(50, cts.Token);
+            if (nodeId is null)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(nodeId, "the producer was never given a node id");
@@ -136,7 +156,8 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-content-sink");
         capture.FrameReady += (_, f) =>
         {
-            if (f.Pixels.IsEmpty || f.Width != Width || f.Height != Height) return;
+            if (f.Pixels.IsEmpty || f.Width != Width || f.Height != Height)
+                return;
 
             // Recover the tag from the first pixel, then check the whole frame agrees with it.
             byte tag = (byte)(f.Pixels[0] ^ 0);
@@ -164,7 +185,8 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
 
         Assert.IsTrue(
             Volatile.Read(ref verified) > 5,
-            $"only {Volatile.Read(ref verified)} frames arrived intact");
+            $"only {Volatile.Read(ref verified)} frames arrived intact"
+        );
     }
 
     /// <summary>
@@ -194,18 +216,29 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
 
         try
         {
-            await using var ctx = new PipeWireContext("pwnet-zerocopy", ConsoleTestLoggerFactory.Instance);
+            await using var ctx = new PipeWireContext(
+                "pwnet-zerocopy",
+                ConsoleTestLoggerFactory.Instance
+            );
             await ctx.StartAsync(cts.Token);
 
             long modifier = (long)GbmAllocator.LinearModifier;
 
             await using var output = new PipeWireVideoOutput(
-                ctx, "pwnet-zerocopy-src", Width, Height, PixelFormat.Bgra, 30);
+                ctx,
+                "pwnet-zerocopy-src",
+                Width,
+                Height,
+                PixelFormat.Bgra,
+                30
+            );
 
             output.AllocateDmaBuf += (_, index, _, _, _, _, planes) =>
             {
-                if (index >= PoolCap) return 0;
-                while (buffers.Count <= index) buffers.Add(gbm.CreateBgra(Width, Height));
+                if (index >= PoolCap)
+                    return 0;
+                while (buffers.Count <= index)
+                    buffers.Add(gbm.CreateBgra(Width, Height));
                 GbmAllocator.Buffer b = buffers[index];
                 planes[0] = new VideoPlane(b.Fd, b.Offset, b.Stride, b.Size);
                 return 1;
@@ -218,7 +251,8 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
             for (var i = 0; i < 60 && nodeId is null; i++)
             {
                 nodeId = output.NodeId;
-                if (nodeId is null) await Task.Delay(50, cts.Token);
+                if (nodeId is null)
+                    await Task.Delay(50, cts.Token);
             }
 
             Assert.IsNotNull(nodeId, "the producer was never given a node id");
@@ -235,30 +269,40 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
             for (var i = 0; i < 120 && !got; i++)
             {
                 got = capture.TryGetBorrowedFrame(out frame) && frame.IsFdBacked;
-                if (!got) await Task.Delay(50, cts.Token);
+                if (!got)
+                    await Task.Delay(50, cts.Token);
             }
 
             Assert.IsTrue(got, "no fd-backed frame ever arrived");
 
             ulong? consumerInode = InodeOf((int)frame[0].Fd);
-            Assert.IsNotNull(consumerInode, "the consumer's descriptor could not be stat'd, so it is not live");
+            Assert.IsNotNull(
+                consumerInode,
+                "the consumer's descriptor could not be stat'd, so it is not live"
+            );
 
             var producerInodes = new HashSet<ulong>();
             foreach (GbmAllocator.Buffer b in buffers)
             {
-                if (InodeOf((int)b.Fd) is { } ino) producerInodes.Add(ino);
+                if (InodeOf((int)b.Fd) is { } ino)
+                    producerInodes.Add(ino);
             }
 
-            Assert.IsTrue(producerInodes.Count > 0, "none of the producer's buffers could be stat'd");
+            Assert.IsTrue(
+                producerInodes.Count > 0,
+                "none of the producer's buffers could be stat'd"
+            );
 
             Assert.IsTrue(
                 producerInodes.Contains(consumerInode!.Value),
                 "the consumer's frame does not name any buffer the producer allocated, so the path "
-                + "copied rather than passing the GPU buffer through");
+                    + "copied rather than passing the GPU buffer through"
+            );
         }
         finally
         {
-            foreach (GbmAllocator.Buffer b in buffers) b.Dispose();
+            foreach (GbmAllocator.Buffer b in buffers)
+                b.Dispose();
         }
     }
 
@@ -276,12 +320,17 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task AProducersSamples_ReachTheConsumerUnalteredAndStamped()
     {
-        if (!OperatingSystem.IsLinux()) Assert.Inconclusive("PipeWire is a Linux daemon.");
+        if (!OperatingSystem.IsLinux())
+            Assert.Inconclusive("PipeWire is a Linux daemon.");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
-        const int rate = 48000, channels = 1;
+        const int rate = 48000,
+            channels = 1;
 
-        await using var ctx = new PipeWireContext("pwnet-audiocontent", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-audiocontent",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         string nodeName = $"pwnet-audiocontent-{Environment.ProcessId}";
@@ -290,12 +339,18 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
         uint next = 0;
 
         await using var output = new PipeWireAudioOutput(
-            ctx, nodeName, rate, channels, AudioSampleFormat.F32Le);
+            ctx,
+            nodeName,
+            rate,
+            channels,
+            AudioSampleFormat.F32Le
+        );
 
         output.FillSamples += (_, samples, _, _, _) =>
         {
             Span<float> floats = MemoryMarshal.Cast<byte, float>(samples);
-            for (var i = 0; i < floats.Length; i++) floats[i] = next++;
+            for (var i = 0; i < floats.Length; i++)
+                floats[i] = next++;
             return samples.Length;
         };
 
@@ -308,41 +363,65 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
         await using var capture = new PipeWireAudioCapture(ctx, $"{nodeName}-sink");
         capture.FrameReady += (_, f) =>
         {
-            if (f.SampleRate != rate || f.Channels != channels) { Interlocked.Increment(ref badRate); return; }
+            if (f.SampleRate != rate || f.Channels != channels)
+            {
+                Interlocked.Increment(ref badRate);
+                return;
+            }
             // The queued time, not the header timestamp: no audio converter copies the header, so an
             // audio consumer stamps its packets with the cycle time its buffer was queued in.
-            if (f.QueuedTimeNs is > 0) Interlocked.Increment(ref stampedFrames);
+            if (f.QueuedTimeNs is > 0)
+                Interlocked.Increment(ref stampedFrames);
 
             ReadOnlySpan<float> floats = MemoryMarshal.Cast<byte, float>(f.Samples);
-            lock (got) { if (got.Count < 20000) foreach (float v in floats) got.Add(v); }
+            lock (got)
+            {
+                if (got.Count < 20000)
+                    foreach (float v in floats)
+                        got.Add(v);
+            }
         };
 
-        capture.Connect((await output.WaitForNodeIdAsync(cts.Token)), sampleRate: rate, channels: channels,
-            format: AudioSampleFormat.F32Le);
+        capture.Connect(
+            (await output.WaitForNodeIdAsync(cts.Token)),
+            sampleRate: rate,
+            channels: channels,
+            format: AudioSampleFormat.F32Le
+        );
 
         await capture.WaitForStreamingAsync(cts.Token);
         await Task.Delay(800, cts.Token);
 
         float[] samplesSeen;
-        lock (got) samplesSeen = [.. got];
+        lock (got)
+            samplesSeen = [.. got];
 
-        Assert.AreEqual(0, Volatile.Read(ref badRate), "a frame arrived with the wrong rate or channel count");
+        Assert.AreEqual(
+            0,
+            Volatile.Read(ref badRate),
+            "a frame arrived with the wrong rate or channel count"
+        );
         Assert.IsTrue(samplesSeen.Length > 2000, $"only {samplesSeen.Length} samples arrived");
 
         int start = 0;
-        while (start < samplesSeen.Length && samplesSeen[start] == 0f) start++;
+        while (start < samplesSeen.Length && samplesSeen[start] == 0f)
+            start++;
         Assert.IsTrue(samplesSeen.Length - start > 1000, "the stream was silence throughout");
 
         var breaks = 0;
         for (int i = start + 1; i < samplesSeen.Length; i++)
-            if (samplesSeen[i] != samplesSeen[i - 1] + 1f) breaks++;
+            if (samplesSeen[i] != samplesSeen[i - 1] + 1f)
+                breaks++;
 
         Assert.AreEqual(
-            0, breaks,
-            $"the sample sequence broke {breaks} times, so audio was lost or duplicated in transit");
+            0,
+            breaks,
+            $"the sample sequence broke {breaks} times, so audio was lost or duplicated in transit"
+        );
 
         Assert.IsTrue(
             Volatile.Read(ref stampedFrames) > 0,
-            "no audio frame carried a queued time, so a sender could not stamp its packets");
+            "no audio frame carried a queued time, so a sender could not stamp its packets"
+        );
     }
 }

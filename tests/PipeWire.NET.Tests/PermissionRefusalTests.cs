@@ -60,12 +60,14 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
             Assert.Inconclusive("PipeWire is a Linux daemon.");
     }
 
-    private static string Unique(string p) => $"{p}_{Environment.ProcessId}_{Random.Shared.Next():x}";
+    private static string Unique(string p) =>
+        $"{p}_{Environment.ProcessId}_{Random.Shared.Next():x}";
 
     /// <summary>Finds this connection's own client object, by the name it connected under.</summary>
     private static PipeWireClient? OurClient(PipeWireRegistry registry, string applicationName) =>
-        registry.Current.Clients.FirstOrDefault(
-            c => string.Equals(c.ApplicationName, applicationName, StringComparison.Ordinal));
+        registry.Current.Clients.FirstOrDefault(c =>
+            string.Equals(c.ApplicationName, applicationName, StringComparison.Ordinal)
+        );
 
     [TestMethod]
     public async Task AClientThatLosesWriteAccess_IsRefusedAndRollsBack()
@@ -105,11 +107,15 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
                 // Writes to this store only. Everything else keeps its permissions, so the
                 // connection stays alive to hear the refusal.
                 await control.UpdatePermissionsAsync(
-                    new[] { new PipeWireObjectPermission(store.Id, PipeWirePermissions.None) }, cts.Token);
+                    new[] { new PipeWireObjectPermission(store.Id, PipeWirePermissions.None) },
+                    cts.Token
+                );
             }
 
-            PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
-                () => store.SetAsync(key, "v2", cancellationToken: cts.Token));
+            PipeWireException refused =
+                await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(() =>
+                    store.SetAsync(key, "v2", cancellationToken: cts.Token)
+                );
 
             Assert.IsTrue(refused.Result < 0, "a refusal must carry the daemon's code");
             Console.Error.WriteLine($"after losing write access: {refused.Message}");
@@ -118,8 +124,11 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
             // asserting the daemon's implementation. What is ours is the mapping:
             // IsPermissionDenied has to be exactly the EACCES case and nothing else, or a caller
             // branching on it gets a different answer than the code says.
-            Assert.AreEqual(refused.Result == -13, refused.IsPermissionDenied,
-                $"IsPermissionDenied disagrees with the result code {refused.Result}");
+            Assert.AreEqual(
+                refused.Result == -13,
+                refused.IsPermissionDenied,
+                $"IsPermissionDenied disagrees with the result code {refused.Result}"
+            );
 
             // And the property is reachable on a real refusal rather than only on a constructed
             // one, which is the whole reason it exists.
@@ -152,12 +161,20 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
         {
             // A default is the method's own to write, so one in the grants contradicts the
             // confining it exists to do.
-            await Assert.ThrowsExactlyAsync<ArgumentException>(
-                async () => await control.ConfineToAsync(
-                    [new PipeWireObjectPermission(PipeWireClientProxy.AnyObject, PipeWirePermissions.Read)],
-                    cts.Token));
-            await Assert.ThrowsExactlyAsync<ArgumentNullException>(
-                async () => await control.UpdatePropertiesAsync(null!, cts.Token));
+            await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+                await control.ConfineToAsync(
+                    [
+                        new PipeWireObjectPermission(
+                            PipeWireClientProxy.AnyObject,
+                            PipeWirePermissions.Read
+                        ),
+                    ],
+                    cts.Token
+                )
+            );
+            await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+                await control.UpdatePropertiesAsync(null!, cts.Token)
+            );
         }
     }
 
@@ -177,8 +194,9 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireFactory? factory = registry.Current.Factories
-            .FirstOrDefault(f => string.Equals(f.FactoryName, "adapter", StringComparison.Ordinal));
+        PipeWireFactory? factory = registry.Current.Factories.FirstOrDefault(f =>
+            string.Equals(f.FactoryName, "adapter", StringComparison.Ordinal)
+        );
         if (factory is null)
             Assert.Inconclusive("this session has no adapter factory to be denied.");
 
@@ -188,16 +206,26 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
         await using (PipeWireClientProxy control = registry.BindClient(self!.Id))
         {
             await control.UpdatePermissionsAsync(
-                new[] { new PipeWireObjectPermission(factory!.Id, PipeWirePermissions.None) }, cts.Token);
+                new[] { new PipeWireObjectPermission(factory!.Id, PipeWirePermissions.None) },
+                cts.Token
+            );
         }
 
-        PipeWireException refused = await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(
-            () => registry.CreateVirtualSink("Denied").WithName(Unique("pwnet_denied")).ExecuteAsync(cts.Token));
+        PipeWireException refused =
+            await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(() =>
+                registry
+                    .CreateVirtualSink("Denied")
+                    .WithName(Unique("pwnet_denied"))
+                    .ExecuteAsync(cts.Token)
+            );
 
         Assert.IsTrue(refused.Result < 0, "a refusal must carry the daemon's code");
         Console.Error.WriteLine($"after losing the factory: {refused.Message}");
-        Assert.AreEqual(refused.Result == -13, refused.IsPermissionDenied,
-            $"IsPermissionDenied disagrees with the result code {refused.Result}");
+        Assert.AreEqual(
+            refused.Result == -13,
+            refused.IsPermissionDenied,
+            $"IsPermissionDenied disagrees with the result code {refused.Result}"
+        );
     }
 
     /// <summary>
@@ -210,15 +238,21 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext(Unique("pwnet-secctx"), ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            Unique("pwnet-secctx"),
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
         PipeWireSecurityContext? available = registry.Current.SecurityContext;
-        if (available is null) Assert.Inconclusive("this daemon exposes no security context.");
+        if (available is null)
+            Assert.Inconclusive("this daemon exposes no security context.");
 
-        await using PipeWireSecurityContextProxy control = registry.BindSecurityContext(available!.Id);
+        await using PipeWireSecurityContextProxy control = registry.BindSecurityContext(
+            available!.Id
+        );
 
         var properties = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -228,19 +262,24 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
 
         using (SafeFileHandle invalid = new(new IntPtr(-1), ownsHandle: false))
         {
-            await Assert.ThrowsExactlyAsync<ArgumentException>(
-                async () => await control.CreateAsync(invalid, invalid, properties, cts.Token));
+            await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+                await control.CreateAsync(invalid, invalid, properties, cts.Token)
+            );
         }
 
-        string scratch = Path.Combine(Path.GetTempPath(), $"pwnet-secctx-{Environment.ProcessId}.tmp");
+        string scratch = Path.Combine(
+            Path.GetTempPath(),
+            $"pwnet-secctx-{Environment.ProcessId}.tmp"
+        );
         await File.WriteAllTextAsync(scratch, "not a socket", cts.Token);
         try
         {
             using var notASocket = new FileStream(scratch, FileMode.Open, FileAccess.Read);
             SafeHandle fd = notASocket.SafeFileHandle;
 
-            await Assert.ThrowsExactlyAsync<ArgumentException>(
-                async () => await control.CreateAsync(fd, fd, properties, cts.Token));
+            await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+                await control.CreateAsync(fd, fd, properties, cts.Token)
+            );
         }
         finally
         {
@@ -248,16 +287,22 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
         }
 
         // A real socket, but connected rather than listening.
-        using (var connected = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified))
+        using (
+            var connected = new Socket(
+                AddressFamily.Unix,
+                SocketType.Stream,
+                ProtocolType.Unspecified
+            )
+        )
         {
             SafeHandle fd = connected.SafeHandle;
-            await Assert.ThrowsExactlyAsync<ArgumentException>(
-                async () => await control.CreateAsync(fd, fd, properties, cts.Token));
+            await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
+                await control.CreateAsync(fd, fd, properties, cts.Token)
+            );
         }
 
         // Still usable, which is what makes them refusals.
         await registry.WaitForInitialEnumerationAsync(cts.Token);
         Assert.IsTrue(registry.Current.Nodes.Length > 0);
     }
-
 }

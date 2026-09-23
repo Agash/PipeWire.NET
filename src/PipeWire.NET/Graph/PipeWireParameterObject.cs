@@ -32,11 +32,13 @@ namespace PipeWire.NET.Graph;
 public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
 {
     private readonly PipeWireContext _ctx;
+
     // Concurrent rather than a dictionary behind a lock, and deliberately so. A param event is
     // dispatched by the loop thread with the loop lock already held, so anything it waits on must
     // never be held by a thread that is itself waiting for the loop lock.
     private readonly ConcurrentDictionary<int, List<SpaObject>> _answers = new();
     private BoundProxy? _bound;
+
     // The array reference, not the ImmutableArray wrapping it. A struct assignment has no atomicity
     // guarantee and cannot be published with Volatile; the single reference inside it can.
     private PipeWireParameterInfo[] _parameters = [];
@@ -75,7 +77,8 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     {
         foreach (PipeWireParameterInfo info in Parameters)
         {
-            if (info.Parameter == parameter) return info.CanRead;
+            if (info.Parameter == parameter)
+                return info.CanRead;
         }
 
         return false;
@@ -87,7 +90,8 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     {
         foreach (PipeWireParameterInfo info in Parameters)
         {
-            if (info.Parameter == parameter) return info.CanWrite;
+            if (info.Parameter == parameter)
+                return info.CanWrite;
         }
 
         return false;
@@ -147,17 +151,25 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     private void RaiseRemoved()
     {
         Action? handler = Removed;
-        if (handler is null) return;
+        if (handler is null)
+            return;
 
         // A native callback frame, so nothing may escape it.
-        try { handler(); }
-        catch (Exception ex) { OnHandlerFaulted(ex); }
+        try
+        {
+            handler();
+        }
+        catch (Exception ex)
+        {
+            OnHandlerFaulted(ex);
+        }
     }
 
     /// <summary>
     /// A number to hand to <c>enum_params</c>. Only for tracing: the protocol does not echo it.
     /// </summary>
-    private int NextRequestTag() => Interlocked.Increment(ref _nextTag) & NativeConstants.SPA_ASYNC_SEQ_MASK;
+    private int NextRequestTag() =>
+        Interlocked.Increment(ref _nextTag) & NativeConstants.SPA_ASYNC_SEQ_MASK;
 
     // Each takes the proxy pointer rather than reading it from the binding. Destroying a proxy
     // clears that pointer before it takes the loop lock, so a pointer re-read inside the call could
@@ -165,10 +177,21 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
 
     /// <summary>Dispatches this interface's <c>enum_params</c>.</summary>
     private protected abstract unsafe int EnumParamsNative(
-        void* proxy, int seq, uint id, uint start, uint num, spa_pod* filter);
+        void* proxy,
+        int seq,
+        uint id,
+        uint start,
+        uint num,
+        spa_pod* filter
+    );
 
     /// <summary>Dispatches this interface's <c>set_param</c>.</summary>
-    private protected abstract unsafe int SetParamNative(void* proxy, uint id, uint flags, spa_pod* param);
+    private protected abstract unsafe int SetParamNative(
+        void* proxy,
+        uint id,
+        uint flags,
+        spa_pod* param
+    );
 
     /// <summary>Dispatches this interface's <c>subscribe_params</c>.</summary>
     private protected abstract unsafe int SubscribeParamsNative(void* proxy, uint* ids, uint count);
@@ -189,7 +212,9 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     /// "no values", so a caller asking for the wrong parameter finds out.
     /// </exception>
     public async Task<ImmutableArray<SpaObject>> EnumerateParametersAsync(
-        SpaParamType parameter, CancellationToken cancellationToken = default)
+        SpaParamType parameter,
+        CancellationToken cancellationToken = default
+    )
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
@@ -220,7 +245,10 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     /// </remarks>
     /// <exception cref="ObjectDisposedException">The binding has been disposed.</exception>
     public Task<ImmutableArray<SpaObject>> EnumerateParametersAsync(
-        SpaParamType parameter, SpaObject filter, CancellationToken cancellationToken = default)
+        SpaParamType parameter,
+        SpaObject filter,
+        CancellationToken cancellationToken = default
+    )
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(filter);
@@ -240,7 +268,10 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     }
 
     private async Task<ImmutableArray<SpaObject>> EnumerateFilteredAsync(
-        SpaParamType parameter, nint filter, CancellationToken cancellationToken)
+        SpaParamType parameter,
+        nint filter,
+        CancellationToken cancellationToken
+    )
     {
         // The sequence number the answers carry is not the one handed to enum_params. The protocol
         // replaces it with the connection's own message sequence and returns that, async-tagged, so
@@ -250,8 +281,7 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
         // param the request produced. Without the barrier there is nothing to wait on: the protocol
         // has no "that was the last one".
         int key = 0;
-        Task roundTrip = BeginEnumeration(
-            parameter, filter, k => key = k, cancellationToken);
+        Task roundTrip = BeginEnumeration(parameter, filter, k => key = k, cancellationToken);
 
         try
         {
@@ -281,7 +311,9 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     /// <see cref="PipeWireException.IsObjectGone"/>.
     /// </remarks>
     private static bool IsNoSuchParameter(PipeWireRequestRefusedException ex) =>
-        ex.Result == -NativeLibc.ENOENT && ex.ObjectId is { } id && id != NativeConstants.PW_ID_CORE;
+        ex.Result == -NativeLibc.ENOENT
+        && ex.ObjectId is { } id
+        && id != NativeConstants.PW_ID_CORE;
 
     /// <summary>
     /// Like <see cref="GetParameterAsync"/>, but an object that does not have the parameter at all
@@ -293,7 +325,9 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     /// an error. Every other failure, including an object that is gone, still throws.
     /// </remarks>
     private protected async Task<SpaObject?> GetParameterOrNullAsync(
-        SpaParamType parameter, CancellationToken cancellationToken)
+        SpaParamType parameter,
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -313,10 +347,12 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     /// <param name="parameter">Which parameter to read.</param>
     /// <param name="cancellationToken">Abandons the wait.</param>
     public async Task<SpaObject?> GetParameterAsync(
-        SpaParamType parameter, CancellationToken cancellationToken = default)
+        SpaParamType parameter,
+        CancellationToken cancellationToken = default
+    )
     {
-        ImmutableArray<SpaObject> all =
-            await EnumerateParametersAsync(parameter, cancellationToken).ConfigureAwait(false);
+        ImmutableArray<SpaObject> all = await EnumerateParametersAsync(parameter, cancellationToken)
+            .ConfigureAwait(false);
         return all.IsDefaultOrEmpty ? null : all[0];
     }
 
@@ -337,7 +373,10 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
     /// <exception cref="ObjectDisposedException">The binding has been disposed.</exception>
     public async Task SetParameterAsync(
-        SpaParamType parameter, SpaObject value, CancellationToken cancellationToken = default)
+        SpaParamType parameter,
+        SpaObject value,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(value);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -351,7 +390,10 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
 
     /// <summary>Issues a parameter write inside its round-trip, under a held reference.</summary>
     private unsafe Task BeginWrite(
-        SpaParamType parameter, byte[] pod, CancellationToken cancellationToken)
+        SpaParamType parameter,
+        byte[] pod,
+        CancellationToken cancellationToken
+    )
     {
         if (!Bound.TryUse(out BoundProxy.Use proxy))
             throw new ObjectDisposedException(nameof(PipeWireParameterObject));
@@ -359,16 +401,24 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
         using (proxy)
         {
             nint obj = (nint)proxy.Object;
-            return CoreSync.RoundTripAsync(_ctx, () =>
-            {
-                fixed (byte* p = pod)
-                    return SetParamNative((void*)obj, (uint)parameter, 0, (spa_pod*)p);
-            }, cancellationToken);
+            return CoreSync.RoundTripAsync(
+                _ctx,
+                () =>
+                {
+                    fixed (byte* p = pod)
+                        return SetParamNative((void*)obj, (uint)parameter, 0, (spa_pod*)p);
+                },
+                cancellationToken
+            );
         }
     }
 
     private unsafe Task BeginEnumeration(
-        SpaParamType parameter, nint filter, Action<int> onKey, CancellationToken cancellationToken)
+        SpaParamType parameter,
+        nint filter,
+        Action<int> onKey,
+        CancellationToken cancellationToken
+    )
     {
         if (!Bound.TryUse(out BoundProxy.Use proxy))
             throw new ObjectDisposedException(nameof(PipeWireParameterObject));
@@ -385,31 +435,40 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
         using (proxy)
         {
             nint obj = (nint)proxy.Object;
-            return CoreSync.RoundTripAsync(_ctx, () =>
-            {
-                // 0 to uint.MaxValue: every value the object has of this parameter.
-                // The filter travels as an IntPtr because a pointer cannot be captured; it is only
-                // ever dereferenced here, synchronously, while the caller's pin is still held.
-                int rc = EnumParamsNative(
-                    (void*)obj, NextRequestTag(), (uint)parameter, 0, uint.MaxValue,
-                    (spa_pod*)filter);
-
-                // Filed while the loop lock is still held, so no param event for this request can
-                // have been dispatched yet - the loop thread dispatches them, and it is blocked on
-                // that lock until the scope closes.
-                // Only when the daemon actually queued the request. A synchronous result has no
-                // sequence, and filing a collector under key 0 makes OnParam route any seq-0 param
-                // into this enumeration: the caller collects a parameter it did not ask for, and
-                // the subscriber that should have been told about it is not.
-                if (Native.SPA_RESULT_IS_ASYNC(rc))
+            return CoreSync.RoundTripAsync(
+                _ctx,
+                () =>
                 {
-                    int key = Native.SPA_RESULT_ASYNC_SEQ(rc);
-                    _answers[key] = [];
-                    onKey(key);
-                }
+                    // 0 to uint.MaxValue: every value the object has of this parameter.
+                    // The filter travels as an IntPtr because a pointer cannot be captured; it is only
+                    // ever dereferenced here, synchronously, while the caller's pin is still held.
+                    int rc = EnumParamsNative(
+                        (void*)obj,
+                        NextRequestTag(),
+                        (uint)parameter,
+                        0,
+                        uint.MaxValue,
+                        (spa_pod*)filter
+                    );
 
-                return rc;
-            }, cancellationToken);
+                    // Filed while the loop lock is still held, so no param event for this request can
+                    // have been dispatched yet - the loop thread dispatches them, and it is blocked on
+                    // that lock until the scope closes.
+                    // Only when the daemon actually queued the request. A synchronous result has no
+                    // sequence, and filing a collector under key 0 makes OnParam route any seq-0 param
+                    // into this enumeration: the caller collects a parameter it did not ask for, and
+                    // the subscriber that should have been told about it is not.
+                    if (Native.SPA_RESULT_IS_ASYNC(rc))
+                    {
+                        int key = Native.SPA_RESULT_ASYNC_SEQ(rc);
+                        _answers[key] = [];
+                        onKey(key);
+                    }
+
+                    return rc;
+                },
+                cancellationToken
+            );
         }
     }
 
@@ -439,9 +498,10 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        Span<uint> ids = parameters.Length <= 16
-            ? stackalloc uint[parameters.Length]
-            : new uint[parameters.Length];
+        Span<uint> ids =
+            parameters.Length <= 16
+                ? stackalloc uint[parameters.Length]
+                : new uint[parameters.Length];
 
         for (int i = 0; i < parameters.Length; i++)
             ids[i] = (uint)parameters[i];
@@ -477,19 +537,24 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     /// </remarks>
     private protected unsafe void OnParam(int seq, spa_pod* param)
     {
-        if (param is null) return;
+        if (param is null)
+            return;
 
         // The size is the producer's, and it is used to build the very span the parser then bounds
         // itself against, so a lie here is one the parser cannot see through. Guarded the way
         // PipeWireProfilerProxy guards the same shape.
         uint size = *(uint*)param;
-        if (size > int.MaxValue - 8) return;
+        if (size > int.MaxValue - 8)
+            return;
 
         var bytes = new ReadOnlySpan<byte>(param, 8 + (int)size);
         if (!SpaPod.TryParse(bytes, out SpaValue? value) || value is not SpaObject parsed)
             return;
 
-        bool filed = _answers.TryGetValue(Native.SPA_RESULT_ASYNC_SEQ(seq), out List<SpaObject>? into);
+        bool filed = _answers.TryGetValue(
+            Native.SPA_RESULT_ASYNC_SEQ(seq),
+            out List<SpaObject>? into
+        );
         if (filed)
         {
             lock (into!)
@@ -519,7 +584,8 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
             described[i] = new PipeWireParameterInfo(
                 (SpaParamType)parameters![i].id,
                 ((SpaParamInfoFlags)parameters[i].flags & SpaParamInfoFlags.Read) != 0,
-                ((SpaParamInfoFlags)parameters[i].flags & SpaParamInfoFlags.Write) != 0);
+                ((SpaParamInfoFlags)parameters[i].flags & SpaParamInfoFlags.Write) != 0
+            );
         }
 
         Volatile.Write(ref _parameters, described);
@@ -542,18 +608,26 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     private protected unsafe void OnInfoProperties(spa_dict* properties)
     {
         Action<uint, PipeWireProperties>? observer = PropertiesObserved;
-        if (observer is null || properties is null) return;
+        if (observer is null || properties is null)
+            return;
 
         // A native callback frame, so nothing may escape it.
-        try { observer(Id, PipeWireProperties.From(properties)); }
-        catch (Exception ex) { OnHandlerFaulted(ex); }
+        try
+        {
+            observer(Id, PipeWireProperties.From(properties));
+        }
+        catch (Exception ex)
+        {
+            OnHandlerFaulted(ex);
+        }
     }
 
     /// <summary>Reports a subscriber that threw, where the logger is in scope.</summary>
     private protected abstract void OnHandlerFaulted(Exception exception);
 
     /// <summary>Resolves the instance a native callback belongs to, or null once it is gone.</summary>
-    private protected static unsafe T? FromUserData<T>(void* data) where T : PipeWireParameterObject
+    private protected static unsafe T? FromUserData<T>(void* data)
+        where T : PipeWireParameterObject
     {
         var self = (T?)GCHandle.FromIntPtr((nint)data).Target;
         return self is null || self._disposed ? null : self;
@@ -575,7 +649,8 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
 
     private void DisposeCore()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
 
         // Anything still waiting for answers gets none; the round-trip it is awaiting completes or
@@ -585,5 +660,4 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
 
         GC.SuppressFinalize(this);
     }
-
 }

@@ -37,14 +37,19 @@ public sealed class GraphSurfaceTests
     }
 
     private static async Task<PipeWireNode> WaitForNodeAsync(
-        PipeWireRegistry reg, string name, CancellationToken ct)
+        PipeWireRegistry reg,
+        string name,
+        CancellationToken ct
+    )
     {
         for (var i = 0; i < 100; i++)
         {
-            PipeWireNode? n = reg.Current.Nodes.FirstOrDefault(
-                x => string.Equals(x.NodeName, name, StringComparison.Ordinal));
+            PipeWireNode? n = reg.Current.Nodes.FirstOrDefault(x =>
+                string.Equals(x.NodeName, name, StringComparison.Ordinal)
+            );
 
-            if (n is not null) return n;
+            if (n is not null)
+                return n;
             await Task.Delay(50, ct);
         }
 
@@ -61,11 +66,15 @@ public sealed class GraphSurfaceTests
     /// arrives. Waiting on the key that proves the info landed keeps that race out of the assertions.
     /// </remarks>
     private static async Task<PipeWireProperties> WaitForBoundPropertiesAsync(
-        Func<PipeWireProperties?> read, string key, CancellationToken ct)
+        Func<PipeWireProperties?> read,
+        string key,
+        CancellationToken ct
+    )
     {
         for (var i = 0; i < 100; i++)
         {
-            if (read() is { } props && props.GetValueOrDefault(key) is not null) return props;
+            if (read() is { } props && props.GetValueOrDefault(key) is not null)
+                return props;
             await Task.Delay(50, ct);
         }
 
@@ -89,14 +98,16 @@ public sealed class GraphSurfaceTests
         string nodeName = $"pwnet-builder-{Environment.ProcessId}";
         const string description = "a described node";
 
-        await using var ctx = new PipeWireContext("pwnet-builder", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-builder",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode created = await reg
-            .CreateVirtualSink(nodeName, "Audio/Sink")
+        PipeWireNode created = await reg.CreateVirtualSink(nodeName, "Audio/Sink")
             .WithName(nodeName)
             .WithMediaClass("Audio/Sink")
             .WithChannelPositions("[ FL FR ]")
@@ -118,22 +129,26 @@ public sealed class GraphSurfaceTests
         PipeWireProperties props = await WaitForBoundPropertiesAsync(
             () => reg.Current.Nodes.FirstOrDefault(n => n.NodeId == node.NodeId)?.Properties,
             PipeWireKeys.SPA_KEY_AUDIO_POSITION,
-            cts.Token);
+            cts.Token
+        );
 
         Assert.AreEqual(
             description,
             props.GetValueOrDefault(PipeWireKeys.PW_KEY_NODE_DESCRIPTION),
-            "WithProperty did not reach the node");
+            "WithProperty did not reach the node"
+        );
 
         Assert.AreEqual(
             "[ FL FR ]",
             props.GetValueOrDefault(PipeWireKeys.SPA_KEY_AUDIO_POSITION),
-            "WithChannelPositions did not reach the node");
+            "WithChannelPositions did not reach the node"
+        );
 
         Assert.AreEqual(
             "false",
             props.GetValueOrDefault(PipeWireKeys.PW_KEY_NODE_AUTOCONNECT)?.ToLowerInvariant(),
-            "WithAutoConnect did not reach the node");
+            "WithAutoConnect did not reach the node"
+        );
     }
 
     /// <summary>
@@ -160,7 +175,10 @@ public sealed class GraphSurfaceTests
 
         string name = $"pwnet-linkbuilder-{Environment.ProcessId}";
 
-        await using var ctx = new PipeWireContext("pwnet-linkbuilder", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-linkbuilder",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var reg = new PipeWireRegistry(ctx);
@@ -168,7 +186,12 @@ public sealed class GraphSurfaceTests
 
         // A producer and a sink of our own, so the link is between things this test controls.
         await using var output = new PipeWireAudioOutput(
-            ctx, $"{name}-src", 48000, 2, AudioSampleFormat.F32Le);
+            ctx,
+            $"{name}-src",
+            48000,
+            2,
+            AudioSampleFormat.F32Le
+        );
 
         output.FillSamples += (_, samples, _, _, _) =>
         {
@@ -179,8 +202,7 @@ public sealed class GraphSurfaceTests
         output.Connect(autoConnect: false);
         await WaitForNodeAsync(reg, $"{name}-src", cts.Token);
 
-        PipeWireNode sink = await reg
-            .CreateVirtualSink($"{name}-sink", "Audio/Sink")
+        PipeWireNode sink = await reg.CreateVirtualSink($"{name}-sink", "Audio/Sink")
             .WithName($"{name}-sink")
             .ExecuteAsync(cts.Token);
 
@@ -192,19 +214,21 @@ public sealed class GraphSurfaceTests
         for (var i = 0; i < 100 && (outPort is null || inPort is null); i++)
         {
             PipeWireGraphSnapshot g = reg.Current;
-            outPort ??= g.Ports.FirstOrDefault(
-                p => p.NodeId == srcNode.NodeId && p.PortDirection == PipeWirePortDirection.Out);
-            inPort ??= g.Ports.FirstOrDefault(
-                p => p.NodeId == sinkNode.NodeId && p.PortDirection == PipeWirePortDirection.In);
+            outPort ??= g.Ports.FirstOrDefault(p =>
+                p.NodeId == srcNode.NodeId && p.PortDirection == PipeWirePortDirection.Out
+            );
+            inPort ??= g.Ports.FirstOrDefault(p =>
+                p.NodeId == sinkNode.NodeId && p.PortDirection == PipeWirePortDirection.In
+            );
 
-            if (outPort is null || inPort is null) await Task.Delay(50, cts.Token);
+            if (outPort is null || inPort is null)
+                await Task.Delay(50, cts.Token);
         }
 
         if (outPort is null || inPort is null)
             Assert.Inconclusive("the two nodes never both exposed a port to link.");
 
-        PipeWireLink link = await reg
-            .CreateLink(outPort!, inPort!)
+        PipeWireLink link = await reg.CreateLink(outPort!, inPort!)
             .WithPassive()
             .WithProperty("pwnet.test.marker", name)
             .ExecuteAsync(cts.Token);
@@ -217,29 +241,48 @@ public sealed class GraphSurfaceTests
         PipeWireProperties made = await WaitForBoundPropertiesAsync(
             () => reg.Current.Links.FirstOrDefault(l => l.LinkId == link.LinkId)?.Properties,
             "pwnet.test.marker",
-            cts.Token);
+            cts.Token
+        );
 
-        Assert.AreEqual(name, made.GetValueOrDefault("pwnet.test.marker"), "WithProperty did not reach the created link");
+        Assert.AreEqual(
+            name,
+            made.GetValueOrDefault("pwnet.test.marker"),
+            "WithProperty did not reach the created link"
+        );
 
-        PipeWireModule? factoryModule = reg.Current.Modules.FirstOrDefault(
-            m => m.ModuleName == "libpipewire-module-link-factory");
-        Assert.IsNotNull(factoryModule, "no link-factory module, so the link could not have been created");
+        PipeWireModule? factoryModule = reg.Current.Modules.FirstOrDefault(m =>
+            m.ModuleName == "libpipewire-module-link-factory"
+        );
+        Assert.IsNotNull(
+            factoryModule,
+            "no link-factory module, so the link could not have been created"
+        );
 
         PipeWireModule details = await reg.ReadModuleDetailsAsync(factoryModule.Id, cts.Token);
-        string args = details.Properties.GetValueOrDefault(PipeWireKeys.MODULE_ARGS) ?? string.Empty;
+        string args =
+            details.Properties.GetValueOrDefault(PipeWireKeys.MODULE_ARGS) ?? string.Empty;
         bool passiveAllowed = System.Text.RegularExpressions.Regex.IsMatch(
-            args, @"allow\.link\.passive\s*[=:]\s*true", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            args,
+            @"allow\.link\.passive\s*[=:]\s*true",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
 
-        string? passive = made.GetValueOrDefault(PipeWireKeys.PW_KEY_LINK_PASSIVE)?.ToLowerInvariant();
+        string? passive = made.GetValueOrDefault(PipeWireKeys.PW_KEY_LINK_PASSIVE)
+            ?.ToLowerInvariant();
         if (passiveAllowed)
         {
-            Assert.AreEqual("true", passive,
-                "the link factory allows link.passive, but Passive() did not reach the created link");
+            Assert.AreEqual(
+                "true",
+                passive,
+                "the link factory allows link.passive, but Passive() did not reach the created link"
+            );
         }
         else
         {
-            Assert.IsNull(passive,
-                $"the link factory does not allow link.passive (args '{args}'), so the daemon should have removed it; it reads '{passive}'");
+            Assert.IsNull(
+                passive,
+                $"the link factory does not allow link.passive (args '{args}'), so the daemon should have removed it; it reads '{passive}'"
+            );
         }
     }
 
@@ -260,11 +303,19 @@ public sealed class GraphSurfaceTests
 
         string nodeName = $"pwnet-clockrate-{Environment.ProcessId}";
 
-        await using var ctx = new PipeWireContext("pwnet-clockrate", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-clockrate",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var output = new PipeWireAudioOutput(
-            ctx, nodeName, 48000, 2, AudioSampleFormat.F32Le);
+            ctx,
+            nodeName,
+            48000,
+            2,
+            AudioSampleFormat.F32Le
+        );
 
         output.FillSamples += (_, samples, _, _, _) =>
         {
@@ -291,35 +342,51 @@ public sealed class GraphSurfaceTests
             if (output.GraphClock is { RateDen: > 0 } read)
             {
                 firstPosition ??= read.Position;
-                if (read.Position > firstPosition) clock = read;
+                if (read.Position > firstPosition)
+                    clock = read;
             }
 
-            if (clock is null) await Task.Delay(50, cts.Token);
+            if (clock is null)
+                await Task.Delay(50, cts.Token);
         }
 
-        Assert.IsNotNull(clock, "the stream never saw a running driver's clock: the position never advanced");
+        Assert.IsNotNull(
+            clock,
+            "the stream never saw a running driver's clock: the position never advanced"
+        );
 
         PipeWireGraphClock c = clock!.Value;
 
-        Assert.AreNotEqual(0u, c.RateDen, "the clock's rate denominator is zero, so the period is undefined");
-        Assert.AreNotEqual(0u, c.RateNum, "the clock's rate numerator is zero, so the period is undefined");
+        Assert.AreNotEqual(
+            0u,
+            c.RateDen,
+            "the clock's rate denominator is zero, so the period is undefined"
+        );
+        Assert.AreNotEqual(
+            0u,
+            c.RateNum,
+            "the clock's rate numerator is zero, so the period is undefined"
+        );
 
         // A graph tick is a fraction of a second, not seconds and not nanoseconds-as-an-integer.
         double period = (double)c.RateNum / c.RateDen;
         Assert.IsTrue(
             period is > 0 and < 1,
-            $"the clock period reads {period}s, which is not a graph tick");
+            $"the clock period reads {period}s, which is not a graph tick"
+        );
 
         // RateDiff is a ratio around 1. Zero means it was never written; far from 1 means it was
         // read from the wrong place.
         Assert.IsTrue(
             c.RateDiff is > 0.5 and < 2.0,
-            $"the clock's rate difference reads {c.RateDiff}, which is not a drift ratio");
+            $"the clock's rate difference reads {c.RateDiff}, which is not a drift ratio"
+        );
 
         // NextTimeNs is when the next cycle is due, so it is ahead of the current cycle's time.
         Assert.IsTrue(
             c.NextTimeNs >= c.TimeNs,
-            $"the next cycle ({c.NextTimeNs}) is scheduled before the current one ({c.TimeNs})");
+            $"the next cycle ({c.NextTimeNs}) is scheduled before the current one ({c.TimeNs})"
+        );
     }
 
     /// <summary>
@@ -344,20 +411,31 @@ public sealed class GraphSurfaceTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        const int width = 64, height = 32;
+        const int width = 64,
+            height = 32;
 
-        await using var ctx = new PipeWireContext("pwnet-cursor", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-cursor",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         var produced = 0;
 
         await using var output = new PipeWireVideoOutput(
-            ctx, "pwnet-cursor-src", width, height, PixelFormat.Bgra, 30);
+            ctx,
+            "pwnet-cursor-src",
+            width,
+            height,
+            PixelFormat.Bgra,
+            30
+        );
 
         output.FillFrame += (_, pixels, stride, w, h, _) =>
         {
             byte tag = (byte)(Interlocked.Increment(ref produced) & 0xFF);
-            for (var y = 0; y < h; y++) pixels.Slice(y * stride, w * 4).Fill(tag);
+            for (var y = 0; y < h; y++)
+                pixels.Slice(y * stride, w * 4).Fill(tag);
             return true;
         };
 
@@ -371,7 +449,8 @@ public sealed class GraphSurfaceTests
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-cursor-sink");
         capture.FrameReady += (_, f) =>
         {
-            if (f.Pixels.IsEmpty) return;
+            if (f.Pixels.IsEmpty)
+                return;
 
             // Only inspect metadata on a frame whose pixels are confirmed intact.
             byte tag = f.Pixels[0];
@@ -379,7 +458,8 @@ public sealed class GraphSurfaceTests
             {
                 foreach (byte b in f.Pixels.Slice(y * f.Stride, f.Width * 4))
                 {
-                    if (b != tag) return;
+                    if (b != tag)
+                        return;
                 }
             }
 
@@ -388,7 +468,8 @@ public sealed class GraphSurfaceTests
 
             foreach (VideoRegion r in f.Damage)
             {
-                if (r.Width == 0 || r.Height == 0) failures.Add("a damage region is degenerate");
+                if (r.Width == 0 || r.Height == 0)
+                    failures.Add("a damage region is degenerate");
                 if (r.X + r.Width > f.Width || r.Y + r.Height > f.Height)
                     failures.Add("a damage region falls outside the frame");
             }
@@ -402,13 +483,21 @@ public sealed class GraphSurfaceTests
 
         Assert.IsTrue(
             Volatile.Read(ref verified) > 5,
-            $"only {Volatile.Read(ref verified)} intact frames arrived to inspect");
+            $"only {Volatile.Read(ref verified)} intact frames arrived to inspect"
+        );
 
         Assert.AreEqual(0, failures.Count, string.Join("; ", failures.Distinct()));
     }
 
     [System.Runtime.InteropServices.DllImport("libc", SetLastError = true)]
-    private static extern unsafe void* mmap(void* addr, nuint length, int prot, int flags, int fd, long offset);
+    private static extern unsafe void* mmap(
+        void* addr,
+        nuint length,
+        int prot,
+        int flags,
+        int fd,
+        long offset
+    );
 
     [System.Runtime.InteropServices.DllImport("libc")]
     private static extern unsafe int munmap(void* addr, nuint length);
@@ -419,7 +508,8 @@ public sealed class GraphSurfaceTests
     /// <returns>Null when the mapped bytes are the frame's, otherwise what went wrong.</returns>
     internal static unsafe string? CompareMappedPixels(VideoFrame f)
     {
-        const int ProtRead = 1, MapShared = 1;
+        const int ProtRead = 1,
+            MapShared = 1;
         long pageSize = Environment.SystemPageSize;
 
         long pageStart = f.MapOffset - (f.MapOffset % pageSize);

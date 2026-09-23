@@ -29,10 +29,16 @@ public sealed class FilterTests : PipeWireTestBase
     /// actually does, and it does not depend on session-manager policy being present.
     /// </summary>
     private static async Task<(PipeWireNode Sink, uint FilterNodeId)> LinkToSinkAsync(
-        PipeWireRegistry registry, PipeWireFilter filter, string sinkName, CancellationToken cancellationToken)
+        PipeWireRegistry registry,
+        PipeWireFilter filter,
+        string sinkName,
+        CancellationToken cancellationToken
+    )
     {
-        PipeWireNode sink = await registry.CreateVirtualSink("FilterSink")
-            .WithName(sinkName).ExecuteAsync(cancellationToken);
+        PipeWireNode sink = await registry
+            .CreateVirtualSink("FilterSink")
+            .WithName(sinkName)
+            .ExecuteAsync(cancellationToken);
 
         await filter.ConnectAsync(cancellationToken: cancellationToken);
         uint filterNodeId = await filter.WaitForNodeIdAsync(cancellationToken);
@@ -64,7 +70,10 @@ public sealed class FilterTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-filter", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-filter",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -95,7 +104,8 @@ public sealed class FilterTests : PipeWireTestBase
         {
             await registry.WaitForInitialEnumerationAsync(cts.Token);
             ports = registry.Current.GetPortsForNode(nodeId);
-            if (ports.Length < 4) await Task.Delay(TimeSpan.FromMilliseconds(25), cts.Token);
+            if (ports.Length < 4)
+                await Task.Delay(TimeSpan.FromMilliseconds(25), cts.Token);
         }
 
         Assert.IsNotNull(registry.Current.GetNode(nodeId), "the filter must appear as a node");
@@ -109,7 +119,10 @@ public sealed class FilterTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-filter-run", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-filter-run",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -136,12 +149,20 @@ public sealed class FilterTests : PipeWireTestBase
             }
         };
 
-        (PipeWireNode sink, _) = await LinkToSinkAsync(registry, filter, "pwnet_filter_run_sink", cts.Token);
+        (PipeWireNode sink, _) = await LinkToSinkAsync(
+            registry,
+            filter,
+            "pwnet_filter_run_sink",
+            cts.Token
+        );
 
         await ran.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
 
         Assert.IsTrue(Interlocked.Read(ref cycles) > 0, "the filter never processed a cycle");
-        Assert.IsTrue(Interlocked.Read(ref buffered) > 0, "the filter never received a buffer to write");
+        Assert.IsTrue(
+            Interlocked.Read(ref buffered) > 0,
+            "the filter never received a buffer to write"
+        );
 
         await registry.DestroyGlobalAsync(sink.NodeId, cts.Token);
     }
@@ -152,7 +173,10 @@ public sealed class FilterTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-filter-throw", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-filter-throw",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -170,7 +194,12 @@ public sealed class FilterTests : PipeWireTestBase
             throw new InvalidOperationException("deliberate");
         };
 
-        (PipeWireNode sink, _) = await LinkToSinkAsync(registry, filter, "pwnet_filter_throw_sink", cts.Token);
+        (PipeWireNode sink, _) = await LinkToSinkAsync(
+            registry,
+            filter,
+            "pwnet_filter_throw_sink",
+            cts.Token
+        );
 
         await threw.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
 
@@ -178,11 +207,13 @@ public sealed class FilterTests : PipeWireTestBase
         // that fails every cycle, which is indistinguishable from one that processed nothing.
         Assert.IsInstanceOfType<InvalidOperationException>(
             filter.LastProcessError,
-            "the filter did not record the exception its process callback threw");
+            "the filter did not record the exception its process callback threw"
+        );
 
         Assert.IsTrue(
             filter.ProcessErrorCount > 0,
-            "the filter recorded an error but counted no failures");
+            "the filter recorded an error but counted no failures"
+        );
 
         await registry.WaitForInitialEnumerationAsync(cts.Token);
         await registry.DestroyGlobalAsync(sink.NodeId, cts.Token);
@@ -194,7 +225,10 @@ public sealed class FilterTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-filter-late", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-filter-late",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_filter_late");
@@ -203,8 +237,9 @@ public sealed class FilterTests : PipeWireTestBase
 
         // Ports are part of what the filter negotiated when it connected, so adding one afterwards
         // would describe a node the graph has already agreed the shape of.
-        Assert.ThrowsExactly<InvalidOperationException>(
-            () => filter.AddAudioPort(PipeWirePortDirection.Out, "output_FR"));
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            filter.AddAudioPort(PipeWirePortDirection.Out, "output_FR")
+        );
     }
 
     [TestMethod]
@@ -213,7 +248,10 @@ public sealed class FilterTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-filter-nobuf", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-filter-nobuf",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_filter_nobuf");
@@ -231,7 +269,10 @@ public sealed class FilterTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-filter-disposed", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-filter-disposed",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_filter_disposed");
@@ -249,12 +290,18 @@ public sealed class FilterTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-filter-midi", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-filter-midi",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_filter_midi");
         PipeWireFilterPort midi = filter.AddMidiPort(PipeWirePortDirection.In, "midi-in");
-        PipeWireFilterPort control = filter.AddControlPort(PipeWirePortDirection.Out, "control-out");
+        PipeWireFilterPort control = filter.AddControlPort(
+            PipeWirePortDirection.Out,
+            "control-out"
+        );
 
         // A sequence buffer reinterpreted as floats is garbage with a valid-looking type. Refusal
         // is the contract until sequences get a typed accessor of their own.
@@ -295,7 +342,10 @@ public sealed class FilterTests : PipeWireTestBase
         SessionGates.RequireDaemonAtLeast(1, 6, 8);
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-filter-ports", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-filter-ports",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -305,8 +355,11 @@ public sealed class FilterTests : PipeWireTestBase
         PipeWireFilterPort midi = filter.AddMidiPort(PipeWirePortDirection.In, "midi_in");
         PipeWireFilterPort control = filter.AddControlPort(PipeWirePortDirection.In, "control_in");
         PipeWireFilterPort extra = filter.AddPort(
-            PipeWirePortDirection.Out, "midi_out", PipeWireDspFormat.Midi,
-            new Dictionary<string, string> { ["port.alias"] = "pwnet_midi_out" });
+            PipeWirePortDirection.Out,
+            "midi_out",
+            PipeWireDspFormat.Midi,
+            new Dictionary<string, string> { ["port.alias"] = "pwnet_midi_out" }
+        );
 
         Assert.AreEqual(4, filter.Ports.Count);
         Assert.AreEqual("midi_in", midi.Name);
@@ -315,10 +368,12 @@ public sealed class FilterTests : PipeWireTestBase
 
         // Neither an input nor an output, and no such DSP format: both are caller mistakes the
         // daemon must never see.
-        Assert.ThrowsExactly<ArgumentException>(
-            () => filter.AddPort((PipeWirePortDirection)999, "bad", PipeWireDspFormat.Midi));
-        Assert.ThrowsExactly<ArgumentException>(
-            () => filter.AddPort(PipeWirePortDirection.In, "bad", (PipeWireDspFormat)999));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            filter.AddPort((PipeWirePortDirection)999, "bad", PipeWireDspFormat.Midi)
+        );
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            filter.AddPort(PipeWirePortDirection.In, "bad", (PipeWireDspFormat)999)
+        );
 
         await filter.ConnectAsync(cancellationToken: cts.Token);
         await filter.WaitForNodeIdAsync(cts.Token);
@@ -340,7 +395,10 @@ public sealed class FilterTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-filter-state", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-filter-state",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_filter_state");
@@ -369,10 +427,14 @@ public sealed class FilterTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-filter-cold", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-filter-cold",
+            ConsoleTestLoggerFactory.Instance
+        );
 
-        Assert.ThrowsExactly<InvalidOperationException>(
-            () => PipeWireFilter.Create(ctx, "pwnet_filter_cold"));
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            PipeWireFilter.Create(ctx, "pwnet_filter_cold")
+        );
     }
 
     /// <summary>A port can be taken out of a running filter without rebuilding it.</summary>
@@ -389,7 +451,10 @@ public sealed class FilterTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-filter-removeport", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-filter-removeport",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_filter_removeport");
@@ -409,7 +474,8 @@ public sealed class FilterTests : PipeWireTestBase
 
         Assert.ThrowsExactly<ArgumentException>(
             () => filter.RemovePort(drop),
-            "removing a port twice should be refused, not repeated");
+            "removing a port twice should be refused, not repeated"
+        );
     }
 
     /// <summary>A connected filter can be retagged, as every stream type already could.</summary>
@@ -427,7 +493,10 @@ public sealed class FilterTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-filter-retag", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-filter-retag",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_filter_retag");
@@ -441,21 +510,29 @@ public sealed class FilterTests : PipeWireTestBase
 
         Assert.IsTrue(
             filter.UpdateProperties(properties) > 0,
-            "the new description changed nothing, so it was never stored");
+            "the new description changed nothing, so it was never stored"
+        );
 
         Assert.AreEqual(
-            0, filter.UpdateProperties(properties),
-            "setting the same value twice reported a change, so the first one did not stick");
+            0,
+            filter.UpdateProperties(properties),
+            "setting the same value twice reported a change, so the first one did not stick"
+        );
 
         // And per port, which is the granularity the native call offers and the streams do not.
         Assert.IsTrue(
             filter.UpdateProperties(
-                new Dictionary<string, string> { [PipeWireKeys.PW_KEY_PORT_NAME] = "renamed" }, port) > 0,
-            "a per-port retag changed nothing");
+                new Dictionary<string, string> { [PipeWireKeys.PW_KEY_PORT_NAME] = "renamed" },
+                port
+            ) > 0,
+            "a per-port retag changed nothing"
+        );
 
         Assert.AreNotEqual(
-            PipeWireFilterState.Error, filter.State,
-            "retagging put the filter into the error state");
+            PipeWireFilterState.Error,
+            filter.State,
+            "retagging put the filter into the error state"
+        );
     }
 
     /// <summary>A filter can be subscribed to the commands its node is sent.</summary>
@@ -474,7 +551,10 @@ public sealed class FilterTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-filter-command", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-filter-command",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_filter_command");
@@ -489,8 +569,10 @@ public sealed class FilterTests : PipeWireTestBase
         _ = await filter.WaitForNodeIdAsync(cts.Token);
 
         Assert.AreNotEqual(
-            PipeWireFilterState.Error, filter.State,
-            "subscribing to commands put the filter into the error state");
+            PipeWireFilterState.Error,
+            filter.State,
+            "subscribing to commands put the filter into the error state"
+        );
 
         Assert.IsNull(filter.LastProcessError, "the command handler faulted");
 

@@ -42,11 +42,14 @@ public sealed class UpstreamExampleTests
     }
 
     private static async Task<uint> WaitForNodeIdAsync(
-        PipeWireVideoOutput output, CancellationToken ct)
+        PipeWireVideoOutput output,
+        CancellationToken ct
+    )
     {
         for (var i = 0; i < 60; i++)
         {
-            if (output.NodeId is { } id) return id;
+            if (output.NodeId is { } id)
+                return id;
             await Task.Delay(50, ct);
         }
 
@@ -67,13 +70,22 @@ public sealed class UpstreamExampleTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-srcreneg", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-srcreneg",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         var filled = 0;
 
         await using var output = new PipeWireVideoOutput(
-            ctx, "pwnet-srcreneg-src", Width, Height, PixelFormat.Bgra, 30);
+            ctx,
+            "pwnet-srcreneg-src",
+            Width,
+            Height,
+            PixelFormat.Bgra,
+            30
+        );
 
         output.FillFrame += (_, pixels, _, _, _, _) =>
         {
@@ -99,13 +111,15 @@ public sealed class UpstreamExampleTests
         PixelFormat[] formats = [PixelFormat.Bgra];
         Assert.IsTrue(
             output.RequestFormat(formats, 160, 120),
-            "the producer's renegotiation offer was refused outright");
+            "the producer's renegotiation offer was refused outright"
+        );
 
         await Task.Delay(600, cts.Token);
 
         Assert.IsTrue(
             Volatile.Read(ref received) > 0,
-            "the consumer stopped receiving after the producer offered a new format");
+            "the consumer stopped receiving after the producer offered a new format"
+        );
 
         Assert.IsNotNull(output.Queue, "the producer stopped answering after renegotiating");
     }
@@ -125,11 +139,20 @@ public sealed class UpstreamExampleTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-srcfixate", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-srcfixate",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var output = new PipeWireVideoOutput(
-            ctx, "pwnet-srcfixate-src", Width, Height, PixelFormat.Bgra, 30);
+            ctx,
+            "pwnet-srcfixate-src",
+            Width,
+            Height,
+            PixelFormat.Bgra,
+            30
+        );
 
         output.FillFrame += (_, pixels, _, _, _, _) =>
         {
@@ -144,7 +167,11 @@ public sealed class UpstreamExampleTests
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-srcfixate-sink");
         capture.FrameReady += (_, f) =>
         {
-            lock (sizes) { if (sizes.Count < 32) sizes.Add((f.Width, f.Height)); }
+            lock (sizes)
+            {
+                if (sizes.Count < 32)
+                    sizes.Add((f.Width, f.Height));
+            }
         };
 
         capture.Connect(nodeId, [PixelFormat.Bgra]);
@@ -153,12 +180,14 @@ public sealed class UpstreamExampleTests
         PixelFormat[] formats = [PixelFormat.Bgra];
         Assert.IsTrue(
             output.RequestFormat(formats, 256, 144, frameRate: 30, fixedSize: false),
-            "the producer's range offer was refused outright");
+            "the producer's range offer was refused outright"
+        );
 
         await Task.Delay(800, cts.Token);
 
         (int W, int H)[] seen;
-        lock (sizes) seen = [.. sizes];
+        lock (sizes)
+            seen = [.. sizes];
 
         Assert.IsTrue(seen.Length > 0, "no frame arrived while a range was on offer");
 
@@ -169,8 +198,11 @@ public sealed class UpstreamExampleTests
             Assert.IsTrue(w > 0 && h > 0, $"a frame reported a degenerate size {w}x{h}");
         }
 
-        Assert.AreEqual(1, seen.Distinct().Count(),
-            "the negotiated size changed between frames without a renegotiation in between");
+        Assert.AreEqual(
+            1,
+            seen.Distinct().Count(),
+            "the negotiated size changed between frames without a renegotiation in between"
+        );
     }
 
     /// <summary>
@@ -194,7 +226,8 @@ public sealed class UpstreamExampleTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        const int rate = 48000, channels = 1;
+        const int rate = 48000,
+            channels = 1;
 
         await using var ctx = new PipeWireContext("pwnet-ring", ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
@@ -205,12 +238,20 @@ public sealed class UpstreamExampleTests
         uint next = 0;
 
         await using var output = new PipeWireAudioOutput(
-            ctx, nodeName, rate, channels, AudioSampleFormat.F32Le);
+            ctx,
+            nodeName,
+            rate,
+            channels,
+            AudioSampleFormat.F32Le
+        );
 
         output.FillSamples += (_, samples, _, _, _) =>
         {
-            Span<float> floats = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(samples);
-            for (var i = 0; i < floats.Length; i++) floats[i] = next++;
+            Span<float> floats = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(
+                samples
+            );
+            for (var i = 0; i < floats.Length; i++)
+                floats[i] = next++;
             return samples.Length;
         };
 
@@ -220,45 +261,58 @@ public sealed class UpstreamExampleTests
         await using var capture = new PipeWireAudioCapture(ctx, $"{nodeName}-sink");
         capture.FrameReady += (_, f) =>
         {
-            ReadOnlySpan<float> floats =
-                System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(f.Samples);
+            ReadOnlySpan<float> floats = System.Runtime.InteropServices.MemoryMarshal.Cast<
+                byte,
+                float
+            >(f.Samples);
 
             lock (received)
             {
-                if (received.Count > 20000) return;
-                foreach (float v in floats) received.Add(v);
+                if (received.Count > 20000)
+                    return;
+                foreach (float v in floats)
+                    received.Add(v);
             }
         };
 
-        capture.Connect((await output.WaitForNodeIdAsync(cts.Token)), sampleRate: rate, channels: channels,
-            format: AudioSampleFormat.F32Le);
+        capture.Connect(
+            (await output.WaitForNodeIdAsync(cts.Token)),
+            sampleRate: rate,
+            channels: channels,
+            format: AudioSampleFormat.F32Le
+        );
 
         await capture.WaitForStreamingAsync(cts.Token);
         await Task.Delay(700, cts.Token);
 
         float[] got;
-        lock (received) got = [.. received];
+        lock (received)
+            got = [.. received];
 
         Assert.IsTrue(got.Length > 2000, $"only {got.Length} samples arrived from the ring");
 
         // Skip the head: the first cycles can carry silence the graph inserted before the producer
         // was scheduled, which is not the producer losing anything.
         int start = 0;
-        while (start < got.Length && got[start] == 0f) start++;
+        while (start < got.Length && got[start] == 0f)
+            start++;
 
         Assert.IsTrue(got.Length - start > 1000, "the stream was silence all the way through");
 
         var breaks = 0;
         for (int i = start + 1; i < got.Length; i++)
         {
-            if (got[i] != got[i - 1] + 1f) breaks++;
+            if (got[i] != got[i - 1] + 1f)
+                breaks++;
         }
 
         // Exactly zero: every sample the producer wrote arrived once, in order.
         Assert.AreEqual(
-            0, breaks,
+            0,
+            breaks,
             $"the received sequence broke {breaks} times over {got.Length - start} samples, so "
-            + "buffers were dropped or served twice");
+                + "buffers were dropped or served twice"
+        );
     }
 
     /// <summary>
@@ -278,11 +332,20 @@ public sealed class UpstreamExampleTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-playfixate", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-playfixate",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var output = new PipeWireVideoOutput(
-            ctx, "pwnet-playfixate-src", Width, Height, PixelFormat.Bgra, 30);
+            ctx,
+            "pwnet-playfixate-src",
+            Width,
+            Height,
+            PixelFormat.Bgra,
+            30
+        );
 
         output.FillFrame += (_, pixels, _, _, _, _) =>
         {
@@ -297,29 +360,35 @@ public sealed class UpstreamExampleTests
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-playfixate-sink");
         capture.FrameReady += (_, f) =>
         {
-            lock (sizes) { if (sizes.Count < 16) sizes.Add((f.Width, f.Height)); }
+            lock (sizes)
+            {
+                if (sizes.Count < 16)
+                    sizes.Add((f.Width, f.Height));
+            }
         };
 
         // A size the producer is not offering. The connect must still negotiate.
-        capture.Connect(
-            nodeId, [PixelFormat.Bgra], preferredWidth: 640, preferredHeight: 360);
+        capture.Connect(nodeId, [PixelFormat.Bgra], preferredWidth: 640, preferredHeight: 360);
 
         await capture.WaitForStreamingAsync(cts.Token);
         await Task.Delay(700, cts.Token);
 
         (int W, int H)[] seen;
-        lock (sizes) seen = [.. sizes];
+        lock (sizes)
+            seen = [.. sizes];
 
         Assert.IsTrue(
             seen.Length > 0,
-            "asking for a size the producer does not have stopped the negotiation entirely");
+            "asking for a size the producer does not have stopped the negotiation entirely"
+        );
 
         // What arrived is the producer's size, not the request - which is exactly why a consumer
         // must read the geometry rather than assume it.
         Assert.AreEqual(
             (Width, Height),
             seen[0],
-            "the negotiated geometry is neither what was asked for nor what the producer offers");
+            "the negotiated geometry is neither what was asked for nor what the producer offers"
+        );
 
         Assert.AreEqual(1, seen.Distinct().Count(), "the geometry changed between frames");
     }
@@ -353,7 +422,10 @@ public sealed class UpstreamExampleTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-dspvideo", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-dspvideo",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var reg = new PipeWireRegistry(ctx);
@@ -369,10 +441,12 @@ public sealed class UpstreamExampleTests
         source.ProcessCallback = (f, _, in _) =>
         {
             PipeWireVideoCycle v = f.VideoCycle;
-            if (!v.IsValid || v.Width == 0 || v.Height == 0) return;
+            if (!v.IsValid || v.Width == 0 || v.Height == 0)
+                return;
 
             Span<float> pixels = srcOut.GetPixels(v.Width, v.Height);
-            if (pixels.IsEmpty) return;
+            if (pixels.IsEmpty)
+                return;
 
             // A value that changes every cycle, so a stale or repeated buffer is visible.
             float tag = Interlocked.Increment(ref written);
@@ -392,17 +466,24 @@ public sealed class UpstreamExampleTests
         play.ProcessCallback = (f, _, in _) =>
         {
             PipeWireVideoCycle v = f.VideoCycle;
-            if (!v.IsValid || v.Width == 0 || v.Height == 0) return;
+            if (!v.IsValid || v.Width == 0 || v.Height == 0)
+                return;
 
             Span<float> pixels = playIn.GetPixels(v.Width, v.Height);
-            if (pixels.IsEmpty) return;
+            if (pixels.IsEmpty)
+                return;
 
             float first = pixels[0];
-            if (first == 0f) return;   // a cycle before the source has written anything
+            if (first == 0f)
+                return; // a cycle before the source has written anything
 
             foreach (float px in pixels)
             {
-                if (px != first) { Interlocked.Increment(ref nonUniform); break; }
+                if (px != first)
+                {
+                    Interlocked.Increment(ref nonUniform);
+                    break;
+                }
             }
 
             // Recorded inside the cycle, where the geometry is actually available: four floats
@@ -425,25 +506,35 @@ public sealed class UpstreamExampleTests
         uint playNode = await play.WaitForNodeIdAsync(cts.Token);
 
         // Both ports have to reach the registry before they can be linked.
-        PipeWirePort? outPort = null, inPort = null;
+        PipeWirePort? outPort = null,
+            inPort = null;
         for (var i = 0; i < 100 && (outPort is null || inPort is null); i++)
         {
             PipeWireGraphSnapshot g = reg.Current;
-            outPort ??= g.Ports.FirstOrDefault(
-                p => p.NodeId == srcNode && p.PortDirection == PipeWirePortDirection.Out);
-            inPort ??= g.Ports.FirstOrDefault(
-                p => p.NodeId == playNode && p.PortDirection == PipeWirePortDirection.In);
+            outPort ??= g.Ports.FirstOrDefault(p =>
+                p.NodeId == srcNode && p.PortDirection == PipeWirePortDirection.Out
+            );
+            inPort ??= g.Ports.FirstOrDefault(p =>
+                p.NodeId == playNode && p.PortDirection == PipeWirePortDirection.In
+            );
 
-            if (outPort is null || inPort is null) await Task.Delay(50, cts.Token);
+            if (outPort is null || inPort is null)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(outPort, "the source filter's video port never reached the graph");
         Assert.IsNotNull(inPort, "the consuming filter's video port never reached the graph");
 
-        Assert.AreEqual("32 bit float RGBA video", outPort!.DspFormat,
-            "the source port reached the graph declaring the wrong DSP format");
-        Assert.AreEqual("32 bit float RGBA video", inPort!.DspFormat,
-            "the consuming port reached the graph declaring the wrong DSP format");
+        Assert.AreEqual(
+            "32 bit float RGBA video",
+            outPort!.DspFormat,
+            "the source port reached the graph declaring the wrong DSP format"
+        );
+        Assert.AreEqual(
+            "32 bit float RGBA video",
+            inPort!.DspFormat,
+            "the consuming port reached the graph declaring the wrong DSP format"
+        );
 
         PipeWireLink link = await reg.CreateLink(outPort, inPort).ExecuteAsync(cts.Token);
         Assert.IsNotNull(link, "the two video ports could not be linked");
@@ -456,34 +547,43 @@ public sealed class UpstreamExampleTests
 
         Assert.IsTrue(
             Volatile.Read(ref written) > 0,
-            "the source filter's process callback never got a video buffer to write into");
+            "the source filter's process callback never got a video buffer to write into"
+        );
 
         Assert.IsTrue(
             Volatile.Read(ref read) >= 4,
-            $"only {Volatile.Read(ref read)} cycles carried pixels across the link");
+            $"only {Volatile.Read(ref read)} cycles carried pixels across the link"
+        );
 
         Assert.AreEqual(
-            0, Volatile.Read(ref nonUniform),
-            "a frame arrived with mixed values, so the buffer was torn or only partly written");
+            0,
+            Volatile.Read(ref nonUniform),
+            "a frame arrived with mixed values, so the buffer was torn or only partly written"
+        );
 
         // The accessor handed back exactly one frame: width * height * 4 floats.
         int[] shortfalls;
-        lock (pixelCounts) shortfalls = [.. pixelCounts];
+        lock (pixelCounts)
+            shortfalls = [.. pixelCounts];
 
         Assert.IsTrue(shortfalls.Length > 0, "no buffer size was recorded");
 
         foreach (int shortfall in shortfalls)
         {
             Assert.AreEqual(
-                0, shortfall,
-                $"a video buffer was {shortfall} floats away from one RGBA frame");
+                0,
+                shortfall,
+                $"a video buffer was {shortfall} floats away from one RGBA frame"
+            );
         }
 
         // What was read is something the source actually wrote, not an artefact.
         Assert.IsTrue(
-            Volatile.Read(ref lastRead) > 0 && Volatile.Read(ref lastRead) <= Volatile.Read(ref written),
+            Volatile.Read(ref lastRead) > 0
+                && Volatile.Read(ref lastRead) <= Volatile.Read(ref written),
             $"the consumer read {Volatile.Read(ref lastRead)}, which the source never wrote "
-            + $"(it had written up to {Volatile.Read(ref written)})");
+                + $"(it had written up to {Volatile.Read(ref written)})"
+        );
 
         // Outside a cycle the geometry is deliberately not reported, so a filter cannot size its
         // next access from a frame the graph has moved on from. Every cycle above proves the other
@@ -502,17 +602,21 @@ public sealed class UpstreamExampleTests
         {
             await Task.Delay(50, cts.Token);
             int now = Volatile.Read(ref read);
-            if (now == quiet) break;
+            if (now == quiet)
+                break;
             quiet = now;
         }
 
         Assert.AreEqual(
-            quiet, Volatile.Read(ref read),
-            "the consuming filter is still being scheduled after SetActive(false)");
+            quiet,
+            Volatile.Read(ref read),
+            "the consuming filter is still being scheduled after SetActive(false)"
+        );
 
         Assert.IsFalse(
             play.VideoCycle.IsValid,
-            "the frame geometry is still being reported outside the process callback");
+            "the frame geometry is still being reported outside the process callback"
+        );
     }
 
     /// <summary>
@@ -539,7 +643,8 @@ public sealed class UpstreamExampleTests
         // A note-on and a note-off as UMP packets, at distinct offsets inside the cycle.
         byte[] noteOn = [0x20, 0x90, 0x3C, 0x64];
         byte[] noteOff = [0x20, 0x80, 0x3C, 0x00];
-        const uint onOffset = 0, offOffset = 64;
+        const uint onOffset = 0,
+            offOffset = 64;
 
         await using var ctx = new PipeWireContext("pwnet-midi", ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
@@ -559,7 +664,8 @@ public sealed class UpstreamExampleTests
                 new SpaControl(offOffset, (uint)SpaControlType.Ump, new SpaBytes([.. noteOff])),
             ];
 
-            if (srcOut.WriteEvents(events)) Interlocked.Increment(ref sent);
+            if (srcOut.WriteEvents(events))
+                Interlocked.Increment(ref sent);
         };
 
         await using PipeWireFilter sink = PipeWireFilter.Create(ctx, "pwnet_midi_sink");
@@ -569,14 +675,17 @@ public sealed class UpstreamExampleTests
         sink.ProcessCallback = (_, _, in _) =>
         {
             SpaSequence? seq = sinkIn.ReadEvents();
-            if (seq is null || seq.Controls.Length == 0) return;
+            if (seq is null || seq.Controls.Length == 0)
+                return;
 
             lock (received)
             {
-                if (received.Count >= 16) return;
+                if (received.Count >= 16)
+                    return;
                 foreach (SpaControl c in seq.Controls)
                 {
-                    if (c.Value is SpaBytes b) received.Add((c.Offset, [.. b.Value]));
+                    if (c.Value is SpaBytes b)
+                        received.Add((c.Offset, [.. b.Value]));
                 }
             }
         };
@@ -587,16 +696,20 @@ public sealed class UpstreamExampleTests
         uint srcNode = await source.WaitForNodeIdAsync(cts.Token);
         uint sinkNode = await sink.WaitForNodeIdAsync(cts.Token);
 
-        PipeWirePort? outPort = null, inPort = null;
+        PipeWirePort? outPort = null,
+            inPort = null;
         for (var i = 0; i < 100 && (outPort is null || inPort is null); i++)
         {
             PipeWireGraphSnapshot g = reg.Current;
-            outPort ??= g.Ports.FirstOrDefault(
-                p => p.NodeId == srcNode && p.PortDirection == PipeWirePortDirection.Out);
-            inPort ??= g.Ports.FirstOrDefault(
-                p => p.NodeId == sinkNode && p.PortDirection == PipeWirePortDirection.In);
+            outPort ??= g.Ports.FirstOrDefault(p =>
+                p.NodeId == srcNode && p.PortDirection == PipeWirePortDirection.Out
+            );
+            inPort ??= g.Ports.FirstOrDefault(p =>
+                p.NodeId == sinkNode && p.PortDirection == PipeWirePortDirection.In
+            );
 
-            if (outPort is null || inPort is null) await Task.Delay(50, cts.Token);
+            if (outPort is null || inPort is null)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(outPort, "the MIDI source port never reached the graph");
@@ -610,16 +723,22 @@ public sealed class UpstreamExampleTests
 
         for (var i = 0; i < 100; i++)
         {
-            lock (received) { if (received.Count >= 4) break; }
+            lock (received)
+            {
+                if (received.Count >= 4)
+                    break;
+            }
             await Task.Delay(50, cts.Token);
         }
 
         (uint Offset, byte[] Data)[] got;
-        lock (received) got = [.. received];
+        lock (received)
+            got = [.. received];
 
         Assert.IsTrue(
             Volatile.Read(ref sent) > 0,
-            "the source filter never got a buffer to write MIDI into");
+            "the source filter never got a buffer to write MIDI into"
+        );
 
         Assert.IsTrue(got.Length >= 4, $"only {got.Length} MIDI events crossed the link");
 
@@ -632,20 +751,23 @@ public sealed class UpstreamExampleTests
             Assert.IsTrue(
                 isOn || isOff,
                 $"an event arrived with payload [{string.Join(" ", data.Select(b => b.ToString("X2")))}], "
-                + "which is neither packet that was sent");
+                    + "which is neither packet that was sent"
+            );
 
             // And at the offset it was sent at: a sequence that lost its timing would deliver the
             // right notes at the wrong moment inside the quantum.
             Assert.AreEqual(
                 isOn ? onOffset : offOffset,
                 offset,
-                "a MIDI event arrived at the wrong offset within the cycle");
+                "a MIDI event arrived at the wrong offset within the cycle"
+            );
         }
 
         Assert.IsTrue(
             got.Any(e => e.Data.AsSpan().SequenceEqual(noteOn))
-            && got.Any(e => e.Data.AsSpan().SequenceEqual(noteOff)),
-            "only one of the two packets ever arrived");
+                && got.Any(e => e.Data.AsSpan().SequenceEqual(noteOff)),
+            "only one of the two packets ever arrived"
+        );
     }
 
     /// <summary>
@@ -663,7 +785,10 @@ public sealed class UpstreamExampleTests
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-dspformats", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-dspformats",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         await using var reg = new PipeWireRegistry(ctx);
@@ -687,15 +812,19 @@ public sealed class UpstreamExampleTests
         for (var i = 0; i < 100 && ports.Count < 5; i++)
         {
             ports = [.. reg.Current.Ports.Where(p => p.NodeId == nodeId)];
-            if (ports.Count < 5) await Task.Delay(100, cts.Token);
+            if (ports.Count < 5)
+                await Task.Delay(100, cts.Token);
         }
 
         Assert.AreEqual(5, ports.Count, "not every DSP port reached the graph");
 
         Dictionary<string, string?> byName = ports.ToDictionary(
-            p => p.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_PORT_NAME) ?? p.PortId.ToString(),
+            p =>
+                p.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_PORT_NAME)
+                ?? p.PortId.ToString(),
             p => p.DspFormat,
-            StringComparer.Ordinal);
+            StringComparer.Ordinal
+        );
 
         Assert.AreEqual("32 bit float mono audio", byName["audio_in"]);
         Assert.AreEqual("8 bit raw midi", byName["midi_in"]);
@@ -710,8 +839,9 @@ public sealed class UpstreamExampleTests
         // control.ump is one of the port's own properties, outside the keys the daemon copies onto
         // the registry global (impl-port.c global_keys). It arrives with the port's info once the
         // port is bound, and binding files it into the registry's record of the port.
-        PipeWirePort ump = ports.Single(
-            p => p.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_PORT_NAME) == "ump_in");
+        PipeWirePort ump = ports.Single(p =>
+            p.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_PORT_NAME) == "ump_in"
+        );
         await using PipeWirePortProxy bound = reg.BindPort(ump.PortId);
         for (var i = 0; i < 50 && ump.Properties.GetValueOrDefault("control.ump") is null; i++)
         {
@@ -727,7 +857,8 @@ public sealed class UpstreamExampleTests
             Assert.AreEqual(
                 "true",
                 ump.Properties.GetValueOrDefault("control.ump")?.ToLowerInvariant(),
-                "the UMP port reached the graph as plain MIDI, so MIDI 2.0 packets would be misread");
+                "the UMP port reached the graph as plain MIDI, so MIDI 2.0 packets would be misread"
+            );
         }
     }
 }

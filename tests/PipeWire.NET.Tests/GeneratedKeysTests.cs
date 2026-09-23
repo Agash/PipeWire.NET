@@ -35,19 +35,32 @@ public sealed class GeneratedKeysTests
     /// getter is bound as a delegate and the result copied out instead.
     /// </remarks>
     private static List<(string Name, byte[] Utf8)> NativeSpans() =>
-        [.. typeof(NativeConstants)
-            .GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
-            .Where(p => p.PropertyType == typeof(ReadOnlySpan<byte>))
-            .OrderBy(p => p.Name, StringComparer.Ordinal)
-            .Select(p => (
-                p.Name,
-                ((SpanGetter)Delegate.CreateDelegate(typeof(SpanGetter), p.GetGetMethod(true)!))().ToArray()))];
+        [
+            .. typeof(NativeConstants)
+                .GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+                .Where(p => p.PropertyType == typeof(ReadOnlySpan<byte>))
+                .OrderBy(p => p.Name, StringComparer.Ordinal)
+                .Select(p =>
+                    (
+                        p.Name,
+                        (
+                            (SpanGetter)
+                                Delegate.CreateDelegate(typeof(SpanGetter), p.GetGetMethod(true)!)
+                        )()
+                            .ToArray()
+                    )
+                ),
+        ];
 
     private static Dictionary<string, string> StringKeys() =>
         typeof(PipeWireKeys)
             .GetFields(BindingFlags.Public | BindingFlags.Static)
             .Where(f => f.IsLiteral && f.FieldType == typeof(string))
-            .ToDictionary(f => f.Name, f => (string)f.GetRawConstantValue()!, StringComparer.Ordinal);
+            .ToDictionary(
+                f => f.Name,
+                f => (string)f.GetRawConstantValue()!,
+                StringComparer.Ordinal
+            );
 
     /// <summary>
     /// The derived string form and the generated span form name the same property, for every key.
@@ -66,7 +79,8 @@ public sealed class GeneratedKeysTests
 
         foreach ((string name, byte[] utf8) in NativeSpans())
         {
-            if (!strings.TryGetValue(name, out string? asString)) continue;
+            if (!strings.TryGetValue(name, out string? asString))
+                continue;
 
             compared++;
             string decoded = Encoding.UTF8.GetString(utf8);
@@ -98,7 +112,8 @@ public sealed class GeneratedKeysTests
             Assert.AreEqual(
                 (byte)0,
                 p[NativeConstants.PW_KEY_NODE_NAME.Length],
-                "a u8 literal handed to native code was not NUL-terminated past its length");
+                "a u8 literal handed to native code was not NUL-terminated past its length"
+            );
         }
 
         fixed (byte* p = NativeConstants.PW_TYPE_INTERFACE_Node)
@@ -117,7 +132,10 @@ public sealed class GeneratedKeysTests
         foreach ((string name, string value) in keys)
         {
             Assert.AreNotEqual(0, value.Length, $"{name} is empty");
-            Assert.IsFalse(value.Contains('\0', StringComparison.Ordinal), $"{name} contains a NUL");
+            Assert.IsFalse(
+                value.Contains('\0', StringComparison.Ordinal),
+                $"{name} contains a NUL"
+            );
             Assert.IsFalse(value.Any(char.IsWhiteSpace), $"{name} contains whitespace: '{value}'");
         }
     }
@@ -138,16 +156,27 @@ public sealed class GeneratedKeysTests
         // constants is folded at compile time and asserts nothing about the shipped assembly.
         Dictionary<string, string> keys = StringKeys();
 
-        Assert.AreEqual("module.filename", keys.GetValueOrDefault(nameof(PipeWireKeys.MODULE_FILENAME)));
+        Assert.AreEqual(
+            "module.filename",
+            keys.GetValueOrDefault(nameof(PipeWireKeys.MODULE_FILENAME))
+        );
         Assert.AreEqual("module.args", keys.GetValueOrDefault(nameof(PipeWireKeys.MODULE_ARGS)));
 
-        string generated = File.ReadAllText(Path.Combine(
-            PublicSurfaceTests.RepoRoot(), "src", "PipeWire.NET", "generated", "PipeWireKeys.g.cs"));
+        string generated = File.ReadAllText(
+            Path.Combine(
+                PublicSurfaceTests.RepoRoot(),
+                "src",
+                "PipeWire.NET",
+                "generated",
+                "PipeWireKeys.g.cs"
+            )
+        );
 
         Assert.IsFalse(
             generated.Contains("MODULE_FILENAME", StringComparison.Ordinal),
             "a library-defined key is being emitted into the generated file, where the next "
-            + "regeneration drops it");
+                + "regeneration drops it"
+        );
     }
 
     /// <summary>
@@ -166,10 +195,12 @@ public sealed class GeneratedKeysTests
 
         foreach ((string name, string value) in keys)
         {
-            if (!name.StartsWith("PW_KEY_", StringComparison.Ordinal)) continue;
+            if (!name.StartsWith("PW_KEY_", StringComparison.Ordinal))
+                continue;
 
             string spa = "SPA_KEY_" + name["PW_KEY_".Length..];
-            if (!keys.TryGetValue(spa, out string? other)) continue;
+            if (!keys.TryGetValue(spa, out string? other))
+                continue;
 
             compared++;
             Assert.AreEqual(value, other, $"{name} and {spa} name different properties");

@@ -17,7 +17,8 @@ namespace PipeWire.NET.Interop;
 [SupportedOSPlatform("linux")]
 internal sealed unsafe class PipeWireLoopHandle : SafeHandle
 {
-    internal PipeWireLoopHandle(pw_thread_loop* loop) : base((IntPtr)loop, ownsHandle: true) { }
+    internal PipeWireLoopHandle(pw_thread_loop* loop)
+        : base((IntPtr)loop, ownsHandle: true) { }
 
     public override bool IsInvalid => handle == IntPtr.Zero;
 
@@ -34,7 +35,8 @@ internal sealed unsafe class PipeWireLoopHandle : SafeHandle
     internal void Unlock(pw_thread_loop* loop)
     {
         int rc = Native.pw_thread_loop_unlock_checked(loop);
-        if (rc < 0) RefusedUnlock?.Invoke(rc);
+        if (rc < 0)
+            RefusedUnlock?.Invoke(rc);
     }
 
     // Set by deterministic disposal before the base runs. Stopping joins the loop thread, so a
@@ -47,7 +49,8 @@ internal sealed unsafe class PipeWireLoopHandle : SafeHandle
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _deterministic = true;
+        if (disposing)
+            _deterministic = true;
         base.Dispose(disposing);
     }
 
@@ -61,7 +64,8 @@ internal sealed unsafe class PipeWireLoopHandle : SafeHandle
     {
         var loop = (pw_thread_loop*)handle;
         handle = IntPtr.Zero;
-        if (loop is null) return true;
+        if (loop is null)
+            return true;
 
         if (!_deterministic && !_enqueued)
         {
@@ -90,7 +94,8 @@ internal sealed unsafe class PipeWireLoopHandle : SafeHandle
         // deliberately left running and leaked: a leaked thread is recoverable and a hung process
         // is not. PipeWireContext refuses disposal on this thread for the same reason, which is why
         // reaching here means something bypassed it.
-        if (Native.pw_thread_loop_in_thread(loop)) return;
+        if (Native.pw_thread_loop_in_thread(loop))
+            return;
 
         Native.pw_thread_loop_stop(loop);
         Native.pw_thread_loop_destroy(loop);

@@ -1,6 +1,6 @@
 using System.Runtime.Versioning;
-using PipeWire.NET.Graph;
 using PipeWire.NET;
+using PipeWire.NET.Graph;
 
 namespace PipeWire.NET.SampleConsole;
 
@@ -28,7 +28,10 @@ internal sealed class Session : IAsyncDisposable
     /// `monitor` and `serve` sit waiting on a connection that is never coming back.
     /// </param>
     public static async Task<Session> ConnectAsync(
-        string name, CancellationTokenSource? onConnectionLost, CancellationToken cancellationToken)
+        string name,
+        CancellationTokenSource? onConnectionLost,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name);
         try
@@ -38,7 +41,9 @@ internal sealed class Session : IAsyncDisposable
             // leave the command waiting for ever with nothing on screen to say why.
             using var bounded = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-                cancellationToken, bounded.Token);
+                cancellationToken,
+                bounded.Token
+            );
 
             try
             {
@@ -47,7 +52,8 @@ internal sealed class Session : IAsyncDisposable
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 throw new TimeoutException(
-                    "the daemon did not complete the connection within 15s.");
+                    "the daemon did not complete the connection within 15s."
+                );
             }
         }
         catch
@@ -63,8 +69,13 @@ internal sealed class Session : IAsyncDisposable
             context.ConnectionLost += fault =>
             {
                 Console.Error.WriteLine($"  the daemon connection was lost: {fault.Message}");
-                try { onConnectionLost.Cancel(); }
-                catch (ObjectDisposedException) { /* the command already finished */ }
+                try
+                {
+                    onConnectionLost.Cancel();
+                }
+                catch (ObjectDisposedException)
+                { /* the command already finished */
+                }
             };
         }
 
@@ -75,7 +86,9 @@ internal sealed class Session : IAsyncDisposable
             // still completes, but a missing daemon must fail fast instead of hanging the sample.
             using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-                cancellationToken, bound.Token);
+                cancellationToken,
+                bound.Token
+            );
             try
             {
                 await registry.WaitForInitialEnumerationAsync(linked.Token).ConfigureAwait(false);

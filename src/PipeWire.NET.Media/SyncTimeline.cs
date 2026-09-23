@@ -30,7 +30,8 @@ internal static class SyncTimeline
     internal static SyncTimelineKind Classify(int fd, out uint handle, out int errno)
     {
         handle = DrmSyncobj.Import(fd, out errno);
-        if (handle != 0) return SyncTimelineKind.Syncobj;
+        if (handle != 0)
+            return SyncTimelineKind.Syncobj;
 
         if (Descriptors.IsEventfd(fd))
         {

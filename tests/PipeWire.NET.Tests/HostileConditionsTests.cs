@@ -39,7 +39,10 @@ public sealed class HostileConditionsTests : PipeWireTestBase
 
     /// <summary>A small host-memory producer of this library's own, publishing, unrouted.</summary>
     private static async Task<PipeWireVideoOutput> StartSourceAsync(
-        PipeWireContext ctx, string name, CancellationToken ct)
+        PipeWireContext ctx,
+        string name,
+        CancellationToken ct
+    )
     {
         var output = new PipeWireVideoOutput(ctx, name, 64, 48, PixelFormat.Bgra, 30);
         output.FillFrame += (_, pixels, _, _, _, _) =>
@@ -66,13 +69,20 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-hc-disposed", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-hc-disposed",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         // Targeted at a producer of this test's own. Untargeted, the session manager routes a video
         // capture to the default camera, and on a machine whose camera nothing feeds - the lab box's
         // v4l2 loopback - the daemon logs a failed VIDIOC_STREAMON for every run of this test.
-        await using PipeWireVideoOutput source = await StartSourceAsync(ctx, "pwnet-hc-disposed-src", cts.Token);
+        await using PipeWireVideoOutput source = await StartSourceAsync(
+            ctx,
+            "pwnet-hc-disposed-src",
+            cts.Token
+        );
 
         var capture = new PipeWireVideoCapture(ctx, "pwnet-hc-disposed-consumer");
         capture.Retention = FrameRetention.Owned;
@@ -114,12 +124,19 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-hc-nopull", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-hc-nopull",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         // Frames have to be flowing for "nothing retained" to mean anything: with no producer a
         // puller gets nothing whether or not retention is on.
-        await using PipeWireVideoOutput source = await StartSourceAsync(ctx, "pwnet-hc-nopull-src", cts.Token);
+        await using PipeWireVideoOutput source = await StartSourceAsync(
+            ctx,
+            "pwnet-hc-nopull-src",
+            cts.Token
+        );
 
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-hc-nopull-consumer");
         Assert.AreEqual(FrameRetention.None, capture.Retention, "retention must be off by default");
@@ -129,8 +146,12 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         capture.Connect((await source.WaitForNodeIdAsync(cts.Token)), [PixelFormat.Bgra]);
         await capture.WaitForStreamingAsync(cts.Token);
 
-        for (int i = 0; i < 60 && Volatile.Read(ref delivered) < 5; i++) await Task.Delay(50, cts.Token);
-        Assert.IsTrue(Volatile.Read(ref delivered) >= 5, "no frames flowed, so there was nothing to not retain");
+        for (int i = 0; i < 60 && Volatile.Read(ref delivered) < 5; i++)
+            await Task.Delay(50, cts.Token);
+        Assert.IsTrue(
+            Volatile.Read(ref delivered) >= 5,
+            "no frames flowed, so there was nothing to not retain"
+        );
 
         Assert.IsFalse(capture.TryGetFrame(out _));
         Assert.IsFalse(capture.TryGetBorrowedFrame(out _));
@@ -141,7 +162,10 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-hc-twice", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-hc-twice",
+            ConsoleTestLoggerFactory.Instance
+        );
 
         await ctx.StartAsync(cts.Token);
 
@@ -150,21 +174,25 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         {
             await ctx.StartAsync(cts.Token);
         }
-        catch (InvalidOperationException)
-        {
-        }
+        catch (InvalidOperationException) { }
 
         // Either way the context must still be usable afterwards.
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
-        Assert.IsTrue(reg.Current.Nodes.Length > 0, "the context stopped working after a double start");
+        Assert.IsTrue(
+            reg.Current.Nodes.Length > 0,
+            "the context stopped working after a double start"
+        );
     }
 
     [TestMethod]
     public async Task BuildingARegistryOnAnUnstartedContext_FailsRatherThanCrashing()
     {
         RequireLinux();
-        await using var ctx = new PipeWireContext("pwnet-hc-unstarted", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-hc-unstarted",
+            ConsoleTestLoggerFactory.Instance
+        );
 
         // There is no core to get a registry from yet. Dereferencing a null core in native code
         // would be a segfault, so this has to be a managed failure.
@@ -173,9 +201,12 @@ public sealed class HostileConditionsTests : PipeWireTestBase
             await using var reg = new PipeWireRegistry(ctx);
             Assert.Fail("a registry on an unstarted context must not appear to work");
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException or ArgumentNullException)
-        {
-        }
+        catch (Exception ex)
+            when (ex
+                    is InvalidOperationException
+                        or ObjectDisposedException
+                        or ArgumentNullException
+            ) { }
     }
 
     [TestMethod]
@@ -204,9 +235,12 @@ public sealed class HostileConditionsTests : PipeWireTestBase
             await using var reg = new PipeWireRegistry(ctx);
             Assert.Fail("a registry on a disposed context must not appear to work");
         }
-        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException or ArgumentNullException)
-        {
-        }
+        catch (Exception ex)
+            when (ex
+                    is ObjectDisposedException
+                        or InvalidOperationException
+                        or ArgumentNullException
+            ) { }
     }
 
     [TestMethod]
@@ -240,7 +274,10 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-hc-names", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-hc-names",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
@@ -249,14 +286,22 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         // the interesting ones: a name must not be able to inject a second property.
         try
         {
-            PipeWireNode node = await reg.CreateVirtualSink("Hostile").WithName(name)
-                                         .ExecuteAsync(cts.Token);
+            PipeWireNode node = await reg.CreateVirtualSink("Hostile")
+                .WithName(name)
+                .ExecuteAsync(cts.Token);
 
             PipeWireNode? live = reg.Current.GetNode(node.NodeId);
             Assert.IsNotNull(live);
-            Assert.AreEqual(name, live!.NodeName, "the name must round-trip exactly, not be reinterpreted");
-            Assert.AreEqual("Audio/Sink", live.MediaClass,
-                "a name must never be able to change another property");
+            Assert.AreEqual(
+                name,
+                live!.NodeName,
+                "the name must round-trip exactly, not be reinterpreted"
+            );
+            Assert.AreEqual(
+                "Audio/Sink",
+                live.MediaClass,
+                "a name must never be able to change another property"
+            );
 
             await reg.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
@@ -271,7 +316,10 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-hc-nul", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-hc-nul",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
@@ -281,19 +329,20 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         const string Name = "pwnet_hc_nul\0hidden";
         try
         {
-            PipeWireNode node = await reg.CreateVirtualSink("Nul").WithName(Name)
-                                         .ExecuteAsync(cts.Token);
+            PipeWireNode node = await reg.CreateVirtualSink("Nul")
+                .WithName(Name)
+                .ExecuteAsync(cts.Token);
 
             string? stored = reg.Current.GetNode(node.NodeId)?.NodeName;
             Assert.IsNotNull(stored);
-            Assert.IsFalse(stored!.Contains("hidden", StringComparison.Ordinal),
-                "text after a NUL must not reappear in the graph");
+            Assert.IsFalse(
+                stored!.Contains("hidden", StringComparison.Ordinal),
+                "text after a NUL must not reappear in the graph"
+            );
 
             await reg.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
-        catch (ArgumentException)
-        {
-        }
+        catch (ArgumentException) { }
     }
 
     [TestMethod]
@@ -301,13 +350,18 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-hc-long", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-hc-long",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         var name = "pwnet_hc_" + new string('x', 8192);
-        PipeWireNode node = await reg.CreateVirtualSink("Long").WithName(name).ExecuteAsync(cts.Token);
+        PipeWireNode node = await reg.CreateVirtualSink("Long")
+            .WithName(name)
+            .ExecuteAsync(cts.Token);
 
         string? stored = reg.Current.GetNode(node.NodeId)?.NodeName;
         Assert.AreEqual(name, stored, "a name that was accepted must come back whole");
@@ -322,7 +376,10 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-hc-nowhere", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-hc-nowhere",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         var states = new List<PipeWireStreamState>();
@@ -336,7 +393,11 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         {
             ExtraProperties = new Dictionary<string, string> { ["node.dont-fallback"] = "true" },
         };
-        capture.StateChanged += (_, _, s) => { lock (states) states.Add(s); };
+        capture.StateChanged += (_, _, s) =>
+        {
+            lock (states)
+                states.Add(s);
+        };
         capture.FrameReady += (_, _) => Interlocked.Increment(ref frames);
 
         // 999999 is not a live global. Connecting to it must reach a definite state rather than
@@ -347,7 +408,7 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         }
         catch (Exception e) when (e is InvalidOperationException or PipeWireException)
         {
-            return;   // refusing outright is the cleanest answer
+            return; // refusing outright is the cleanest answer
         }
 
         await Task.Delay(2000, cts.Token);
@@ -355,11 +416,17 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         lock (states)
         {
             Assert.IsTrue(states.Count > 0, "the stream never reported any state at all");
-            Assert.IsFalse(states[^1] is PipeWireStreamState.Streaming,
-                "a stream targeting a nonexistent node must not claim to be streaming");
+            Assert.IsFalse(
+                states[^1] is PipeWireStreamState.Streaming,
+                "a stream targeting a nonexistent node must not claim to be streaming"
+            );
         }
 
-        Assert.AreEqual(0, Volatile.Read(ref frames), "frames arrived from a node that does not exist");
+        Assert.AreEqual(
+            0,
+            Volatile.Read(ref frames),
+            "frames arrived from a node that does not exist"
+        );
     }
 
     [TestMethod]
@@ -367,14 +434,18 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-hc-gone", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-hc-gone",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         // A patchbay holding a stale id and acting on it is the everyday version of this.
         PipeWireNode node = await reg.CreateVirtualSink("Gone")
-                                     .WithName("pwnet_hc_gone").ExecuteAsync(cts.Token);
+            .WithName("pwnet_hc_gone")
+            .ExecuteAsync(cts.Token);
         uint staleId = node.NodeId;
         await reg.DestroyGlobalAsync(staleId, cts.Token);
         await WaitForAsync(reg, g => g.GetNode(staleId) is null, cts.Token);
@@ -383,11 +454,9 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         try
         {
             capture.Connect(staleId);
-            await Task.Delay(1500, cts.Token);   // must not hang, whatever it decides
+            await Task.Delay(1500, cts.Token); // must not hang, whatever it decides
         }
-        catch (Exception e) when (e is InvalidOperationException or PipeWireException)
-        {
-        }
+        catch (Exception e) when (e is InvalidOperationException or PipeWireException) { }
     }
 
     // ------------------------------------------------------------------ pressure
@@ -407,7 +476,10 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         {
             for (int i = 0; i < Count; i++)
             {
-                var ctx = new PipeWireContext($"pwnet-hc-many-{i}", ConsoleTestLoggerFactory.Instance);
+                var ctx = new PipeWireContext(
+                    $"pwnet-hc-many-{i}",
+                    ConsoleTestLoggerFactory.Instance
+                );
                 await ctx.StartAsync(cts.Token);
                 contexts.Add(ctx);
 
@@ -422,8 +494,10 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         }
         finally
         {
-            foreach (PipeWireRegistry reg in registries) await reg.DisposeAsync();
-            foreach (PipeWireContext ctx in contexts) await ctx.DisposeAsync();
+            foreach (PipeWireRegistry reg in registries)
+                await reg.DisposeAsync();
+            foreach (PipeWireContext ctx in contexts)
+                await ctx.DisposeAsync();
         }
 
         GC.Collect();
@@ -432,8 +506,10 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         await Task.Delay(300, cts.Token);
 
         int fdsAfter = OpenFds();
-        Assert.IsTrue(fdsAfter <= fdsBefore + 4,
-            $"{Count} connect/disconnect cycles leaked descriptors: {fdsBefore} -> {fdsAfter}");
+        Assert.IsTrue(
+            fdsAfter <= fdsBefore + 4,
+            $"{Count} connect/disconnect cycles leaked descriptors: {fdsBefore} -> {fdsAfter}"
+        );
     }
 
     [TestMethod]
@@ -441,7 +517,10 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        await using var ctx = new PipeWireContext("pwnet-hc-storm", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-hc-storm",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
@@ -461,25 +540,42 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         // of them and WirePlumber ends up no longer reading its core socket at all, which starves
         // every client that connects afterwards. The concurrency and the id reuse are the point
         // here and both survive the pause.
-        Task[] workers = [.. Enumerable.Range(0, 8).Select(w => Task.Run(async () =>
-        {
-            for (int i = 0; i < 10; i++)
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(25), cts.Token);
+        Task[] workers =
+        [
+            .. Enumerable
+                .Range(0, 8)
+                .Select(w =>
+                    Task.Run(
+                        async () =>
+                        {
+                            for (int i = 0; i < 10; i++)
+                            {
+                                await Task.Delay(TimeSpan.FromMilliseconds(25), cts.Token);
 
-                // No media.class. The session manager reads that as a routable endpoint and builds
-                // a session item for it, then tries to link it - and these nodes exist for a few
-                // milliseconds, so it never finds a target and every one of them ends as an
-                // aborted activation. Nothing here needs the node to be a sink.
-                PipeWireNode n = await reg.CreateVirtualSink($"Storm {w}-{i}")
-                                          .WithName($"pwnet_hc_storm_{w}_{i}")
-                                          .WithMediaClass("").ExecuteAsync(cts.Token);
-                Assert.IsNotNull(n.ObjectSerial, "a created node arrived without a serial");
-                mine.Add(n.ObjectSerial!.Value);
-                Assert.IsNotNull(reg.Current.GetNode(n.NodeId), "a created node was not in the graph");
-                await reg.DestroyGlobalAsync(n.NodeId, cts.Token);
-            }
-        }, cts.Token))];
+                                // No media.class. The session manager reads that as a routable endpoint and builds
+                                // a session item for it, then tries to link it - and these nodes exist for a few
+                                // milliseconds, so it never finds a target and every one of them ends as an
+                                // aborted activation. Nothing here needs the node to be a sink.
+                                PipeWireNode n = await reg.CreateVirtualSink($"Storm {w}-{i}")
+                                    .WithName($"pwnet_hc_storm_{w}_{i}")
+                                    .WithMediaClass("")
+                                    .ExecuteAsync(cts.Token);
+                                Assert.IsNotNull(
+                                    n.ObjectSerial,
+                                    "a created node arrived without a serial"
+                                );
+                                mine.Add(n.ObjectSerial!.Value);
+                                Assert.IsNotNull(
+                                    reg.Current.GetNode(n.NodeId),
+                                    "a created node was not in the graph"
+                                );
+                                await reg.DestroyGlobalAsync(n.NodeId, cts.Token);
+                            }
+                        },
+                        cts.Token
+                    )
+                ),
+        ];
 
         await Task.WhenAll(workers);
 
@@ -498,8 +594,10 @@ public sealed class HostileConditionsTests : PipeWireTestBase
             left = StillOurs(reg.Current, mine);
         }
 
-        Assert.IsEmpty(left,
-            $"the storm left {left.Length} of its own nodes in the graph: {string.Join(", ", left)}");
+        Assert.IsEmpty(
+            left,
+            $"the storm left {left.Length} of its own nodes in the graph: {string.Join(", ", left)}"
+        );
     }
 
     /// <summary>Ids this test created that still resolve to one of its nodes, or to no name.</summary>
@@ -507,9 +605,12 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     private static ulong[] StillOurs(PipeWireGraphSnapshot graph, ConcurrentBag<ulong> mine)
     {
         var ours = new HashSet<ulong>(mine);
-        return [.. graph.Nodes
-            .Where(n => n.ObjectSerial is { } serial && ours.Contains(serial))
-            .Select(n => n.ObjectSerial!.Value)];
+        return
+        [
+            .. graph
+                .Nodes.Where(n => n.ObjectSerial is { } serial && ours.Contains(serial))
+                .Select(n => n.ObjectSerial!.Value),
+        ];
     }
 
     // ------------------------------------------------------------------ losing the daemon
@@ -528,7 +629,8 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
         PipeWireNode node = await reg.CreateVirtualSink("Doomed")
-                                     .WithName("pwnet_hc_kicked_node").ExecuteAsync(cts.Token);
+            .WithName("pwnet_hc_kicked_node")
+            .ExecuteAsync(cts.Token);
         Assert.IsNotNull(reg.Current.GetNode(node.NodeId));
         uint? clientId = await FindOurClientIdAsync(AppName, cts.Token);
         if (clientId is null)
@@ -554,11 +656,18 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         long startedTicks = Environment.TickCount64;
         try
         {
-            await reg.CreateVirtualSink("After").WithName("pwnet_hc_after").ExecuteAsync(prompt.Token);
+            await reg.CreateVirtualSink("After")
+                .WithName("pwnet_hc_after")
+                .ExecuteAsync(prompt.Token);
             Assert.Fail("a create on a destroyed connection reported success");
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException
-                                      or TimeoutException or PipeWireException)
+        catch (Exception ex)
+            when (ex
+                    is InvalidOperationException
+                        or ObjectDisposedException
+                        or TimeoutException
+                        or PipeWireException
+            )
         {
             // A definite refusal, which is the point.
         }
@@ -566,7 +675,8 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         {
             Assert.Fail(
                 $"a create on a destroyed connection was still outstanding after "
-                + $"{(Environment.TickCount64 - startedTicks) / 1000.0:F1}s rather than failing");
+                    + $"{(Environment.TickCount64 - startedTicks) / 1000.0:F1}s rather than failing"
+            );
         }
         // And disposal after the connection is gone must still be clean.
         await reg.DisposeAsync();
@@ -578,7 +688,10 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         Directory.GetFileSystemEntries($"/proc/{Environment.ProcessId}/fd").Length;
 
     private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry, Func<PipeWireGraphSnapshot, bool> until, CancellationToken ct)
+        PipeWireRegistry registry,
+        Func<PipeWireGraphSnapshot, bool> until,
+        CancellationToken ct
+    )
     {
         await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(ct))
             if (until(graph))
@@ -609,20 +722,28 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(json);
         foreach (System.Text.Json.JsonElement o in doc.RootElement.EnumerateArray())
         {
-            if (!o.TryGetProperty("type", out System.Text.Json.JsonElement type)) continue;
-            if (!(type.GetString()?.EndsWith("Client", StringComparison.Ordinal) ?? false)) continue;
-            if (!o.TryGetProperty("info", out System.Text.Json.JsonElement info)) continue;
-            if (!info.TryGetProperty("props", out System.Text.Json.JsonElement props)) continue;
-            if (!o.TryGetProperty("id", out System.Text.Json.JsonElement id)) continue;
+            if (!o.TryGetProperty("type", out System.Text.Json.JsonElement type))
+                continue;
+            if (!(type.GetString()?.EndsWith("Client", StringComparison.Ordinal) ?? false))
+                continue;
+            if (!o.TryGetProperty("info", out System.Text.Json.JsonElement info))
+                continue;
+            if (!info.TryGetProperty("props", out System.Text.Json.JsonElement props))
+                continue;
+            if (!o.TryGetProperty("id", out System.Text.Json.JsonElement id))
+                continue;
 
-            bool ourPid = props.TryGetProperty("pipewire.sec.pid", out System.Text.Json.JsonElement pid)
-                          && pid.TryGetInt32(out int value)
-                          && value == Environment.ProcessId;
+            bool ourPid =
+                props.TryGetProperty("pipewire.sec.pid", out System.Text.Json.JsonElement pid)
+                && pid.TryGetInt32(out int value)
+                && value == Environment.ProcessId;
 
-            bool ourName = props.TryGetProperty("application.name", out System.Text.Json.JsonElement name)
-                           && name.GetString() == appName;
+            bool ourName =
+                props.TryGetProperty("application.name", out System.Text.Json.JsonElement name)
+                && name.GetString() == appName;
 
-            if (ourPid || ourName) return id.GetUInt32();
+            if (ourPid || ourName)
+                return id.GetUInt32();
         }
         return null;
     }

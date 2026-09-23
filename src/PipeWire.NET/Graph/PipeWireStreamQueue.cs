@@ -32,4 +32,5 @@ public readonly record struct PipeWireStreamQueue(
     ulong Queued,
     ulong Buffered,
     uint QueuedBuffers,
-    uint AvailableBuffers);
+    uint AvailableBuffers
+);

@@ -25,7 +25,8 @@ public sealed record OwnedAudioFrame(
     long? QueuedTimeNs,
     long? GraphTimeNs,
     long? StreamPositionNs,
-    long DelayNs)
+    long DelayNs
+)
 {
     // By content, for the same reason as OwnedVideoFrame above.
     /// <inheritdoc/>

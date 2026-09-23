@@ -40,16 +40,25 @@ public sealed class PublicSurfaceTests : PipeWireTestBase
         {
             foreach (Type type in assembly.GetExportedTypes())
             {
-                if (IsCompilerGenerated(type)) continue;
+                if (IsCompilerGenerated(type))
+                    continue;
 
                 lines.Add(type.FullName!);
 
-                foreach (MemberInfo member in type.GetMembers(
-                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+                foreach (
+                    MemberInfo member in type.GetMembers(
+                        BindingFlags.Public
+                            | BindingFlags.Instance
+                            | BindingFlags.Static
+                            | BindingFlags.DeclaredOnly
+                    )
+                )
                 {
                     // Property and event accessors are already implied by the property or event.
-                    if (member is MethodInfo { IsSpecialName: true }) continue;
-                    if (IsCompilerGenerated(member)) continue;
+                    if (member is MethodInfo { IsSpecialName: true })
+                        continue;
+                    if (IsCompilerGenerated(member))
+                        continue;
 
                     lines.Add($"{type.FullName}.{Signature(member)}");
                 }
@@ -60,15 +69,16 @@ public sealed class PublicSurfaceTests : PipeWireTestBase
         return string.Join('\n', lines) + '\n';
     }
 
-    private static string Signature(MemberInfo member) => member switch
-    {
-        MethodBase method =>
-            $"{method.Name}({string.Join(", ", method.GetParameters().Select(p => Render(p.ParameterType)))})",
-        PropertyInfo property => $"{property.Name} : {Render(property.PropertyType)}",
-        FieldInfo field => $"{field.Name} = {Render(field.FieldType)}",
-        EventInfo evt => $"{evt.Name} event",
-        _ => member.Name,
-    };
+    private static string Signature(MemberInfo member) =>
+        member switch
+        {
+            MethodBase method =>
+                $"{method.Name}({string.Join(", ", method.GetParameters().Select(p => Render(p.ParameterType)))})",
+            PropertyInfo property => $"{property.Name} : {Render(property.PropertyType)}",
+            FieldInfo field => $"{field.Name} = {Render(field.FieldType)}",
+            EventInfo evt => $"{evt.Name} event",
+            _ => member.Name,
+        };
 
     /// <summary>A type name that tells two generic instantiations apart.</summary>
     /// <remarks>
@@ -78,11 +88,13 @@ public sealed class PublicSurfaceTests : PipeWireTestBase
     /// </remarks>
     private static string Render(Type type)
     {
-        if (!type.IsGenericType) return type.Name;
+        if (!type.IsGenericType)
+            return type.Name;
 
         string name = type.Name;
         int tick = name.IndexOf('`', StringComparison.Ordinal);
-        if (tick >= 0) name = name[..tick];
+        if (tick >= 0)
+            name = name[..tick];
 
         return $"{name}<{string.Join(", ", type.GetGenericArguments().Select(Render))}>";
     }
@@ -100,7 +112,9 @@ public sealed class PublicSurfaceTests : PipeWireTestBase
             // missing baseline there means it was never committed, and quietly generating one
             // turns the whole check into a skip that reads as a pass.
             if (Environment.GetEnvironmentVariable("CI") is { Length: > 0 })
-                Assert.Fail($"{baselinePath} is missing. It is a committed file, not a generated one.");
+                Assert.Fail(
+                    $"{baselinePath} is missing. It is a committed file, not a generated one."
+                );
 
             File.WriteAllText(baselinePath, actual, new UTF8Encoding(false));
             Assert.Inconclusive($"wrote a first baseline to {baselinePath}; review and commit it.");
@@ -108,18 +122,26 @@ public sealed class PublicSurfaceTests : PipeWireTestBase
 
         string expected = File.ReadAllText(baselinePath).ReplaceLineEndings("\n");
 
-        if (expected == actual) return;
+        if (expected == actual)
+            return;
 
         // Show what moved rather than two thousand lines of file.
         var before = new HashSet<string>(expected.Split('\n'), StringComparer.Ordinal);
         var after = new HashSet<string>(actual.Split('\n'), StringComparer.Ordinal);
 
-        IEnumerable<string> removed = before.Except(after).Order(StringComparer.Ordinal).Select(l => $"  - {l}");
-        IEnumerable<string> added = after.Except(before).Order(StringComparer.Ordinal).Select(l => $"  + {l}");
+        IEnumerable<string> removed = before
+            .Except(after)
+            .Order(StringComparer.Ordinal)
+            .Select(l => $"  - {l}");
+        IEnumerable<string> added = after
+            .Except(before)
+            .Order(StringComparer.Ordinal)
+            .Select(l => $"  + {l}");
 
         Assert.Fail(
             "the public surface changed. Intentional? Regenerate PublicAPI.txt by deleting it and "
-            + $"re-running this test.\n{string.Join('\n', removed.Concat(added))}");
+                + $"re-running this test.\n{string.Join('\n', removed.Concat(added))}"
+        );
     }
 
     [TestMethod]
@@ -133,14 +155,26 @@ public sealed class PublicSurfaceTests : PipeWireTestBase
         {
             foreach (Type type in assembly.GetExportedTypes())
             {
-                foreach (MethodInfo method in type.GetMethods(
-                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+                foreach (
+                    MethodInfo method in type.GetMethods(
+                        BindingFlags.Public
+                            | BindingFlags.Instance
+                            | BindingFlags.Static
+                            | BindingFlags.DeclaredOnly
+                    )
+                )
                 {
                     factories.Add(Unwrap(method.ReturnType).Name);
                 }
 
-                foreach (PropertyInfo property in type.GetProperties(
-                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+                foreach (
+                    PropertyInfo property in type.GetProperties(
+                        BindingFlags.Public
+                            | BindingFlags.Instance
+                            | BindingFlags.Static
+                            | BindingFlags.DeclaredOnly
+                    )
+                )
                 {
                     factories.Add(Unwrap(property.PropertyType).Name);
                 }
@@ -155,16 +189,21 @@ public sealed class PublicSurfaceTests : PipeWireTestBase
             {
                 // Every bound-object type, identified by what makes it one: an internal static
                 // Bind and no public constructor.
-                if (type.GetConstructors(BindingFlags.Public | BindingFlags.Instance).Length > 0) continue;
-                if (type.GetMethod("Bind", BindingFlags.Static | BindingFlags.NonPublic) is null) continue;
+                if (type.GetConstructors(BindingFlags.Public | BindingFlags.Instance).Length > 0)
+                    continue;
+                if (type.GetMethod("Bind", BindingFlags.Static | BindingFlags.NonPublic) is null)
+                    continue;
 
-                if (!factories.Contains(type.Name)) unreachable.Add(type.Name);
+                if (!factories.Contains(type.Name))
+                    unreachable.Add(type.Name);
             }
         }
 
-        Assert.IsTrue(unreachable.Count == 0,
+        Assert.IsTrue(
+            unreachable.Count == 0,
             "these public types cannot be obtained from anywhere in the public surface: "
-            + string.Join(", ", unreachable));
+                + string.Join(", ", unreachable)
+        );
     }
 
     /// <summary>Whether a type is the compiler's, not the library's.</summary>
@@ -176,7 +215,10 @@ public sealed class PublicSurfaceTests : PipeWireTestBase
     private static bool IsCompilerGenerated(Type type) =>
         type.FullName is null
         || type.FullName.Contains('<', StringComparison.Ordinal)
-        || type.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), false);
+        || type.IsDefined(
+            typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute),
+            false
+        );
 
     /// <summary>Whether a member is the compiler's, not the library's.</summary>
     /// <remarks>
@@ -193,7 +235,11 @@ public sealed class PublicSurfaceTests : PipeWireTestBase
         while (type.IsGenericType)
         {
             Type definition = type.GetGenericTypeDefinition();
-            if (definition != typeof(Task<>) && definition != typeof(ValueTask<>) && definition != typeof(Nullable<>))
+            if (
+                definition != typeof(Task<>)
+                && definition != typeof(ValueTask<>)
+                && definition != typeof(Nullable<>)
+            )
                 break;
 
             type = type.GetGenericArguments()[0];

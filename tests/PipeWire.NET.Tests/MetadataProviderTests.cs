@@ -37,12 +37,19 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-provider-nul", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-provider-nul",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         // Not exported: this one only checks argument validation, and a served store that is made and
         // unmade while a device is rebuilding can leave the daemon unable to answer anyone.
-        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique(), export: false);
+        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(
+            ctx,
+            Unique(),
+            export: false
+        );
 
         Assert.ThrowsExactly<ArgumentException>(() => provider.Set("a\0b", "v"));
         Assert.ThrowsExactly<ArgumentException>(() => provider.Set("k", "a\0b"));
@@ -56,7 +63,10 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         CliTool cli = CliTool.Require("pw-cli");
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-provider", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-provider",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -68,7 +78,11 @@ public sealed class MetadataProviderTests : PipeWireTestBase
             provider.Set("k", "v");
 
             // The failure this exists for: the daemon stops answering every client, not just us.
-            (int exit, _, _) = await cli.RunAsync(["info", "0"], cts.Token, TimeSpan.FromSeconds(5));
+            (int exit, _, _) = await cli.RunAsync(
+                ["info", "0"],
+                cts.Token,
+                TimeSpan.FromSeconds(5)
+            );
             Assert.AreEqual(0, exit, "the daemon stopped answering while we served a store");
 
             await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -84,15 +98,26 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-provider-events", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-provider-events",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         // Not exported: these assertions are all in-process, and a served store that is made and
         // unmade while a device is rebuilding can leave the daemon unable to answer anyone.
-        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique(), export: false);
+        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(
+            ctx,
+            Unique(),
+            export: false
+        );
 
         var seen = new List<PipeWireMetadataEntry>();
-        provider.EntryChanged += (_, e) => { lock (seen) seen.Add(e); };
+        provider.EntryChanged += (_, e) =>
+        {
+            lock (seen)
+                seen.Add(e);
+        };
 
         provider.Set("a", "1");
         provider.Set("a", "2");
@@ -119,12 +144,19 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-provider-clear", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-provider-clear",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         // Not exported: these assertions are all in-process, and a served store that is made and
         // unmade while a device is rebuilding can leave the daemon unable to answer anyone.
-        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique(), export: false);
+        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(
+            ctx,
+            Unique(),
+            export: false
+        );
 
         provider.Set("a", "1");
         provider.Set("b", "2");
@@ -152,12 +184,19 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-provider-clear-empty", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-provider-clear-empty",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
 
         // Not exported: these assertions are all in-process, and a served store that is made and
         // unmade while a device is rebuilding can leave the daemon unable to answer anyone.
-        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, Unique(), export: false);
+        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(
+            ctx,
+            Unique(),
+            export: false
+        );
 
         provider.Clear();
         Assert.AreEqual(0, provider.Entries.Count);
@@ -172,14 +211,20 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-provider-local", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-provider-local",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
         string name = Unique();
-        using PipeWireMetadataProvider provider =
-            PipeWireMetadataProvider.Create(ctx, name, export: false);
+        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(
+            ctx,
+            name,
+            export: false
+        );
 
         provider.Set("k", "v");
         Assert.AreEqual("v", provider.Get("k"));
@@ -187,8 +232,10 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         await registry.WaitForInitialEnumerationAsync(cts.Token);
         Assert.IsNull(
             registry.Current.Objects.FirstOrDefault(o =>
-                o is PipeWireMetadata metadata && metadata.MetadataName == name),
-            "an unexported store is visible in the graph");
+                o is PipeWireMetadata metadata && metadata.MetadataName == name
+            ),
+            "an unexported store is visible in the graph"
+        );
 
         provider.Dispose();
         Assert.ThrowsExactly<ObjectDisposedException>(() => provider.Set("k", "v"));
@@ -204,7 +251,10 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-provider-clearbind", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-provider-clearbind",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -212,7 +262,10 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         string name = Unique();
         using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, name);
 
-        await using var reader = new PipeWireContext("pwnet-provider-clearread", ConsoleTestLoggerFactory.Instance);
+        await using var reader = new PipeWireContext(
+            "pwnet-provider-clearread",
+            ConsoleTestLoggerFactory.Instance
+        );
         await reader.StartAsync(cts.Token);
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
@@ -260,7 +313,11 @@ public sealed class MetadataProviderTests : PipeWireTestBase
     /// would sometimes lose. A value that never arrives is still a failure, just a slower one.
     /// </remarks>
     private static async Task WaitForProviderValueAsync(
-        PipeWireMetadataProvider provider, string key, string? expected, CancellationToken cancellationToken)
+        PipeWireMetadataProvider provider,
+        string key,
+        string? expected,
+        CancellationToken cancellationToken
+    )
     {
         for (int attempt = 0; attempt < 150; attempt++)
         {
@@ -270,8 +327,11 @@ public sealed class MetadataProviderTests : PipeWireTestBase
             await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
         }
 
-        Assert.AreEqual(expected, provider.Get(key),
-            $"the serving process never held '{expected ?? "<null>"}` for '{key}'");
+        Assert.AreEqual(
+            expected,
+            provider.Get(key),
+            $"the serving process never held '{expected ?? "<null>"}` for '{key}'"
+        );
     }
 
     /// <summary>
@@ -286,10 +346,14 @@ public sealed class MetadataProviderTests : PipeWireTestBase
     [TestMethod]
     public async Task BindingAStoreThroughTheConnectionThatServesIt_IsRefusedRatherThanHanging()
     {
-        if (!OperatingSystem.IsLinux()) Assert.Inconclusive("PipeWire is a Linux daemon.");
+        if (!OperatingSystem.IsLinux())
+            Assert.Inconclusive("PipeWire is a Linux daemon.");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
-        await using var ctx = new PipeWireContext("pwnet-provider-selfbind", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-provider-selfbind",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -303,7 +367,8 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         {
             await registry.WaitForInitialEnumerationAsync(cts.Token);
             store = registry.Current.GetMetadata(name);
-            if (store is null) await Task.Delay(50, cts.Token);
+            if (store is null)
+                await Task.Delay(50, cts.Token);
         }
 
         Assert.IsNotNull(store, "the served store never reached the registry");

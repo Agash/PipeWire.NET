@@ -22,7 +22,11 @@ internal sealed unsafe class PipeWireFilterHandle : SafeHandle
     private spa_hook* _hook;
     private GCHandle _self;
 
-    internal PipeWireFilterHandle(pw_filter* filter, PipeWireLoopHandle loop, PipeWireCoreHandle? core)
+    internal PipeWireFilterHandle(
+        pw_filter* filter,
+        PipeWireLoopHandle loop,
+        PipeWireCoreHandle? core
+    )
         : base((IntPtr)filter, ownsHandle: true)
     {
         ArgumentNullException.ThrowIfNull(loop);
@@ -41,12 +45,19 @@ internal sealed unsafe class PipeWireFilterHandle : SafeHandle
         }
         catch
         {
-            if (_coreReferenced) { core!.DangerousRelease(); _coreReferenced = false; }
-            if (_loopReferenced) { loop.DangerousRelease(); _loopReferenced = false; }
+            if (_coreReferenced)
+            {
+                core!.DangerousRelease();
+                _coreReferenced = false;
+            }
+            if (_loopReferenced)
+            {
+                loop.DangerousRelease();
+                _loopReferenced = false;
+            }
             throw;
         }
     }
-
 
     /// <summary>
     /// Hands the handle the listener memory, freed once the native object has been destroyed.
@@ -82,7 +93,8 @@ internal sealed unsafe class PipeWireFilterHandle : SafeHandle
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _deterministic = true;
+        if (disposing)
+            _deterministic = true;
         base.Dispose(disposing);
     }
 
@@ -102,7 +114,8 @@ internal sealed unsafe class PipeWireFilterHandle : SafeHandle
     private bool NeedsLoop(out nint loop)
     {
         loop = 0;
-        if (handle == IntPtr.Zero || !_loopReferenced || _loop.IsInvalid) return false;
+        if (handle == IntPtr.Zero || !_loopReferenced || _loop.IsInvalid)
+            return false;
         loop = (nint)_loop.Loop;
         return loop != 0;
     }
@@ -156,7 +169,6 @@ internal sealed unsafe class PipeWireFilterHandle : SafeHandle
             }
             if (_self.IsAllocated)
                 _self.Free();
-
         }
 
         return true;

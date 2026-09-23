@@ -35,7 +35,8 @@ public sealed record PipeWireClient : IPipeWireObject
         string? SecurityLabel = null,
         string? SecurityAppId = null,
         string? SecurityInstanceId = null,
-        PipeWireProperties? Properties = null)
+        PipeWireProperties? Properties = null
+    )
     {
         this.Properties = Properties ?? PipeWireProperties.Empty;
         this.ObjectSerial = this.Properties.Serial;

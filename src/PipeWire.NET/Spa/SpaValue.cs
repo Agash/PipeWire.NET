@@ -135,7 +135,8 @@ public sealed record SpaString(string Value) : SpaValue
         {
             throw new ArgumentException(
                 "a SPA string is NUL-terminated on the wire, so it cannot contain a NUL.",
-                nameof(value));
+                nameof(value)
+            );
         }
 
         return value;
@@ -195,7 +196,8 @@ public sealed record SpaBitmap(ImmutableArray<byte> Bits) : SpaValue
 public sealed record SpaArray(SpaType ChildType, ImmutableArray<SpaValue> Items) : SpaValue
 {
     /// <summary>The items.</summary>
-    public ImmutableArray<SpaValue> Items { get; init; } = Coherent(ChildType, Items, nameof(Items));
+    public ImmutableArray<SpaValue> Items { get; init; } =
+        Coherent(ChildType, Items, nameof(Items));
 
     /// <inheritdoc/>
     public override SpaType Type => SpaType.Array;
@@ -207,16 +209,23 @@ public sealed record SpaArray(SpaType ChildType, ImmutableArray<SpaValue> Items)
     /// the item is truncated or padded to fit and the failure is a wrong value rather than an error.
     /// </remarks>
     internal static ImmutableArray<SpaValue> Coherent(
-        SpaType childType, ImmutableArray<SpaValue> items, string parameterName)
+        SpaType childType,
+        ImmutableArray<SpaValue> items,
+        string parameterName
+    )
     {
-        if (items.IsDefaultOrEmpty) return items;
+        if (items.IsDefaultOrEmpty)
+            return items;
 
         foreach (SpaValue item in items)
         {
-            if (item.Type == childType) continue;
+            if (item.Type == childType)
+                continue;
 
             throw new ArgumentException(
-                $"every child must be {childType}; found a {item.Type}.", parameterName);
+                $"every child must be {childType}; found a {item.Type}.",
+                parameterName
+            );
         }
 
         return items;
@@ -224,7 +233,8 @@ public sealed record SpaArray(SpaType ChildType, ImmutableArray<SpaValue> Items)
 
     /// <inheritdoc/>
     public bool Equals(SpaArray? other) =>
-        other is not null && ChildType == other.ChildType
+        other is not null
+        && ChildType == other.ChildType
         && SpaValueEquality.SequenceEqual(Items, other.Items);
 
     /// <inheritdoc/>
@@ -260,7 +270,11 @@ public sealed record SpaPodProperty(SpaKey Key, SpaPodPropFlags Flags, SpaValue 
 /// <param name="ObjectType">What the object describes, such as <see cref="SpaType.ObjectProps"/>.</param>
 /// <param name="ObjectId">Which parameter it answers.</param>
 /// <param name="Properties">The properties, in wire order.</param>
-public sealed record SpaObject(SpaType ObjectType, SpaParamType ObjectId, ImmutableArray<SpaPodProperty> Properties) : SpaValue
+public sealed record SpaObject(
+    SpaType ObjectType,
+    SpaParamType ObjectId,
+    ImmutableArray<SpaPodProperty> Properties
+) : SpaValue
 {
     /// <inheritdoc/>
     public override SpaType Type => SpaType.Object;
@@ -288,7 +302,9 @@ public sealed record SpaObject(SpaType ObjectType, SpaParamType ObjectId, Immuta
 
     /// <inheritdoc/>
     public bool Equals(SpaObject? other) =>
-        other is not null && ObjectType == other.ObjectType && ObjectId == other.ObjectId
+        other is not null
+        && ObjectType == other.ObjectType
+        && ObjectId == other.ObjectId
         && SpaValueEquality.SequenceEqual(Properties, other.Properties);
 
     /// <inheritdoc/>
@@ -304,20 +320,25 @@ public sealed record SpaObject(SpaType ObjectType, SpaParamType ObjectId, Immuta
 /// <see cref="SpaChoiceType.Range"/> the two after it are the minimum and maximum.
 /// </param>
 /// <exception cref="ArgumentException">An alternative is not of <paramref name="ChildType"/>.</exception>
-public sealed record SpaChoice(SpaChoiceType Kind, SpaType ChildType, ImmutableArray<SpaValue> Alternatives) : SpaValue
+public sealed record SpaChoice(
+    SpaChoiceType Kind,
+    SpaType ChildType,
+    ImmutableArray<SpaValue> Alternatives
+) : SpaValue
 {
     /// <summary>The alternatives.</summary>
     public ImmutableArray<SpaValue> Alternatives { get; init; } =
         Arity(Kind, SpaArray.Coherent(ChildType, Alternatives, nameof(Alternatives)));
 
     /// <summary>How many values the kind means, or 0 for the kinds that are lists.</summary>
-    internal static int RequiredCount(SpaChoiceType kind) => kind switch
-    {
-        SpaChoiceType.None => 1,
-        SpaChoiceType.Range => 3,
-        SpaChoiceType.Step => 4,
-        _ => 0,
-    };
+    internal static int RequiredCount(SpaChoiceType kind) =>
+        kind switch
+        {
+            SpaChoiceType.None => 1,
+            SpaChoiceType.Range => 3,
+            SpaChoiceType.Step => 4,
+            _ => 0,
+        };
 
     /// <summary>Whether a count is one the kind can mean. The parser's form of the check.</summary>
     /// <remarks>
@@ -333,15 +354,20 @@ public sealed record SpaChoice(SpaChoiceType Kind, SpaType ChildType, ImmutableA
     }
 
     private static ImmutableArray<SpaValue> Arity(
-        SpaChoiceType kind, ImmutableArray<SpaValue> alternatives)
+        SpaChoiceType kind,
+        ImmutableArray<SpaValue> alternatives
+    )
     {
-        if (alternatives.IsDefaultOrEmpty) return alternatives;
-        if (CountFitsKind(kind, alternatives.Length)) return alternatives;
+        if (alternatives.IsDefaultOrEmpty)
+            return alternatives;
+        if (CountFitsKind(kind, alternatives.Length))
+            return alternatives;
 
         throw new ArgumentException(
             $"a {kind} choice carries exactly {RequiredCount(kind)} values; this one has "
-            + $"{alternatives.Length}.",
-            nameof(alternatives));
+                + $"{alternatives.Length}.",
+            nameof(alternatives)
+        );
     }
 
     /// <inheritdoc/>
@@ -352,7 +378,9 @@ public sealed record SpaChoice(SpaChoiceType Kind, SpaType ChildType, ImmutableA
 
     /// <inheritdoc/>
     public bool Equals(SpaChoice? other) =>
-        other is not null && Kind == other.Kind && ChildType == other.ChildType
+        other is not null
+        && Kind == other.Kind
+        && ChildType == other.ChildType
         && SpaValueEquality.SequenceEqual(Alternatives, other.Alternatives);
 
     /// <inheritdoc/>
@@ -376,7 +404,8 @@ public sealed record SpaSequence(uint Unit, ImmutableArray<SpaControl> Controls)
 
     /// <inheritdoc/>
     public bool Equals(SpaSequence? other) =>
-        other is not null && Unit == other.Unit
+        other is not null
+        && Unit == other.Unit
         && SpaValueEquality.SequenceEqual(Controls, other.Controls);
 
     /// <inheritdoc/>
@@ -434,7 +463,8 @@ public sealed record SpaUnknown(SpaType UnknownType, ImmutableArray<byte> Body) 
 
     /// <inheritdoc/>
     public bool Equals(SpaUnknown? other) =>
-        other is not null && UnknownType == other.UnknownType
+        other is not null
+        && UnknownType == other.UnknownType
         && SpaValueEquality.SequenceEqual(Body, other.Body);
 
     /// <inheritdoc/>

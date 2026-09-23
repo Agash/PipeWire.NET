@@ -35,8 +35,7 @@ public sealed class PipeWireProperties : IReadOnlyDictionary<string, string>
     private PipeWireProperties(FrozenDictionary<string, string> items) => _items = items;
 
     /// <summary>An object the daemon sent no properties for.</summary>
-    public static PipeWireProperties Empty { get; } =
-        new(FrozenDictionary<string, string>.Empty);
+    public static PipeWireProperties Empty { get; } = new(FrozenDictionary<string, string>.Empty);
 
     /// <inheritdoc/>
     public string this[string key] => _items[key];
@@ -65,7 +64,9 @@ public sealed class PipeWireProperties : IReadOnlyDictionary<string, string>
 
     /// <summary>Reads a property that names another object, or null when it is absent or unusable.</summary>
     internal uint? Id(string key) =>
-        _items.TryGetValue(key, out string? raw) && uint.TryParse(raw, out uint value) ? value : null;
+        _items.TryGetValue(key, out string? raw) && uint.TryParse(raw, out uint value)
+            ? value
+            : null;
 
     /// <inheritdoc cref="Id"/>
     internal int? Int(string key) =>
@@ -77,7 +78,8 @@ public sealed class PipeWireProperties : IReadOnlyDictionary<string, string>
 
     /// <summary>Reads <c>object.serial</c>, which every object carries.</summary>
     internal ulong? Serial =>
-        _items.TryGetValue(PipeWireKeys.PW_KEY_OBJECT_SERIAL, out string? raw) && ulong.TryParse(raw, out ulong serial)
+        _items.TryGetValue(PipeWireKeys.PW_KEY_OBJECT_SERIAL, out string? raw)
+        && ulong.TryParse(raw, out ulong serial)
             ? serial
             : null;
 
@@ -95,23 +97,29 @@ public sealed class PipeWireProperties : IReadOnlyDictionary<string, string>
     /// </remarks>
     internal static unsafe PipeWireProperties From(spa_dict* dict)
     {
-        if (dict is null) return Empty;
+        if (dict is null)
+            return Empty;
 
         int count = (int)dict->n_items;
-        if (count <= 0 || dict->items is null) return Empty;
+        if (count <= 0 || dict->items is null)
+            return Empty;
 
         var items = new Dictionary<string, string>(count, StringComparer.Ordinal);
         for (int i = 0; i < count; i++)
         {
             spa_dict_item* item = dict->items + i;
-            if (item->key is null || item->value is null) continue;
+            if (item->key is null || item->value is null)
+                continue;
 
             string key = Encoding.UTF8.GetString(DaemonText.Bytes(item->key));
-            if (items.ContainsKey(key)) continue;
+            if (items.ContainsKey(key))
+                continue;
             items[key] = Encoding.UTF8.GetString(DaemonText.Bytes(item->value));
         }
 
-        return items.Count == 0 ? Empty : new PipeWireProperties(items.ToFrozenDictionary(StringComparer.Ordinal));
+        return items.Count == 0
+            ? Empty
+            : new PipeWireProperties(items.ToFrozenDictionary(StringComparer.Ordinal));
     }
 
     /// <summary>Wraps properties this library assembled rather than read off the wire.</summary>
@@ -129,11 +137,14 @@ public sealed class PipeWireProperties : IReadOnlyDictionary<string, string>
     /// </remarks>
     internal PipeWireProperties MergedWith(PipeWireProperties other)
     {
-        if (other.Count == 0) return this;
-        if (Count == 0) return other;
+        if (other.Count == 0)
+            return this;
+        if (Count == 0)
+            return other;
 
         var items = new Dictionary<string, string>(_items, StringComparer.Ordinal);
-        foreach (KeyValuePair<string, string> pair in other._items) items[pair.Key] = pair.Value;
+        foreach (KeyValuePair<string, string> pair in other._items)
+            items[pair.Key] = pair.Value;
         return new PipeWireProperties(items.ToFrozenDictionary(StringComparer.Ordinal));
     }
 }

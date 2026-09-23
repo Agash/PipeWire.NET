@@ -31,14 +31,16 @@ public sealed record PipeWireMetadataEntry(uint Subject, string Key, string? Typ
     {
         get
         {
-            if (string.IsNullOrEmpty(Value)) return null;
+            if (string.IsNullOrEmpty(Value))
+                return null;
 
             try
             {
                 using var document = JsonDocument.Parse(Value);
-                return document.RootElement.ValueKind == JsonValueKind.Object
-                       && document.RootElement.TryGetProperty("name", out JsonElement name)
-                       && name.ValueKind == JsonValueKind.String
+                return
+                    document.RootElement.ValueKind == JsonValueKind.Object
+                    && document.RootElement.TryGetProperty("name", out JsonElement name)
+                    && name.ValueKind == JsonValueKind.String
                     ? name.GetString()
                     : null;
             }

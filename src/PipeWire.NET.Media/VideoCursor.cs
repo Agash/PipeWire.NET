@@ -16,8 +16,17 @@ namespace PipeWire.NET.Media;
 public readonly ref struct VideoCursor
 {
     internal VideoCursor(
-        uint id, int x, int y, int hotspotX, int hotspotY,
-        PixelFormat format, uint width, uint height, int stride, ReadOnlySpan<byte> pixels)
+        uint id,
+        int x,
+        int y,
+        int hotspotX,
+        int hotspotY,
+        PixelFormat format,
+        uint width,
+        uint height,
+        int stride,
+        ReadOnlySpan<byte> pixels
+    )
     {
         Id = id;
         X = x;

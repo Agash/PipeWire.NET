@@ -30,7 +30,9 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken ct)
+        string name,
+        CancellationToken ct
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(ct);
@@ -40,7 +42,10 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     }
 
     private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry, Func<PipeWireGraphSnapshot, bool> until, CancellationToken ct)
+        PipeWireRegistry registry,
+        Func<PipeWireGraphSnapshot, bool> until,
+        CancellationToken ct
+    )
     {
         await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(ct))
             if (until(graph))
@@ -60,7 +65,10 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
-        await using var ctx = new PipeWireContext("pwnet-ragged", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-ragged",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
@@ -76,10 +84,12 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
         await using var output = new PipeWireAudioOutput(ctx, nodeName, Rate, Channels, Format);
         output.FillSamples += (_, samples, _, _, _) =>
         {
-            for (int i = 0; i < samples.Length; i++) samples[i] = (byte)(i % 3 == 0 ? 0x01 : 0x00);
+            for (int i = 0; i < samples.Length; i++)
+                samples[i] = (byte)(i % 3 == 0 ? 0x01 : 0x00);
 
             int ragged = Math.Min(samples.Length, (frameBytes * 8) + (frameBytes / 2));
-            if (ragged % frameBytes != 0) Interlocked.Increment(ref askedRagged);
+            if (ragged % frameBytes != 0)
+                Interlocked.Increment(ref askedRagged);
             return ragged;
         };
 
@@ -91,7 +101,10 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
         var received = 0;
         var ragged = 0;
 
-        await using var capture = new PipeWireAudioCapture(ctx, $"pwnet-ragged-sink-{Environment.ProcessId}");
+        await using var capture = new PipeWireAudioCapture(
+            ctx,
+            $"pwnet-ragged-sink-{Environment.ProcessId}"
+        );
         capture.FrameReady += (_, frame) =>
         {
             Interlocked.Increment(ref received);
@@ -105,10 +118,15 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
 
         await WaitForCountAsync(() => Volatile.Read(ref received), 5, cts.Token);
 
-        Assert.IsTrue(Volatile.Read(ref askedRagged) > 0,
-            "the producer never actually returned a partial frame, so nothing was exercised");
-        Assert.AreEqual(0, Volatile.Read(ref ragged),
-            $"{ragged} buffers reached the consumer without being a whole number of frames");
+        Assert.IsTrue(
+            Volatile.Read(ref askedRagged) > 0,
+            "the producer never actually returned a partial frame, so nothing was exercised"
+        );
+        Assert.AreEqual(
+            0,
+            Volatile.Read(ref ragged),
+            $"{ragged} buffers reached the consumer without being a whole number of frames"
+        );
     }
 
     [TestMethod]
@@ -117,11 +135,17 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     [DataRow(48000, 1, AudioSampleFormat.F32Le)]
     [DataRow(48000, 2, AudioSampleFormat.S16Le)]
     public async Task PublishedAudio_ArrivesAtAConsumerWithTheSameShape(
-        int rate, int channels, AudioSampleFormat format)
+        int rate,
+        int channels,
+        AudioSampleFormat format
+    )
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync($"pwnet-art-{rate}-{channels}", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
+            $"pwnet-art-{rate}-{channels}",
+            cts.Token
+        );
 
         await using (ctx)
         await using (reg)
@@ -135,7 +159,8 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
                 // A recognisable pattern rather than silence, so a consumer reading zeroes because
                 // nothing was routed is distinguishable from real audio. Deliberately tiny: if this
                 // ever reaches a real device it should be inaudible, not a burst of noise.
-                for (int i = 0; i < samples.Length; i++) samples[i] = (byte)(i % 3 == 0 ? 0x01 : 0x00);
+                for (int i = 0; i < samples.Length; i++)
+                    samples[i] = (byte)(i % 3 == 0 ? 0x01 : 0x00);
                 Interlocked.Increment(ref filled);
                 return samples.Length;
             };
@@ -150,10 +175,14 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
             var received = 0;
             var ragged = 0;
             var allZero = 0;
-            int seenRate = 0, seenChannels = 0;
+            int seenRate = 0,
+                seenChannels = 0;
             AudioSampleFormat? seenFormat = null;
 
-            await using var capture = new PipeWireAudioCapture(ctx, $"pwnet-art-sink-{rate}-{channels}");
+            await using var capture = new PipeWireAudioCapture(
+                ctx,
+                $"pwnet-art-sink-{rate}-{channels}"
+            );
             capture.FrameReady += (_, frame) =>
             {
                 Interlocked.Increment(ref received);
@@ -166,8 +195,16 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
                     Interlocked.Increment(ref ragged);
 
                 bool nonZero = false;
-                foreach (byte b in frame.Samples) { if (b != 0) { nonZero = true; break; } }
-                if (!nonZero && frame.Samples.Length > 0) Interlocked.Increment(ref allZero);
+                foreach (byte b in frame.Samples)
+                {
+                    if (b != 0)
+                    {
+                        nonZero = true;
+                        break;
+                    }
+                }
+                if (!nonZero && frame.Samples.Length > 0)
+                    Interlocked.Increment(ref allZero);
             };
 
             capture.Connect((await output.WaitForNodeIdAsync(cts.Token)), rate, channels, format);
@@ -176,11 +213,17 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
 
             Assert.IsTrue(filled > 0, "the producer was never asked for samples");
             Assert.AreEqual(rate, seenRate, "the consumer negotiated a different rate");
-            Assert.AreEqual(channels, seenChannels, "the consumer negotiated a different channel count");
+            Assert.AreEqual(
+                channels,
+                seenChannels,
+                "the consumer negotiated a different channel count"
+            );
             Assert.AreEqual(format, seenFormat);
             Assert.AreEqual(0, ragged, $"{ragged} buffers were not a whole number of frames");
-            Assert.IsTrue(allZero < received,
-                "every buffer was silence, so nothing was actually routed from the producer");
+            Assert.IsTrue(
+                allZero < received,
+                "every buffer was silence, so nothing was actually routed from the producer"
+            );
         }
     }
 
@@ -189,20 +232,29 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-art-routable", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
+            "pwnet-art-routable",
+            cts.Token
+        );
 
         await using (ctx)
         await using (reg)
         {
             await using var output = new PipeWireAudioOutput(ctx, "pwnet_art_routable");
-            output.FillSamples += (_, s, _, _, _) => { s.Clear(); return s.Length; };
+            output.FillSamples += (_, s, _, _, _) =>
+            {
+                s.Clear();
+                return s.Length;
+            };
             output.Connect(autoConnect: false);
 
             PipeWireGraphSnapshot graph = await WaitForAsync(
                 reg,
-                g => g.Nodes.Any(n => n.NodeName == "pwnet_art_routable")
-                     && g.GetPortsForNode(output.NodeId ?? 0).Length > 0,
-                cts.Token);
+                g =>
+                    g.Nodes.Any(n => n.NodeName == "pwnet_art_routable")
+                    && g.GetPortsForNode(output.NodeId ?? 0).Length > 0,
+                cts.Token
+            );
 
             uint id = (await output.WaitForNodeIdAsync(cts.Token));
             PipeWireNode node = graph.GetNode(id)!;
@@ -217,14 +269,22 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
 
             // And it must be linkable to a node we create separately.
             PipeWireNode sink = await reg.CreateVirtualSink("Sink")
-                                         .WithName("pwnet_art_sink").ExecuteAsync(cts.Token);
+                .WithName("pwnet_art_sink")
+                .ExecuteAsync(cts.Token);
             PipeWireGraphSnapshot ready = await WaitForAsync(
-                reg, g => g.GetPortsForNode(sink.NodeId).Length == 4, cts.Token);
+                reg,
+                g => g.GetPortsForNode(sink.NodeId).Length == 4,
+                cts.Token
+            );
 
-            PipeWirePort from = ready.GetPortsForNode(id, PipeWirePortDirection.Out)
-                                     .OrderBy(p => p.PortId).First();
-            PipeWirePort to = ready.GetPortsForNode(sink.NodeId, PipeWirePortDirection.In)
-                                   .OrderBy(p => p.PortId).First();
+            PipeWirePort from = ready
+                .GetPortsForNode(id, PipeWirePortDirection.Out)
+                .OrderBy(p => p.PortId)
+                .First();
+            PipeWirePort to = ready
+                .GetPortsForNode(sink.NodeId, PipeWirePortDirection.In)
+                .OrderBy(p => p.PortId)
+                .First();
 
             PipeWireLink link = await reg.CreateLink(from, to).ExecuteAsync(cts.Token);
             Assert.IsNotNull(reg.Current.GetLink(link.LinkId));
@@ -236,17 +296,28 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-art-silent", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
+            "pwnet-art-silent",
+            cts.Token
+        );
 
         await using (ctx)
         await using (reg)
         {
             var asked = 0;
             await using var output = new PipeWireAudioOutput(ctx, "pwnet_art_silent");
-            output.FillSamples += (_, _, _, _, _) => { Interlocked.Increment(ref asked); return 0; };
+            output.FillSamples += (_, _, _, _, _) =>
+            {
+                Interlocked.Increment(ref asked);
+                return 0;
+            };
             output.Connect(autoConnect: false);
 
-            await WaitForAsync(reg, g => g.Nodes.Any(n => n.NodeName == "pwnet_art_silent"), cts.Token);
+            await WaitForAsync(
+                reg,
+                g => g.Nodes.Any(n => n.NodeName == "pwnet_art_silent"),
+                cts.Token
+            );
 
             var received = 0;
             await using var capture = new PipeWireAudioCapture(ctx, "pwnet-art-silent-sink");
@@ -266,7 +337,10 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-art-throw", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
+            "pwnet-art-throw",
+            cts.Token
+        );
 
         await using (ctx)
         await using (reg)
@@ -281,7 +355,11 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
             };
             output.Connect(autoConnect: false);
 
-            await WaitForAsync(reg, g => g.Nodes.Any(n => n.NodeName == "pwnet_art_throw"), cts.Token);
+            await WaitForAsync(
+                reg,
+                g => g.Nodes.Any(n => n.NodeName == "pwnet_art_throw"),
+                cts.Token
+            );
 
             // An unrouted output is never driven, so nothing would ask it for samples and the test
             // would pass without exercising anything. A consumer pulling from it is what makes the
@@ -291,23 +369,28 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
 
             await WaitForCountAsync(() => Volatile.Read(ref asked), 5, cts.Token);
 
-            Assert.IsTrue(asked >= 5,
-                $"the stream stopped after {asked} throwing fills; it must survive a bad producer");
+            Assert.IsTrue(
+                asked >= 5,
+                $"the stream stopped after {asked} throwing fills; it must survive a bad producer"
+            );
 
             // Surviving is half of it. A swallowed exception nothing can read leaves a handler that
             // throws every cycle looking exactly like one that published silence, which is the
             // hardest kind of bug to find in somebody else's application.
             Assert.IsNotNull(
                 output.LastProcessError,
-                "the fill handler threw every cycle and the stream reported no error at all");
+                "the fill handler threw every cycle and the stream reported no error at all"
+            );
 
             Assert.IsInstanceOfType<InvalidOperationException>(
                 output.LastProcessError,
-                "the recorded error is not the one the handler threw");
+                "the recorded error is not the one the handler threw"
+            );
 
             Assert.IsTrue(
                 output.ProcessErrorCount >= 5,
-                $"{asked} fills threw but only {output.ProcessErrorCount} were counted");
+                $"{asked} fills threw but only {output.ProcessErrorCount} were counted"
+            );
         }
     }
 
@@ -316,17 +399,26 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-art-twice", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
+            "pwnet-art-twice",
+            cts.Token
+        );
 
         await using (ctx)
         await using (reg)
         {
             await using var output = new PipeWireAudioOutput(ctx, "pwnet_art_twice");
-            output.FillSamples += (_, s, _, _, _) => { s.Clear(); return s.Length; };
+            output.FillSamples += (_, s, _, _, _) =>
+            {
+                s.Clear();
+                return s.Length;
+            };
             output.Connect(autoConnect: false);
 
-            Assert.ThrowsExactly<InvalidOperationException>(() => output.Connect(),
-                "a second Connect would leak the first stream");
+            Assert.ThrowsExactly<InvalidOperationException>(
+                () => output.Connect(),
+                "a second Connect would leak the first stream"
+            );
 
             await using var capture = new PipeWireAudioCapture(ctx, "pwnet-art-twice-sink");
             capture.Connect();
@@ -342,18 +434,25 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     public async Task NonsenseStreamGeometry_IsRefusedAtConstruction(int rate, int channels)
     {
         RequireLinux();
-        await using var ctx = new PipeWireContext("pwnet-art-bad", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-art-bad",
+            ConsoleTestLoggerFactory.Instance
+        );
 
         // Caught before any native call, so a bad value never reaches the daemon.
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => new PipeWireAudioOutput(ctx, "pwnet_art_bad", rate, channels));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            new PipeWireAudioOutput(ctx, "pwnet_art_bad", rate, channels)
+        );
     }
 
     [TestMethod]
     public async Task AStreamRequiresAContextAndAName()
     {
         RequireLinux();
-        await using var ctx = new PipeWireContext("pwnet-art-null", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-art-null",
+            ConsoleTestLoggerFactory.Instance
+        );
 
         Assert.ThrowsExactly<ArgumentNullException>(() => new PipeWireAudioOutput(null!, "n"));
         Assert.ThrowsExactly<ArgumentException>(() => new PipeWireAudioOutput(ctx, ""));
@@ -392,14 +491,19 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
             output.FillSamples += (_, _, _, _, _) => 0;
             output.Connect(autoConnect: false);
 
-            await WaitForAsync(reg, g => g.Nodes.Any(n => n.NodeName == "pwnet_clock_out"), cts.Token);
+            await WaitForAsync(
+                reg,
+                g => g.Nodes.Any(n => n.NodeName == "pwnet_clock_out"),
+                cts.Token
+            );
 
             await using var capture = new PipeWireAudioCapture(ctx, "pwnet-clock-in");
             capture.FrameReady += (_, _) => { };
             capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
 
             // The area arrives with the first cycle, not with the connect.
-            PipeWireGraphClock? producer = null, consumer = null;
+            PipeWireGraphClock? producer = null,
+                consumer = null;
             for (int i = 0; i < 100 && (producer is null || consumer is null); i++)
             {
                 await Task.Delay(50, cts.Token);
@@ -411,9 +515,15 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
             Assert.IsNotNull(consumer, "the consumer never received SPA_IO_Position");
 
             Assert.IsTrue(producer!.Value.RateDen > 0, "a clock with no rate says nothing");
-            Assert.AreEqual(producer!.Value.RateDen, consumer!.Value.RateDen,
-                "two streams on one graph must be on one clock rate");
-            Assert.IsTrue(producer!.Value.Duration > 0, "the quantum must be a real number of frames");
+            Assert.AreEqual(
+                producer!.Value.RateDen,
+                consumer!.Value.RateDen,
+                "two streams on one graph must be on one clock rate"
+            );
+            Assert.IsTrue(
+                producer!.Value.Duration > 0,
+                "the quantum must be a real number of frames"
+            );
         }
     }
 
@@ -431,16 +541,27 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-art-seterror", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
+            "pwnet-art-seterror",
+            cts.Token
+        );
 
         await using (ctx)
         await using (reg)
         {
             var output = new PipeWireAudioOutput(ctx, "pwnet_art_seterror");
-            output.FillSamples += (_, samples, _, _, _) => { samples.Clear(); return samples.Length; };
+            output.FillSamples += (_, samples, _, _, _) =>
+            {
+                samples.Clear();
+                return samples.Length;
+            };
             output.Connect(autoConnect: false);
 
-            await WaitForAsync(reg, g => g.Nodes.Any(n => n.NodeName == "pwnet_art_seterror"), cts.Token);
+            await WaitForAsync(
+                reg,
+                g => g.Nodes.Any(n => n.NodeName == "pwnet_art_seterror"),
+                cts.Token
+            );
 
             // Accepted on a live stream, and it does not throw its way back out.
             output.SetError(-5, "a test said so");

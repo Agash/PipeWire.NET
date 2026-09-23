@@ -52,17 +52,32 @@ public sealed class DrmSyncobjTests
             SyncWait early = DrmSyncobj.Wait(handle, 5, TimeSpan.FromMilliseconds(200));
             long elapsed = Environment.TickCount64 - start;
 
-            Assert.AreEqual(SyncWaitOutcome.TimedOut, early.Outcome, "an unsignalled point was not waited for");
+            Assert.AreEqual(
+                SyncWaitOutcome.TimedOut,
+                early.Outcome,
+                "an unsignalled point was not waited for"
+            );
             Assert.AreEqual(NativeLibc.ETIME, early.Errno);
-            Assert.IsTrue(elapsed >= 150,
-                $"the wait gave up after {elapsed}ms of a 200ms deadline - the deadline is not absolute CLOCK_MONOTONIC");
+            Assert.IsTrue(
+                elapsed >= 150,
+                $"the wait gave up after {elapsed}ms of a 200ms deadline - the deadline is not absolute CLOCK_MONOTONIC"
+            );
 
             Assert.IsTrue(DrmSyncobj.Signal(handle, 5), "the signal was refused");
 
-            Assert.IsTrue(DrmSyncobj.Wait(handle, 5, TimeSpan.FromSeconds(1)).Reached, "the signalled point was not reached");
-            Assert.IsTrue(DrmSyncobj.Wait(handle, 3, TimeSpan.FromSeconds(1)).Reached, "an earlier point was not reached");
-            Assert.AreEqual(SyncWaitOutcome.TimedOut, DrmSyncobj.Wait(handle, 6, TimeSpan.FromMilliseconds(50)).Outcome,
-                "a later point read as reached");
+            Assert.IsTrue(
+                DrmSyncobj.Wait(handle, 5, TimeSpan.FromSeconds(1)).Reached,
+                "the signalled point was not reached"
+            );
+            Assert.IsTrue(
+                DrmSyncobj.Wait(handle, 3, TimeSpan.FromSeconds(1)).Reached,
+                "an earlier point was not reached"
+            );
+            Assert.AreEqual(
+                SyncWaitOutcome.TimedOut,
+                DrmSyncobj.Wait(handle, 6, TimeSpan.FromMilliseconds(50)).Outcome,
+                "a later point read as reached"
+            );
         }
         finally
         {
@@ -85,16 +100,27 @@ public sealed class DrmSyncobjTests
 
         try
         {
-            Assert.AreNotEqual(0u, imported, $"the timeline's own descriptor did not import (errno {errno})");
-            Assert.AreEqual(SyncTimelineKind.Syncobj, SyncTimeline.Classify(fd, out uint classified, out _));
+            Assert.AreNotEqual(
+                0u,
+                imported,
+                $"the timeline's own descriptor did not import (errno {errno})"
+            );
+            Assert.AreEqual(
+                SyncTimelineKind.Syncobj,
+                SyncTimeline.Classify(fd, out uint classified, out _)
+            );
             DrmSyncobj.Destroy(classified);
 
             Assert.IsTrue(DrmSyncobj.Signal(imported, 9));
-            Assert.IsTrue(DrmSyncobj.Wait(created, 9, TimeSpan.FromSeconds(1)).Reached,
-                "a point signalled through the imported handle was not seen through the original");
+            Assert.IsTrue(
+                DrmSyncobj.Wait(created, 9, TimeSpan.FromSeconds(1)).Reached,
+                "a point signalled through the imported handle was not seen through the original"
+            );
 
-            Assert.IsTrue(SyncTimeline.Wait(fd, 9, TimeSpan.FromSeconds(1)).Reached,
-                "the descriptor-level wait did not see the point");
+            Assert.IsTrue(
+                SyncTimeline.Wait(fd, 9, TimeSpan.FromSeconds(1)).Reached,
+                "the descriptor-level wait did not see the point"
+            );
         }
         finally
         {
@@ -117,8 +143,10 @@ public sealed class DrmSyncobjTests
             Assert.IsTrue(release.IsPending, "no release was promised on a syncobj");
             Assert.IsTrue(release.Signal(), "the release signal was refused");
 
-            Assert.IsTrue(DrmSyncobj.Wait(handle, 7, TimeSpan.FromSeconds(1)).Reached,
-                "the release point was not signalled");
+            Assert.IsTrue(
+                DrmSyncobj.Wait(handle, 7, TimeSpan.FromSeconds(1)).Reached,
+                "the release point was not signalled"
+            );
         }
         finally
         {
@@ -136,7 +164,11 @@ public sealed class DrmSyncobjTests
         int fd = Descriptors.CreateEventfd();
         try
         {
-            Assert.AreEqual(0u, DrmSyncobj.Import(fd, out int errno), "an eventfd imported as a syncobj");
+            Assert.AreEqual(
+                0u,
+                DrmSyncobj.Import(fd, out int errno),
+                "an eventfd imported as a syncobj"
+            );
             Assert.AreNotEqual(0, errno, "the refused import carries no errno");
             Assert.AreEqual(SyncTimelineKind.Eventfd, SyncTimeline.Classify(fd, out _, out _));
         }

@@ -52,7 +52,8 @@ internal static class SpaPodProjection
             SpaPodProperty? p2 = filter.Find(p1.Key);
             if (p2 is not null)
             {
-                if (FilterProp(p1, p2) is not { } narrowed) return null;
+                if (FilterProp(p1, p2) is not { } narrowed)
+                    return null;
                 result.Add(narrowed);
             }
             else if ((p1.Flags & SpaPodPropFlags.Mandatory) != 0)
@@ -67,12 +68,18 @@ internal static class SpaPodProjection
 
         foreach (SpaPodProperty p2 in filter.Properties)
         {
-            if (candidate.Find(p2.Key) is not null) continue;
-            if ((p2.Flags & SpaPodPropFlags.Mandatory) != 0) return null;
-            if ((p2.Flags & SpaPodPropFlags.Drop) == 0) result.Add(p2);
+            if (candidate.Find(p2.Key) is not null)
+                continue;
+            if ((p2.Flags & SpaPodPropFlags.Mandatory) != 0)
+                return null;
+            if ((p2.Flags & SpaPodPropFlags.Drop) == 0)
+                result.Add(p2);
         }
 
-        return candidate with { Properties = result.ToImmutable() };
+        return candidate with
+        {
+            Properties = result.ToImmutable(),
+        };
     }
 
     /// <summary>
@@ -103,10 +110,12 @@ internal static class SpaPodProjection
         (SpaChoiceType p2c, ImmutableArray<SpaValue> alt2, _) = Values(filter);
 
         // filter.h 85-86: an empty choice is invalid.
-        if (alt1.IsDefaultOrEmpty || alt2.IsDefaultOrEmpty) return null;
+        if (alt1.IsDefaultOrEmpty || alt2.IsDefaultOrEmpty)
+            return null;
 
         // filter.h 94-96: incompatible property types.
-        if (!SpaPodCompare.SameType(alt1[0], alt2[0])) return null;
+        if (!SpaPodCompare.SameType(alt1[0], alt2[0]))
+            return null;
 
         // filter.h 110-116: prefer the filter's values, but only if the filter's own default is
         // valid for its own choice; otherwise the roles swap and the candidate's lead.
@@ -134,8 +143,10 @@ internal static class SpaPodProjection
             {
                 foreach (SpaValue a1 in alt1)
                 {
-                    if (SpaPodCompare.CompareValue(a1, a2) != 0) continue;
-                    if (nCopied++ == 0) copied.Add(a1);
+                    if (SpaPodCompare.CompareValue(a1, a2) != 0)
+                        continue;
+                    if (nCopied++ == 0)
+                        copied.Add(a1);
                     copied.Add(a1);
                 }
             }
@@ -144,16 +155,22 @@ internal static class SpaPodProjection
         {
             // filter.h 133-163: the candidate's values that fall inside the filter's range. The
             // filter's range default leads if it is itself in range and one of the candidate's.
-            if (alt2.Length < (p2c == SpaChoiceType.Step ? 4 : 3)) return null;
-            SpaValue min = alt2[1], max = alt2[2];
+            if (alt2.Length < (p2c == SpaChoiceType.Step ? 4 : 3))
+                return null;
+            SpaValue min = alt2[1],
+                max = alt2[2];
             SpaValue? step = p2c == SpaChoiceType.Step ? alt2[3] : null;
             var foundDefault = false;
 
-            if (SpaPodCompare.CompareValue(alt2[0], min) >= 0 && SpaPodCompare.CompareValue(alt2[0], max) <= 0)
+            if (
+                SpaPodCompare.CompareValue(alt2[0], min) >= 0
+                && SpaPodCompare.CompareValue(alt2[0], max) <= 0
+            )
             {
                 foreach (SpaValue a1 in alt1)
                 {
-                    if (SpaPodCompare.CompareValue(a1, alt2[0]) != 0) continue;
+                    if (SpaPodCompare.CompareValue(a1, alt2[0]) != 0)
+                        continue;
                     copied.Add(a1);
                     foundDefault = true;
                     break;
@@ -163,9 +180,12 @@ internal static class SpaPodProjection
             foreach (SpaValue a1 in alt1)
             {
                 int inRange = SpaPodCompare.IsInRange(a1, min, max, step);
-                if (inRange < 0) return null;
-                if (inRange == 0) continue;
-                if (nCopied++ == 0 && !foundDefault) copied.Add(a1);
+                if (inRange < 0)
+                    return null;
+                if (inRange == 0)
+                    continue;
+                if (nCopied++ == 0 && !foundDefault)
+                    copied.Add(a1);
                 copied.Add(a1);
             }
         }
@@ -173,16 +193,21 @@ internal static class SpaPodProjection
         {
             // filter.h 165-183: the filter's values that fall inside the candidate's range, in the
             // filter's order, which is how its preference wins.
-            if (alt1.Length < (p1c == SpaChoiceType.Step ? 4 : 3)) return null;
-            SpaValue min = alt1[1], max = alt1[2];
+            if (alt1.Length < (p1c == SpaChoiceType.Step ? 4 : 3))
+                return null;
+            SpaValue min = alt1[1],
+                max = alt1[2];
             SpaValue? step = p1c == SpaChoiceType.Step ? alt1[3] : null;
 
             foreach (SpaValue a2 in alt2)
             {
                 int inRange = SpaPodCompare.IsInRange(a2, min, max, step);
-                if (inRange < 0) return null;
-                if (inRange == 0) continue;
-                if (nCopied++ == 0) copied.Add(a2);
+                if (inRange < 0)
+                    return null;
+                if (inRange == 0)
+                    continue;
+                if (nCopied++ == 0)
+                    copied.Add(a2);
                 copied.Add(a2);
             }
         }
@@ -192,28 +217,39 @@ internal static class SpaPodProjection
             // lands in the overlap, else the candidate's, else the overlap's minimum. The answer is
             // always a plain range: upstream writes default/min/max and marks it Range even when
             // either side was a Step.
-            if (alt1.Length < 3 || alt2.Length < 3) return null;
+            if (alt1.Length < 3 || alt2.Length < 3)
+                return null;
 
             SpaValue min = SpaPodCompare.CompareValue(alt1[1], alt2[1]) < 0 ? alt2[1] : alt1[1];
             SpaValue max = SpaPodCompare.CompareValue(alt2[2], alt1[2]) < 0 ? alt2[2] : alt1[2];
-            if (SpaPodCompare.CompareValue(max, min) < 0) return null;
+            if (SpaPodCompare.CompareValue(max, min) < 0)
+                return null;
 
             SpaValue def = alt2[0];
             int inRange = SpaPodCompare.IsInRange(def, min, max, null);
-            if (inRange < 0) return null;
+            if (inRange < 0)
+                return null;
             if (inRange == 0)
             {
                 def = alt1[0];
                 inRange = SpaPodCompare.IsInRange(def, min, max, null);
-                if (inRange < 0) return null;
-                if (inRange == 0) def = min;
+                if (inRange < 0)
+                    return null;
+                if (inRange == 0)
+                    def = min;
             }
 
             return new SpaChoice(SpaChoiceType.Range, childType, [def, min, max]);
         }
-        else if ((p1c, p2c) is (SpaChoiceType.None, SpaChoiceType.Flags)
-                 or (SpaChoiceType.Flags, SpaChoiceType.None)
-                 or (SpaChoiceType.Flags, SpaChoiceType.Flags))
+        else if (
+            (p1c, p2c)
+            is
+                (SpaChoiceType.None, SpaChoiceType.Flags)
+                or
+                (SpaChoiceType.Flags, SpaChoiceType.None)
+                or
+                (SpaChoiceType.Flags, SpaChoiceType.Flags)
+        )
         {
             // filter.h 225-232: the AND of the two flag sets; nothing in common is a refusal.
             return SpaPodCompare.AndFlags(alt1[0], alt2[0]) is { } flags
@@ -237,7 +273,9 @@ internal static class SpaPodProjection
 
     /// <summary><c>spa_pod_get_values</c>: a value's alternatives, choice kind and child type.</summary>
     /// <remarks>A bare value is a choice of kind None with itself as the one alternative.</remarks>
-    private static (SpaChoiceType Kind, ImmutableArray<SpaValue> Alts, SpaType ChildType) Values(SpaValue value) =>
+    private static (SpaChoiceType Kind, ImmutableArray<SpaValue> Alts, SpaType ChildType) Values(
+        SpaValue value
+    ) =>
         value is SpaChoice choice
             ? (choice.Kind, choice.Alternatives, choice.ChildType)
             : (SpaChoiceType.None, [value], value.Type);

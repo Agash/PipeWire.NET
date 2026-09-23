@@ -21,7 +21,8 @@ public sealed record PipeWireLink : IPipeWireObject
         bool IsPassive = false,
         uint? FactoryId = null,
         uint? ClientId = null,
-        PipeWireProperties? Properties = null)
+        PipeWireProperties? Properties = null
+    )
     {
         this.Properties = Properties ?? PipeWireProperties.Empty;
         this.ObjectSerial = this.Properties.Serial;

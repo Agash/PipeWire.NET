@@ -46,7 +46,8 @@ internal static unsafe class DrmSyncobj
     /// <summary>Whether a DRM render node is available, and with it explicit sync.</summary>
     internal static bool IsAvailable => Device >= 0;
 
-    private static int Device => RenderNode.Value is { IsInvalid: false } h ? (int)h.DangerousGetHandle() : -1;
+    private static int Device =>
+        RenderNode.Value is { IsInvalid: false } h ? (int)h.DangerousGetHandle() : -1;
 
     private static SafeFileHandle? OpenRenderNode()
     {
@@ -55,12 +56,14 @@ internal static unsafe class DrmSyncobj
         for (int minor = 128; minor < 192; minor++)
         {
             string path = $"/dev/dri/renderD{minor}";
-            if (!File.Exists(path)) continue;
+            if (!File.Exists(path))
+                continue;
 
             try
             {
                 SafeFileHandle node = File.OpenHandle(path, FileMode.Open, FileAccess.ReadWrite);
-                if (SupportsTimelines(node)) return node;
+                if (SupportsTimelines(node))
+                    return node;
 
                 node.Dispose();
             }
@@ -83,8 +86,11 @@ internal static unsafe class DrmSyncobj
     {
         ulong value = 0;
         return NativeLibdrm.drmGetCap(
-                   (int)node.DangerousGetHandle(), NativeLibdrm.DRM_CAP_SYNCOBJ_TIMELINE, &value) == 0
-               && value != 0;
+                (int)node.DangerousGetHandle(),
+                NativeLibdrm.DRM_CAP_SYNCOBJ_TIMELINE,
+                &value
+            ) == 0
+            && value != 0;
     }
 
     /// <summary>Imports a syncobj descriptor, returning its handle, or 0 when it does not import.</summary>
@@ -110,7 +116,8 @@ internal static unsafe class DrmSyncobj
         }
 
         uint handle = 0;
-        if (NativeLibdrm.drmSyncobjFDToHandle(Device, fd, &handle) == 0) return handle;
+        if (NativeLibdrm.drmSyncobjFDToHandle(Device, fd, &handle) == 0)
+            return handle;
 
         errno = Marshal.GetLastPInvokeError();
         return 0;
@@ -120,10 +127,12 @@ internal static unsafe class DrmSyncobj
     /// <returns>The handle and its exported descriptor, or (0, -1) when no device is available.</returns>
     internal static (uint Handle, int Fd) Create()
     {
-        if (Device < 0) return (0, -1);
+        if (Device < 0)
+            return (0, -1);
 
         uint handle = 0;
-        if (NativeLibdrm.drmSyncobjCreate(Device, 0, &handle) != 0) return (0, -1);
+        if (NativeLibdrm.drmSyncobjCreate(Device, 0, &handle) != 0)
+            return (0, -1);
 
         int fd = -1;
         if (NativeLibdrm.drmSyncobjHandleToFD(Device, handle, &fd) != 0)
@@ -138,14 +147,16 @@ internal static unsafe class DrmSyncobj
     /// <summary>Releases a handle. The descriptor it came from, if any, is closed separately.</summary>
     internal static void Destroy(uint handle)
     {
-        if (handle != 0 && Device >= 0) _ = NativeLibdrm.drmSyncobjDestroy(Device, handle);
+        if (handle != 0 && Device >= 0)
+            _ = NativeLibdrm.drmSyncobjDestroy(Device, handle);
     }
 
     /// <summary>Signals a timeline point from the CPU.</summary>
     /// <returns>False when the signal was refused.</returns>
     internal static bool Signal(uint handle, ulong point)
     {
-        if (handle == 0 || Device < 0) return false;
+        if (handle == 0 || Device < 0)
+            return false;
         return NativeLibdrm.drmSyncobjTimelineSignal(Device, &handle, &point, 1) == 0;
     }
 
@@ -160,12 +171,16 @@ internal static unsafe class DrmSyncobj
     /// </remarks>
     internal static SyncWait Wait(uint handle, ulong point, TimeSpan timeout)
     {
-        if (handle == 0 || Device < 0) return new SyncWait(SyncWaitOutcome.Failed, 0);
+        if (handle == 0 || Device < 0)
+            return new SyncWait(SyncWaitOutcome.Failed, 0);
 
         long deadline = MonotonicNowNs() + (long)(timeout.TotalMilliseconds * 1_000_000);
         uint flags = NativeLibdrm.DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT;
 
-        if (NativeLibdrm.drmSyncobjTimelineWait(Device, &handle, &point, 1, deadline, flags, null) == 0)
+        if (
+            NativeLibdrm.drmSyncobjTimelineWait(Device, &handle, &point, 1, deadline, flags, null)
+            == 0
+        )
             return new SyncWait(SyncWaitOutcome.Reached, 0);
 
         int errno = Marshal.GetLastPInvokeError();

@@ -31,7 +31,9 @@ public sealed class CrossProcessOrderingTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken cancellationToken)
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -40,7 +42,8 @@ public sealed class CrossProcessOrderingTests : PipeWireTestBase
         return (context, registry);
     }
 
-    private static string Unique(string p) => $"{p}_{Environment.ProcessId}_{Random.Shared.Next():x}";
+    private static string Unique(string p) =>
+        $"{p}_{Environment.ProcessId}_{Random.Shared.Next():x}";
 
     [TestMethod]
     public async Task AWriterSeesItsOwnWriteWithoutWaiting_EvenThroughTheSessionManager()
@@ -49,20 +52,30 @@ public sealed class CrossProcessOrderingTests : PipeWireTestBase
         // whatever the session manager is doing, because the store applied it on the way out.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-xproc-self", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-xproc-self",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             PipeWireMetadataProxy? store = registry.BindMetadata("default");
-            if (store is null) Assert.Inconclusive("no session manager, so no default store.");
+            if (store is null)
+                Assert.Inconclusive("no session manager, so no default store.");
 
             await using (store)
             {
                 await store!.ReadyAsync(cts.Token);
                 string key = Unique("pwnet.xproc.self");
 
-                try { await store.SetAsync(key, "v", cancellationToken: cts.Token); }
-                catch (PipeWireException e) { Assert.Inconclusive($"cannot write metadata here: {e.Message}"); }
+                try
+                {
+                    await store.SetAsync(key, "v", cancellationToken: cts.Token);
+                }
+                catch (PipeWireException e)
+                {
+                    Assert.Inconclusive($"cannot write metadata here: {e.Message}");
+                }
 
                 Assert.AreEqual("v", store.Get(key), "a client cannot read back its own write");
 
@@ -106,20 +119,32 @@ public sealed class CrossProcessOrderingTests : PipeWireTestBase
                         key,
                         async () =>
                         {
-                            try { await writer.SetAsync(key, "v", cancellationToken: cts.Token); }
-                            catch (PipeWireException e) { Assert.Inconclusive($"cannot write metadata here: {e.Message}"); }
+                            try
+                            {
+                                await writer.SetAsync(key, "v", cancellationToken: cts.Token);
+                            }
+                            catch (PipeWireException e)
+                            {
+                                Assert.Inconclusive($"cannot write metadata here: {e.Message}");
+                            }
 
                             await reader.ReadyAsync(cts.Token);
 
                             // Whether this is already "v" is a race, so it is not the assertion. The
                             // assertion is that waiting works, which is the contract callers get.
                             Console.WriteLine(
-                                $"reader held '{reader.Get(key) ?? "(null)"}' the moment its barrier completed");
+                                $"reader held '{reader.Get(key) ?? "(null)"}' the moment its barrier completed"
+                            );
                         },
-                        cts.Token);
+                        cts.Token
+                    );
 
                     Assert.AreEqual("v", seen, "the second client was told, with the wrong value");
-                    Assert.AreEqual("v", reader.Get(key), "the event fired but the store does not hold it");
+                    Assert.AreEqual(
+                        "v",
+                        reader.Get(key),
+                        "the event fired but the store does not hold it"
+                    );
                 }
                 finally
                 {
@@ -137,12 +162,17 @@ public sealed class CrossProcessOrderingTests : PipeWireTestBase
         // that follows it can complete. If this raced too, the diagnosis above would be wrong.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-xproc-own", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-xproc-own",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            await using PipeWireMetadataProvider provider =
-                PipeWireMetadataProvider.Create(ctx, Unique("pwnet-xproc-store"));
+            await using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(
+                ctx,
+                Unique("pwnet-xproc-store")
+            );
 
             // Export is a request, not a transaction: settle before treating the store as served.
             await provider.ReadyAsync(cts.Token);
@@ -156,8 +186,11 @@ public sealed class CrossProcessOrderingTests : PipeWireTestBase
 
                 await CoreSync.RoundTripAsync(ctx, cts.Token);
 
-                Assert.AreEqual(value, provider.Get(key),
-                    "a store served in this process lost a write across its own barrier");
+                Assert.AreEqual(
+                    value,
+                    provider.Get(key),
+                    "a store served in this process lost a write across its own barrier"
+                );
             }
 
             provider.Clear();

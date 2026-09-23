@@ -13,7 +13,8 @@ namespace PipeWire.NET.Graph;
 /// <param name="Info">The key and value pairs, in the order the producer wrote them.</param>
 public sealed record PipeWireTag(
     SpaDirection Direction,
-    ImmutableArray<KeyValuePair<string, string>> Info)
+    ImmutableArray<KeyValuePair<string, string>> Info
+)
 {
     /// <summary>Reads one out of a <c>SPA_PARAM_Tag</c> object, or null if it is not one.</summary>
     /// <remarks>
@@ -23,7 +24,8 @@ public sealed record PipeWireTag(
     /// </remarks>
     public static PipeWireTag? From(SpaObject? param)
     {
-        if (param is null || param.ObjectType != SpaType.ObjectParamTag) return null;
+        if (param is null || param.ObjectType != SpaType.ObjectParamTag)
+            return null;
 
         var pairs = ImmutableArray.CreateBuilder<KeyValuePair<string, string>>();
 
@@ -40,7 +42,8 @@ public sealed record PipeWireTag(
 
         return new PipeWireTag(
             (SpaDirection)(param[(uint)SpaParamTag.Direction] is SpaId d ? d.Value : 0),
-            pairs.ToImmutable());
+            pairs.ToImmutable()
+        );
     }
 
     /// <summary>This tag as the parameter object the daemon expects.</summary>
@@ -54,10 +57,17 @@ public sealed record PipeWireTag(
             fields.Add(new SpaString(pair.Value));
         }
 
-        return new SpaObject(SpaType.ObjectParamTag, SpaParamType.Tag,
-        [
-            new SpaPodProperty((uint)SpaParamTag.Direction, 0, new SpaId((uint)Direction)),
-            new SpaPodProperty((uint)SpaParamTag.Info, 0, new SpaStruct(fields.MoveToImmutable())),
-        ]);
+        return new SpaObject(
+            SpaType.ObjectParamTag,
+            SpaParamType.Tag,
+            [
+                new SpaPodProperty((uint)SpaParamTag.Direction, 0, new SpaId((uint)Direction)),
+                new SpaPodProperty(
+                    (uint)SpaParamTag.Info,
+                    0,
+                    new SpaStruct(fields.MoveToImmutable())
+                ),
+            ]
+        );
     }
 }

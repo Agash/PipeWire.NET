@@ -14,9 +14,12 @@ namespace PipeWire.NET.Media;
 /// </param>
 /// <param name="AcquirePoint">The point to wait for before reading the frame.</param>
 /// <param name="ReleasePoint">The point to signal once the frame is no longer being read.</param>
-public readonly record struct VideoSyncTimeline(SpaMetaSyncTimelineFlags Flags, ulong AcquirePoint, ulong ReleasePoint)
+public readonly record struct VideoSyncTimeline(
+    SpaMetaSyncTimelineFlags Flags,
+    ulong AcquirePoint,
+    ulong ReleasePoint
+)
 {
-
     /// <summary>True when the producer has not scheduled the release point.</summary>
     public bool ReleaseIsUnscheduled => (Flags & SpaMetaSyncTimelineFlags.UnscheduledRelease) != 0;
 }

@@ -30,7 +30,9 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
     }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
-        string name, CancellationToken cancellationToken)
+        string name,
+        CancellationToken cancellationToken
+    )
     {
         var context = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await context.StartAsync(cancellationToken);
@@ -47,14 +49,18 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-order-create", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-order-create",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
             var created = new List<uint>();
             for (int i = 0; i < 12; i++)
             {
-                PipeWireNode node = await registry.CreateVirtualSink("Ordering")
+                PipeWireNode node = await registry
+                    .CreateVirtualSink("Ordering")
                     .WithName(Unique("pwnet_order"))
                     .ExecuteAsync(cts.Token);
 
@@ -67,7 +73,10 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
 
             PipeWireGraphSnapshot graph = registry.Current;
             foreach (uint id in created)
-                Assert.IsNotNull(graph.GetNode(id), $"node {id} was created before the barrier but is absent after it");
+                Assert.IsNotNull(
+                    graph.GetNode(id),
+                    $"node {id} was created before the barrier but is absent after it"
+                );
 
             foreach (uint id in created)
                 await registry.DestroyGlobalAsync(id, cts.Token);
@@ -76,7 +85,10 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
 
             PipeWireGraphSnapshot after = registry.Current;
             foreach (uint id in created)
-                Assert.IsNull(after.GetNode(id), $"node {id} was removed before the barrier but is present after it");
+                Assert.IsNull(
+                    after.GetNode(id),
+                    $"node {id} was removed before the barrier but is present after it"
+                );
         }
     }
 
@@ -85,19 +97,34 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
     {
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-order-link", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-order-link",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode source = await registry.CreateVirtualSink("OrderSrc")
-                .WithName(Unique("pwnet_order_src")).ExecuteAsync(cts.Token);
-            PipeWireNode sink = await registry.CreateVirtualSink("OrderSink")
-                .WithName(Unique("pwnet_order_sink")).ExecuteAsync(cts.Token);
+            PipeWireNode source = await registry
+                .CreateVirtualSink("OrderSrc")
+                .WithName(Unique("pwnet_order_src"))
+                .ExecuteAsync(cts.Token);
+            PipeWireNode sink = await registry
+                .CreateVirtualSink("OrderSink")
+                .WithName(Unique("pwnet_order_sink"))
+                .ExecuteAsync(cts.Token);
 
             ImmutableArray<PipeWirePort> outputs = await PortsAsync(
-                registry, source.NodeId, PipeWirePortDirection.Out, cts.Token);
+                registry,
+                source.NodeId,
+                PipeWirePortDirection.Out,
+                cts.Token
+            );
             ImmutableArray<PipeWirePort> inputs = await PortsAsync(
-                registry, sink.NodeId, PipeWirePortDirection.In, cts.Token);
+                registry,
+                sink.NodeId,
+                PipeWirePortDirection.In,
+                cts.Token
+            );
 
             PipeWireLink link = await registry.CreateLinkAsync(outputs[0], inputs[0], cts.Token);
             await registry.WaitForInitialEnumerationAsync(cts.Token);
@@ -108,8 +135,10 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
             Assert.IsNotNull(graph.GetLink(link.LinkId));
             Assert.IsNotNull(graph.GetNode(link.OutputNodeId));
             Assert.IsNotNull(graph.GetNode(link.InputNodeId));
-            Assert.IsTrue(graph.GetLinksForNode(source.NodeId).Any(l => l.LinkId == link.LinkId),
-                "the link is not reachable from the node it starts at");
+            Assert.IsTrue(
+                graph.GetLinksForNode(source.NodeId).Any(l => l.LinkId == link.LinkId),
+                "the link is not reachable from the node it starts at"
+            );
 
             await registry.DestroyGlobalAsync(link.LinkId, cts.Token);
             await registry.DestroyGlobalAsync(source.NodeId, cts.Token);
@@ -127,8 +156,14 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
         // arrives, so that is what is waited for; the timeout is the assertion.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext a, PipeWireRegistry ra) = await ConnectAsync("pwnet-order-meta-a", cts.Token);
-        (PipeWireContext b, PipeWireRegistry rb) = await ConnectAsync("pwnet-order-meta-b", cts.Token);
+        (PipeWireContext a, PipeWireRegistry ra) = await ConnectAsync(
+            "pwnet-order-meta-a",
+            cts.Token
+        );
+        (PipeWireContext b, PipeWireRegistry rb) = await ConnectAsync(
+            "pwnet-order-meta-b",
+            cts.Token
+        );
         await using (a)
         await using (ra)
         await using (b)
@@ -151,11 +186,19 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
                         reader,
                         key,
                         () => writer.SetAsync(key, "v", cancellationToken: cts.Token),
-                        cts.Token);
+                        cts.Token
+                    );
 
-                    Assert.AreEqual("v", seen, "the reader was told about the write, with the wrong value");
-                    Assert.AreEqual("v", reader.Get(key),
-                        "the change was raised but the store it came from does not hold it");
+                    Assert.AreEqual(
+                        "v",
+                        seen,
+                        "the reader was told about the write, with the wrong value"
+                    );
+                    Assert.AreEqual(
+                        "v",
+                        reader.Get(key),
+                        "the change was raised but the store it came from does not hold it"
+                    );
                 }
                 finally
                 {
@@ -173,24 +216,35 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
         // before it is therefore in our own registry by then, with no polling.
         RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
-        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync("pwnet-order-own", cts.Token);
+        (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
+            "pwnet-order-own",
+            cts.Token
+        );
         await using (ctx)
         await using (registry)
         {
-            PipeWireNode node = await registry.CreateVirtualSink("Barrier")
-                .WithName(Unique("pwnet_barrier")).ExecuteAsync(cts.Token);
+            PipeWireNode node = await registry
+                .CreateVirtualSink("Barrier")
+                .WithName(Unique("pwnet_barrier"))
+                .ExecuteAsync(cts.Token);
 
             await CoreSync.RoundTripAsync(ctx, cts.Token);
 
-            Assert.IsNotNull(registry.Current.GetNode(node.NodeId),
-                "a global created before the barrier is not in the graph after it");
+            Assert.IsNotNull(
+                registry.Current.GetNode(node.NodeId),
+                "a global created before the barrier is not in the graph after it"
+            );
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
         }
     }
 
     private static async Task<ImmutableArray<PipeWirePort>> PortsAsync(
-        PipeWireRegistry registry, uint nodeId, PipeWirePortDirection direction, CancellationToken cancellationToken)
+        PipeWireRegistry registry,
+        uint nodeId,
+        PipeWirePortDirection direction,
+        CancellationToken cancellationToken
+    )
     {
         while (true)
         {
@@ -201,10 +255,13 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
             // excluding monitors leaves the output side with nothing and waits for ever.
             ImmutableArray<PipeWirePort> ports =
             [
-                .. registry.Current.GetPortsForNode(nodeId).Where(p => p.PortDirection == direction),
+                .. registry
+                    .Current.GetPortsForNode(nodeId)
+                    .Where(p => p.PortDirection == direction),
             ];
 
-            if (ports.Length >= 1) return ports;
+            if (ports.Length >= 1)
+                return ports;
         }
     }
 }

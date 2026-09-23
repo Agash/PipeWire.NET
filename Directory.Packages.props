@@ -7,8 +7,16 @@
     <!-- A stable target should not carry a preview dependency: net10 consumers would otherwise be
          forced onto an unreleased package for no API they use. Kept split across the merge - the
          bump on main moved a single unconditional entry, which would put the preview back on net10. -->
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0-rc.1.26425.128" Condition="'$(TargetFramework)' == 'net11.0'" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" Condition="'$(TargetFramework)' != 'net11.0'" />
+    <PackageVersion
+      Include="Microsoft.Extensions.Logging.Abstractions"
+      Version="11.0.0-rc.1.26425.128"
+      Condition="'$(TargetFramework)' == 'net11.0'"
+    />
+    <PackageVersion
+      Include="Microsoft.Extensions.Logging.Abstractions"
+      Version="10.0.0"
+      Condition="'$(TargetFramework)' != 'net11.0'"
+    />
     <PackageVersion Include="MinVer" Version="7.0.0" />
     <PackageVersion Include="MSTest.TestFramework" Version="4.4.1" />
     <PackageVersion Include="MSTest.TestAdapter" Version="4.4.1" />

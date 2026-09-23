@@ -10,6 +10,7 @@ public enum StreamMediaType
 {
     /// <summary><c>media.type=Video</c>.</summary>
     Video,
+
     /// <summary><c>media.type=Audio</c>.</summary>
     Audio,
 }

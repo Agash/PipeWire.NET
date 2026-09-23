@@ -23,8 +23,10 @@ public sealed class SequenceAndPortConfigTests : PipeWireTestBase
 
     private static SpaValue Parse(ReadOnlySpan<byte> pod)
     {
-        Assert.IsTrue(SpaPod.TryParse(pod, out SpaValue? value),
-            "the writer produced bytes the reader refuses");
+        Assert.IsTrue(
+            SpaPod.TryParse(pod, out SpaValue? value),
+            "the writer produced bytes the reader refuses"
+        );
 
         return value!;
     }
@@ -88,8 +90,11 @@ public sealed class SequenceAndPortConfigTests : PipeWireTestBase
             var value = (SpaSequence)Parse(builder.GetPod());
 
             Assert.HasCount(2, value.Controls, $"a {length} byte payload lost a control");
-            CollectionAssert.AreEqual(payload, ((SpaBytes)value.Controls[1].Value).Value.ToArray(),
-                $"a {length} byte payload came back wrong");
+            CollectionAssert.AreEqual(
+                payload,
+                ((SpaBytes)value.Controls[1].Value).Value.ToArray(),
+                $"a {length} byte payload came back wrong"
+            );
         }
     }
 
@@ -133,7 +138,11 @@ public sealed class SequenceAndPortConfigTests : PipeWireTestBase
     public void APortConfig_SurvivesTheRoundTrip()
     {
         var written = new PipeWirePortConfig(
-            SpaDirection.Input, SpaParamPortConfigMode.Dsp, Monitor: true, Control: true);
+            SpaDirection.Input,
+            SpaParamPortConfigMode.Dsp,
+            Monitor: true,
+            Control: true
+        );
 
         PipeWirePortConfig? read = PipeWirePortConfig.From(written.ToParameter());
 
@@ -146,20 +155,30 @@ public sealed class SequenceAndPortConfigTests : PipeWireTestBase
         // An empty Object property is not the same as an absent one: the adapter reads it as a
         // filter matching nothing, so a config with no filter must omit the property entirely.
         SpaObject param = new PipeWirePortConfig(
-            SpaDirection.Output, SpaParamPortConfigMode.Convert).ToParameter();
+            SpaDirection.Output,
+            SpaParamPortConfigMode.Convert
+        ).ToParameter();
 
-        Assert.IsNull(param[(uint)SpaParamPortConfig.Format],
-            "an absent format filter was written as an empty object");
+        Assert.IsNull(
+            param[(uint)SpaParamPortConfig.Format],
+            "an absent format filter was written as an empty object"
+        );
     }
 
     [TestMethod]
     public void APortConfigCarryingAFormatFilter_KeepsIt()
     {
-        var filter = new SpaObject(SpaType.ObjectFormat, SpaParamType.EnumFormat,
-            [new SpaPodProperty((uint)SpaFormat.AudioChannels, 0, new SpaInt(2))]);
+        var filter = new SpaObject(
+            SpaType.ObjectFormat,
+            SpaParamType.EnumFormat,
+            [new SpaPodProperty((uint)SpaFormat.AudioChannels, 0, new SpaInt(2))]
+        );
 
         var written = new PipeWirePortConfig(
-            SpaDirection.Input, SpaParamPortConfigMode.Dsp, Format: filter);
+            SpaDirection.Input,
+            SpaParamPortConfigMode.Dsp,
+            Format: filter
+        );
 
         PipeWirePortConfig? read = PipeWirePortConfig.From(written.ToParameter());
 
@@ -181,8 +200,13 @@ public sealed class SequenceAndPortConfigTests : PipeWireTestBase
     [TestMethod]
     public void TheUnscheduledReleaseFlag_IsReadOffTheTimeline()
     {
-        Assert.IsTrue(new VideoSyncTimeline(SpaMetaSyncTimelineFlags.UnscheduledRelease, 1, 2)
-            .ReleaseIsUnscheduled);
+        Assert.IsTrue(
+            new VideoSyncTimeline(
+                SpaMetaSyncTimelineFlags.UnscheduledRelease,
+                1,
+                2
+            ).ReleaseIsUnscheduled
+        );
         Assert.IsFalse(new VideoSyncTimeline(0, 1, 2).ReleaseIsUnscheduled);
     }
 
@@ -202,12 +226,16 @@ public sealed class SequenceAndPortConfigTests : PipeWireTestBase
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
 
-        await using var ctx = new PipeWireContext("pwnet-portconfig-live", ConsoleTestLoggerFactory.Instance);
+        await using var ctx = new PipeWireContext(
+            "pwnet-portconfig-live",
+            ConsoleTestLoggerFactory.Instance
+        );
         await ctx.StartAsync(cts.Token);
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode node = await registry.CreateVirtualSink("PortConfigLive")
+        PipeWireNode node = await registry
+            .CreateVirtualSink("PortConfigLive")
             .WithName($"pwnet_pconf_{Environment.ProcessId}_{Random.Shared.Next():x}")
             .ExecuteAsync(cts.Token);
 
@@ -216,8 +244,9 @@ public sealed class SequenceAndPortConfigTests : PipeWireTestBase
             await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
             await control.ReadyAsync(cts.Token);
 
-            ImmutableArray<PipeWirePortConfig> configs =
-                await control.EnumeratePortConfigsAsync(cts.Token);
+            ImmutableArray<PipeWirePortConfig> configs = await control.EnumeratePortConfigsAsync(
+                cts.Token
+            );
             Console.Error.WriteLine($"adapter reports {configs.Length} port configs");
 
             var dsp = new PipeWirePortConfig(SpaDirection.Output, SpaParamPortConfigMode.Dsp);

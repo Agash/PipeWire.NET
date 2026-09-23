@@ -50,7 +50,8 @@ internal sealed unsafe class PipeWireContextHandle : SafeHandle
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _deterministic = true;
+        if (disposing)
+            _deterministic = true;
         base.Dispose(disposing);
     }
 
@@ -70,7 +71,8 @@ internal sealed unsafe class PipeWireContextHandle : SafeHandle
     private bool NeedsLoop(out nint loop)
     {
         loop = 0;
-        if (handle == IntPtr.Zero || !_loopReferenced || _loop.IsInvalid) return false;
+        if (handle == IntPtr.Zero || !_loopReferenced || _loop.IsInvalid)
+            return false;
         loop = (nint)_loop.Loop;
         return loop != 0;
     }

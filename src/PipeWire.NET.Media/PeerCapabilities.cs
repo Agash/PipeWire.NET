@@ -16,8 +16,12 @@ namespace PipeWire.NET.Media;
 /// The devices it can work with (<c>pipewire.device-ids</c>), empty when it named none - which means
 /// any, as upstream's video-play-fixate reads it.
 /// </param>
-internal readonly record struct PeerCapabilities(bool NegotiatesDeviceIds, ImmutableArray<ulong> AvailableDevices)
+internal readonly record struct PeerCapabilities(
+    bool NegotiatesDeviceIds,
+    ImmutableArray<ulong> AvailableDevices
+)
 {
     /// <summary>Whether <paramref name="device"/> is one the peer can work with.</summary>
-    public bool Accepts(ulong device) => AvailableDevices.IsDefaultOrEmpty || AvailableDevices.Contains(device);
+    public bool Accepts(ulong device) =>
+        AvailableDevices.IsDefaultOrEmpty || AvailableDevices.Contains(device);
 }

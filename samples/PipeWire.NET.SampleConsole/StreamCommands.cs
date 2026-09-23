@@ -1,6 +1,6 @@
 using System.Runtime.Versioning;
-using PipeWire.NET.Media;
 using PipeWire.NET;
+using PipeWire.NET.Media;
 
 namespace PipeWire.NET.SampleConsole;
 
@@ -9,12 +9,16 @@ namespace PipeWire.NET.SampleConsole;
 [SupportedOSPlatform("linux")]
 internal static class StreamCommands
 {
-    public static async Task<int> CaptureAudioAsync(string[] args, CancellationToken cancellationToken)
+    public static async Task<int> CaptureAudioAsync(
+        string[] args,
+        CancellationToken cancellationToken
+    )
     {
         int seconds = Program.Seconds(args, 5);
 
-        await using var session = await Session.ConnectAsync(
-            "sample-capture-audio", cancellationToken).ConfigureAwait(false);
+        await using var session = await Session
+            .ConnectAsync("sample-capture-audio", cancellationToken)
+            .ConfigureAwait(false);
 
         await using var capture = new PipeWireAudioCapture(session.Context, "sample_capture");
 
@@ -53,8 +57,10 @@ internal static class StreamCommands
 
             long nowFrames = Interlocked.Read(ref frames);
             long nowBytes = Interlocked.Read(ref bytes);
-            Console.WriteLine($"  audio: {nowFrames - lastFrames}/s, " +
-                $"{(nowBytes - lastBytes) / 1024.0:F1} KiB/s");
+            Console.WriteLine(
+                $"  audio: {nowFrames - lastFrames}/s, "
+                    + $"{(nowBytes - lastBytes) / 1024.0:F1} KiB/s"
+            );
             lastFrames = nowFrames;
             lastBytes = nowBytes;
         }
@@ -67,18 +73,24 @@ internal static class StreamCommands
             return Program.NothingToDo;
         }
 
-        Console.WriteLine($"Negotiated: {Volatile.Read(ref rate)} Hz, " +
-            $"{Volatile.Read(ref channels)}ch, {(AudioSampleFormat)Volatile.Read(ref format)}.");
+        Console.WriteLine(
+            $"Negotiated: {Volatile.Read(ref rate)} Hz, "
+                + $"{Volatile.Read(ref channels)}ch, {(AudioSampleFormat)Volatile.Read(ref format)}."
+        );
         Console.WriteLine($"Total: {totalFrames} frames, {totalBytes:N0} bytes.");
         return 0;
     }
 
-    public static async Task<int> CaptureVideoAsync(string[] args, CancellationToken cancellationToken)
+    public static async Task<int> CaptureVideoAsync(
+        string[] args,
+        CancellationToken cancellationToken
+    )
     {
         int seconds = Program.Seconds(args, 5);
 
-        await using var session = await Session.ConnectAsync(
-            "sample-capture-video", cancellationToken).ConfigureAwait(false);
+        await using var session = await Session
+            .ConnectAsync("sample-capture-video", cancellationToken)
+            .ConfigureAwait(false);
 
         await using var capture = new PipeWireVideoCapture(session.Context, "sample_capture");
 
@@ -117,8 +129,10 @@ internal static class StreamCommands
 
             long nowFrames = Interlocked.Read(ref frames);
             long nowBytes = Interlocked.Read(ref bytes);
-            Console.WriteLine($"  video: {nowFrames - lastFrames} fps, " +
-                $"{(nowBytes - lastBytes) / 1024.0 / 1024.0:F2} MiB/s");
+            Console.WriteLine(
+                $"  video: {nowFrames - lastFrames} fps, "
+                    + $"{(nowBytes - lastBytes) / 1024.0 / 1024.0:F2} MiB/s"
+            );
             lastFrames = nowFrames;
             lastBytes = nowBytes;
         }
@@ -131,8 +145,10 @@ internal static class StreamCommands
             return Program.NothingToDo;
         }
 
-        Console.WriteLine($"Negotiated: {Volatile.Read(ref width)}x{Volatile.Read(ref height)} " +
-            $"{(PixelFormat)Volatile.Read(ref format)}.");
+        Console.WriteLine(
+            $"Negotiated: {Volatile.Read(ref width)}x{Volatile.Read(ref height)} "
+                + $"{(PixelFormat)Volatile.Read(ref format)}."
+        );
         Console.WriteLine($"Total: {totalFrames} frames, {totalBytes:N0} bytes.");
         return 0;
     }

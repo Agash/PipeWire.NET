@@ -27,7 +27,8 @@ public sealed record PipeWireLatency(
     int MinRate,
     int MaxRate,
     long MinNs,
-    long MaxNs)
+    long MaxNs
+)
 {
     /// <summary>Reads one out of a <c>SPA_PARAM_Latency</c> object, or null if it is not one.</summary>
     /// <remarks>
@@ -37,7 +38,8 @@ public sealed record PipeWireLatency(
     /// </remarks>
     public static PipeWireLatency? From(SpaObject? param)
     {
-        if (param is null || param.ObjectType != SpaType.ObjectParamLatency) return null;
+        if (param is null || param.ObjectType != SpaType.ObjectParamLatency)
+            return null;
 
         return new PipeWireLatency(
             (SpaDirection)Id(param, SpaParamLatency.Direction),
@@ -46,21 +48,25 @@ public sealed record PipeWireLatency(
             Int(param, SpaParamLatency.MinRate),
             Int(param, SpaParamLatency.MaxRate),
             Long(param, SpaParamLatency.MinNs),
-            Long(param, SpaParamLatency.MaxNs));
+            Long(param, SpaParamLatency.MaxNs)
+        );
     }
 
     /// <summary>This latency as the parameter object the daemon expects.</summary>
     public SpaObject ToParameter() =>
-        new(SpaType.ObjectParamLatency, SpaParamType.Latency,
-        [
-            new SpaPodProperty((uint)SpaParamLatency.Direction, 0, new SpaId((uint)Direction)),
-            new SpaPodProperty((uint)SpaParamLatency.MinQuantum, 0, new SpaFloat(MinQuantum)),
-            new SpaPodProperty((uint)SpaParamLatency.MaxQuantum, 0, new SpaFloat(MaxQuantum)),
-            new SpaPodProperty((uint)SpaParamLatency.MinRate, 0, new SpaInt(MinRate)),
-            new SpaPodProperty((uint)SpaParamLatency.MaxRate, 0, new SpaInt(MaxRate)),
-            new SpaPodProperty((uint)SpaParamLatency.MinNs, 0, new SpaLong(MinNs)),
-            new SpaPodProperty((uint)SpaParamLatency.MaxNs, 0, new SpaLong(MaxNs)),
-        ]);
+        new(
+            SpaType.ObjectParamLatency,
+            SpaParamType.Latency,
+            [
+                new SpaPodProperty((uint)SpaParamLatency.Direction, 0, new SpaId((uint)Direction)),
+                new SpaPodProperty((uint)SpaParamLatency.MinQuantum, 0, new SpaFloat(MinQuantum)),
+                new SpaPodProperty((uint)SpaParamLatency.MaxQuantum, 0, new SpaFloat(MaxQuantum)),
+                new SpaPodProperty((uint)SpaParamLatency.MinRate, 0, new SpaInt(MinRate)),
+                new SpaPodProperty((uint)SpaParamLatency.MaxRate, 0, new SpaInt(MaxRate)),
+                new SpaPodProperty((uint)SpaParamLatency.MinNs, 0, new SpaLong(MinNs)),
+                new SpaPodProperty((uint)SpaParamLatency.MaxNs, 0, new SpaLong(MaxNs)),
+            ]
+        );
 
     private static uint Id(SpaObject o, SpaParamLatency key) =>
         o[(uint)key] is SpaId v ? v.Value : 0;

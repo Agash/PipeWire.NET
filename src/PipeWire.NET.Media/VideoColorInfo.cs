@@ -11,7 +11,8 @@ public readonly record struct VideoColorInfo(
     VideoColorRange Range,
     VideoColorMatrix Matrix,
     VideoTransferFunction Transfer,
-    VideoColorPrimaries Primaries)
+    VideoColorPrimaries Primaries
+)
 {
     /// <summary>An all-unknown color info (source did not report color metadata).</summary>
     public static VideoColorInfo Unknown => default;

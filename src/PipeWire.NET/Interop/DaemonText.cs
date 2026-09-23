@@ -29,7 +29,8 @@ internal static unsafe class DaemonText
     /// <param name="text">A NUL-terminated pointer, or null.</param>
     internal static ReadOnlySpan<byte> Bytes(sbyte* text)
     {
-        if (text is null) return default;
+        if (text is null)
+            return default;
 
         var bytes = (byte*)text;
         int length = 0;
