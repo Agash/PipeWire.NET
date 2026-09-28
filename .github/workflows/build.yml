@@ -39,7 +39,7 @@ jobs:
     env:
       PWNET_TEST_LOG_LEVEL: Information
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # MinVer needs full history
 
@@ -64,7 +64,7 @@ jobs:
           echo "libpipewire: $(pkg-config --modversion libpipewire-0.3 2>/dev/null || echo unknown)"
           echo "pinned:      $(tr -d '[:space:]' < generate/HEADER-VERSION)"
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           # net11.0 target requires the .NET 11 preview SDK alongside the .NET 10 SDK.
           # global.json (rollForward latestFeature, allowPrerelease) then selects the 11 SDK,
@@ -351,11 +351,11 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             10.0.x
@@ -382,7 +382,7 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -391,7 +391,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends             libpipewire-0.3-0 libpipewire-0.3-dev pipewire wireplumber pipewire-bin elfutils
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             10.0.x
@@ -483,11 +483,11 @@ jobs:
     env:
       PWNET_TEST_LOG_LEVEL: Information
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             10.0.x
@@ -581,7 +581,7 @@ jobs:
           name: nuget-package
           path: ${{ env.NuGetDirectory }}
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
 
       - name: NuGet login (OIDC)
         id: login
