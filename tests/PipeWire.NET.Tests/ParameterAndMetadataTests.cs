@@ -577,7 +577,7 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     /// else's: it binds a few objects first, so the daemon has resources of its to take away.
     /// </para>
     /// <para>
-    /// Carries <c>KillsTheDaemon</c> because on a stock 1.6.8 daemon that path can abort it:
+    /// Carries <c>KillsTheDaemon</c> because on a stock daemon (1.6.9 and earlier) that path can abort it:
     /// <c>pw_global_update_permissions</c> destroys the client's resources while walking lists that a
     /// destroy can change under it, the object itself included when the client exported it
     /// (<c>assert(!resource->destroyed)</c> or a segfault; reproduced on the lab box with a core by

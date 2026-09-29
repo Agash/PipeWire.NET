@@ -48,16 +48,17 @@ concurrently makes them fail on each other's changes instead of on defects.
 
 Three categories are excluded from every ordinary leg and have to be asked for by name.
 
-**`RequiresPatchedDaemon`** pins an upstream bug that is still open: the test fails on a stock 1.6.8
-daemon because that is what it is about. `build/verify-linux.sh` runs it against daemons loading the
-patches in `repro/`; CI, whose sessions are stock, excludes it.
+**`RequiresPatchedDaemon`** pins an upstream bug that is still open: the test fails on a stock daemon
+(1.6.8 and 1.6.9 alike) because that is what it is about. `build/verify-linux.sh` runs it against
+daemons loading the patches in `repro/`, which `build/patched-pipewire.sh` builds for the installed
+release; CI, whose sessions are stock, excludes it.
 
 **`PenTest`** churns one session hard for seconds at a time - twelve contexts opening at once,
 metadata written in a loop - so anything sharing that session fails on this traffic rather than on
 anything of its own. Give it a session to itself.
 
-**`KillsTheDaemon`** is the permission tests, and on a stock PipeWire 1.6.8 they can do what the
-name says: withdrawing a client's read access makes `pw_global_update_permissions` destroy its
+**`KillsTheDaemon`** is the permission tests, and on a stock PipeWire (1.6.9 and earlier) they can do
+what the name says: withdrawing a client's read access makes `pw_global_update_permissions` destroy its
 resources while walking the global's resource list, and `pw_impl_client_update_permissions` calls it
 while walking the context's global list. A destroy runs hooks that can take other resources with it,
 and the global itself when it is an object the client exported, so the walks continue into destroyed

@@ -136,7 +136,7 @@ a second overlapping call is refused rather than given somebody else's result. A
 set to grant is `ReadWriteExecuteMetadataLink`, not `All` - upstream's `PW_PERM_ALL` is `RWXM` and
 leaves `L` out, so `All` silently withholds the right to link.
 
-Withdrawing read access from a client that already has it can abort a 1.6.8 daemon; see the remarks
+Withdrawing read access from a client that already has it can abort a daemon (1.6.9 and earlier); see the remarks
 on `PipeWireClientProxy`.
 
 ## Where to go next

@@ -13,7 +13,8 @@
 #   PWNET_VERIFY_LIVE    "full" (default) runs the whole suite on the desktop session too; "cards"
 #                        runs only the tests that need its sound card
 #   PWNET_PATCHED_MODULES a module directory whose libpipewire-module-metadata carries the
-#                        fixes in repro/module-metadata.patch (default ~/pw-mods-patched); used by the private
+#                        fixes in repro/module-metadata.patch (default ~/pw-mods-patched, built by
+#                        build/patched-pipewire.sh); used by the private
 #                        sessions when its version matches the installed daemon
 #   PWNET_PATCHED_LIB    a directory holding a libpipewire-0.3.so.0 built with
 #                        repro/libpipewire-permissions.patch (default ~/pw-lib-patched): the KillsTheDaemon
@@ -21,14 +22,16 @@
 #   PWNET_VERIFY_LIVE_PATCHED "1" (default) runs the live leg on the desktop's own daemon with the
 #                        patched library and modules swapped in for its duration and restored after
 #                        (on any exit), so only the sound-card split is excluded there; "0" keeps it
-#                        stock and excludes what a stock 1.6.8 daemon cannot survive
+#                        stock and excludes what a stock daemon cannot survive
 #
-# Three upstream bugs in PipeWire 1.6.8 decide how the legs are set up (HANDOFF: "The session
-# wedge", the bind-window section after it, and the update_permissions crash). The private sessions
-# load module-metadata with repro/module-metadata.patch, so a store withdrawn while WirePlumber's
-# bind is pending cannot freeze the session and a change a served store makes while another client
-# binds it still reaches the consumers already bound. The KillsTheDaemon category runs against a
-# daemon of its own loading libpipewire with repro/libpipewire-permissions.patch. The live leg runs the
+# Upstream bugs decide how the legs are set up (HANDOFF, "Upstream bugs"). Two are still in 1.6.9:
+# the bind window and the update_permissions crash. A third, the session wedge, is fixed in 1.6.9
+# but freezes the session on 1.6.8 and earlier. The private sessions load module-metadata with
+# repro/module-metadata.patch, so a change a served store makes while another client binds it still
+# reaches the consumers already bound (and, before 1.6.9, a store withdrawn while WirePlumber's bind
+# is pending cannot freeze the session). The KillsTheDaemon category runs against a daemon of its
+# own loading libpipewire with repro/libpipewire-permissions.patch. build/patched-pipewire.sh builds
+# both for the installed release. The live leg runs the
 # desktop's own stack with both swapped in for its duration (PWNET_VERIFY_LIVE_PATCHED), so it runs
 # everything; kept stock, it leaves out the tests a stock daemon cannot survive (LIVE_EXCLUDE,
 # KillsTheDaemon), which the private legs still run.
@@ -282,7 +285,7 @@ source "$ROOT/build/session.sh"
 
 # One category in a private session of its own: PenTest, whose churn would otherwise be what
 # everything sharing its session fails on (docs/running-tests.md), and KillsTheDaemon, whose tests
-# abort a stock 1.6.8 daemon and so get a daemon that loads the patched library ($4). The daemon
+# abort a stock daemon (1.6.9 and earlier) and so get a daemon that loads the patched library ($4). The daemon
 # is checked to have mapped that library, so a run cannot pass on a stock one by mistake.
 own_session_leg() {
   local tfm="$1" label="$2" filter="$3" lib="${4:-}"
@@ -426,7 +429,7 @@ if [ -z "$FILTER" ]; then
     fi
 
     # On the patched stack everything runs here that has a reason to; on a stock one the tests a
-    # 1.6.8 daemon cannot survive stay in the private legs. PenTest gets its own pass below either
+    # stock daemon cannot survive stay in the private legs. PenTest gets its own pass below either
     # way, after the suite, so its churn is nobody else's problem.
     if [ "$LIVE_MODE" != "full" ]; then
       LIVE_FILTER="$LIVE_ONLY"

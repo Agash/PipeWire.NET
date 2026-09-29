@@ -27,7 +27,7 @@ namespace PipeWire.NET.Graph;
 /// session manager's tool, and it acts on whatever client it is pointed at.
 /// </para>
 /// <para>
-/// <strong>On PipeWire 1.6.8, withdrawing read access can abort the daemon.</strong> When a change
+/// <strong>On PipeWire 1.6.9 and earlier, withdrawing read access can abort the daemon.</strong> When a change
 /// takes <c>R</c> away, <c>pw_global_update_permissions</c> destroys the client's resources on that
 /// object while walking the object's resource list, called from a walk over every object. A destroy
 /// can take other resources with it, and the object itself when the client exported it, so the walks
@@ -333,7 +333,7 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
     /// client already had - so a self-directed grant silently does nothing.
     /// </para>
     /// <para>
-    /// Withdrawing read access can abort a 1.6.8 daemon; see the remarks on this class.
+    /// Withdrawing read access can abort a 1.6.9 or earlier daemon; see the remarks on this class.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException"><paramref name="permissions"/> is empty.</exception>
@@ -392,7 +392,7 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
     /// </para>
     /// <para>
     /// The deny-everything default withdraws read access from everything not granted, which is the
-    /// change that can abort a 1.6.8 daemon; see the remarks on this class.
+    /// change that can abort a 1.6.9 or earlier daemon; see the remarks on this class.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException">

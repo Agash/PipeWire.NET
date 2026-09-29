@@ -219,11 +219,11 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
     /// until just when the test clears it, which is what made
     /// <see cref="AStoreClearedByItsServer_EmptiesEveryBoundConsumer"/> fail under load. Fixed by
     /// <c>repro/module-metadata.patch</c>, which the private verify sessions load;
-    /// on a stock 1.6.8 daemon this fails every time.
+    /// on a stock daemon (1.6.8 and 1.6.9 alike) this fails every time.
     /// </para>
     /// </remarks>
     [TestMethod]
-    // Fails on a stock 1.6.8 daemon by design: that is the bug it pins. Excluded from CI, whose
+    // Fails on a stock daemon by design: that is the bug it pins. Excluded from CI, whose
     // sessions are stock; build/verify-linux.sh runs it against daemons carrying the patch.
     [TestCategory("RequiresPatchedDaemon")]
     public async Task AChangeWhileAnotherClientBinds_ReachesTheConsumersAlreadyBound()

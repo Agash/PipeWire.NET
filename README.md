@@ -58,7 +58,7 @@ wanted. [docs/choosing-a-type.md](docs/choosing-a-type.md) is one table per case
 | -------- | -------------------------------------------------------------------- |
 | OS       | Linux (x64 / arm64)                                                  |
 | Runtime  | `libpipewire-0.3.so.0` (ships with any PipeWire install)             |
-| PipeWire | Bindings generated against 1.6.8; see [version policy](#pipewire-version-policy) |
+| PipeWire | Bindings generated against 1.6.9; see [version policy](#pipewire-version-policy) |
 | Daemon   | A running PipeWire daemon plus a session manager such as WirePlumber |
 | .NET     | .NET 10, or .NET 11 (preview)                                        |
 
@@ -310,7 +310,9 @@ CI regenerates on every build and fails if the committed output drifts.
 
 The bindings are generated from the headers of one specific release, recorded in
 `generate/HEADER-VERSION` and enforced by the generator. That release is what the committed bindings
-describe and what the gating test job runs against.
+describe and what `build/verify-linux.sh` runs against on a desktop machine. CI runs the PipeWire its
+Ubuntu runner ships (1.6.2 on Ubuntu 26.04), and checks the bindings only when that is the pinned
+release.
 
 Older daemons are not rejected and should mostly work: the library binds a small, long-stable part
 of the protocol. What an older daemon can lack is usually a whole interface, and binding one that is
