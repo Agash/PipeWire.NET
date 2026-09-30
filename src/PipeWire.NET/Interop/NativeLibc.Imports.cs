@@ -65,4 +65,32 @@ internal static unsafe partial class NativeLibc
     /// </summary>
     [LibraryImport("libc", EntryPoint = "close")]
     internal static partial int close(int fd);
+
+    /// <summary><c>memfd_create(2)</c>: anonymous memory with a descriptor another process can map.</summary>
+    [LibraryImport(
+        "libc",
+        EntryPoint = "memfd_create",
+        StringMarshalling = StringMarshalling.Utf8,
+        SetLastError = true
+    )]
+    internal static partial int memfd_create(string name, uint flags);
+
+    /// <summary><c>ftruncate(2)</c>.</summary>
+    [LibraryImport("libc", EntryPoint = "ftruncate", SetLastError = true)]
+    internal static partial int ftruncate(int fd, long length);
+
+    /// <summary><c>mmap(2)</c>.</summary>
+    [LibraryImport("libc", EntryPoint = "mmap", SetLastError = true)]
+    internal static partial void* mmap(
+        void* address,
+        nuint length,
+        int protection,
+        int flags,
+        int fd,
+        long offset
+    );
+
+    /// <summary><c>munmap(2)</c>.</summary>
+    [LibraryImport("libc", EntryPoint = "munmap", SetLastError = true)]
+    internal static partial int munmap(void* address, nuint length);
 }

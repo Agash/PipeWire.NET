@@ -180,6 +180,14 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     // dmabuf-mode state. Set once at ConnectDmaBuf; the modifier is fixated during negotiation. We never
     // retain the offered modifier list (see VideoFormatInfo for why) - fixation re-offers _fmt.Modifier.
     private bool _dmaBufMode;
+
+    // Whether the consumer took a shared buffer; false when a DMA-BUF stream fell back to memory.
+    private bool _sharedNegotiated;
+
+    // Memory backing the pool's buffers when a DMA-BUF stream fell back to it, by buffer index.
+    private readonly (int Fd, nint Address, uint Size)[] _hostBlocks = new (int, nint, uint)[
+        MaxPoolBuffers
+    ];
     private bool _modifierFixated;
     private bool _announcedToAPeer;
     private long[] _modifiers = [];
@@ -497,7 +505,9 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             buffers,
             size,
             stride,
-            dataTypes: 1 << (int)SpaDataType.MemPtr,
+            // A DMA-BUF stream that fell back backs its buffers itself, with memfd memory the
+            // consumer maps; a host-memory stream's buffers come from the daemon.
+            dataTypes: 1 << (int)(_dmaBufMode ? SpaDataType.MemFd : SpaDataType.MemPtr),
             blocks: 1
         );
 
@@ -815,7 +825,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 (uint)_height,
                 (uint)_frameRate,
                 fixedSize: true,
-                hostMemoryFallback: false,
+                hostMemoryFallback: HostMemoryFallback,
                 out int count,
                 out int deviceFormats,
                 _color
@@ -837,7 +847,21 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 modifiers: _modifiers,
                 color: _color
             );
-            rc = core.RequestParamsFromCallback(pod[..len]);
+
+            // The same format in memory, for a consumer that cannot import a shared buffer.
+            byte[] host = HostMemoryFallback ? new byte[1024] : [];
+            int hostLen = HostMemoryFallback
+                ? SpaFormatPod.WriteVideoFormat(
+                    host,
+                    fmt,
+                    (uint)_width,
+                    (uint)_height,
+                    (uint)_frameRate,
+                    fixedSize: true,
+                    color: _color
+                )
+                : 0;
+            rc = core.RequestParamsFromCallback(pod[..len], host.AsSpan(0, hostLen));
         }
 
         if (rc < 0)
@@ -1026,6 +1050,14 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     /// </remarks>
     public IReadOnlyDictionary<string, string>? ExtraProperties { get; set; }
 
+    /// <summary>
+    /// Whether a DMA-BUF stream also offers host memory, for a consumer that cannot import a shared
+    /// buffer. Set before connecting. When the consumer settles on memory, this stream backs the pool
+    /// with memfd memory itself and fills each frame through <see cref="FillFrame"/>, as a
+    /// host-memory stream does; when it takes a shared buffer, <see cref="FillDmaBuf"/> fills it.
+    /// </summary>
+    public bool HostMemoryFallback { get; set; }
+
     /// <summary>How much this stream currently holds, or null when it cannot be read.</summary>
     /// <remarks>
     /// The error term for a rate controller. Pair it with <see cref="PipeWireRateController"/> to
@@ -1103,7 +1135,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         in PipeWireStreamCore.StreamClock clock
     )
     {
-        if (_dmaBufMode)
+        if (_dmaBufMode && _sharedNegotiated)
         {
             FillDmaBufBuffer(buf, in clock);
             return;
@@ -1391,6 +1423,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
 
         SpaFormatPod.VideoFormatInfo parsed = SpaFormatPod.ParseVideoFormat(param, Format);
         Volatile.Write(ref _fmtCell, new NegotiatedFormat(parsed));
+        _sharedNegotiated = parsed.Modifier != DrmFormatModifier.Invalid;
         LogOnFormat(parsed.Modifier, parsed.ModifierNeedsFixation);
     }
 
@@ -1398,6 +1431,13 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     {
         SpaFormatPod.VideoFormatInfo negotiated = Format;
         LogOnPostFormat(_modifierFixated, negotiated.ModifierNeedsFixation, _planeCount);
+
+        // The consumer settled on memory: buffers this stream backs with memfd memory itself.
+        if (!_sharedNegotiated)
+        {
+            OnPostFormatHostMem(core);
+            return;
+        }
 
         // Mirror the consumer's two-step modifier fixation on the producer side: when the peer honoured
         // DONT_FIXATE we re-offer our preferred returned modifier alone (DONT_FIXATE cleared) to settle it.
@@ -1495,6 +1535,12 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         if ((uint)index >= (uint)MaxPoolBuffers)
         {
             LogBufferIndexOutOfRange(index);
+            return;
+        }
+
+        if (!_sharedNegotiated)
+        {
+            AddHostBuffer(buf, sb, index);
             return;
         }
 
@@ -1753,11 +1799,69 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         _syncReleaseOwned[i] = false;
     }
 
+    // A DMA-BUF stream that fell back to memory: one memfd block holding the whole image, mapped here
+    // for FillFrame and by the consumer through its descriptor. Loop thread.
+    private unsafe void AddHostBuffer(pw_buffer* buf, spa_buffer* sb, int index)
+    {
+        SpaFormatPod.VideoFormatInfo fmt = Format;
+        if (
+            sb->n_datas < 1
+            || fmt.Format == PixelFormat.Unknown
+            || fmt.Width <= 0
+            || fmt.Height <= 0
+        )
+        {
+            _freeBufferIndices.Push(index);
+            LogBufferDeclined(index);
+            return;
+        }
+
+        const uint CloseOnExec = 1;
+        const int ReadWrite = 3,
+            Shared = 1;
+        uint size = (uint)SpaFormatPod.VideoImageSize(fmt.Format, fmt.Width, fmt.Height);
+        int fd = NativeLibc.memfd_create("pipewire-net-video", CloseOnExec);
+        void* address = (void*)-1;
+        if (fd >= 0 && NativeLibc.ftruncate(fd, size) == 0)
+            address = NativeLibc.mmap(null, size, ReadWrite, Shared, fd, 0);
+
+        if (address == (void*)-1)
+        {
+            int errno = System.Runtime.InteropServices.Marshal.GetLastPInvokeError();
+            if (fd >= 0)
+                _ = NativeLibc.close(fd);
+            LogHostBufferFailed(index, errno);
+            _freeBufferIndices.Push(index);
+            return; // unbacked: the whole pool fails, see the bound in OnAddBuffer
+        }
+
+        spa_data* d = &sb->datas[0];
+        d->type = (uint)SpaDataType.MemFd;
+        d->flags = (uint)(SpaDataFlags.Readable | SpaDataFlags.Writable);
+        d->fd = fd;
+        d->mapoffset = 0;
+        d->maxsize = size;
+        d->data = address;
+        _hostBlocks[index] = (fd, (nint)address, size);
+        buf->user_data = (void*)(nint)(index + 1);
+    }
+
     private unsafe void OnRemoveBuffer(pw_buffer* buf)
     {
         int index = (int)(nint)buf->user_data - 1;
         if (index < 0)
             return;
+
+        if ((uint)index < (uint)MaxPoolBuffers && _hostBlocks[index].Fd > 0)
+        {
+            (int fd, nint address, uint size) = _hostBlocks[index];
+            _ = NativeLibc.munmap((void*)address, size);
+            _ = NativeLibc.close(fd);
+            _hostBlocks[index] = default;
+            _freeBufferIndices.Push(index);
+            buf->user_data = null;
+            return;
+        }
 
         ReleaseDmaBuf?.Invoke(this, index);
 
@@ -1780,6 +1884,12 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
 
     private void OnState(PipeWireStreamState oldState, PipeWireStreamState newState) =>
         StateChanged?.Invoke(this, oldState, newState);
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "buffer {Index}: memory for the host-memory fallback could not be made (errno {Errno}); the pool fails"
+    )]
+    private partial void LogHostBufferFailed(int index, int errno);
 
     [LoggerMessage(
         Level = LogLevel.Warning,

@@ -1421,6 +1421,7 @@ PipeWire.NET.Media.PipeWireVideoOutput.FillFrame event
 PipeWire.NET.Media.PipeWireVideoOutput.FillFrameHandler
 PipeWire.NET.Media.PipeWireVideoOutput.GetControl(UInt32)
 PipeWire.NET.Media.PipeWireVideoOutput.GraphClock : Nullable<PipeWireGraphClock>
+PipeWire.NET.Media.PipeWireVideoOutput.HostMemoryFallback : Boolean
 PipeWire.NET.Media.PipeWireVideoOutput.IsDriving : Boolean
 PipeWire.NET.Media.PipeWireVideoOutput.IsLazy : Boolean
 PipeWire.NET.Media.PipeWireVideoOutput.LastProcessError : Exception
