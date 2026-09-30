@@ -1565,7 +1565,10 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     }
 
     /// <summary>The stream's queue depth, or null if it cannot be read.</summary>
-    internal unsafe PipeWireStreamQueue? Queue
+    internal PipeWireStreamQueue? Queue => Time?.Queue;
+
+    /// <summary>The stream's clock, delay and queue, or null if they cannot be read.</summary>
+    internal unsafe PipeWireStreamTime? Time
     {
         get
         {
@@ -1582,11 +1585,22 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
                 if (Native.pw_stream_get_time_n(stream, &t, (nuint)sizeof(pw_time)) != 0)
                     return null;
 
-                return new PipeWireStreamQueue(
-                    t.queued,
-                    t.buffered,
-                    t.queued_buffers,
-                    t.avail_buffers
+                // The rate is seconds per tick (num/denom); the same 128-bit arithmetic as the
+                // process path, for the same reason.
+                long num = t.rate.num,
+                    denom = t.rate.denom;
+                long positionNs =
+                    denom != 0
+                        ? (long)((UInt128)t.ticks * (UInt128)num * 1_000_000_000 / (UInt128)denom)
+                        : -1;
+                long delayNs =
+                    denom != 0 ? (long)((Int128)t.delay * num * 1_000_000_000 / denom) : 0;
+                return new PipeWireStreamTime(
+                    t.now,
+                    positionNs,
+                    TimeSpan.FromTicks(delayNs / 100),
+                    num != 0 ? denom / num : 0,
+                    new PipeWireStreamQueue(t.queued, t.buffered, t.queued_buffers, t.avail_buffers)
                 );
             }
         }

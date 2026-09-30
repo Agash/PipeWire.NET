@@ -1019,7 +1019,7 @@ public sealed class StreamGuardTests : PipeWireTestBase
         Assert.ThrowsExactly<ArgumentException>(() =>
             capture.Connect(
                 modifiers: new long[] { 1 },
-                preferredFormats: new[] { PixelFormat.Bgra, PixelFormat.Rgba }
+                preferredFormats: ReadOnlySpan<PixelFormat>.Empty
             )
         );
 

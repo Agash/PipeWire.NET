@@ -343,6 +343,19 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
         );
     }
 
+    // The pod at an index of a buffer of 8-byte-aligned pods.
+    private static byte[] Pod(byte[] pods, int index)
+    {
+        int at = 0;
+        for (int i = 0; ; i++)
+        {
+            int size = 8 + (int)BitConverter.ToUInt32(pods, at);
+            if (i == index)
+                return pods[at..(at + size)];
+            at += (size + 7) & ~7;
+        }
+    }
+
     private static List<SpaFormatPod.VideoFormatInfo> ReadPods(byte[] pods, int count)
     {
         var read = new List<SpaFormatPod.VideoFormatInfo>();
@@ -410,6 +423,46 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
             DrmFormatModifier.Invalid,
             read[2].Modifier,
             "the fallback is host memory: no modifier at all"
+        );
+    }
+
+    [TestMethod]
+    public void TheHostMemoryFallback_OffersEveryFormatTheConsumerReads()
+    {
+        RequireLinux();
+
+        // A consumer that imports BGRA on the GPU but reads a camera's YUYV or NV12 from memory: the
+        // DMA-BUF offer stays one format, the fallback lists them all.
+        var peer = new PeerCapabilities(true, [CardA.Id]);
+        byte[] pods = DeviceIdNegotiation.WriteDeviceFormats(
+            peer,
+            [new(CardA, [0])],
+            PixelFormat.Bgra,
+            640,
+            480,
+            30,
+            fixedSize: false,
+            hostMemoryFallback: true,
+            out int count,
+            out _,
+            hostMemoryFormats: [PixelFormat.Bgra, PixelFormat.Yuyv, PixelFormat.Nv12]
+        );
+
+        Assert.AreEqual(2, count);
+        Assert.IsTrue(SpaPod.TryParse(Pod(pods, 0), out SpaValue? device));
+        Assert.IsInstanceOfType<SpaId>(
+            ((SpaObject)device!)[SpaFormat.VideoFormat],
+            "one GPU format"
+        );
+        Assert.IsTrue(SpaPod.TryParse(Pod(pods, 1), out SpaValue? host));
+        var formats = (SpaChoice)((SpaObject)host!)[SpaFormat.VideoFormat]!;
+        CollectionAssert.AreEquivalent(
+            new[] { SpaVideoFormat.Bgra, SpaVideoFormat.Yuy2, SpaVideoFormat.Nv12 },
+            formats
+                .Alternatives.OfType<SpaId>()
+                .Select(id => (SpaVideoFormat)id.Value)
+                .Distinct()
+                .ToArray()
         );
     }
 

@@ -326,6 +326,31 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
     /// </remarks>
     public PipeWireStreamQueue? Queue => _core?.Queue;
 
+    /// <summary>
+    /// The stream's clock, its latency to the hardware and what it holds, or null when they cannot
+    /// be read.
+    /// </summary>
+    public PipeWireStreamTime? Time => _core?.Time;
+
+    /// <summary>
+    /// How long a sample written now takes to reach the device: the stream's delay to the hardware,
+    /// plus what is queued on the stream and held by its resampler ahead of it. Null until the
+    /// stream has a format and a clock.
+    /// </summary>
+    public TimeSpan? PlaybackLatency
+    {
+        get
+        {
+            int rate = Negotiated.SampleRate;
+            if (Time is not { } time || rate <= 0)
+                return null;
+
+            ulong frames = time.Queue.Queued + time.Queue.Buffered;
+            return time.Delay
+                + TimeSpan.FromTicks((long)(frames * TimeSpan.TicksPerSecond / (ulong)rate));
+        }
+    }
+
     /// <summary>Whether the daemon has put this stream in lazy scheduling.</summary>
     public bool IsLazy => _core?.IsLazy ?? false;
 

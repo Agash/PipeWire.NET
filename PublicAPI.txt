@@ -1010,6 +1010,18 @@ PipeWire.NET.Graph.PipeWireStreamQueue.GetHashCode()
 PipeWire.NET.Graph.PipeWireStreamQueue.Queued : UInt64
 PipeWire.NET.Graph.PipeWireStreamQueue.QueuedBuffers : UInt32
 PipeWire.NET.Graph.PipeWireStreamQueue.ToString()
+PipeWire.NET.Graph.PipeWireStreamTime
+PipeWire.NET.Graph.PipeWireStreamTime..ctor(Int64, Int64, TimeSpan, Int64, PipeWireStreamQueue)
+PipeWire.NET.Graph.PipeWireStreamTime.Deconstruct(Int64&, Int64&, TimeSpan&, Int64&, PipeWireStreamQueue&)
+PipeWire.NET.Graph.PipeWireStreamTime.Delay : TimeSpan
+PipeWire.NET.Graph.PipeWireStreamTime.Equals(Object)
+PipeWire.NET.Graph.PipeWireStreamTime.Equals(PipeWireStreamTime)
+PipeWire.NET.Graph.PipeWireStreamTime.GetHashCode()
+PipeWire.NET.Graph.PipeWireStreamTime.GraphTimeNs : Int64
+PipeWire.NET.Graph.PipeWireStreamTime.Queue : PipeWireStreamQueue
+PipeWire.NET.Graph.PipeWireStreamTime.Rate : Int64
+PipeWire.NET.Graph.PipeWireStreamTime.StreamPositionNs : Int64
+PipeWire.NET.Graph.PipeWireStreamTime.ToString()
 PipeWire.NET.Graph.PipeWireTag
 PipeWire.NET.Graph.PipeWireTag..ctor(SpaDirection, ImmutableArray<KeyValuePair<String, String>>)
 PipeWire.NET.Graph.PipeWireTag.Deconstruct(SpaDirection&, ImmutableArray`1&)
@@ -1197,6 +1209,7 @@ PipeWire.NET.Media.PipeWireAudioCapture.SetRate(Double, CancellationToken)
 PipeWire.NET.Media.PipeWireAudioCapture.SkipCurrentFrame()
 PipeWire.NET.Media.PipeWireAudioCapture.StateChanged event
 PipeWire.NET.Media.PipeWireAudioCapture.StateChangedHandler
+PipeWire.NET.Media.PipeWireAudioCapture.Time : Nullable<PipeWireStreamTime>
 PipeWire.NET.Media.PipeWireAudioCapture.TriggerProcess()
 PipeWire.NET.Media.PipeWireAudioCapture.TriggerProcessAndWaitAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireAudioCapture.UpdateProperties(IReadOnlyDictionary<String, String>)
@@ -1234,6 +1247,7 @@ PipeWire.NET.Media.PipeWireAudioOutput.IsLazy : Boolean
 PipeWire.NET.Media.PipeWireAudioOutput.LastProcessError : Exception
 PipeWire.NET.Media.PipeWireAudioOutput.NextPresentationTimestampNs : Nullable<Int64>
 PipeWire.NET.Media.PipeWireAudioOutput.NodeId : Nullable<UInt32>
+PipeWire.NET.Media.PipeWireAudioOutput.PlaybackLatency : Nullable<TimeSpan>
 PipeWire.NET.Media.PipeWireAudioOutput.ProcessErrorCount : Int64
 PipeWire.NET.Media.PipeWireAudioOutput.Queue : Nullable<PipeWireStreamQueue>
 PipeWire.NET.Media.PipeWireAudioOutput.RateMatch : Nullable<PipeWireRateMatch>
@@ -1242,6 +1256,7 @@ PipeWire.NET.Media.PipeWireAudioOutput.SetError(Int32, String, CancellationToken
 PipeWire.NET.Media.PipeWireAudioOutput.SetRate(Double, CancellationToken)
 PipeWire.NET.Media.PipeWireAudioOutput.StateChanged event
 PipeWire.NET.Media.PipeWireAudioOutput.StateChangedHandler
+PipeWire.NET.Media.PipeWireAudioOutput.Time : Nullable<PipeWireStreamTime>
 PipeWire.NET.Media.PipeWireAudioOutput.TriggerProcess()
 PipeWire.NET.Media.PipeWireAudioOutput.TriggerProcessAndWaitAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireAudioOutput.UpdateProperties(IReadOnlyDictionary<String, String>)
@@ -1341,6 +1356,7 @@ PipeWire.NET.Media.PipeWireVideoCapture.SetRate(Double, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoCapture.SkipCurrentFrame()
 PipeWire.NET.Media.PipeWireVideoCapture.StateChanged event
 PipeWire.NET.Media.PipeWireVideoCapture.StateChangedHandler
+PipeWire.NET.Media.PipeWireVideoCapture.Time : Nullable<PipeWireStreamTime>
 PipeWire.NET.Media.PipeWireVideoCapture.TriggerProcess()
 PipeWire.NET.Media.PipeWireVideoCapture.TriggerProcessAndWaitAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireVideoCapture.TryGetBorrowedFrame(BorrowedVideoFrame&)
@@ -1379,7 +1395,7 @@ PipeWire.NET.Media.PipeWireVideoOutput+StateChangedHandler..ctor(Object, IntPtr)
 PipeWire.NET.Media.PipeWireVideoOutput+StateChangedHandler.BeginInvoke(PipeWireVideoOutput, PipeWireStreamState, PipeWireStreamState, AsyncCallback, Object)
 PipeWire.NET.Media.PipeWireVideoOutput+StateChangedHandler.EndInvoke(IAsyncResult)
 PipeWire.NET.Media.PipeWireVideoOutput+StateChangedHandler.Invoke(PipeWireVideoOutput, PipeWireStreamState, PipeWireStreamState)
-PipeWire.NET.Media.PipeWireVideoOutput..ctor(PipeWireContext, String, Int32, Int32, PixelFormat, Int32)
+PipeWire.NET.Media.PipeWireVideoOutput..ctor(PipeWireContext, String, Int32, Int32, PixelFormat, Int32, VideoColorInfo)
 PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBuf event
 PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBufHandler
 PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBufSync event
@@ -1423,6 +1439,7 @@ PipeWire.NET.Media.PipeWireVideoOutput.SetRate(Double, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.StampSyncPoints(Int32, UInt64, UInt64)
 PipeWire.NET.Media.PipeWireVideoOutput.StateChanged event
 PipeWire.NET.Media.PipeWireVideoOutput.StateChangedHandler
+PipeWire.NET.Media.PipeWireVideoOutput.Time : Nullable<PipeWireStreamTime>
 PipeWire.NET.Media.PipeWireVideoOutput.TriggerProcess()
 PipeWire.NET.Media.PipeWireVideoOutput.TriggerProcessAndWaitAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.UpdateProperties(IReadOnlyDictionary<String, String>)
@@ -1486,9 +1503,18 @@ PipeWire.NET.Media.StreamProperties.WithNodeDescription(String)
 PipeWire.NET.Media.StreamProperties.WithNodeName(String)
 PipeWire.NET.Media.StreamProperties.WithRole(String)
 PipeWire.NET.Media.StreamProperties.WithTargetObject(String)
+PipeWire.NET.Media.VideoChromaSite
+PipeWire.NET.Media.VideoChromaSite.AltLine = VideoChromaSite
+PipeWire.NET.Media.VideoChromaSite.Cosited = VideoChromaSite
+PipeWire.NET.Media.VideoChromaSite.HCosited = VideoChromaSite
+PipeWire.NET.Media.VideoChromaSite.None = VideoChromaSite
+PipeWire.NET.Media.VideoChromaSite.Unknown = VideoChromaSite
+PipeWire.NET.Media.VideoChromaSite.VCosited = VideoChromaSite
+PipeWire.NET.Media.VideoChromaSite.value__ = Int32
 PipeWire.NET.Media.VideoColorInfo
-PipeWire.NET.Media.VideoColorInfo..ctor(VideoColorRange, VideoColorMatrix, VideoTransferFunction, VideoColorPrimaries)
-PipeWire.NET.Media.VideoColorInfo.Deconstruct(VideoColorRange&, VideoColorMatrix&, VideoTransferFunction&, VideoColorPrimaries&)
+PipeWire.NET.Media.VideoColorInfo..ctor(VideoColorRange, VideoColorMatrix, VideoTransferFunction, VideoColorPrimaries, VideoChromaSite)
+PipeWire.NET.Media.VideoColorInfo.ChromaSite : VideoChromaSite
+PipeWire.NET.Media.VideoColorInfo.Deconstruct(VideoColorRange&, VideoColorMatrix&, VideoTransferFunction&, VideoColorPrimaries&, VideoChromaSite&)
 PipeWire.NET.Media.VideoColorInfo.Equals(Object)
 PipeWire.NET.Media.VideoColorInfo.Equals(VideoColorInfo)
 PipeWire.NET.Media.VideoColorInfo.GetHashCode()
@@ -1507,6 +1533,7 @@ PipeWire.NET.Media.VideoColorMatrix.Unknown = VideoColorMatrix
 PipeWire.NET.Media.VideoColorMatrix.value__ = Int32
 PipeWire.NET.Media.VideoColorPrimaries
 PipeWire.NET.Media.VideoColorPrimaries.Bt2020 = VideoColorPrimaries
+PipeWire.NET.Media.VideoColorPrimaries.Bt601 = VideoColorPrimaries
 PipeWire.NET.Media.VideoColorPrimaries.Bt709 = VideoColorPrimaries
 PipeWire.NET.Media.VideoColorPrimaries.Unknown = VideoColorPrimaries
 PipeWire.NET.Media.VideoColorPrimaries.value__ = Int32
@@ -1527,7 +1554,7 @@ PipeWire.NET.Media.VideoCursor.Width : UInt32
 PipeWire.NET.Media.VideoCursor.X : Int32
 PipeWire.NET.Media.VideoCursor.Y : Int32
 PipeWire.NET.Media.VideoFrame
-PipeWire.NET.Media.VideoFrame..ctor(ReadOnlySpan<Byte>, Int32, Int32, Int32, PixelFormat, UInt64, PipeWireBufferType, Int64, UInt32, Int64, VideoColorInfo, Int64, Int64, Int64, UInt64, ReadOnlySpan<VideoPlane>, Nullable<VideoSyncTimeline>, Nullable<VideoRegion>, SpaMetaVideotransformValue, ReadOnlySpan<VideoRegion>, VideoCursor, Boolean, Int64)
+PipeWire.NET.Media.VideoFrame..ctor(ReadOnlySpan<Byte>, Int32, Int32, Int32, PixelFormat, UInt64, PipeWireBufferType, Int64, UInt32, Int64, VideoColorInfo, Int64, Int64, Int64, UInt64, ReadOnlySpan<VideoPlane>, Nullable<VideoSyncTimeline>, Nullable<VideoRegion>, SpaMetaVideotransformValue, ReadOnlySpan<VideoRegion>, VideoCursor, Boolean, Int64, ReadOnlySpan<Byte>, Int32, ReadOnlySpan<Byte>, Int32)
 PipeWire.NET.Media.VideoFrame.BufferType : PipeWireBufferType
 PipeWire.NET.Media.VideoFrame.Clone()
 PipeWire.NET.Media.VideoFrame.Color : VideoColorInfo
@@ -1539,9 +1566,12 @@ PipeWire.NET.Media.VideoFrame.DrmFourcc : UInt32
 PipeWire.NET.Media.VideoFrame.DuplicateFd()
 PipeWire.NET.Media.VideoFrame.Fd : Int64
 PipeWire.NET.Media.VideoFrame.Format : PixelFormat
+PipeWire.NET.Media.VideoFrame.GetHostPlane(Int32)
+PipeWire.NET.Media.VideoFrame.GetHostStride(Int32)
 PipeWire.NET.Media.VideoFrame.GraphTimeNs : Nullable<Int64>
 PipeWire.NET.Media.VideoFrame.HasCursor : Boolean
 PipeWire.NET.Media.VideoFrame.Height : Int32
+PipeWire.NET.Media.VideoFrame.HostPlaneCount : Int32
 PipeWire.NET.Media.VideoFrame.IsFdBacked : Boolean
 PipeWire.NET.Media.VideoFrame.MapOffset : UInt32
 PipeWire.NET.Media.VideoFrame.Modifier : UInt64
@@ -1591,8 +1621,12 @@ PipeWire.NET.Media.VideoSyncTimeline.ReleasePoint : UInt64
 PipeWire.NET.Media.VideoSyncTimeline.ToString()
 PipeWire.NET.Media.VideoTransferFunction
 PipeWire.NET.Media.VideoTransferFunction.Bt2020_12 = VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Bt601 = VideoTransferFunction
 PipeWire.NET.Media.VideoTransferFunction.Bt709 = VideoTransferFunction
 PipeWire.NET.Media.VideoTransferFunction.Gamma22 = VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Hlg = VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Linear = VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Pq = VideoTransferFunction
 PipeWire.NET.Media.VideoTransferFunction.Srgb = VideoTransferFunction
 PipeWire.NET.Media.VideoTransferFunction.Unknown = VideoTransferFunction
 PipeWire.NET.Media.VideoTransferFunction.value__ = Int32

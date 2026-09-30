@@ -366,8 +366,11 @@ public sealed class SpaFormatTests : PipeWireTestBase
                 (SpaVideoTransferFunction.Bt709, VideoTransferFunction.Bt709),
                 (SpaVideoTransferFunction.Srgb, VideoTransferFunction.Srgb),
                 (SpaVideoTransferFunction.Bt2020_12, VideoTransferFunction.Bt2020_12),
-                (SpaVideoTransferFunction.Gamma10, VideoTransferFunction.Unknown),
-                (SpaVideoTransferFunction.Smpte2084, VideoTransferFunction.Unknown),
+                (SpaVideoTransferFunction.Gamma10, VideoTransferFunction.Linear),
+                (SpaVideoTransferFunction.Bt601, VideoTransferFunction.Bt601),
+                (SpaVideoTransferFunction.Smpte2084, VideoTransferFunction.Pq),
+                (SpaVideoTransferFunction.AribStdB67, VideoTransferFunction.Hlg),
+                (SpaVideoTransferFunction.Gamma28, VideoTransferFunction.Unknown),
             }
         )
             Assert.AreEqual(expected, SpaFormatPod.MapTransfer(spa), $"transfer {spa}");
@@ -375,8 +378,12 @@ public sealed class SpaFormatTests : PipeWireTestBase
         foreach (
             (SpaVideoColorPrimaries spa, VideoColorPrimaries expected) in new[]
             {
+                (SpaVideoColorPrimaries.Unknown, VideoColorPrimaries.Unknown),
                 (SpaVideoColorPrimaries.Bt709, VideoColorPrimaries.Bt709),
                 (SpaVideoColorPrimaries.Bt2020, VideoColorPrimaries.Bt2020),
+                (SpaVideoColorPrimaries.Smpte170M, VideoColorPrimaries.Bt601),
+                (SpaVideoColorPrimaries.Bt470Bg, VideoColorPrimaries.Bt601),
+                (SpaVideoColorPrimaries.Film, VideoColorPrimaries.Unknown),
             }
         )
             Assert.AreEqual(expected, SpaFormatPod.MapPrimaries(spa), $"primaries {spa}");
@@ -568,6 +575,84 @@ public sealed class SpaFormatTests : PipeWireTestBase
         Assert.AreEqual(640, parsed.Width);
         Assert.AreEqual(480, parsed.Height);
         Assert.AreEqual(PixelFormat.Bgra, parsed.Format);
+    }
+
+    [TestMethod]
+    [DataRow(
+        VideoColorRange.Limited_16_235,
+        VideoColorMatrix.Bt709,
+        VideoTransferFunction.Bt709,
+        VideoColorPrimaries.Bt709,
+        VideoChromaSite.HCosited
+    )]
+    [DataRow(
+        VideoColorRange.Full_0_255,
+        VideoColorMatrix.Bt601,
+        VideoTransferFunction.Bt601,
+        VideoColorPrimaries.Bt601,
+        VideoChromaSite.None
+    )]
+    [DataRow(
+        VideoColorRange.Limited_16_235,
+        VideoColorMatrix.Bt2020,
+        VideoTransferFunction.Pq,
+        VideoColorPrimaries.Bt2020,
+        VideoChromaSite.Cosited
+    )]
+    [DataRow(
+        VideoColorRange.Limited_16_235,
+        VideoColorMatrix.Bt2020,
+        VideoTransferFunction.Hlg,
+        VideoColorPrimaries.Bt2020,
+        VideoChromaSite.Cosited
+    )]
+    public unsafe void TheColourAProducerDeclares_ParsesBackAsDeclared(
+        VideoColorRange range,
+        VideoColorMatrix matrix,
+        VideoTransferFunction transfer,
+        VideoColorPrimaries primaries,
+        VideoChromaSite chromaSite
+    )
+    {
+        VideoColorInfo color = new(range, matrix, transfer, primaries, chromaSite);
+        Span<byte> buf = stackalloc byte[1024];
+        int len = SpaFormatPod.WriteVideoFormat(
+            buf,
+            [PixelFormat.Nv12],
+            1280,
+            720,
+            30,
+            fixedSize: true,
+            color: color
+        );
+
+        SpaFormatPod.VideoFormatInfo parsed;
+        fixed (byte* p = buf)
+            parsed = SpaFormatPod.ParseVideoFormat(
+                (spa_pod*)p,
+                new SpaFormatPod.VideoFormatInfo(PixelFormat.Bgra, 1, 1, default)
+            );
+
+        Assert.AreEqual(color, parsed.Color);
+    }
+
+    [TestMethod]
+    public unsafe void AnUnknownColour_IsLeftOutOfTheFormat()
+    {
+        Span<byte> buf = stackalloc byte[1024];
+        int len = SpaFormatPod.WriteVideoFormat(
+            buf,
+            [PixelFormat.Nv12],
+            64,
+            64,
+            30,
+            fixedSize: true
+        );
+
+        Assert.IsTrue(SpaPod.TryParse(buf[..len], out SpaValue? value));
+        var format = (SpaObject)value!;
+        Assert.IsNull(format[SpaFormat.VideoColorMatrix]);
+        Assert.IsNull(format[SpaFormat.VideoChromaSite]);
     }
 
     [TestMethod]

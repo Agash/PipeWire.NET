@@ -276,6 +276,10 @@ internal static class SpaFormatPod
     /// A fixed value risks refusal when the producer lays its planes out differently. PipeWire's own
     /// <c>gstpipewiresrc</c> offers a range for the same reason.
     /// </param>
+    /// <param name="minBlocks">
+    /// The fewest blocks a consumer takes, when it reads a planar format either as a block per plane
+    /// or with its planes one after another in one block; 0 for exactly <paramref name="blocks"/>.
+    /// </param>
     /// <param name="syncDataBlocks">
     /// Extra data blocks for explicit-sync timeline descriptors, appended after the plane blocks.
     /// Two for the acquire and release timelines (<c>spa/buffer/meta.h:186-192</c>), which also
@@ -289,7 +293,8 @@ internal static class SpaFormatPod
         int dataTypes,
         int blocks = 1,
         bool sizeIsAnyOf = false,
-        int syncDataBlocks = 0
+        int syncDataBlocks = 0,
+        int minBlocks = 0
     )
     {
         var b = new SpaPodBuilder(buf);
@@ -297,7 +302,15 @@ internal static class SpaFormatPod
         b.AddChoiceRangeInt(SpaParamBuffers.Buffers, 8, 2, 16);
         // Blocks = number of planes (one spa_data block per plane). A packed format / host buffer is
         // a single block; planar needs one block per plane so each plane gets its own fd.
-        b.AddInt(SpaParamBuffers.Blocks, blocks + syncDataBlocks);
+        if (minBlocks > 0 && minBlocks < blocks)
+            b.AddChoiceRangeInt(
+                SpaParamBuffers.Blocks,
+                blocks + syncDataBlocks,
+                minBlocks + syncDataBlocks,
+                blocks + syncDataBlocks
+            );
+        else
+            b.AddInt(SpaParamBuffers.Blocks, blocks + syncDataBlocks);
 
         if (sizeIsAnyOf)
             b.AddChoiceRangeInt(SpaParamBuffers.Size, size, 1, int.MaxValue);
@@ -422,6 +435,25 @@ internal static class SpaFormatPod
             PixelFormat.Yuv420 => 3, // Y + U + V
             PixelFormat.Nv12 => 2, // Y + interleaved UV
             _ => 1, // packed
+        };
+
+    /// <summary>
+    /// The stride and rows of a plane when the planes lie one after another in one block, each at
+    /// the stride that follows from the first plane's: the layout GStreamer and this library's own
+    /// output use for a single-block planar buffer.
+    /// </summary>
+    internal static (int Stride, int Rows) HostPlaneLayout(
+        PixelFormat fmt,
+        int plane,
+        int stride,
+        int height
+    ) =>
+        (fmt, plane) switch
+        {
+            (_, 0) => (stride, height),
+            (PixelFormat.Nv12, _) => (stride, (height + 1) / 2),
+            (PixelFormat.Yuv420, _) => ((stride + 1) / 2, (height + 1) / 2),
+            _ => (0, 0),
         };
 
     // - Buffer metadata -
@@ -625,11 +657,12 @@ internal static class SpaFormatPod
     internal static unsafe VideoFormatInfo ParseVideoFormat(spa_pod* param, VideoFormatInfo current)
     {
         var (fmt, w, h, color) = (current.Format, current.Width, current.Height, current.Color);
-        var (range, matrix, transfer, primaries) = (
+        var (range, matrix, transfer, primaries, chromaSite) = (
             color.Range,
             color.Matrix,
             color.Transfer,
-            color.Primaries
+            color.Primaries,
+            color.ChromaSite
         );
         // Not carried over from the incoming format. An absent VideoModifier means the producer
         // negotiated host memory, and keeping the last DMA-BUF modifier there makes the fallback
@@ -726,6 +759,8 @@ internal static class SpaFormatPod
                         transfer = MapTransfer((SpaVideoTransferFunction)ReadId(ref value));
                     else if (key == SpaFormat.VideoColorPrimaries)
                         primaries = MapPrimaries((SpaVideoColorPrimaries)ReadId(ref value));
+                    else if (key == SpaFormat.VideoChromaSite)
+                        chromaSite = (VideoChromaSite)ReadId(ref value);
                 }
                 catch (InvalidOperationException)
                 { /* malformed property - skip */
@@ -736,7 +771,7 @@ internal static class SpaFormatPod
             fmt,
             w,
             h,
-            new VideoColorInfo(range, matrix, transfer, primaries),
+            new VideoColorInfo(range, matrix, transfer, primaries, chromaSite),
             modifier,
             modifierNeedsFixation,
             deviceId
@@ -822,6 +857,7 @@ internal static class SpaFormatPod
     /// offer per device, each with that device's modifiers, is upstream's shape
     /// (video-src-fixate.c, build_format).
     /// </param>
+    /// <param name="color">The producer's colour, declared where known.</param>
     internal static int WriteVideoFormat(
         Span<byte> buf,
         ReadOnlySpan<PixelFormat> formats,
@@ -831,7 +867,8 @@ internal static class SpaFormatPod
         bool fixedSize,
         ReadOnlySpan<long> modifiers = default,
         bool fixateModifier = false,
-        ulong? deviceId = null
+        ulong? deviceId = null,
+        VideoColorInfo color = default
     )
     {
         var b = new SpaPodBuilder(buf);
@@ -914,6 +951,25 @@ internal static class SpaFormatPod
             );
             b.AddChoiceRangeFraction(SpaFormat.VideoFramerate, defaultFrameRate, 1, 0, 1, 1000, 1);
         }
+
+        // What the producer knows of its colour. An unknown property is left out, which a consumer
+        // reads as unstated.
+        if (color.Range != VideoColorRange.Unknown)
+            b.AddId(SpaFormat.VideoColorRange, SpaIdValue.FromRaw((uint)ToSpa(color.Range)));
+        if (color.Matrix != VideoColorMatrix.Unknown)
+            b.AddId(SpaFormat.VideoColorMatrix, SpaIdValue.FromRaw((uint)ToSpa(color.Matrix)));
+        if (color.Transfer != VideoTransferFunction.Unknown)
+            b.AddId(
+                SpaFormat.VideoTransferFunction,
+                SpaIdValue.FromRaw((uint)ToSpa(color.Transfer))
+            );
+        if (color.Primaries != VideoColorPrimaries.Unknown)
+            b.AddId(
+                SpaFormat.VideoColorPrimaries,
+                SpaIdValue.FromRaw((uint)ToSpa(color.Primaries))
+            );
+        if (color.ChromaSite != VideoChromaSite.Unknown)
+            b.AddId(SpaFormat.VideoChromaSite, SpaIdValue.FromRaw((uint)color.ChromaSite));
 
         return b.GetPod().Length;
     }
@@ -1057,6 +1113,10 @@ internal static class SpaFormatPod
             SpaVideoTransferFunction.Bt709 => VideoTransferFunction.Bt709,
             SpaVideoTransferFunction.Srgb => VideoTransferFunction.Srgb,
             SpaVideoTransferFunction.Bt2020_12 => VideoTransferFunction.Bt2020_12,
+            SpaVideoTransferFunction.Bt601 => VideoTransferFunction.Bt601,
+            SpaVideoTransferFunction.Smpte2084 => VideoTransferFunction.Pq,
+            SpaVideoTransferFunction.AribStdB67 => VideoTransferFunction.Hlg,
+            SpaVideoTransferFunction.Gamma10 => VideoTransferFunction.Linear,
             _ => VideoTransferFunction.Unknown,
         };
 
@@ -1065,7 +1125,52 @@ internal static class SpaFormatPod
         {
             SpaVideoColorPrimaries.Bt709 => VideoColorPrimaries.Bt709,
             SpaVideoColorPrimaries.Bt2020 => VideoColorPrimaries.Bt2020,
+            SpaVideoColorPrimaries.Smpte170M or SpaVideoColorPrimaries.Bt470Bg =>
+                VideoColorPrimaries.Bt601,
             _ => VideoColorPrimaries.Unknown,
+        };
+
+    // The reverse of the maps above, for the colour a producer declares.
+
+    internal static SpaVideoColorRange ToSpa(VideoColorRange range) =>
+        range switch
+        {
+            VideoColorRange.Full_0_255 => SpaVideoColorRange.Full,
+            VideoColorRange.Limited_16_235 => SpaVideoColorRange.Limited,
+            _ => SpaVideoColorRange.Unknown,
+        };
+
+    internal static SpaVideoColorMatrix ToSpa(VideoColorMatrix matrix) =>
+        matrix switch
+        {
+            VideoColorMatrix.Rgb => SpaVideoColorMatrix.Rgb,
+            VideoColorMatrix.Bt709 => SpaVideoColorMatrix.Bt709,
+            VideoColorMatrix.Bt601 => SpaVideoColorMatrix.Bt601,
+            VideoColorMatrix.Bt2020 => SpaVideoColorMatrix.Bt2020,
+            _ => SpaVideoColorMatrix.Unknown,
+        };
+
+    internal static SpaVideoTransferFunction ToSpa(VideoTransferFunction transfer) =>
+        transfer switch
+        {
+            VideoTransferFunction.Gamma22 => SpaVideoTransferFunction.Gamma22,
+            VideoTransferFunction.Bt709 => SpaVideoTransferFunction.Bt709,
+            VideoTransferFunction.Srgb => SpaVideoTransferFunction.Srgb,
+            VideoTransferFunction.Bt2020_12 => SpaVideoTransferFunction.Bt2020_12,
+            VideoTransferFunction.Bt601 => SpaVideoTransferFunction.Bt601,
+            VideoTransferFunction.Pq => SpaVideoTransferFunction.Smpte2084,
+            VideoTransferFunction.Hlg => SpaVideoTransferFunction.AribStdB67,
+            VideoTransferFunction.Linear => SpaVideoTransferFunction.Gamma10,
+            _ => SpaVideoTransferFunction.Unknown,
+        };
+
+    internal static SpaVideoColorPrimaries ToSpa(VideoColorPrimaries primaries) =>
+        primaries switch
+        {
+            VideoColorPrimaries.Bt709 => SpaVideoColorPrimaries.Bt709,
+            VideoColorPrimaries.Bt2020 => SpaVideoColorPrimaries.Bt2020,
+            VideoColorPrimaries.Bt601 => SpaVideoColorPrimaries.Smpte170M,
+            _ => SpaVideoColorPrimaries.Unknown,
         };
 
     internal static AudioSampleFormat FromSpaAudioFormat(SpaAudioFormat spa) =>

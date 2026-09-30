@@ -47,6 +47,10 @@ public readonly ref struct VideoFrame
     /// <param name="cursor">The pointer, when the producer sent it.</param>
     /// <param name="hasCursor">Whether <paramref name="cursor"/> holds anything.</param>
     /// <param name="queuedTimeNs">The cycle time the buffer was queued in (<c>pw_buffer.time</c>), or -1.</param>
+    /// <param name="plane1">The second plane's host bytes, for a planar format: NV12's UV, I420's U.</param>
+    /// <param name="plane1Stride">Bytes per row of <paramref name="plane1"/>.</param>
+    /// <param name="plane2">The third plane's host bytes: I420's V.</param>
+    /// <param name="plane2Stride">Bytes per row of <paramref name="plane2"/>.</param>
     public VideoFrame(
         ReadOnlySpan<byte> pixels,
         int stride,
@@ -70,9 +74,17 @@ public readonly ref struct VideoFrame
         ReadOnlySpan<VideoRegion> damage = default,
         VideoCursor cursor = default,
         bool hasCursor = false,
-        long queuedTimeNs = -1
+        long queuedTimeNs = -1,
+        ReadOnlySpan<byte> plane1 = default,
+        int plane1Stride = 0,
+        ReadOnlySpan<byte> plane2 = default,
+        int plane2Stride = 0
     )
     {
+        _plane1 = plane1;
+        _plane1Stride = plane1Stride;
+        _plane2 = plane2;
+        _plane2Stride = plane2Stride;
         Cursor = cursor;
         HasCursor = hasCursor;
         Crop = crop;
@@ -98,8 +110,97 @@ public readonly ref struct VideoFrame
         SyncTimeline = syncTimeline;
     }
 
-    /// <summary>Raw pixel bytes. Empty for an unmapped DMA-BUF frame (use <see cref="Fd"/>).</summary>
+    private readonly ReadOnlySpan<byte> _plane1;
+    private readonly int _plane1Stride;
+    private readonly ReadOnlySpan<byte> _plane2;
+    private readonly int _plane2Stride;
+
+    /// <summary>
+    /// Raw pixel bytes of the first plane. Empty for an unmapped DMA-BUF frame (use <see cref="Fd"/>).
+    /// The other planes of a planar format are <see cref="GetHostPlane"/>.
+    /// </summary>
     public ReadOnlySpan<byte> Pixels { get; }
+
+    /// <summary>
+    /// How many planes are readable in host memory: every plane of the format for a mapped frame,
+    /// whether the producer put each in a block of its own or all in one; 0 for an unmapped DMA-BUF.
+    /// </summary>
+    public int HostPlaneCount =>
+        Pixels.IsEmpty ? 0
+        : !_plane2.IsEmpty ? 3
+        : !_plane1.IsEmpty ? 2
+        : 1;
+
+    /// <summary>A plane's host bytes, from its first row; valid only while the frame is.</summary>
+    /// <param name="plane">The plane, below <see cref="HostPlaneCount"/>.</param>
+    /// <returns>The plane's bytes.</returns>
+    public ReadOnlySpan<byte> GetHostPlane(int plane)
+    {
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(
+            (uint)plane,
+            (uint)HostPlaneCount,
+            nameof(plane)
+        );
+        return plane switch
+        {
+            // The first plane alone: in a single-block buffer the others follow it in Pixels.
+            0 when HostPlaneCount > 1 => Pixels[..Math.Min(Pixels.Length, Stride * Height)],
+            0 => Pixels,
+            1 => _plane1,
+            _ => _plane2,
+        };
+    }
+
+    /// <summary>A plane's bytes per row.</summary>
+    /// <param name="plane">The plane, below <see cref="HostPlaneCount"/>.</param>
+    /// <returns>The stride.</returns>
+    public int GetHostStride(int plane)
+    {
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(
+            (uint)plane,
+            (uint)HostPlaneCount,
+            nameof(plane)
+        );
+        return plane switch
+        {
+            0 => Stride,
+            1 => _plane1Stride,
+            _ => _plane2Stride,
+        };
+    }
+
+    // The host planes one after another, each at the stride that follows from the first plane's:
+    // the single-block layout, which a copy keeps with nothing more than the first stride.
+    internal byte[] PackHostPlanes()
+    {
+        int count = HostPlaneCount;
+        if (count <= 1)
+            return [.. Pixels];
+
+        int total = 0;
+        for (int plane = 0; plane < count; plane++)
+        {
+            (int stride, int rows) = SpaFormatPod.HostPlaneLayout(Format, plane, Stride, Height);
+            total += stride * rows;
+        }
+
+        byte[] packed = new byte[total];
+        int at = 0;
+        for (int plane = 0; plane < count; plane++)
+        {
+            (int stride, int rows) = SpaFormatPod.HostPlaneLayout(Format, plane, Stride, Height);
+            ReadOnlySpan<byte> source = GetHostPlane(plane);
+            int sourceStride = GetHostStride(plane);
+            int rowBytes = Math.Min(stride, sourceStride);
+            for (int row = 0; row < rows && (row * sourceStride) + rowBytes <= source.Length; row++)
+                source
+                    .Slice(row * sourceStride, rowBytes)
+                    .CopyTo(packed.AsSpan(at + (row * stride)));
+            at += stride * rows;
+        }
+
+        return packed;
+    }
 
     /// <summary>Bytes per row in the primary plane.</summary>
     public int Stride { get; }
@@ -299,21 +400,22 @@ public readonly ref struct VideoFrame
     /// <see cref="OwnedVideoFrame"/>.
     /// </remarks>
     /// <exception cref="InvalidOperationException">
-    /// The frame is fd-backed (DMA-BUF/MemFd): its <see cref="Pixels"/> is empty and a byte copy
-    /// would keep nothing, so cloning refuses rather than returning an empty frame that reads as
-    /// valid. Duplicate what is kept on purpose instead: <see cref="DuplicateFd"/> for the first
-    /// plane's descriptor, <see cref="VideoPlane.DuplicateFd"/> per plane.
+    /// The frame is an unmapped DMA-BUF: its <see cref="Pixels"/> is empty and a byte copy would
+    /// keep nothing, so cloning refuses rather than returning an empty frame that reads as valid.
+    /// Duplicate what is kept on purpose instead: <see cref="DuplicateFd"/> for the first plane's
+    /// descriptor, <see cref="VideoPlane.DuplicateFd"/> per plane. A mapped frame is copied whatever
+    /// backs it, every plane, one after another at the strides that follow from the first.
     /// </exception>
     public OwnedVideoFrame Clone()
     {
-        if (IsFdBacked)
+        if (Pixels.IsEmpty)
             throw new InvalidOperationException(
-                "an fd-backed frame has no host bytes to copy; duplicate its descriptors instead "
-                    + "(VideoFrame.DuplicateFd, VideoPlane.DuplicateFd)."
+                "an unmapped DMA-BUF frame has no host bytes to copy; duplicate its descriptors "
+                    + "instead (VideoFrame.DuplicateFd, VideoPlane.DuplicateFd)."
             );
 
         return new OwnedVideoFrame(
-            [.. Pixels],
+            ImmutableCollectionsMarshal.AsImmutableArray(PackHostPlanes()),
             Stride,
             Width,
             Height,

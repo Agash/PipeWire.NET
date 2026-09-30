@@ -174,6 +174,11 @@ internal static class DeviceIdNegotiation
     /// <param name="hostMemoryFallback">Whether to end with a format without modifiers.</param>
     /// <param name="count">How many pods were written.</param>
     /// <param name="deviceFormats">How many of them name a device.</param>
+    /// <param name="color">The colour every format declares.</param>
+    /// <param name="hostMemoryFormats">
+    /// The formats the host-memory fallback offers; the DMA-BUF format alone when empty. A consumer that
+    /// reads several formats from memory (a camera's YUYV or NV12) but imports only one on the GPU.
+    /// </param>
     internal static byte[] WriteDeviceFormats(
         in PeerCapabilities peer,
         ReadOnlySpan<DmaBufDeviceOffer> offers,
@@ -184,7 +189,9 @@ internal static class DeviceIdNegotiation
         bool fixedSize,
         bool hostMemoryFallback,
         out int count,
-        out int deviceFormats
+        out int deviceFormats,
+        VideoColorInfo color = default,
+        ReadOnlySpan<PixelFormat> hostMemoryFormats = default
     )
     {
         int capacity = 1024;
@@ -213,7 +220,8 @@ internal static class DeviceIdNegotiation
                         frameRate,
                         fixedSize,
                         modifiers: offer.Modifiers.AsSpan(),
-                        deviceId: offer.Device.Id
+                        deviceId: offer.Device.Id,
+                        color: color
                     )
                 );
                 count++;
@@ -230,7 +238,8 @@ internal static class DeviceIdNegotiation
                     height,
                     frameRate,
                     fixedSize,
-                    modifiers: offers[0].Modifiers.AsSpan()
+                    modifiers: offers[0].Modifiers.AsSpan(),
+                    color: color
                 )
             );
             count++;
@@ -241,11 +250,12 @@ internal static class DeviceIdNegotiation
             used += Align(
                 SpaFormatPod.WriteVideoFormat(
                     buffer.AsSpan(used),
-                    formats,
+                    hostMemoryFormats.IsEmpty ? formats : hostMemoryFormats,
                     width,
                     height,
                     frameRate,
-                    fixedSize
+                    fixedSize,
+                    color: color
                 )
             );
             count++;

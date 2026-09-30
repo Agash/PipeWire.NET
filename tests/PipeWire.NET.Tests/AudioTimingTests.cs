@@ -207,4 +207,60 @@ public sealed class AudioTimingTests : PipeWireTestBase
         Assert.IsTrue(shortestAsk > 0 && shortestAsk < int.MaxValue, "the fill callback never ran");
         Assert.IsNotNull(output.GraphClock, "a running output should see the graph clock");
     }
+
+    /// <summary>
+    /// A running output reports how long audio written now takes to reach the device: its delay to
+    /// the hardware plus what is queued ahead of it.
+    /// </summary>
+    [TestMethod]
+    public async Task AnAudioOutput_ReportsItsPlaybackLatency()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext(
+            "pwnet-audiolat",
+            ConsoleTestLoggerFactory.Instance
+        );
+        await ctx.StartAsync(cts.Token);
+
+        await using var output = new PipeWireAudioOutput(
+            ctx,
+            $"pwnet-audiolat-{Environment.ProcessId}",
+            Rate,
+            Channels,
+            Format
+        );
+        output.FillSamples += (_, samples, _, _, _) =>
+        {
+            samples.Clear();
+            return samples.Length;
+        };
+        output.Connect(autoConnect: false);
+
+        await using var capture = new PipeWireAudioCapture(
+            ctx,
+            $"pwnet-audiolat-sink-{Environment.ProcessId}"
+        );
+        capture.Connect(await output.WaitForNodeIdAsync(cts.Token));
+        await capture.WaitForStreamingAsync(cts.Token);
+
+        // The clock and queue fill in over the first cycles; poll for them rather than guess.
+        using PeriodicTimer poll = new(TimeSpan.FromMilliseconds(20));
+        TimeSpan? latency = output.PlaybackLatency;
+        while (
+            (latency is null || latency == TimeSpan.Zero)
+            && await poll.WaitForNextTickAsync(cts.Token)
+        )
+            latency = output.PlaybackLatency;
+
+        Assert.IsNotNull(latency);
+        Assert.IsTrue(
+            latency > TimeSpan.Zero && latency < TimeSpan.FromSeconds(1),
+            $"latency {latency}"
+        );
+        PipeWireStreamTime time = output.Time!.Value;
+        Assert.IsTrue(time.GraphTimeNs > 0, "the graph time is on CLOCK_MONOTONIC");
+        Assert.IsTrue(time.Rate > 0, "the graph rate is known once running");
+    }
 }

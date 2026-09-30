@@ -11,4 +11,7 @@ public enum VideoColorPrimaries
 
     /// <summary>ITU-R BT.2020 (wide gamut).</summary>
     Bt2020 = 2,
+
+    /// <summary>ITU-R BT.601 (SMPTE 170M, and the matching BT.470 B/G).</summary>
+    Bt601 = 3,
 }

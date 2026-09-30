@@ -17,4 +17,16 @@ public enum VideoTransferFunction
 
     /// <summary>BT.2020 12-bit.</summary>
     Bt2020_12 = 4,
+
+    /// <summary>ITU-R BT.601.</summary>
+    Bt601 = 5,
+
+    /// <summary>SMPTE ST 2084, the PQ curve of HDR10.</summary>
+    Pq = 6,
+
+    /// <summary>ARIB STD-B67, hybrid log-gamma.</summary>
+    Hlg = 7,
+
+    /// <summary>Linear light (gamma 1.0).</summary>
+    Linear = 8,
 }

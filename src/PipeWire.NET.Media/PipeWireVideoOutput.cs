@@ -292,19 +292,27 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     // so no lock crosses into the realtime path for index bookkeeping either.
     private readonly Stack<int> _freeBufferIndices = new();
 
+    // The colour every format this stream writes declares.
+    private readonly VideoColorInfo _color;
+
     /// <param name="context">A started <see cref="PipeWireContext"/>.</param>
     /// <param name="nodeName">Name visible to consumers.</param>
     /// <param name="width">Frame width in pixels.</param>
     /// <param name="height">Frame height in pixels.</param>
     /// <param name="format">Pixel format to publish.</param>
     /// <param name="frameRate">Target frame rate (Hz).</param>
+    /// <param name="color">
+    /// The colour of the frames, declared in the format so consumers convert them correctly; unknown
+    /// fields are left unstated.
+    /// </param>
     public PipeWireVideoOutput(
         PipeWireContext context,
         string nodeName,
         int width,
         int height,
         PixelFormat format = PixelFormat.Bgra,
-        int frameRate = 30
+        int frameRate = 30,
+        VideoColorInfo color = default
     )
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -318,8 +326,9 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         _height = height;
         _format = format;
         _frameRate = frameRate;
+        _color = color;
         _fmtCell = new NegotiatedFormat(
-            new SpaFormatPod.VideoFormatInfo(format, width, height, VideoColorInfo.Unknown)
+            new SpaFormatPod.VideoFormatInfo(format, width, height, color)
         );
         _logger = context.LoggerFactory.CreateLogger($"PipeWire.NET.{nodeName}");
     }
@@ -434,7 +443,8 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             (uint)_width,
             (uint)_height,
             (uint)_frameRate,
-            fixedSize: true
+            fixedSize: true,
+            color: _color
         );
 
         PipeWireStreamFlags flags = PipeWireStreamFlags.MapBuffers;
@@ -726,7 +736,8 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             (uint)_height,
             (uint)_frameRate,
             fixedSize: true,
-            modifiers: modifiers
+            modifiers: modifiers,
+            color: _color
         );
 
         // Device negotiation is announced, not assumed: the Capability param names the devices this
@@ -806,7 +817,8 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 fixedSize: true,
                 hostMemoryFallback: false,
                 out int count,
-                out int deviceFormats
+                out int deviceFormats,
+                _color
             );
             LogDeviceOffers(peer.NegotiatesDeviceIds, deviceFormats, _deviceOffers.Length);
             rc = core.RequestParamsFromCallback(pods, count);
@@ -822,7 +834,8 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 (uint)_height,
                 (uint)_frameRate,
                 fixedSize: true,
-                modifiers: _modifiers
+                modifiers: _modifiers,
+                color: _color
             );
             rc = core.RequestParamsFromCallback(pod[..len]);
         }
@@ -916,7 +929,8 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             (uint)width,
             (uint)height,
             (uint)frameRate,
-            fixedSize
+            fixedSize,
+            color: _color
         );
 
         return _core.RequestFormats(pod[..len]) >= 0;
@@ -1018,6 +1032,12 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     /// close the loop the way upstream's tunnels do.
     /// </remarks>
     public PipeWireStreamQueue? Queue => _core?.Queue;
+
+    /// <summary>
+    /// The stream's clock, its latency to the hardware and what it holds, or null when they cannot
+    /// be read.
+    /// </summary>
+    public PipeWireStreamTime? Time => _core?.Time;
 
     /// <summary>Whether the daemon has put this stream in lazy scheduling.</summary>
     public bool IsLazy => _core?.IsLazy ?? false;
@@ -1397,7 +1417,8 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 fixedSize: true,
                 modifiers: chosen,
                 fixateModifier: true,
-                deviceId: negotiated.DeviceId
+                deviceId: negotiated.DeviceId,
+                color: _color
             );
 
             // Marked done only if the daemon took it, so a refusal is retried on the next

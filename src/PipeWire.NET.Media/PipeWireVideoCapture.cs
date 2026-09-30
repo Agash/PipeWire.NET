@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 using PipeWire.NET.Interop;
@@ -101,6 +102,12 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     // Device-ID negotiation: the offers, and the geometry the formats announced on the peer's
     // capabilities are written with. Empty when the stream was connected without device offers.
     private DmaBufDeviceOffer[] _deviceOffers = [];
+
+    // Whether frames with unreadable chroma have been reported; once per stream.
+    private bool _chromaUnreadableLogged;
+
+    // Every format the consumer reads from memory, which the host-memory fallback offers.
+    private PixelFormat[] _hostMemoryFormats = [];
     private bool _announcedToAPeer;
     private (uint Width, uint Height, uint FrameRate) _preferredGeometry;
 
@@ -180,8 +187,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// </param>
     /// <param name="modifiers">
     /// DRM format modifiers to offer for a zero-copy dmabuf negotiation (the consumer's
-    /// GPU-importable set). When non-empty, <paramref name="preferredFormats"/> must name exactly one
-    /// format. The library auto-fixates to the producer's preferred modifier from this set.
+    /// GPU-importable set). The first of <paramref name="preferredFormats"/> is the format offered with
+    /// them; every one of them is offered in host memory, for a producer that cannot share a buffer. The library auto-fixates to the producer's preferred modifier from this set.
     /// </param>
     /// <param name="requestExplicitSync">
     /// Ask the producer for <c>SPA_META_SyncTimeline</c>, so frames carry acquire and release points
@@ -193,8 +200,9 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// <param name="deviceOffers">
     /// The devices this consumer can import on, each with the modifiers it can import there, in
     /// priority order - PipeWire's DMA-BUF device-ID negotiation, as upstream's video-play-fixate does
-    /// it. Instead of <paramref name="modifiers"/>, not with them, and with exactly one
-    /// <paramref name="preferredFormats"/> entry. The stream connects inactive, learns the producer's
+    /// it. Instead of <paramref name="modifiers"/>, not with them. The first of
+    /// <paramref name="preferredFormats"/> is the format offered on the devices; every one of them is
+    /// offered in host memory. The stream connects inactive, learns the producer's
     /// capabilities, offers one format per device the producer can work with plus a host-memory
     /// fallback, and activates. <see cref="NegotiatedDevice"/> says which device was chosen; a producer
     /// that does not negotiate is offered the first device's modifiers without a device.
@@ -241,15 +249,17 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         }
 
         bool dmaBuf = !modifiers.IsEmpty || !deviceOffers.IsEmpty;
-        if (dmaBuf && preferredFormats.Length != 1)
+        if (dmaBuf && preferredFormats.IsEmpty)
             throw new ArgumentException(
-                "Exactly one pixel format must be specified when offering DRM modifiers (modifiers are per-format).",
+                "A pixel format must be named when offering DRM modifiers: modifiers are per format, and "
+                    + "the first preferred format is the one offered on the GPU.",
                 nameof(preferredFormats)
             );
 
         _modifiersOffered = dmaBuf;
         _explicitSyncRequested = requestExplicitSync && dmaBuf;
-        _modifierFormat = preferredFormats.Length == 1 ? preferredFormats[0] : default;
+        _modifierFormat = dmaBuf ? preferredFormats[0] : default;
+        _hostMemoryFormats = preferredFormats.ToArray();
         _modifierFixated = false;
         _deviceOffers = deviceOffers.ToArray();
         _announcedToAPeer = false;
@@ -295,7 +305,7 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         Span<byte> pod = stackalloc byte[1024];
         int len = SpaFormatPod.WriteVideoFormat(
             pod,
-            preferredFormats,
+            modifiers.IsEmpty ? preferredFormats : preferredFormats[..1],
             (uint)preferredWidth,
             (uint)preferredHeight,
             (uint)preferredFrameRate,
@@ -619,6 +629,12 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// </remarks>
     public PipeWireStreamQueue? Queue => _core?.Queue;
 
+    /// <summary>
+    /// The stream's clock, its latency to the hardware and what it holds, or null when they cannot
+    /// be read.
+    /// </summary>
+    public PipeWireStreamTime? Time => _core?.Time;
+
     /// <summary>Whether the daemon has put this stream in lazy scheduling.</summary>
     public bool IsLazy => _core?.IsLazy ?? false;
 
@@ -817,7 +833,9 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         }
 
         return new PulledVideoFrame(
-            pixels: planes.IsEmpty ? [.. frame.Pixels] : ImmutableArray<byte>.Empty,
+            pixels: planes.IsEmpty
+                ? ImmutableCollectionsMarshal.AsImmutableArray(frame.PackHostPlanes())
+                : ImmutableArray<byte>.Empty,
             planes: planes,
             stride: frame.Stride,
             width: frame.Width,
@@ -837,6 +855,28 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
             transform: frame.Transform
         );
     }
+
+    // A mapped block's bytes from its chunk, or nothing when the chunk does not fit the mapping.
+    private static unsafe ReadOnlySpan<byte> HostBlock(spa_data* block, out int stride)
+    {
+        stride = 0;
+        if (block->data is null || block->chunk is null)
+            return default;
+
+        uint offset = block->chunk->offset;
+        uint size = block->chunk->size;
+        if ((ulong)offset + size > block->maxsize || size > int.MaxValue)
+            return default;
+
+        stride = block->chunk->stride;
+        return new ReadOnlySpan<byte>((byte*)block->data + offset, (int)size);
+    }
+
+    // Part of a block, or nothing when it runs past the end.
+    private static ReadOnlySpan<byte> Slice(ReadOnlySpan<byte> bytes, int start, int length) =>
+        start >= 0 && length > 0 && start + length <= bytes.Length
+            ? bytes.Slice(start, length)
+            : default;
 
     private unsafe void OnBuffer(
         spa_data* d,
@@ -906,6 +946,69 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         if (fmt.Width <= 0 || fmt.Height <= 0)
             return;
 
+        // The other planes of a mapped planar frame: in blocks of their own when the producer split
+        // them, as GStreamer does, or after the first in the one block, as this library's output does.
+        ReadOnlySpan<byte> plane1 = default,
+            plane2 = default;
+        int plane1Stride = 0,
+            plane2Stride = 0;
+        int planesInFormat = SpaFormatPod.VideoPlaneCount(fmt.Format);
+        if (!pixels.IsEmpty && planesInFormat > 1)
+        {
+            if (spaBuf->n_datas >= planesInFormat)
+            {
+                plane1 = HostBlock(&spaBuf->datas[1], out plane1Stride);
+                if (planesInFormat > 2)
+                    plane2 = HostBlock(&spaBuf->datas[2], out plane2Stride);
+            }
+            else
+            {
+                int stride0 = d->chunk->stride;
+                (int s1, int r1) = SpaFormatPod.HostPlaneLayout(fmt.Format, 0, stride0, fmt.Height);
+                int at = s1 * r1;
+                (plane1Stride, int rows1) = SpaFormatPod.HostPlaneLayout(
+                    fmt.Format,
+                    1,
+                    stride0,
+                    fmt.Height
+                );
+                plane1 = Slice(pixels, at, plane1Stride * rows1);
+                at += plane1Stride * rows1;
+                if (planesInFormat > 2)
+                {
+                    (plane2Stride, int rows2) = SpaFormatPod.HostPlaneLayout(
+                        fmt.Format,
+                        2,
+                        stride0,
+                        fmt.Height
+                    );
+                    plane2 = Slice(pixels, at, plane2Stride * rows2);
+                }
+            }
+
+            // Chroma that cannot be read is left out rather than guessed: the frame goes on with the
+            // planes that can be, and HostPlaneCount says how many. GStreamer's pipewiresink reports
+            // an odd-height I420 plane at an offset that runs past its block, for one.
+            if (plane1.IsEmpty || (planesInFormat > 2 && plane2.IsEmpty))
+            {
+                if (!_chromaUnreadableLogged)
+                {
+                    _chromaUnreadableLogged = true;
+                    spa_data* second = spaBuf->n_datas > 1 ? &spaBuf->datas[1] : null;
+                    LogChromaUnreadable(
+                        fmt.Format,
+                        spaBuf->n_datas,
+                        second is null || second->chunk is null ? 0 : second->chunk->offset,
+                        second is null || second->chunk is null ? 0 : second->chunk->size,
+                        second is null ? 0 : second->maxsize
+                    );
+                }
+
+                plane1 = default;
+                plane2 = default;
+            }
+        }
+
         // Read on the loop thread while the buffer is still ours; the spans die with it.
         Span<VideoRegion> damage = stackalloc VideoRegion[DamageRegions];
         int damageCount = SpaFormatPod.ReadDamage(spaBuf, damage);
@@ -936,7 +1039,11 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
             transform: SpaFormatPod.FindTransform(spaBuf),
             damage: damage[..damageCount],
             cursor: hasCursor ? cursor : default,
-            hasCursor: hasCursor
+            hasCursor: hasCursor,
+            plane1: plane1,
+            plane1Stride: plane1Stride,
+            plane2: plane2,
+            plane2Stride: plane2Stride
         );
 
         // Explicit sync, when the producer negotiated it: wait for the acquire point before anything
@@ -1054,7 +1161,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
             fixedSize: false,
             hostMemoryFallback: true,
             out int count,
-            out int deviceFormats
+            out int deviceFormats,
+            hostMemoryFormats: _hostMemoryFormats
         );
         LogDeviceOffers(
             peer.NegotiatesDeviceIds,
@@ -1208,7 +1316,8 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
             SpaFormatPod.VideoCaptureDataTypeMask,
             blocks,
             sizeIsAnyOf: true,
-            syncDataBlocks: _explicitSyncRequested ? SpaFormatPod.SyncTimelineDataBlocks : 0
+            syncDataBlocks: _explicitSyncRequested ? SpaFormatPod.SyncTimelineDataBlocks : 0,
+            minBlocks: 1
         );
 
         LogRequestedBuffers(blocks, blockSize, stride, SpaFormatPod.VideoCaptureDataTypeMask);
@@ -1292,6 +1401,18 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         Message = "the daemon refused the modifier fixation ({Result}); it will be retried on the next negotiation"
     )]
     private partial void LogFixationRefused(int result);
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "{Format} frames arrive with chroma that cannot be read (blocks={Blocks}, second block offset={Offset} size={Size} maxsize={MaxSize}); they are handed on with the luma alone"
+    )]
+    private partial void LogChromaUnreadable(
+        PixelFormat format,
+        uint blocks,
+        uint offset,
+        uint size,
+        uint maxSize
+    );
 
     [LoggerMessage(
         Level = LogLevel.Warning,

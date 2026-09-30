@@ -322,6 +322,12 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
     /// </remarks>
     public PipeWireStreamQueue? Queue => _core?.Queue;
 
+    /// <summary>
+    /// The stream's clock, its latency to the hardware and what it holds, or null when they cannot
+    /// be read.
+    /// </summary>
+    public PipeWireStreamTime? Time => _core?.Time;
+
     /// <summary>Whether the daemon has put this stream in lazy scheduling.</summary>
     public bool IsLazy => _core?.IsLazy ?? false;
 
