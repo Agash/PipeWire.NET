@@ -409,17 +409,13 @@ internal static class DeviceIdNegotiation
     /// <summary>The inverse of <see cref="EncodeDevice"/>, or null for anything that is not eight bytes of hex.</summary>
     internal static ulong? DecodeDevice(string hex)
     {
-        if (hex.Length != sizeof(ulong) * 2)
-            return null;
-
-        try
-        {
-            byte[] bytes = Convert.FromHexString(hex);
-            return MemoryMarshal.Read<ulong>(bytes);
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
+        Span<byte> bytes = stackalloc byte[sizeof(ulong)];
+        return
+            hex.Length == sizeof(ulong) * 2
+            && Convert.FromHexString(hex, bytes, out _, out int written)
+                == System.Buffers.OperationStatus.Done
+            && written == sizeof(ulong)
+            ? MemoryMarshal.Read<ulong>(bytes)
+            : null;
     }
 }

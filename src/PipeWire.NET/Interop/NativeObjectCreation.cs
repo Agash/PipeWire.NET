@@ -443,6 +443,8 @@ internal sealed class NativeObjectCreation : IDisposable
         }
         catch (Exception)
         {
+            // Deliberately not logged: a freed handle means the instance, and its logger, are gone;
+            // this is a native frame, so nothing may escape it.
             return null;
         }
     }

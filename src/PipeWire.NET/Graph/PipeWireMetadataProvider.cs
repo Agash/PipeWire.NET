@@ -436,6 +436,7 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
         }
         catch (Exception)
         {
+            // Deliberately not logged: a freed handle means the provider, and its logger, are gone.
             return 0;
         }
 

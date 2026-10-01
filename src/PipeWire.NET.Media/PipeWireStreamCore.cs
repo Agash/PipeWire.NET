@@ -468,6 +468,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         }
         catch (Exception)
         {
+            // Deliberately not logged: the instance that holds the logger is the one that is gone.
             return null;
         }
     }
@@ -1019,15 +1020,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnDrained(void* data)
     {
-        PipeWireStreamCore? self;
-        try
-        {
-            self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target;
-        }
-        catch (Exception)
-        {
-            return;
-        }
+        PipeWireStreamCore? self = FromData(data);
         self?._drained?.TrySetResult();
     }
 
@@ -1044,15 +1037,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnCommandArrived(void* data, spa_command* command)
     {
-        PipeWireStreamCore? self;
-        try
-        {
-            self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target;
-        }
-        catch (Exception)
-        {
-            return;
-        }
+        PipeWireStreamCore? self = FromData(data);
         if (self is null || command is null)
             return;
 
@@ -1079,15 +1064,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnTriggerDone(void* data)
     {
-        PipeWireStreamCore? self;
-        try
-        {
-            self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target;
-        }
-        catch (Exception)
-        {
-            return;
-        }
+        PipeWireStreamCore? self = FromData(data);
         if (self is null)
             return;
         self.LogTriggerDone(self._triggerDone is { Task.IsCompleted: false });
@@ -1145,15 +1122,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnIoChanged(void* data, uint id, void* area, uint size)
     {
-        PipeWireStreamCore? self;
-        try
-        {
-            self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target;
-        }
-        catch (Exception)
-        {
-            return;
-        }
+        PipeWireStreamCore? self = FromData(data);
         if (self is null || self._disposed)
             return;
 
@@ -1293,15 +1262,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void OnDriveTimer(void* data, ulong expirations)
     {
-        PipeWireStreamCore? self;
-        try
-        {
-            self = (PipeWireStreamCore?)GCHandle.FromIntPtr((IntPtr)data).Target;
-        }
-        catch (Exception)
-        {
-            return;
-        }
+        PipeWireStreamCore? self = FromData(data);
         if (self is null || self._disposed)
             return;
 
