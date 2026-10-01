@@ -96,7 +96,9 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     // returned modifier (carried as the scalar _fmt.Modifier), which is always within our offered set.
     private bool _modifiersOffered;
     private bool _explicitSyncRequested;
-    private PixelFormat _modifierFormat;
+
+    // The formats offered on the GPU, most preferred first.
+    private PixelFormat[] _gpuFormats = [];
     private bool _modifierFixated;
 
     // Device-ID negotiation: the offers, and the geometry the formats announced on the peer's
@@ -200,11 +202,11 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// <param name="deviceOffers">
     /// The devices this consumer can import on, each with the modifiers it can import there, in
     /// priority order - PipeWire's DMA-BUF device-ID negotiation, as upstream's video-play-fixate does
-    /// it. Instead of <paramref name="modifiers"/>, not with them. The first of
-    /// <paramref name="preferredFormats"/> is the format offered on the devices; every one of them is
-    /// offered in host memory. The stream connects inactive, learns the producer's
-    /// capabilities, offers one format per device the producer can work with plus a host-memory
-    /// fallback, and activates. <see cref="NegotiatedDevice"/> says which device was chosen; a producer
+    /// it. Instead of <paramref name="modifiers"/>, not with them. Each of
+    /// <paramref name="preferredFormats"/> a device offer names modifiers for is offered on that device,
+    /// in the preferred order; every one of them is offered in host memory. The stream connects inactive,
+    /// learns the producer's capabilities, offers one format per device the producer can work with and
+    /// pixel format, plus a host-memory fallback, and activates. <see cref="NegotiatedDevice"/> says which device was chosen; a producer
     /// that does not negotiate is offered the first device's modifiers without a device.
     /// </param>
     /// <param name="autoConnect">
@@ -256,9 +258,20 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
                 nameof(preferredFormats)
             );
 
+        PixelFormat[] gpuFormats = deviceOffers.IsEmpty
+            ? dmaBuf
+                ? [preferredFormats[0]]
+                : []
+            : OfferedOnADevice(preferredFormats, deviceOffers);
+        if (!deviceOffers.IsEmpty && gpuFormats.Length == 0)
+            throw new ArgumentException(
+                "No device offer names modifiers for any of the preferred formats.",
+                nameof(deviceOffers)
+            );
+
         _modifiersOffered = dmaBuf;
         _explicitSyncRequested = requestExplicitSync && dmaBuf;
-        _modifierFormat = dmaBuf ? preferredFormats[0] : default;
+        _gpuFormats = gpuFormats;
         _hostMemoryFormats = preferredFormats.ToArray();
         _modifierFixated = false;
         _deviceOffers = deviceOffers.ToArray();
@@ -1140,6 +1153,25 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         StateChanged?.Invoke(this, oldState, newState);
     }
 
+    // The preferred formats some device offer names modifiers for, in the preferred order.
+    private static PixelFormat[] OfferedOnADevice(
+        ReadOnlySpan<PixelFormat> preferred,
+        ReadOnlySpan<DmaBufDeviceOffer> offers
+    )
+    {
+        List<PixelFormat> offered = [];
+        foreach (PixelFormat format in preferred)
+        {
+            foreach (DmaBufDeviceOffer offer in offers)
+            {
+                if (!offer.ModifiersFor(format).IsEmpty && !offered.Contains(format))
+                    offered.Add(format);
+            }
+        }
+
+        return [.. offered];
+    }
+
     // video-play-fixate's on_stream_peer_capability_changed: announce the real formats once the
     // producer's capabilities are known, then activate. Once: a later PeerCapability (a relink) would
     // otherwise restart negotiation under a running stream. Loop lock held.
@@ -1154,7 +1186,7 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         byte[] pods = DeviceIdNegotiation.WriteDeviceFormats(
             peer,
             _deviceOffers,
-            _modifierFormat,
+            _gpuFormats,
             width,
             height,
             frameRate,
@@ -1226,7 +1258,7 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         if (!_modifierFixated && _modifiersOffered && fmt.ModifierNeedsFixation)
         {
             Span<byte> fixate = stackalloc byte[512];
-            ReadOnlySpan<PixelFormat> chosenFormat = [_modifierFormat];
+            ReadOnlySpan<PixelFormat> chosenFormat = [fmt.Format];
             ReadOnlySpan<long> chosen = [(long)fmt.Modifier];
             // With the negotiated device: the producer's offers each name one, mandatory.
             int fl = SpaFormatPod.WriteVideoFormat(

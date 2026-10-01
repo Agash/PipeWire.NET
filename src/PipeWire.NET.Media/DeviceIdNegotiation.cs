@@ -154,10 +154,10 @@ internal static class DeviceIdNegotiation
     /// <remarks>
     /// <para>
     /// Upstream's <c>build_formats</c> (video-play-fixate.c) and the producer's equivalent
-    /// (video-src-fixate.c). A peer that negotiates gets one format per device it can work with, each
-    /// carrying that device's id and modifiers. A peer that does not gets one format without a device,
-    /// with the first offer's modifiers - upstream's "implicitly assumed device" - so a stream connected
-    /// with device offers still streams to every current client.
+    /// (video-src-fixate.c). A peer that negotiates gets one format per device it can work with and pixel
+    /// format that device offers, each carrying that device's id and its modifiers for the format. A peer
+    /// that does not gets the first offer's formats without a device - upstream's "implicitly assumed
+    /// device" - so a stream connected with device offers still streams to every current client.
     /// </para>
     /// <para>
     /// With <paramref name="hostMemoryFallback"/>, a last format with no modifiers: the consumer's
@@ -166,7 +166,8 @@ internal static class DeviceIdNegotiation
     /// </remarks>
     /// <param name="peer">What the peer said.</param>
     /// <param name="offers">This side's devices and their modifiers, in preference order; not empty.</param>
-    /// <param name="format">The one pixel format the modifiers apply to.</param>
+    /// <param name="formats">The pixel formats to offer on the GPU, most preferred first; each goes out
+    /// for every device whose offer has modifiers for it.</param>
     /// <param name="width">The width to offer.</param>
     /// <param name="height">The height to offer.</param>
     /// <param name="frameRate">The frame rate to offer.</param>
@@ -182,7 +183,7 @@ internal static class DeviceIdNegotiation
     internal static byte[] WriteDeviceFormats(
         in PeerCapabilities peer,
         ReadOnlySpan<DmaBufDeviceOffer> offers,
-        PixelFormat format,
+        ReadOnlySpan<PixelFormat> formats,
         uint width,
         uint height,
         uint frameRate,
@@ -196,13 +197,15 @@ internal static class DeviceIdNegotiation
     {
         int capacity = 1024;
         foreach (DmaBufDeviceOffer offer in offers)
-            capacity += 1024 + ((offer.Modifiers.Length + 1) * 8);
+        {
+            foreach (DmaBufFormatModifiers entry in offer.Formats)
+                capacity += 1024 + ((entry.Modifiers.Length + 1) * 8);
+        }
 
         byte[] buffer = new byte[capacity];
         int used = 0;
         count = 0;
         deviceFormats = 0;
-        ReadOnlySpan<PixelFormat> formats = [format];
 
         if (peer.NegotiatesDeviceIds)
         {
@@ -211,38 +214,52 @@ internal static class DeviceIdNegotiation
                 if (!peer.Accepts(offer.Device.Id))
                     continue;
 
-                used += Align(
-                    SpaFormatPod.WriteVideoFormat(
-                        buffer.AsSpan(used),
-                        formats,
-                        width,
-                        height,
-                        frameRate,
-                        fixedSize,
-                        modifiers: offer.Modifiers.AsSpan(),
-                        deviceId: offer.Device.Id,
-                        color: color
-                    )
-                );
-                count++;
-                deviceFormats++;
+                foreach (PixelFormat format in formats)
+                {
+                    ImmutableArray<long> modifiers = offer.ModifiersFor(format);
+                    if (modifiers.IsEmpty)
+                        continue;
+
+                    used += Align(
+                        SpaFormatPod.WriteVideoFormat(
+                            buffer.AsSpan(used),
+                            [format],
+                            width,
+                            height,
+                            frameRate,
+                            fixedSize,
+                            modifiers: modifiers.AsSpan(),
+                            deviceId: offer.Device.Id,
+                            color: color
+                        )
+                    );
+                    count++;
+                    deviceFormats++;
+                }
             }
         }
         else
         {
-            used += Align(
-                SpaFormatPod.WriteVideoFormat(
-                    buffer.AsSpan(used),
-                    formats,
-                    width,
-                    height,
-                    frameRate,
-                    fixedSize,
-                    modifiers: offers[0].Modifiers.AsSpan(),
-                    color: color
-                )
-            );
-            count++;
+            foreach (PixelFormat format in formats)
+            {
+                ImmutableArray<long> modifiers = offers[0].ModifiersFor(format);
+                if (modifiers.IsEmpty)
+                    continue;
+
+                used += Align(
+                    SpaFormatPod.WriteVideoFormat(
+                        buffer.AsSpan(used),
+                        [format],
+                        width,
+                        height,
+                        frameRate,
+                        fixedSize,
+                        modifiers: modifiers.AsSpan(),
+                        color: color
+                    )
+                );
+                count++;
+            }
         }
 
         if (hostMemoryFallback)
@@ -271,7 +288,8 @@ internal static class DeviceIdNegotiation
     /// Validates a set of device offers the way every public entry point needs them validated.
     /// </summary>
     /// <exception cref="ArgumentException">
-    /// No offers, an offer without modifiers, or the same device offered twice.
+    /// No offers, an offer without formats, a format without modifiers or offered twice, or the same
+    /// device offered twice.
     /// </exception>
     internal static void Validate(ReadOnlySpan<DmaBufDeviceOffer> offers, string paramName)
     {
@@ -280,11 +298,30 @@ internal static class DeviceIdNegotiation
 
         for (int i = 0; i < offers.Length; i++)
         {
-            if (offers[i].Modifiers.IsDefaultOrEmpty)
+            ImmutableArray<DmaBufFormatModifiers> formats = offers[i].Formats;
+            if (formats.IsDefaultOrEmpty)
                 throw new ArgumentException(
-                    $"The offer for {offers[i].Device} names no DRM modifiers.",
+                    $"The offer for {offers[i].Device} names no pixel formats.",
                     paramName
                 );
+
+            for (int f = 0; f < formats.Length; f++)
+            {
+                if (formats[f].Modifiers.IsDefaultOrEmpty)
+                    throw new ArgumentException(
+                        $"The offer for {offers[i].Device} names no DRM modifiers for {formats[f].Format}.",
+                        paramName
+                    );
+
+                for (int g = 0; g < f; g++)
+                {
+                    if (formats[g].Format == formats[f].Format)
+                        throw new ArgumentException(
+                            $"The offer for {offers[i].Device} names {formats[f].Format} twice.",
+                            paramName
+                        );
+                }
+            }
 
             for (int j = 0; j < i; j++)
             {

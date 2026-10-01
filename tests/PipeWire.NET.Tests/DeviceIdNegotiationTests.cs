@@ -386,9 +386,9 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
         DrmDevice cardC = DrmDevice.FromNumbers(226, 130);
         DmaBufDeviceOffer[] offers =
         [
-            new(cardC, [0x0100000000000002]),
-            new(CardA, [0]),
-            new(CardB, [0x0100000000000001, 0]),
+            new(cardC, PixelFormat.Bgra, [0x0100000000000002]),
+            new(CardA, PixelFormat.Bgra, [0]),
+            new(CardB, PixelFormat.Bgra, [0x0100000000000001, 0]),
         ];
 
         // The producer named A and B only: C is filtered out, as video-play-fixate's has_device_id does.
@@ -396,7 +396,7 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
         byte[] pods = DeviceIdNegotiation.WriteDeviceFormats(
             peer,
             offers,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             640,
             480,
             30,
@@ -427,6 +427,63 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     }
 
     [TestMethod]
+    public void SeveralGpuFormats_AreOfferedPerDeviceInOrder_EachWithItsOwnModifiers()
+    {
+        RequireLinux();
+
+        // A GPU that imports NV12 linear only and BGRA tiled too; card B imports only BGRA.
+        DmaBufDeviceOffer[] offers =
+        [
+            new(
+                CardA,
+                [new(PixelFormat.Bgra, [0x0100000000000001, 0]), new(PixelFormat.Nv12, [0])]
+            ),
+            new(CardB, PixelFormat.Bgra, [0]),
+        ];
+        var peer = new PeerCapabilities(true, [CardA.Id, CardB.Id]);
+
+        byte[] pods = DeviceIdNegotiation.WriteDeviceFormats(
+            peer,
+            offers,
+            [PixelFormat.Nv12, PixelFormat.Bgra],
+            640,
+            480,
+            30,
+            fixedSize: false,
+            hostMemoryFallback: false,
+            out int count,
+            out int deviceFormats
+        );
+
+        Assert.AreEqual(3, count);
+        Assert.AreEqual(3, deviceFormats);
+        List<SpaFormatPod.VideoFormatInfo> read = ReadPods(pods, count);
+        Assert.AreEqual(
+            (PixelFormat.Nv12, CardA.Id, 0UL),
+            (read[0].Format, read[0].DeviceId, read[0].Modifier)
+        );
+        Assert.AreEqual(
+            (PixelFormat.Bgra, CardA.Id, 0x0100000000000001UL),
+            (read[1].Format, read[1].DeviceId, read[1].Modifier)
+        );
+        Assert.AreEqual(
+            (PixelFormat.Bgra, CardB.Id, 0UL),
+            (read[2].Format, read[2].DeviceId, read[2].Modifier)
+        );
+    }
+
+    [TestMethod]
+    public void ModifiersFor_AFormatNotOffered_IsEmpty()
+    {
+        RequireLinux();
+
+        DmaBufDeviceOffer offer = new(CardA, PixelFormat.Bgra, [0]);
+
+        Assert.AreEqual(1, offer.ModifiersFor(PixelFormat.Bgra).Length);
+        Assert.IsTrue(offer.ModifiersFor(PixelFormat.Nv12).IsEmpty);
+    }
+
+    [TestMethod]
     public void TheHostMemoryFallback_OffersEveryFormatTheConsumerReads()
     {
         RequireLinux();
@@ -436,8 +493,8 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
         var peer = new PeerCapabilities(true, [CardA.Id]);
         byte[] pods = DeviceIdNegotiation.WriteDeviceFormats(
             peer,
-            [new(CardA, [0])],
-            PixelFormat.Bgra,
+            [new(CardA, PixelFormat.Bgra, [0])],
+            [PixelFormat.Bgra],
             640,
             480,
             30,
@@ -471,12 +528,16 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     {
         RequireLinux();
 
-        DmaBufDeviceOffer[] offers = [new(CardA, [0x0100000000000001]), new(CardB, [0])];
+        DmaBufDeviceOffer[] offers =
+        [
+            new(CardA, PixelFormat.Bgra, [0x0100000000000001]),
+            new(CardB, PixelFormat.Bgra, [0]),
+        ];
 
         byte[] pods = DeviceIdNegotiation.WriteDeviceFormats(
             default,
             offers,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             640,
             480,
             30,
@@ -503,19 +564,39 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
 
         Assert.ThrowsExactly<ArgumentException>(() => DeviceIdNegotiation.Validate([], "offers"));
         Assert.ThrowsExactly<ArgumentException>(() =>
-            DeviceIdNegotiation.Validate([new(CardA, [])], "offers")
+            DeviceIdNegotiation.Validate([new(CardA, PixelFormat.Bgra, [])], "offers")
         );
         Assert.ThrowsExactly<ArgumentException>(() =>
-            DeviceIdNegotiation.Validate([new(CardA, default)], "offers")
+            DeviceIdNegotiation.Validate([new(CardA, PixelFormat.Bgra, default)], "offers")
+        );
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            DeviceIdNegotiation.Validate([new DmaBufDeviceOffer(CardA, [])], "offers")
         );
         Assert.ThrowsExactly<ArgumentException>(() =>
             DeviceIdNegotiation.Validate(
-                [new(CardA, [0]), new(new DrmDevice(CardA.Id, "/dev/dri/renderD128"), [0])],
+                [
+                    new DmaBufDeviceOffer(
+                        CardA,
+                        [new(PixelFormat.Bgra, [0]), new(PixelFormat.Bgra, [0])]
+                    ),
+                ],
+                "offers"
+            )
+        );
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            DeviceIdNegotiation.Validate(
+                [
+                    new(CardA, PixelFormat.Bgra, [0]),
+                    new(new DrmDevice(CardA.Id, "/dev/dri/renderD128"), PixelFormat.Bgra, [0]),
+                ],
                 "offers"
             )
         );
 
-        DeviceIdNegotiation.Validate([new(CardA, [0]), new(CardB, [0])], "offers");
+        DeviceIdNegotiation.Validate(
+            [new(CardA, PixelFormat.Bgra, [0]), new(CardB, PixelFormat.Bgra, [0])],
+            "offers"
+        );
     }
 
     [TestMethod]
@@ -524,7 +605,11 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
         RequireLinux();
 
         var named = new DrmDevice(CardB.Id, "/dev/dri/renderD129");
-        DmaBufDeviceOffer[] offers = [new(CardA, [0]), new(named, [0])];
+        DmaBufDeviceOffer[] offers =
+        [
+            new(CardA, PixelFormat.Bgra, [0]),
+            new(named, PixelFormat.Bgra, [0]),
+        ];
 
         Assert.IsNull(DeviceIdNegotiation.Resolve(null, offers));
         Assert.AreEqual(

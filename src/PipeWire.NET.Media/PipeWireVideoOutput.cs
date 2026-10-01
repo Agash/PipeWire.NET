@@ -691,8 +691,14 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     )
     {
         DeviceIdNegotiation.Validate(offers, nameof(offers));
+        ImmutableArray<long> modifiers = offers[0].ModifiersFor(_format);
+        if (modifiers.IsEmpty)
+            throw new ArgumentException(
+                $"The first offer names no DRM modifiers for this output's {_format}.",
+                nameof(offers)
+            );
 
-        ConnectDmaBufCore(offers[0].Modifiers.AsSpan(), offers, cancellationToken);
+        ConnectDmaBufCore(modifiers.AsSpan(), offers, cancellationToken);
     }
 
     private unsafe void ConnectDmaBufCore(
@@ -820,7 +826,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             byte[] pods = DeviceIdNegotiation.WriteDeviceFormats(
                 peer,
                 _deviceOffers,
-                _format,
+                [_format],
                 (uint)_width,
                 (uint)_height,
                 (uint)_frameRate,

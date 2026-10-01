@@ -204,8 +204,8 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
                 gbm,
                 output =>
                     output.ConnectDmaBuf([
-                        new DmaBufDeviceOffer(Phantom(250), [Linear]),
-                        new DmaBufDeviceOffer(real, [Linear]),
+                        new DmaBufDeviceOffer(Phantom(250), PixelFormat.Bgra, [Linear]),
+                        new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear]),
                     ]),
                 (capture, node) =>
                     capture.Connect(
@@ -213,8 +213,8 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
                         [PixelFormat.Bgra],
                         deviceOffers:
                         [
-                            new DmaBufDeviceOffer(Phantom(251), [Linear]),
-                            new DmaBufDeviceOffer(real, [Linear]),
+                            new DmaBufDeviceOffer(Phantom(251), PixelFormat.Bgra, [Linear]),
+                            new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear]),
                         ]
                     )
             );
@@ -252,7 +252,8 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
             Outcome o = await StreamAsync(
                 "pwnet-devid-oldsink",
                 gbm,
-                output => output.ConnectDmaBuf([new DmaBufDeviceOffer(real, [Linear])]),
+                output =>
+                    output.ConnectDmaBuf([new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear])]),
                 (capture, node) => capture.Connect(node, [PixelFormat.Bgra], modifiers: [Linear])
             );
 
@@ -293,7 +294,7 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
                     capture.Connect(
                         node,
                         [PixelFormat.Bgra],
-                        deviceOffers: [new DmaBufDeviceOffer(real, [Linear])]
+                        deviceOffers: [new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear])]
                     )
             );
 
@@ -321,12 +322,15 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
             Outcome o = await StreamAsync(
                 "pwnet-devid-sync",
                 gbm,
-                output => output.ConnectDmaBufSync([new DmaBufDeviceOffer(real, [Linear])]),
+                output =>
+                    output.ConnectDmaBufSync([
+                        new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear]),
+                    ]),
                 (capture, node) =>
                     capture.Connect(
                         node,
                         [PixelFormat.Bgra],
-                        deviceOffers: [new DmaBufDeviceOffer(real, [Linear])],
+                        deviceOffers: [new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear])],
                         requestExplicitSync: true
                     ),
                 explicitSync: true
@@ -366,12 +370,16 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
             Outcome o = await StreamAsync(
                 "pwnet-devid-disjoint",
                 gbm,
-                output => output.ConnectDmaBuf([new DmaBufDeviceOffer(real, [Linear])]),
+                output =>
+                    output.ConnectDmaBuf([new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear])]),
                 (capture, node) =>
                     capture.Connect(
                         node,
                         [PixelFormat.Bgra],
-                        deviceOffers: [new DmaBufDeviceOffer(Phantom(252), [Linear])]
+                        deviceOffers:
+                        [
+                            new DmaBufDeviceOffer(Phantom(252), PixelFormat.Bgra, [Linear]),
+                        ]
                     ),
                 wantFrames: 1,
                 budget: TimeSpan.FromSeconds(4)

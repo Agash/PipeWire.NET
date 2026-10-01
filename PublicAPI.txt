@@ -1102,14 +1102,25 @@ PipeWire.NET.Media.BorrowedVideoPlane.Size : UInt32
 PipeWire.NET.Media.BorrowedVideoPlane.Stride : UInt32
 PipeWire.NET.Media.BorrowedVideoPlane.ToString()
 PipeWire.NET.Media.DmaBufDeviceOffer
-PipeWire.NET.Media.DmaBufDeviceOffer..ctor(DrmDevice, ImmutableArray<Int64>)
+PipeWire.NET.Media.DmaBufDeviceOffer..ctor(DrmDevice, ImmutableArray<DmaBufFormatModifiers>)
+PipeWire.NET.Media.DmaBufDeviceOffer..ctor(DrmDevice, PixelFormat, ImmutableArray<Int64>)
 PipeWire.NET.Media.DmaBufDeviceOffer.Deconstruct(DrmDevice&, ImmutableArray`1&)
 PipeWire.NET.Media.DmaBufDeviceOffer.Device : DrmDevice
 PipeWire.NET.Media.DmaBufDeviceOffer.Equals(DmaBufDeviceOffer)
 PipeWire.NET.Media.DmaBufDeviceOffer.Equals(Object)
+PipeWire.NET.Media.DmaBufDeviceOffer.Formats : ImmutableArray<DmaBufFormatModifiers>
 PipeWire.NET.Media.DmaBufDeviceOffer.GetHashCode()
-PipeWire.NET.Media.DmaBufDeviceOffer.Modifiers : ImmutableArray<Int64>
+PipeWire.NET.Media.DmaBufDeviceOffer.ModifiersFor(PixelFormat)
 PipeWire.NET.Media.DmaBufDeviceOffer.ToString()
+PipeWire.NET.Media.DmaBufFormatModifiers
+PipeWire.NET.Media.DmaBufFormatModifiers..ctor(PixelFormat, ImmutableArray<Int64>)
+PipeWire.NET.Media.DmaBufFormatModifiers.Deconstruct(PixelFormat&, ImmutableArray`1&)
+PipeWire.NET.Media.DmaBufFormatModifiers.Equals(DmaBufFormatModifiers)
+PipeWire.NET.Media.DmaBufFormatModifiers.Equals(Object)
+PipeWire.NET.Media.DmaBufFormatModifiers.Format : PixelFormat
+PipeWire.NET.Media.DmaBufFormatModifiers.GetHashCode()
+PipeWire.NET.Media.DmaBufFormatModifiers.Modifiers : ImmutableArray<Int64>
+PipeWire.NET.Media.DmaBufFormatModifiers.ToString()
 PipeWire.NET.Media.DrmDevice
 PipeWire.NET.Media.DrmDevice..ctor(UInt64, String)
 PipeWire.NET.Media.DrmDevice.EnumerateRenderNodes()
