@@ -46,6 +46,23 @@ By contributing you agree that your contributions are licensed under the MIT Lic
   on every build. Serialization goes through a source-generated `JsonSerializerContext`, never the
   reflection-based `JsonSerializer` overloads.
 
+## Logging
+
+Log through `[LoggerMessage]` methods with an explicit event id. Each area owns a block, and ids are
+unique across both packages; `LoggingTests` checks both.
+
+| Block | Area |
+| --- | --- |
+| 1000-1099 | `PipeWire.NET` context and loop |
+| 1100-1199 | `PipeWireRegistry` |
+| 1200-1299 | Graph proxies (node, device, metadata, port, link, client, profiler, security context) |
+| 1300-1399 | `PipeWireFilter` |
+| 1400-1499 | Graph providers (node, device, metadata) |
+| 2000-2099 | `PipeWire.NET.Media` stream core |
+| 2100-2199 | `PipeWireVideoCapture` |
+| 2200-2299 | `PipeWireVideoOutput` |
+| 2300-2399 | `PipeWireAudioCapture` |
+
 ## Tests
 
 - Name tests `{Method}_{Scenario}_{ExpectedResult}`.

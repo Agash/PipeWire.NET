@@ -242,21 +242,21 @@ public sealed partial class PipeWireProfilerProxy : IDisposable, IAsyncDisposabl
     }
 
     [LoggerMessage(
-        EventId = 34000,
+        EventId = 1260,
         Level = LogLevel.Warning,
         Message = "a profiler report of {Size} bytes did not parse as an object"
     )]
     private partial void LogUnparsedReport(int size);
 
     [LoggerMessage(
-        EventId = 34001,
+        EventId = 1261,
         Level = LogLevel.Error,
         Message = "dispatching a profiler report failed"
     )]
     private partial void LogProfileDispatchFailed(Exception ex);
 
     [LoggerMessage(
-        EventId = 34002,
+        EventId = 1262,
         Level = LogLevel.Error,
         Message = "a ProfileReceived handler for profiler {ProfilerId} threw"
     )]

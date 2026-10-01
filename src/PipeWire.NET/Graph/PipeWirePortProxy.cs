@@ -231,7 +231,7 @@ public sealed partial class PipeWirePortProxy : PipeWireParameterObject
     }
 
     [LoggerMessage(
-        EventId = 34400,
+        EventId = 1230,
         Level = LogLevel.Warning,
         Message = "a port parameter handler threw"
     )]

@@ -567,7 +567,7 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     }
 
     [LoggerMessage(
-        EventId = 33000,
+        EventId = 1200,
         Level = LogLevel.Error,
         Message = "a ParameterChanged handler for node {NodeId} threw"
     )]

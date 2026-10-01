@@ -729,7 +729,7 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
     }
 
     [LoggerMessage(
-        EventId = 33200,
+        EventId = 1220,
         Level = LogLevel.Error,
         Message = "an EntryChanged handler for store {StoreId} key {Key} threw"
     )]

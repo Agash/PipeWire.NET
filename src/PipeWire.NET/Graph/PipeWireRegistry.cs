@@ -2267,14 +2267,14 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     //   PipeWireContext; silent by default. -
 
     [LoggerMessage(
-        EventId = 1,
+        EventId = 1100,
         Level = LogLevel.Trace,
         Message = "node {Id} '{Name}' ({MediaClass})"
     )]
     private partial void LogNodeAdded(uint id, string? name, string? mediaClass);
 
     [LoggerMessage(
-        EventId = 2,
+        EventId = 1101,
         Level = LogLevel.Trace,
         Message = "port {Id} '{Name}' ({Direction}) of node {NodeId}"
     )]
@@ -2286,14 +2286,14 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     );
 
     [LoggerMessage(
-        EventId = 10,
+        EventId = 1102,
         Level = LogLevel.Error,
         Message = "a graph watcher's completion handler threw during disposal"
     )]
     private partial void LogWatchCompletionThrew(Exception ex);
 
     [LoggerMessage(
-        EventId = 3,
+        EventId = 1103,
         Level = LogLevel.Trace,
         Message = "link {Id} {OutputNode}.{OutputPort} -> {InputNode}.{InputPort}"
     )]
@@ -2305,45 +2305,45 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         uint inputPort
     );
 
-    [LoggerMessage(EventId = 4, Level = LogLevel.Trace, Message = "removed {Kind} {Id}")]
+    [LoggerMessage(EventId = 1104, Level = LogLevel.Trace, Message = "removed {Kind} {Id}")]
     private partial void LogRemoved(string kind, uint id);
 
     [LoggerMessage(
-        EventId = 5,
+        EventId = 1105,
         Level = LogLevel.Warning,
         Message = "skipped port {Id}: {Reason} ({Value})"
     )]
     private partial void LogPortSkipped(uint id, string reason, string? value);
 
     [LoggerMessage(
-        EventId = 12,
+        EventId = 1106,
         Level = LogLevel.Debug,
         Message = "port {Id} announced for node {NodeId}, which was already removed; not filed"
     )]
     private partial void LogPortOfRemovedNode(uint id, uint nodeId);
 
     [LoggerMessage(
-        EventId = 6,
+        EventId = 1107,
         Level = LogLevel.Warning,
         Message = "skipped link {Id}: {Reason} ({Value})"
     )]
     private partial void LogLinkSkipped(uint id, string reason, string? value);
 
     [LoggerMessage(
-        EventId = 11,
+        EventId = 1108,
         Level = LogLevel.Warning,
         Message = "the daemon published global {Id} with no interface type"
     )]
     private partial void LogGlobalWithoutType(uint id);
 
-    [LoggerMessage(EventId = 7, Level = LogLevel.Error, Message = "a {Event} handler threw")]
+    [LoggerMessage(EventId = 1109, Level = LogLevel.Error, Message = "a {Event} handler threw")]
     private partial void LogHandlerFaulted(string @event, Exception exception);
 
-    [LoggerMessage(EventId = 8, Level = LogLevel.Trace, Message = "{Kind} {Id}")]
+    [LoggerMessage(EventId = 1110, Level = LogLevel.Trace, Message = "{Kind} {Id}")]
     private partial void LogObjectAdded(string kind, uint id);
 
     [LoggerMessage(
-        EventId = 9,
+        EventId = 1111,
         Level = LogLevel.Debug,
         Message = "global {Id} dropped: this version does not model {Interface}"
     )]

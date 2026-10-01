@@ -1108,35 +1108,35 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
     }
 
     [LoggerMessage(
-        EventId = 33310,
+        EventId = 1300,
         Level = LogLevel.Debug,
         Message = "video port '{Port}' asks for {Width}x{Height} frames: buffers of {Size} bytes"
     )]
     private partial void LogVideoBuffersDeclared(string port, uint width, uint height, int size);
 
     [LoggerMessage(
-        EventId = 33311,
+        EventId = 1301,
         Level = LogLevel.Warning,
         Message = "the graph refused video port '{Port}''s buffer size ({Result}); frames larger than its default pool will not be handed out"
     )]
     private partial void LogVideoBuffersRefused(string port, int result);
 
     [LoggerMessage(
-        EventId = 33312,
+        EventId = 1302,
         Level = LogLevel.Error,
         Message = "declaring a video port's buffers threw"
     )]
     private partial void LogVideoBuffersFailed(Exception exception);
 
     [LoggerMessage(
-        EventId = 33300,
+        EventId = 1303,
         Level = LogLevel.Debug,
         Message = "filter '{Name}' connected with {PortCount} port(s)"
     )]
     private partial void LogConnected(string name, int portCount);
 
     [LoggerMessage(
-        EventId = 33301,
+        EventId = 1304,
         Level = LogLevel.Debug,
         Message = "filter '{Name}' state {Old} -> {State} {Error}"
     )]
@@ -1148,7 +1148,7 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
     );
 
     [LoggerMessage(
-        EventId = 33302,
+        EventId = 1305,
         Level = LogLevel.Error,
         Message = "a StateChanged handler for filter '{Name}' threw"
     )]

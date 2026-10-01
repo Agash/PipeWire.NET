@@ -1426,56 +1426,56 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     }
 
     [LoggerMessage(
-        EventId = 34600,
+        EventId = 1400,
         Level = LogLevel.Error,
         Message = "exported node '{Name}': its {Callback} callback threw; the graph was answered -EIO"
     )]
     private partial void LogCallbackFaulted(string name, string callback, Exception exception);
 
     [LoggerMessage(
-        EventId = 34601,
+        EventId = 1401,
         Level = LogLevel.Error,
         Message = "exported node '{Name}': the process handler threw; the cycle was dropped (later failures of the same kind are only recorded in LastProcessError)"
     )]
     private partial void LogProcessFaulted(string name, Exception exception);
 
     [LoggerMessage(
-        EventId = 34602,
+        EventId = 1402,
         Level = LogLevel.Warning,
         Message = "exported node '{Name}': refused a listener (no hook list, or a null hook)"
     )]
     private partial void LogListenerRefused(string name);
 
     [LoggerMessage(
-        EventId = 34603,
+        EventId = 1403,
         Level = LogLevel.Debug,
         Message = "exported node '{Name}': io area {Io} is not one it uses"
     )]
     private partial void LogIoRefused(string name, SpaIoType io);
 
     [LoggerMessage(
-        EventId = 34604,
+        EventId = 1404,
         Level = LogLevel.Warning,
         Message = "exported node '{Name}': io area {Io} is {Size} bytes, too small for the struct"
     )]
     private partial void LogIoAreaTooSmall(string name, SpaIoType io, nuint size);
 
     [LoggerMessage(
-        EventId = 34605,
+        EventId = 1405,
         Level = LogLevel.Debug,
         Message = "exported node '{Name}': parameter {Param} cannot be set on its port"
     )]
     private partial void LogParamRefused(string name, SpaParamType param);
 
     [LoggerMessage(
-        EventId = 34606,
+        EventId = 1406,
         Level = LogLevel.Warning,
         Message = "exported node '{Name}': refused a format it cannot carry"
     )]
     private partial void LogFormatRefused(string name);
 
     [LoggerMessage(
-        EventId = 34607,
+        EventId = 1407,
         Level = LogLevel.Debug,
         Message = "exported node '{Name}': format settled on {SampleFormat} {Rate} Hz x{Channels}"
     )]
@@ -1487,21 +1487,21 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
     );
 
     [LoggerMessage(
-        EventId = 34608,
+        EventId = 1408,
         Level = LogLevel.Debug,
         Message = "exported node '{Name}': format cleared"
     )]
     private partial void LogFormatCleared(string name);
 
     [LoggerMessage(
-        EventId = 34609,
+        EventId = 1409,
         Level = LogLevel.Debug,
         Message = "exported node '{Name}': the peer allocated {Count} buffers"
     )]
     private partial void LogBuffersArrived(string name, uint count);
 
     [LoggerMessage(
-        EventId = 34610,
+        EventId = 1410,
         Level = LogLevel.Warning,
         Message = "exported node '{Name}': the peer returned buffer {BufferId}, outside its pool of {Count}"
     )]

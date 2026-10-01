@@ -526,14 +526,14 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
     }
 
     [LoggerMessage(
-        EventId = 34203,
+        EventId = 1440,
         Level = LogLevel.Information,
         Message = "exported metadata store {Name}; other clients can bind it"
     )]
     private partial void LogExported(string name);
 
     [LoggerMessage(
-        EventId = 34204,
+        EventId = 1441,
         Level = LogLevel.Warning,
         Message = "metadata store {Name} could not be exported, so only this client can see it. "
             + "The context has no export type for Metadata, which libpipewire-module-metadata "
@@ -542,21 +542,21 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
     private partial void LogNotExported(string name);
 
     [LoggerMessage(
-        EventId = 34200,
+        EventId = 1442,
         Level = LogLevel.Information,
         Message = "serving metadata store {Name}"
     )]
     private partial void LogRegistered(string name);
 
     [LoggerMessage(
-        EventId = 34201,
+        EventId = 1443,
         Level = LogLevel.Error,
         Message = "dispatching a metadata change failed"
     )]
     private partial void LogDispatchFailed(Exception ex);
 
     [LoggerMessage(
-        EventId = 34202,
+        EventId = 1444,
         Level = LogLevel.Error,
         Message = "an EntryChanged handler for store {Name} threw"
     )]

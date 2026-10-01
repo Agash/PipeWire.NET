@@ -1845,62 +1845,69 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     // factory passed to PipeWireContext. The stream name is the logger category, so each
     // stream's lifecycle is filterable on its own.
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "state {Old} -> {New}")]
+    [LoggerMessage(EventId = 2000, Level = LogLevel.Debug, Message = "state {Old} -> {New}")]
     private partial void LogStateChanged(PipeWireStreamState old, PipeWireStreamState @new);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "stream error: {Error}")]
+    [LoggerMessage(EventId = 2001, Level = LogLevel.Error, Message = "stream error: {Error}")]
     private partial void LogStreamError(string error);
 
-    [LoggerMessage(Level = LogLevel.Trace, Message = "param_changed id={Id}")]
+    [LoggerMessage(EventId = 2002, Level = LogLevel.Trace, Message = "param_changed id={Id}")]
     private partial void LogParamChanged(uint id);
 
     [LoggerMessage(
+        EventId = 2003,
         Level = LogLevel.Debug,
         Message = "first buffer: n_datas={Blocks} type={DataType} size={Size} maxsize={MaxSize}"
     )]
     private partial void LogFirstBuffer(uint blocks, uint dataType, uint size, uint maxSize);
 
     [LoggerMessage(
+        EventId = 2004,
         Level = LogLevel.Trace,
         Message = "process: no buffer dequeued (producer underrun or not yet started)"
     )]
     private partial void LogDequeueEmpty();
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "a node command handler threw")]
+    [LoggerMessage(
+        EventId = 2005,
+        Level = LogLevel.Error,
+        Message = "a node command handler threw"
+    )]
     private partial void LogCommandHandlerThrew(Exception exception);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "a stream state handler threw")]
+    [LoggerMessage(
+        EventId = 2006,
+        Level = LogLevel.Error,
+        Message = "a stream state handler threw"
+    )]
     private partial void LogStateHandlerThrew(Exception ex);
 
     [LoggerMessage(
-        EventId = 34990,
+        EventId = 2007,
         Level = LogLevel.Error,
         Message = "a control_info callback threw"
     )]
     private partial void LogControlInfoThrew(Exception ex);
 
     [LoggerMessage(
+        EventId = 2008,
         Level = LogLevel.Error,
         Message = "a format handler threw; negotiation continued with defaults"
     )]
     private partial void LogFormatHandlerThrew(Exception ex);
 
-    [LoggerMessage(
-        EventId = 34992,
-        Level = LogLevel.Trace,
-        Message = "trigger_process -> {Result}"
-    )]
+    [LoggerMessage(EventId = 2009, Level = LogLevel.Trace, Message = "trigger_process -> {Result}")]
     private partial void LogTriggered(int result);
 
     [LoggerMessage(
-        EventId = 34993,
+        EventId = 2010,
         Level = LogLevel.Trace,
         Message = "trigger_done (a wait was pending: {Pending})"
     )]
     private partial void LogTriggerDone(bool pending);
 
     [LoggerMessage(
-        EventId = 34991,
+        EventId = 2011,
         Level = LogLevel.Error,
         Message = "the peer-capability handler threw; an INACTIVE stream stays inactive"
     )]

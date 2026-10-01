@@ -775,31 +775,31 @@ public sealed unsafe partial class PipeWireDeviceProvider : IDisposable, IAsyncD
     }
 
     [LoggerMessage(
-        EventId = 34300,
+        EventId = 1420,
         Level = LogLevel.Information,
         Message = "exported device {Name}; other clients can select its profiles"
     )]
     private partial void LogExported(string name);
 
     [LoggerMessage(
-        EventId = 34302,
+        EventId = 1421,
         Level = LogLevel.Debug,
         Message = "enum_params id={Id} start={Start} num={Num}"
     )]
     private partial void LogEnumParams(uint id, uint start, uint num);
 
     [LoggerMessage(
-        EventId = 34304,
+        EventId = 1422,
         Level = LogLevel.Debug,
         Message = "enum_params sent {Sent} results to {Listeners} listeners"
     )]
     private partial void LogEnumSent(uint sent, int listeners);
 
-    [LoggerMessage(EventId = 34303, Level = LogLevel.Debug, Message = "a listener attached")]
+    [LoggerMessage(EventId = 1423, Level = LogLevel.Debug, Message = "a listener attached")]
     private partial void LogListenerAttached();
 
     [LoggerMessage(
-        EventId = 34301,
+        EventId = 1424,
         Level = LogLevel.Error,
         Message = "a device provider callback ({Callback}) threw"
     )]

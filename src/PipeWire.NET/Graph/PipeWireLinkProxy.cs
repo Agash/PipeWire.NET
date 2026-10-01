@@ -267,14 +267,14 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
     }
 
     [LoggerMessage(
-        EventId = 34500,
+        EventId = 1240,
         Level = LogLevel.Debug,
         Message = "link {LinkId} is {State}{Error}"
     )]
     private partial void LogState(uint linkId, PipeWireLinkState state, string? error);
 
     [LoggerMessage(
-        EventId = 34501,
+        EventId = 1241,
         Level = LogLevel.Warning,
         Message = "a link state handler threw"
     )]

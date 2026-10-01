@@ -536,7 +536,7 @@ public sealed partial class PipeWireClientProxy : IDisposable, IAsyncDisposable
     }
 
     [LoggerMessage(
-        EventId = 34700,
+        EventId = 1250,
         Level = LogLevel.Warning,
         Message = "a properties handler for client {ClientId} threw"
     )]

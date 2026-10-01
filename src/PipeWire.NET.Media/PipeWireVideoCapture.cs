@@ -1370,12 +1370,14 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     }
 
     [LoggerMessage(
+        EventId = 2100,
         Level = LogLevel.Warning,
         Message = "signalling a frame's release point was refused; the producer waits until its release timeout for that buffer"
     )]
     private partial void LogReleaseSignalFailed();
 
     [LoggerMessage(
+        EventId = 2101,
         Level = LogLevel.Debug,
         Message = "negotiated format {Format} {Width}x{Height} modifier=0x{Modifier:x} needsFixation={NeedsFixation}"
     )]
@@ -1388,24 +1390,28 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     );
 
     [LoggerMessage(
+        EventId = 2102,
         Level = LogLevel.Debug,
         Message = "requesting buffers blocks={Blocks} size={Size} stride={Stride} dataTypeMask=0x{DataTypeMask:x}"
     )]
     private partial void LogRequestedBuffers(int blocks, int size, int stride, int dataTypeMask);
 
     [LoggerMessage(
+        EventId = 2103,
         Level = LogLevel.Warning,
         Message = "a frame's acquire point {Point} was not reached within {TimeoutMs}ms; the frame was dropped rather than read while still being written"
     )]
     private partial void LogAcquireTimedOut(ulong point, double timeoutMs);
 
     [LoggerMessage(
+        EventId = 2104,
         Level = LogLevel.Warning,
         Message = "waiting for a frame's acquire point {Point} failed with errno {Errno}; the frame was dropped"
     )]
     private partial void LogAcquireFailed(ulong point, int errno);
 
     [LoggerMessage(
+        EventId = 2105,
         Level = LogLevel.Debug,
         Message = "peer capabilities: negotiates device ids={Negotiates}, names {PeerDevices} devices; announcing {DeviceFormats} of {Offers} device formats"
     )]
@@ -1417,24 +1423,28 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     );
 
     [LoggerMessage(
+        EventId = 2106,
         Level = LogLevel.Warning,
         Message = "the daemon refused the announced formats ({Result}); the stream is activated anyway and will not negotiate"
     )]
     private partial void LogAnnounceRefused(int result);
 
     [LoggerMessage(
+        EventId = 2107,
         Level = LogLevel.Debug,
         Message = "the daemon withdrew the format; the stream is unconfigured"
     )]
     private partial void LogFormatWithdrawn();
 
     [LoggerMessage(
+        EventId = 2108,
         Level = LogLevel.Warning,
         Message = "the daemon refused the modifier fixation ({Result}); it will be retried on the next negotiation"
     )]
     private partial void LogFixationRefused(int result);
 
     [LoggerMessage(
+        EventId = 2109,
         Level = LogLevel.Warning,
         Message = "{Format} frames arrive with chroma that cannot be read (blocks={Blocks}, second block offset={Offset} size={Size} maxsize={MaxSize}); they are handed on with the luma alone"
     )]
@@ -1447,6 +1457,7 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     );
 
     [LoggerMessage(
+        EventId = 2110,
         Level = LogLevel.Warning,
         Message = "could not take a copy of the frame for TryGetFrame; the puller will not see this one"
     )]

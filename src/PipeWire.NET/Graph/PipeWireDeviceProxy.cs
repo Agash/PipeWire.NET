@@ -327,7 +327,7 @@ public sealed partial class PipeWireDeviceProxy : PipeWireParameterObject
     }
 
     [LoggerMessage(
-        EventId = 33100,
+        EventId = 1210,
         Level = LogLevel.Error,
         Message = "a ParameterChanged handler for device {DeviceId} threw"
     )]

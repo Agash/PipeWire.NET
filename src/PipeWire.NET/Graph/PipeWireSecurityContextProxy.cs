@@ -237,7 +237,7 @@ public sealed partial class PipeWireSecurityContextProxy : IDisposable, IAsyncDi
     }
 
     [LoggerMessage(
-        EventId = 34100,
+        EventId = 1270,
         Level = LogLevel.Information,
         Message = "security context {ContextId} opened a sandbox with {PropertyCount} propertie(s)"
     )]

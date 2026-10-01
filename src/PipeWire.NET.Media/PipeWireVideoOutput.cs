@@ -1892,84 +1892,98 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         StateChanged?.Invoke(this, oldState, newState);
 
     [LoggerMessage(
+        EventId = 2200,
         Level = LogLevel.Warning,
         Message = "buffer {Index}: memory for the host-memory fallback could not be made (errno {Errno}); the pool fails"
     )]
     private partial void LogHostBufferFailed(int index, int errno);
 
     [LoggerMessage(
+        EventId = 2201,
         Level = LogLevel.Warning,
         Message = "buffer {Index}: signalling acquire point {Point} on the library's timeline was refused; a consumer waiting on it times out"
     )]
     private partial void LogAcquireSignalFailed(int index, ulong point);
 
     [LoggerMessage(
+        EventId = 2202,
         Level = LogLevel.Warning,
         Message = "buffer {Index}: the consumer promised release point {Point} and did not signal it within {TimeoutMs}ms; the cycle publishes nothing"
     )]
     private partial void LogReleaseTimedOut(int index, ulong point, double timeoutMs);
 
     [LoggerMessage(
+        EventId = 2203,
         Level = LogLevel.Warning,
         Message = "buffer {Index}: waiting for release point {Point} failed with errno {Errno}; the cycle publishes nothing"
     )]
     private partial void LogReleaseFailed(int index, ulong point, int errno);
 
     [LoggerMessage(
+        EventId = 2204,
         Level = LogLevel.Debug,
         Message = "OnFormat modifier=0x{Modifier:x} needsFixation={NeedsFixation}"
     )]
     private partial void LogOnFormat(ulong modifier, bool needsFixation);
 
     [LoggerMessage(
+        EventId = 2205,
         Level = LogLevel.Debug,
         Message = "peer capabilities: negotiates device ids={Negotiates}; announcing {DeviceFormats} of {Offers} device formats"
     )]
     private partial void LogDeviceOffers(bool negotiates, int deviceFormats, int offers);
 
     [LoggerMessage(
+        EventId = 2206,
         Level = LogLevel.Warning,
         Message = "the daemon refused the announced formats ({Result}); the stream is activated anyway and will not negotiate"
     )]
     private partial void LogAnnounceRefused(int result);
 
     [LoggerMessage(
+        EventId = 2207,
         Level = LogLevel.Debug,
         Message = "OnPostFormat fixated={Fixated} needsFixation={NeedsFixation} planeCount={PlaneCount}"
     )]
     private partial void LogOnPostFormat(bool fixated, bool needsFixation, int planeCount);
 
     [LoggerMessage(
+        EventId = 2208,
         Level = LogLevel.Warning,
         Message = "buffer {Index} declined: the allocator backed {Backed} of {Needed} planes"
     )]
     private partial void LogPartialAllocation(int index, int backed, uint needed);
 
     [LoggerMessage(
+        EventId = 2209,
         Level = LogLevel.Warning,
         Message = "buffer {Index} declined: plane {Plane} carries descriptor {Fd}"
     )]
     private partial void LogInvalidPlaneDescriptor(int index, uint plane, long fd);
 
     [LoggerMessage(
+        EventId = 2210,
         Level = LogLevel.Warning,
         Message = "the allocator declined buffer {Index}; an unbacked buffer fails the allocation of the whole pool, so back every buffer the pool asks for"
     )]
     private partial void LogBufferDeclined(int index);
 
     [LoggerMessage(
+        EventId = 2211,
         Level = LogLevel.Warning,
         Message = "buffer index {Index} is past the pool table; it stays unbacked, which fails the allocation of the whole pool"
     )]
     private partial void LogBufferIndexOutOfRange(int index);
 
     [LoggerMessage(
+        EventId = 2212,
         Level = LogLevel.Warning,
         Message = "buffer {Index} declined: timeline descriptors unavailable ({Reason})"
     )]
     private partial void LogSyncFdFailed(int index, string reason);
 
     [LoggerMessage(
+        EventId = 2213,
         Level = LogLevel.Warning,
         Message = "buffer {Index} declined: timeline descriptors {AcquireFd}/{ReleaseFd} are not usable"
     )]

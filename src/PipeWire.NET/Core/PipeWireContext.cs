@@ -1206,7 +1206,7 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     }
 
     [LoggerMessage(
-        EventId = 34700,
+        EventId = 1000,
         Level = LogLevel.Error,
         Message = "the loop refused an unlock ({Result}) on managed thread {ThreadId}; the loop mutex is still held by that thread and the next thread that needs it will wait for ever. At: {StackTrace}"
     )]

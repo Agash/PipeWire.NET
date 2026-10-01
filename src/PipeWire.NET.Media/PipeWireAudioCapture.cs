@@ -440,6 +440,7 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
     private SpaFormatPod.AudioFormatInfo Format => Volatile.Read(ref _fmtCell).Info;
 
     [LoggerMessage(
+        EventId = 2300,
         Level = LogLevel.Debug,
         Message = "negotiated audio format {Format} {SampleRate}Hz {Channels}ch"
     )]
