@@ -290,6 +290,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
     // ---------------------------------------------------------------- third-party nodes
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task AMidiNode_ReportsNoChannelMap()
     {
         // A node that carries no audio has no channel map: its Props either lack the key or it

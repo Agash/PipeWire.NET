@@ -22,6 +22,7 @@ public sealed class LifecycleLockTests : PipeWireTestBase
     private static readonly TimeSpan JoinBudget = TimeSpan.FromSeconds(15);
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task HoldingAScopeAcrossAnotherThreadsStart_CompletesBoth()
     {
         using var ctx = new PipeWireContext("PipeWire.NET.Test.LifecycleStart");
@@ -52,6 +53,7 @@ public sealed class LifecycleLockTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task TwoConcurrentStarts_BothReportSuccess()
     {
         using var ctx = new PipeWireContext("PipeWire.NET.Test.LifecycleRacingStarts");
@@ -65,6 +67,7 @@ public sealed class LifecycleLockTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public void DisposingWhileAScopeIsHeld_WaitsForTheScope()
     {
         using var ctx = new PipeWireContext("PipeWire.NET.Test.LifecycleDrain");
@@ -85,6 +88,7 @@ public sealed class LifecycleLockTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task DisposingACopyAndTheOriginal_UnlocksExactlyOnce()
     {
         using var ctx = new PipeWireContext("PipeWire.NET.Test.LifecycleCopy");
@@ -106,6 +110,7 @@ public sealed class LifecycleLockTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task AbandonedStreamsAndFilters_FinalizeWithoutWaitingForABusyLoop()
     {
         // Stream and filter destroys are heavier (disconnect plus listener teardown).
@@ -157,6 +162,7 @@ public sealed class LifecycleLockTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task LockingAfterDispose_RefusesInsteadOfLocking()
     {
         var ctx = new PipeWireContext("PipeWire.NET.Test.LifecycleAfterDispose");
@@ -172,6 +178,7 @@ public sealed class LifecycleLockTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public unsafe void ADisposedUnstartedContext_RefusesItsHandles()
     {
         // No daemon needed: construction alone takes no connection, and disposal tears down
@@ -211,6 +218,7 @@ public sealed class LifecycleLockTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task AbandonedHandles_FinalizeWithoutWaitingForABusyLoop()
     {
         // The finalizer must never block on the loop mutex: abandoned proxy handles go to the

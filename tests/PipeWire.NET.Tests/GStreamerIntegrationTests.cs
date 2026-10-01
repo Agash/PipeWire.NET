@@ -163,6 +163,7 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     [TestCategory("Integration")]
     [TestCategory("RequiresDaemon")]
     public async Task CaptureVideo_RefusesAGeometryThatCannotBeMeant()

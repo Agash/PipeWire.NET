@@ -997,6 +997,7 @@ public sealed class StreamGuardTests : PipeWireTestBase
     // Every guard on the stream wrappers answers from local state: none of these reach the
     // daemon, so all of them are checked against streams that were never connected.
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     [TestCategory("Integration")]
     [TestCategory("RequiresDaemon")]
     [System.Runtime.Versioning.SupportedOSPlatform("linux")]
@@ -1038,6 +1039,7 @@ public sealed class StreamGuardTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     [TestCategory("Integration")]
     [TestCategory("RequiresDaemon")]
     [System.Runtime.Versioning.SupportedOSPlatform("linux")]
@@ -1073,6 +1075,7 @@ public sealed class StreamGuardTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     [TestCategory("Integration")]
     [TestCategory("RequiresDaemon")]
     [System.Runtime.Versioning.SupportedOSPlatform("linux")]
@@ -1099,6 +1102,7 @@ public sealed class StreamGuardTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     [TestCategory("Integration")]
     [TestCategory("RequiresDaemon")]
     [System.Runtime.Versioning.SupportedOSPlatform("linux")]
@@ -1125,6 +1129,7 @@ public sealed class StreamGuardTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     [TestCategory("Integration")]
     [TestCategory("RequiresDaemon")]
     [System.Runtime.Versioning.SupportedOSPlatform("linux")]
