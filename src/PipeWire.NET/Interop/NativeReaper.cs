@@ -15,9 +15,10 @@ namespace PipeWire.NET.Interop;
 /// </para>
 /// <para>
 /// A loop is destroyed only after the objects bound to it have drained. That wait must never hold
-/// the only worker hostage: a loop item whose objects are still queued behind it goes back to the
-/// back of the queue and the worker keeps draining instead. Abandonment is finite - every dropped
-/// handle enqueues exactly once - so a deferred loop item always reaches an empty count.
+/// the only worker hostage: a loop item whose objects are still queued is parked, and the worker
+/// keeps draining; the release that brings the loop's count to zero puts the parked item back on the
+/// queue. Abandonment is finite - every dropped handle enqueues exactly once - so a parked loop item
+/// always runs. Counts only fall on the worker, so parking needs no lock.
 /// Finalizer order is still arbitrary, so the guards inside every release stay load-bearing: an
 /// object whose loop already went skips its destroy and just releases its references.
 /// </para>
@@ -28,6 +29,9 @@ internal static class NativeReaper
 
     private static readonly BlockingCollection<WorkItem> _queue = new();
     private static readonly ConcurrentDictionary<nint, int> _pending = new();
+
+    // Loop destroys waiting for their objects to drain; touched only by the worker.
+    private static readonly Dictionary<nint, List<WorkItem>> _parked = [];
     private static readonly Thread _thread = new(Run)
     {
         IsBackground = true,
@@ -64,8 +68,12 @@ internal static class NativeReaper
         {
             if (work.WaitForDrain && PendingFor(work.Loop) > 0)
             {
-                _queue.Add(work);
-                Thread.Sleep(0);
+                if (!_parked.TryGetValue(work.Loop, out List<WorkItem>? waiting))
+                {
+                    _parked[work.Loop] = waiting = [];
+                }
+
+                waiting.Add(work);
                 continue;
             }
 
@@ -86,7 +94,16 @@ internal static class NativeReaper
                     && work.Loop != 0
                     && _pending.AddOrUpdate(work.Loop, 0, static (_, n) => n - 1) <= 0
                 )
+                {
                     _pending.TryRemove(work.Loop, out _);
+                    if (_parked.Remove(work.Loop, out List<WorkItem>? drained))
+                    {
+                        foreach (WorkItem loop in drained)
+                        {
+                            _queue.Add(loop);
+                        }
+                    }
+                }
             }
         }
     }
