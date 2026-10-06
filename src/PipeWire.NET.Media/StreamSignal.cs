@@ -25,4 +25,15 @@ internal static class StreamSignal
         );
         await done.Task.ConfigureAwait(false);
     }
+
+    // Runs the second step once the first has completed.
+    internal static async Task ThenAsync(
+        Task first,
+        Func<CancellationToken, Task> next,
+        CancellationToken cancellationToken
+    )
+    {
+        await first.ConfigureAwait(false);
+        await next(cancellationToken).ConfigureAwait(false);
+    }
 }

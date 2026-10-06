@@ -442,6 +442,21 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             _driveTimer = null;
         }
 
+        // Work queued for the stream on its processing thread runs before the stream goes: a
+        // triggered cycle (pw_stream_trigger_process queues it without waiting) that ran after the
+        // disconnect would call into a node with no IO and no callbacks, and crash in stream.c's
+        // do_trigger_driver. The flag set above stops new triggers; this waits out the queued ones.
+        pw_stream* draining = _stream;
+        if (draining is not null)
+        {
+            _ = Native.pw_loop_invoke(
+                Native.pw_stream_get_data_loop(draining),
+                &DoNothing,
+                block: true,
+                null
+            );
+        }
+
         // The handle disconnects and destroys under the loop lock, holding the core and loop open
         // for exactly as long as that takes - so this works whichever order the caller disposed in.
         // The listener's memory belongs to the handle, which frees it after pw_stream_destroy has
@@ -453,6 +468,16 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     }
 
     // - Native callbacks (invoked by the loop thread with the lock held) -
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int DoNothing(
+        spa_loop* loop,
+        bool async,
+        uint seq,
+        void* data,
+        nuint size,
+        void* userData
+    ) => 0;
 
     /// <summary>Resolves the instance a native callback belongs to, or null if it is gone.</summary>
     /// <remarks>
@@ -654,16 +679,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             if (_disposed || stream is null)
                 return null;
 
-            // One frame waits for the consumer at most. A producer faster than its consumer would
-            // otherwise fill the queue, and the consumer would take every frame a queue's length late.
-            pw_time time;
-            if (
-                Native.pw_stream_get_time_n(stream, &time, (nuint)sizeof(pw_time)) == 0
-                && time.queued_buffers > 0
-            )
-                return null;
-
-            pw_buffer* buffer = Native.pw_stream_dequeue_buffer(stream);
+            pw_buffer* buffer = OnDataLoop(stream, RingOperation.DequeueOne, null);
             if (buffer is not null)
                 _held.Add((nint)buffer);
             return buffer;
@@ -686,10 +702,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             if (_disposed || stream is null || !_held.Remove((nint)buffer))
                 return false;
 
-            if (publish)
-                Native.pw_stream_queue_buffer(stream, buffer);
-            else
-                Native.pw_stream_return_buffer(stream, buffer);
+            _ = OnDataLoop(stream, publish ? RingOperation.Queue : RingOperation.Return, buffer);
             return true;
         }
     }
@@ -702,8 +715,89 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         {
             if (!_disposed && _stream is not null && _held.Remove((nint)buffer))
             {
-                Native.pw_stream_queue_buffer(_stream, buffer);
+                _ = OnDataLoop(_stream, RingOperation.Queue, buffer);
             }
+        }
+    }
+
+    // The stream's buffer queues are rings with one producer and one consumer each. The processing
+    // thread recycles buffers into the dequeued ring and queues from its own callback, and
+    // pw_stream_dequeue_buffer pushes a busy buffer back onto the dequeued ring (stream.c), so another
+    // thread dequeuing or queueing at the same time corrupts them. From outside the processing thread
+    // these run under the data loop's lock, which serialises them with processing.
+    private enum RingOperation
+    {
+        // Dequeues a free buffer unless a frame already waits for the consumer: a producer faster than
+        // its consumer would otherwise fill the queue, and the consumer would fall a queue's length behind.
+        DequeueOne,
+        Queue,
+        Return,
+    }
+
+    private struct RingCall
+    {
+        public pw_stream* Stream;
+        public pw_buffer* Buffer;
+        public RingOperation Operation;
+    }
+
+    private static pw_buffer* OnDataLoop(
+        pw_stream* stream,
+        RingOperation operation,
+        pw_buffer* buffer
+    )
+    {
+        RingCall call = new()
+        {
+            Stream = stream,
+            Buffer = buffer,
+            Operation = operation,
+        };
+        if (
+            Native.pw_loop_locked(Native.pw_stream_get_data_loop(stream), &DoRingCall, &call)
+            == -NativeLibc.EOPNOTSUPP
+        )
+        {
+            // A loop without a locked method processes on the caller's thread: nothing to race.
+            Run(&call);
+        }
+
+        return call.Buffer;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int DoRingCall(
+        spa_loop* loop,
+        bool async,
+        uint seq,
+        void* data,
+        nuint size,
+        void* userData
+    )
+    {
+        Run((RingCall*)userData);
+        return 0;
+    }
+
+    private static void Run(RingCall* call)
+    {
+        pw_stream* stream = call->Stream;
+        switch (call->Operation)
+        {
+            case RingOperation.DequeueOne:
+                pw_time time;
+                call->Buffer =
+                    Native.pw_stream_get_time_n(stream, &time, (nuint)sizeof(pw_time)) == 0
+                    && time.queued_buffers > 0
+                        ? null
+                        : Native.pw_stream_dequeue_buffer(stream);
+                break;
+            case RingOperation.Queue:
+                _ = Native.pw_stream_queue_buffer(stream, call->Buffer);
+                break;
+            case RingOperation.Return:
+                _ = Native.pw_stream_return_buffer(stream, call->Buffer);
+                break;
         }
     }
 
@@ -1249,6 +1343,17 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
                 )
             );
 
+        // A stream is made the driver before it starts; a trigger in between runs no cycle, so its
+        // completion would never come. A streaming stream is triggered at once.
+        return StreamSignal.ThenAsync(
+            WaitForStreamingAsync(cancellationToken),
+            TriggerAndAwaitCompletionAsync,
+            cancellationToken
+        );
+    }
+
+    private Task TriggerAndAwaitCompletionAsync(CancellationToken cancellationToken)
+    {
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _triggerDone = done;
         TriggerProcess();

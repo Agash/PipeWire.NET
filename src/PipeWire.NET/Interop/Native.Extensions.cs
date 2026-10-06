@@ -162,6 +162,29 @@ internal static unsafe partial class Native
         return m->locked(data, func, NativeConstants.SPA_ID_INVALID, null, 0, userData);
     }
 
+    /// <summary>
+    /// <c>pw_loop_invoke</c>: queues <paramref name="func"/> to run on the loop's thread, behind what is
+    /// queued already, and with <paramref name="block"/> waits until it has run. Run on the loop's own
+    /// thread it runs at once.
+    /// </summary>
+    /// <returns>What <paramref name="func"/> returned, or <c>-ENOTSUP</c> if the loop has no
+    /// <c>invoke</c> method.</returns>
+    internal static int pw_loop_invoke(
+        pw_loop* loop,
+        delegate* unmanaged[Cdecl]<spa_loop*, bool, uint, void*, nuint, void*, int> func,
+        bool block,
+        void* userData
+    )
+    {
+        if (loop is null || loop->loop is null)
+            return -NativeLibc.EOPNOTSUPP;
+        GetInterface(loop->loop, out spa_loop_methods* m, out void* data);
+        if (m is null || m->invoke is null)
+            return -NativeLibc.EOPNOTSUPP;
+
+        return m->invoke(data, func, NativeConstants.SPA_ID_INVALID, null, 0, block, userData);
+    }
+
     /// <summary>True when a result is a queued request rather than a completed one.</summary>
     /// <remarks>
     /// SPA encodes "request accepted, answer comes later" in the return value rather than in a
