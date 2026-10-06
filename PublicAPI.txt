@@ -1284,7 +1284,9 @@ PipeWire.NET.Media.PipeWireFrameHold.Dispose()
 PipeWire.NET.Media.PipeWireOutputFrame
 PipeWire.NET.Media.PipeWireOutputFrame.BufferIndex : Int32
 PipeWire.NET.Media.PipeWireOutputFrame.Dispose()
+PipeWire.NET.Media.PipeWireOutputFrame.Pixels : Span<Byte>
 PipeWire.NET.Media.PipeWireOutputFrame.Publish()
+PipeWire.NET.Media.PipeWireOutputFrame.Stride : Int32
 PipeWire.NET.Media.PipeWireRateController
 PipeWire.NET.Media.PipeWireRateController..ctor()
 PipeWire.NET.Media.PipeWireRateController.Bandwidth : Double
@@ -1442,6 +1444,7 @@ PipeWire.NET.Media.PipeWireVideoOutput.GraphClock : Nullable<PipeWireGraphClock>
 PipeWire.NET.Media.PipeWireVideoOutput.HostMemoryFallback : Boolean
 PipeWire.NET.Media.PipeWireVideoOutput.IsDriving : Boolean
 PipeWire.NET.Media.PipeWireVideoOutput.IsLazy : Boolean
+PipeWire.NET.Media.PipeWireVideoOutput.IsPushing : Boolean
 PipeWire.NET.Media.PipeWireVideoOutput.LastProcessError : Exception
 PipeWire.NET.Media.PipeWireVideoOutput.NegotiatedDevice : Nullable<DrmDevice>
 PipeWire.NET.Media.PipeWireVideoOutput.NextPresentationTimestampNs : Nullable<Int64>

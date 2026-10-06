@@ -1065,10 +1065,10 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     public bool HostMemoryFallback { get; set; }
 
     /// <summary>
-    /// Whether the application queues shared buffers itself, rendering each frame into a buffer it takes
-    /// with <see cref="TryBeginFrame"/> on its own thread, as GStreamer's pipewiresink does. Set before
-    /// connecting. Cycles then publish what it queued, and <see cref="FillDmaBuf"/> is not raised; a
-    /// consumer that settled on memory is still filled through <see cref="FillFrame"/>.
+    /// Whether the application queues buffers itself, writing each frame into a buffer it takes with
+    /// <see cref="TryBeginFrame"/> on its own thread, as GStreamer's pipewiresink does. Set before
+    /// connecting. Cycles then publish what it queued, and neither <see cref="FillDmaBuf"/> nor
+    /// <see cref="FillFrame"/> is raised, whether the consumer settled on shared buffers or on memory.
     /// </summary>
     public bool PushFrames { get; set; }
 
@@ -1076,7 +1076,13 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     /// Whether frames are pushed into shared buffers now: <see cref="PushFrames"/> is set and the
     /// consumer settled on a shared buffer. False before a consumer settles and when it reads memory.
     /// </summary>
-    public bool SharesBuffers => _core?.ProducerDequeues ?? false;
+    public bool SharesBuffers => (_core?.ProducerDequeues ?? false) && _sharedNegotiated;
+
+    /// <summary>
+    /// Whether frames are pushed now: <see cref="PushFrames"/> is set and a consumer settled on a
+    /// format, in shared buffers (<see cref="SharesBuffers"/>) or in memory.
+    /// </summary>
+    public bool IsPushing => _core?.ProducerDequeues ?? false;
 
     /// <summary>How much this stream currently holds, or null when it cannot be read.</summary>
     /// <remarks>
@@ -1290,15 +1296,17 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
-    /// Takes a free shared buffer for the application to render the next frame into on its own thread,
-    /// with no copy; <see cref="PipeWireOutputFrame.Publish"/> queues it to the consumer. One frame is
-    /// open at a time. Under explicit sync the consumer's release is waited for here.
+    /// Takes a free buffer for the application to write the next frame into on its own thread;
+    /// <see cref="PipeWireOutputFrame.Publish"/> queues it to the consumer. A shared buffer is the
+    /// application's own DMA-BUF (<see cref="PipeWireOutputFrame.BufferIndex"/>), rendered into with no
+    /// copy; a memory buffer is the daemon's, mapped (<see cref="PipeWireOutputFrame.Pixels"/>), written
+    /// once. One frame is open at a time. Under explicit sync the consumer's release is waited for here.
     /// </summary>
     /// <param name="frame">The open frame; dispose it, published or not.</param>
     /// <returns>
-    /// False, with nothing to dispose, unless <see cref="SharesBuffers"/> and a buffer is free: one
-    /// frame waits for the consumer at most, so while the last one published has not been taken the
-    /// frame is skipped, and the consumer never falls behind by more than a frame.
+    /// False, with nothing to dispose, unless <see cref="IsPushing"/> and a buffer is free: one frame
+    /// waits for the consumer at most, so while the last one published has not been taken the frame is
+    /// skipped, and the consumer never falls behind by more than a frame.
     /// </returns>
     /// <exception cref="InvalidOperationException">A frame is already open.</exception>
     public unsafe bool TryBeginFrame(out PipeWireOutputFrame frame)
@@ -1317,14 +1325,27 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             if (buf is null)
                 return false;
 
-            if (!TryOpenDmaBufFrame(buf, out DmaBufFrame opened))
+            if (_dmaBufMode && _sharedNegotiated)
+            {
+                if (!TryOpenDmaBufFrame(buf, out DmaBufFrame opened))
+                {
+                    _ = core.QueueFromProducer(buf, publish: false);
+                    return false;
+                }
+
+                _openFrame = new OpenFrame(core, (nint)buf, opened, 0);
+                frame = new PipeWireOutputFrame(this, opened.Index, default, 0);
+                return true;
+            }
+
+            if (!TryOpenMemoryFrame(buf, out Span<byte> pixels, out int stride))
             {
                 _ = core.QueueFromProducer(buf, publish: false);
                 return false;
             }
 
-            _openFrame = new OpenFrame(core, (nint)buf, opened);
-            frame = new PipeWireOutputFrame(this, opened.Index);
+            _openFrame = new OpenFrame(core, (nint)buf, default, pixels.Length);
+            frame = new PipeWireOutputFrame(this, -1, pixels, stride);
             return true;
         }
     }
@@ -1349,7 +1370,12 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 if (!open.Core.IsHeldByProducer(buf))
                     return;
 
-                if (publish)
+                if (publish && open.MemoryLength > 0)
+                {
+                    buf->buffer->datas[0].chunk->size = (uint)open.MemoryLength;
+                    WritePresentationTime(buf);
+                }
+                else if (publish)
                 {
                     DmaBufFrame opened = open.Frame;
                     CloseDmaBufFrame(buf, in opened, publish: true);
@@ -1364,8 +1390,47 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     private readonly Lock _pushGate = new();
     private OpenFrame? _openFrame;
 
-    // The buffer an application is rendering into, from TryBeginFrame until its frame ends.
-    private sealed record OpenFrame(PipeWireStreamCore Core, nint Buffer, DmaBufFrame Frame);
+    // The buffer an application is writing into, from TryBeginFrame until its frame ends: a shared one,
+    // or a memory one of a picture's length.
+    private sealed record OpenFrame(
+        PipeWireStreamCore Core,
+        nint Buffer,
+        DmaBufFrame Frame,
+        int MemoryLength
+    );
+
+    // Readies a memory buffer to be written: the picture's span of its mapped data, sizes cleared until
+    // it is published. False when the buffer is not mapped or no format is settled.
+    private unsafe bool TryOpenMemoryFrame(pw_buffer* buf, out Span<byte> pixels, out int stride)
+    {
+        pixels = default;
+        stride = 0;
+        spa_buffer* sb = buf->buffer;
+        if (sb is null || sb->n_datas == 0 || sb->datas is null)
+            return false;
+
+        spa_data* d = &sb->datas[0];
+        SpaFormatPod.VideoFormatInfo fmt = Format;
+        if (
+            d->data is null
+            || d->chunk is null
+            || fmt.Format == PixelFormat.Unknown
+            || fmt.Width <= 0
+            || fmt.Height <= 0
+        )
+            return false;
+
+        stride = SpaFormatPod.VideoStride(fmt.Format, fmt.Width);
+        int length = SpaFormatPod.VideoImageSize(fmt.Format, fmt.Width, fmt.Height);
+        if ((uint)length > d->maxsize)
+            length = (int)d->maxsize;
+
+        d->chunk->offset = 0;
+        d->chunk->stride = stride;
+        d->chunk->size = 0;
+        pixels = new Span<byte>(d->data, length);
+        return true;
+    }
 
     // A pool buffer being filled: its index and the sync points it is stamped with.
     private readonly record struct DmaBufFrame(
@@ -1542,6 +1607,8 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 )
             );
             _modifierFixated = false;
+            if (_core is { } withdrawn)
+                withdrawn.ProducerDequeues = false;
             return;
         }
 
@@ -1549,7 +1616,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         Volatile.Write(ref _fmtCell, new NegotiatedFormat(parsed));
         _sharedNegotiated = parsed.Modifier != DrmFormatModifier.Invalid;
         if (_core is { } core)
-            core.ProducerDequeues = PushFrames && _sharedNegotiated;
+            core.ProducerDequeues = PushFrames;
         LogOnFormat(parsed.Modifier, parsed.ModifierNeedsFixation);
     }
 

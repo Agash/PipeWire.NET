@@ -109,7 +109,11 @@ public sealed partial class PushedFrameTests : PipeWireTestBase
             uint[] numbers = [.. seen];
             Assert.IsGreaterThanOrEqualTo(20, numbers.Length);
             Assert.AreEqual(0, Volatile.Read(ref pulled), "the pull handler was asked for a frame");
-            Assert.IsGreaterThan(0, skipped, "frames pushed at 200 Hz to a 30 Hz consumer queued up");
+            Assert.IsGreaterThan(
+                0,
+                skipped,
+                "frames pushed at 200 Hz to a 30 Hz consumer queued up"
+            );
             for (int i = 1; i < numbers.Length; i++)
             {
                 Assert.IsGreaterThan(
@@ -128,7 +132,85 @@ public sealed partial class PushedFrameTests : PipeWireTestBase
         }
     }
 
-    // Until a consumer settles on shared buffers there is nothing to render into.
+    // A memory stream takes pushed frames the same way: written once into the daemon's mapped buffer,
+    // published when the producer says, the pull handler never asked.
+    [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
+    [Timeout(60_000)]
+    public async Task PushedFramesInMemory_ReachTheConsumerAsWritten()
+    {
+        await using PipeWireContext context = new("test", ConsoleTestLoggerFactory.Instance);
+        await context.StartAsync(TestContext.CancellationToken);
+        int pulled = 0;
+        await using PipeWireVideoOutput output = new(
+            context,
+            "stx-pushed-memory",
+            Width,
+            Height,
+            PixelFormat.Bgra,
+            30
+        )
+        {
+            PushFrames = true,
+        };
+        output.FillFrame += (_, _, _, _, _, _) =>
+        {
+            Interlocked.Increment(ref pulled);
+            return true;
+        };
+        output.Connect(
+            autoConnect: false,
+            driver: true,
+            cancellationToken: TestContext.CancellationToken
+        );
+        uint node = await output.WaitForNodeIdAsync(TestContext.CancellationToken);
+
+        ConcurrentQueue<uint> seen = new();
+        await using PipeWireVideoCapture capture = new(context, "stx-pushed-memory-sink");
+        capture.FrameReady += (_, frame) =>
+        {
+            if (frame.Pixels.Length >= 4)
+            {
+                seen.Enqueue(MemoryMarshal.Read<uint>(frame.Pixels));
+            }
+        };
+        capture.Connect(node, [PixelFormat.Bgra]);
+
+        uint pushed = 0;
+        using PeriodicTimer frames = new(TimeSpan.FromMilliseconds(20));
+        using CancellationTokenSource expiry = new(TimeSpan.FromSeconds(20));
+        while (seen.Count < 20 && await frames.WaitForNextTickAsync(expiry.Token))
+        {
+            if (!output.TryBeginFrame(out PipeWireOutputFrame frame))
+            {
+                continue;
+            }
+
+            using (frame)
+            {
+                Assert.AreEqual(-1, frame.BufferIndex);
+                Assert.AreEqual(Width * 4, frame.Stride);
+                Assert.AreEqual(Width * Height * 4, frame.Pixels.Length);
+                MemoryMarshal.Write(frame.Pixels, ++pushed);
+                frame.Publish();
+            }
+        }
+
+        uint[] numbers = [.. seen];
+        Assert.IsGreaterThanOrEqualTo(20, numbers.Length);
+        Assert.AreEqual(0, Volatile.Read(ref pulled), "the pull handler was asked for a frame");
+        for (int i = 1; i < numbers.Length; i++)
+        {
+            Assert.IsGreaterThan(
+                numbers[i - 1],
+                numbers[i],
+                $"frame {i} repeats or reorders: {string.Join(',', numbers)}"
+            );
+        }
+    }
+
+    // Until a consumer settles on a format there is nothing to write into.
     [TestMethod]
     public async Task TryBeginFrame_BeforeAConsumerSettles_TakesNothing()
     {
