@@ -212,6 +212,8 @@ public sealed partial class PushedFrameTests : PipeWireTestBase
 
     // Until a consumer settles on a format there is nothing to write into.
     [TestMethod]
+    [TestCategory("Integration")]
+    [TestCategory("RequiresDaemon")]
     public async Task TryBeginFrame_BeforeAConsumerSettles_TakesNothing()
     {
         await using PipeWireContext context = new("test", ConsoleTestLoggerFactory.Instance);
