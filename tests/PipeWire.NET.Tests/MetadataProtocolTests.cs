@@ -16,18 +16,13 @@ namespace PipeWire.NET.Tests;
 /// drive the daemon rather than a model of it, because a model would have the same assumptions.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class MetadataProtocolTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -53,7 +48,6 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
         // write: the store raises once for the optimistic local apply and again when the echo it
         // failed to recognise arrives as somebody else's change. A subscriber counting changes sees
         // every one of its own writes twice.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-meta-type",
@@ -118,7 +112,6 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
         // entries or none of them. Served locally and consumed from a second connection, so the
         // event makes a real round trip without clearing the session's own default store, which
         // holds the machine's audio routing.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext serverCtx, PipeWireRegistry serverReg) = await ConnectAsync(
             "pwnet-clear-server",
@@ -228,7 +221,6 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
     [TestCategory("RequiresPatchedDaemon")]
     public async Task AChangeWhileAnotherClientBinds_ReachesTheConsumersAlreadyBound()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext serverCtx, PipeWireRegistry serverReg) = await ConnectAsync(
             "pwnet-bindrace-server",
@@ -342,7 +334,6 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
         // filters removals by subject, so if it arrives as SPA_ID_INVALID and that is compared
         // against a stored subject of 0, nothing is dropped and the cache keeps values that no
         // longer exist anywhere.
-        RequireLinux();
         PwTools.Require();
 
         using var cts = new CancellationTokenSource(Budget);
@@ -419,7 +410,6 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
         // store has to end up empty: a cache that keeps entries the daemon has dropped reports
         // values that no longer exist anywhere, and nothing later corrects it because the removal
         // already happened.
-        RequireLinux();
         PwTools.Require();
 
         using var cts = new CancellationTokenSource(Budget);
@@ -463,7 +453,6 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
         // The local apply happens before the round trip is awaited, so the value is readable
         // immediately. If the daemon then refuses the write, the cache is holding something that
         // exists nowhere else, and the caller has been told about a change that did not happen.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-meta-refused",

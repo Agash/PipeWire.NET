@@ -23,16 +23,11 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [SupportedOSPlatform("linux")]
 public sealed class SurfaceGuardTests : PipeWireTestBase
 {
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
-
     private static PipeWireContext Unstarted() =>
         new("pwnet-guards", ConsoleTestLoggerFactory.Instance);
 
@@ -40,7 +35,6 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
     [TestMethod]
     public async Task SetError_RefusesANullMessage()
     {
-        RequireLinux();
         await using PipeWireContext ctx = Unstarted();
 
         await using var audioIn = new PipeWireAudioCapture(ctx, "pwnet_guard_ai");
@@ -62,7 +56,6 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
     [TestMethod]
     public async Task FaultProperties_AnswerBeforeConnectAndAfterDisposal()
     {
-        RequireLinux();
         await using PipeWireContext ctx = Unstarted();
 
         var output = new PipeWireAudioOutput(ctx, "pwnet_guard_faults");
@@ -83,7 +76,6 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
     [TestMethod]
     public async Task Connect_RefusesANullNode()
     {
-        RequireLinux();
         await using PipeWireContext ctx = Unstarted();
 
         await using var audioOut = new PipeWireAudioOutput(ctx, "pwnet_guard_cao");
@@ -105,7 +97,6 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
     [TestMethod]
     public async Task UpdateProperties_RefusesNullAndIgnoresAnEmptySet()
     {
-        RequireLinux();
         await using PipeWireContext ctx = Unstarted();
 
         Assert.ThrowsExactly<ArgumentNullException>(() => ctx.UpdateProperties(null!));
@@ -128,7 +119,6 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task ReportXrun_AnswersWhileExportedAndRefusesAfterDisposal()
     {
-        RequireLinux();
         await using PipeWireContext ctx = Unstarted();
 
         await ctx.StartAsync(TestContext.CancellationTokenSource.Token).ConfigureAwait(false);
@@ -170,7 +160,6 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
     [TestMethod]
     public async Task EveryStreamMember_AnswersBeforeConnect()
     {
-        RequireLinux();
         await using PipeWireContext ctx = Unstarted();
 
         var latency = new PipeWireLatency(SpaDirection.Output, 0, 0, 48000, 48000, 0, 10_000_000);
@@ -316,7 +305,6 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task AFilter_RefusesOrdersBeforeItIsConnected()
     {
-        RequireLinux();
         await using PipeWireContext ctx = Unstarted();
 
         // A filter is built on the context's loop, so an unstarted context has nothing to build on.
@@ -352,7 +340,6 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task APort_RefusesTheAccessorsOfAnotherFormat()
     {
-        RequireLinux();
         await using PipeWireContext ctx = Unstarted();
         await ctx.StartAsync(TestContext.CancellationTokenSource.Token).ConfigureAwait(false);
 
@@ -381,7 +368,6 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
     [TestMethod]
     public async Task AContext_RefusesConnectionWorkBeforeItStarts()
     {
-        RequireLinux();
         PipeWireContext ctx = Unstarted();
 
         Assert.IsFalse(ctx.IsOnLoopThread, "an unstarted context claimed to be on its own loop");
@@ -417,7 +403,6 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
     [TestMethod]
     public async Task TheDmaBufEntryPoints_RefuseBadOffersAndLeaveNoResidue()
     {
-        RequireLinux();
         await using PipeWireContext ctx = Unstarted();
 
         await using var output = new PipeWireVideoOutput(ctx, "pwnet_guard_dmabuf", 64, 64);
@@ -476,7 +461,6 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task AConnectedStream_RefusesASecondConnect()
     {
-        RequireLinux();
         await using PipeWireContext ctx = Unstarted();
         await ctx.StartAsync(TestContext.CancellationTokenSource.Token).ConfigureAwait(false);
 
@@ -523,7 +507,6 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task ADspPort_RefusesToHandBackMoreThanItsBufferHolds()
     {
-        RequireLinux();
         await using PipeWireContext ctx = Unstarted();
         await ctx.StartAsync(TestContext.CancellationTokenSource.Token).ConfigureAwait(false);
 
@@ -565,7 +548,6 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task AMetadataWrite_RefusesANulInAnyField()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
         // Two connections, because a store cannot be bound through the connection that serves it -

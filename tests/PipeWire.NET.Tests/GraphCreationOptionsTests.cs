@@ -9,18 +9,13 @@ namespace PipeWire.NET.Tests;
 /// <c>object.linger</c> actually changes the daemon's behaviour when the creating client leaves.
 /// </summary>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class GraphCreationOptionsTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(20);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -55,7 +50,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     {
         // target.object names a node; without a name there is nothing to send, and an empty
         // target is not an error the daemon reports but a node that silently never links.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-targetguard",
@@ -79,7 +73,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         // What is verifiable from here is that the key reaches the daemon: whether the node
         // is actually destroyed when its target goes is the session manager's policy (it only
         // applies to linked nodes it manages), not a promise this library can keep by itself.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-stay",
@@ -124,7 +117,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     [TestMethod]
     public async Task DescribingANode_DoesNotCreateItUntilExecuted()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-inert",
@@ -158,7 +150,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     [TestMethod]
     public async Task ALingeringNode_OutlivesTheClientThatCreatedIt()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         (PipeWireContext observerContext, PipeWireRegistry observer) = await ConnectAsync(
@@ -223,7 +214,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     [TestMethod]
     public async Task APassiveLink_IsStillAnOrdinaryLinkInTheGraph()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-passive",
@@ -262,7 +252,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     [TestMethod]
     public async Task EveryObjectCarriesTheVersionTheDaemonAnnounced()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-version",
@@ -296,7 +285,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     [TestMethod]
     public async Task ALingeringLink_OutlivesTheClientThatMadeIt()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
         // A link is the object most likely to be created for somebody else to keep using, so its
@@ -372,7 +360,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     {
         // media.class decides the direction. The proof is the ports: a sink publishes inputs,
         // a source publishes outputs, and the daemon decides that from the class we send.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-source-class",
@@ -411,7 +398,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     {
         // audio.position decides how many ports exist and what they are called. Counting the ports
         // is what shows the map reached the daemon rather than being accepted and ignored.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-channel-map",
@@ -494,7 +480,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         // graph for the port records before it could link anything, which is the same lookup
         // written again at every call site. The id overload does it once, and keeps the direction
         // check on this side so a mistake is an ArgumentException rather than a daemon refusal.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-link-by-id",
@@ -560,7 +545,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         // The set of useful keys is PipeWire's, not this library's, and it grows every release. A
         // caller has to be able to send one nobody here thought of, so the check is that a property
         // with no named method on the builder still comes back on the created object.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-props",
@@ -595,7 +579,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         // The defaults are written first and the caller's after, because spa_dict keeps the last
         // value for a repeated key. If that order ever inverts, the named helpers stop working and
         // so does every caller override, which is worth pinning rather than assuming.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-override",
@@ -629,7 +612,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         // The property list is sized into a stack buffer that falls back to a rented array, and the
         // item slots are counted separately. Enough properties to pass both thresholds is what
         // proves the sizing is driven by the caller rather than by a fixed guess.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-manyprops",
@@ -660,7 +642,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     [TestMethod]
     public async Task ACreationPropertyWithNoKey_IsRefused()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-props-guard",
@@ -681,7 +662,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
     {
         // Leaving lingering objects behind is not a leak, but forgetting them is: the listing is
         // what a later session destroys explicitly instead of rediscovering ids by name.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-linger-list",

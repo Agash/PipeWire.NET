@@ -18,17 +18,12 @@ namespace PipeWire.NET.Tests;
 /// PipeWire client. The end-to-end half is <see cref="DeviceIdNegotiationEndToEndTests"/>.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [SupportedOSPlatform("linux")]
 public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
 {
     private static DrmDevice CardA => DrmDevice.FromNumbers(226, 128);
     private static DrmDevice CardB => DrmDevice.FromNumbers(226, 129);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("dev_t arithmetic is glibc's (gnu_dev_makedev).");
-    }
 
     /// <summary>A PeerCapability the way the daemon hands it over: a PeerParam object keyed by peer id.</summary>
     private static byte[] PeerCapability(params (uint PeerId, byte[]? Capability)[] peers)
@@ -60,8 +55,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void ADevice_IsEncodedAsTheBytesOfItsDevT_InHostOrder()
     {
-        RequireLinux();
-
         // makedev(226, 128) = 0xE280; upstream's encode_hex runs over the dev_t's bytes as they sit
         // in memory, so on a little-endian machine the low byte comes first.
         Assert.AreEqual(0xE280UL, CardA.Id);
@@ -75,8 +68,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void ADrmDevice_IsItsNumber_AndNotItsPath()
     {
-        RequireLinux();
-
         Assert.AreEqual(226u, CardA.Major);
         Assert.AreEqual(128u, CardA.Minor);
         Assert.AreEqual(CardA, new DrmDevice(CardA.Id, "/dev/dri/renderD128"));
@@ -94,8 +85,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void TheRenderNodesOnThisMachine_ReadBackAsTheNodesTheyCameFrom()
     {
-        RequireLinux();
-
         ImmutableArray<DrmDevice> nodes = DrmDevice.EnumerateRenderNodes();
         if (nodes.IsEmpty)
             Assert.Inconclusive("No render node on this machine.");
@@ -113,8 +102,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void AProducersCapability_ReadsBackAsNegotiatingWithItsDevices()
     {
-        RequireLinux();
-
         byte[] capability = DeviceIdNegotiation.CapabilityParam([CardA, CardB]);
 
         // What spa_param_dict_build_dict writes: a ParamDict object with one HINT_DICT property holding
@@ -146,8 +133,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void AConsumersCapability_NegotiatesAndNamesNoDevices_WhichAcceptsAny()
     {
-        RequireLinux();
-
         PeerCapabilities peer = Parse(
             PeerCapability((57, DeviceIdNegotiation.CapabilityParam([])))
         );
@@ -163,8 +148,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void TheDummyPeerCapability_SaysThePeerDoesNotNegotiate()
     {
-        RequireLinux();
-
         // stream.c's emit_dummy_peer_capability: one property keyed SPA_ID_INVALID with a None value.
         PeerCapabilities peer = Parse(PeerCapability((uint.MaxValue, null)));
 
@@ -176,8 +159,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void AMalformedDeviceList_IsReadAsNamingNone_NotAsAFailure()
     {
-        RequireLinux();
-
         byte[] capability = SpaPod.ToBytes(
             new SpaObject(
                 SpaType.ObjectParamDict,
@@ -207,8 +188,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void AFormatForADevice_CarriesItsIdMandatory_AndReadsBack()
     {
-        RequireLinux();
-
         byte[] pod = new byte[1024];
         int len = SpaFormatPod.WriteVideoFormat(
             pod,
@@ -263,8 +242,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void ANegotiatedFormat_YieldsItsDevice_FromInsideTheChoiceTheFilterWrapsItIn()
     {
-        RequireLinux();
-
         // The daemon's settled Format: spa_pod_filter_prop writes every property it intersected as a
         // Choice, and a single match stays a Choice(None) holding one value (filter.h 246-257). A
         // reader that only takes a bare Bytes pod reports the device as undefined - which is how the
@@ -313,8 +290,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void AFormatWithoutADevice_ReadsBackAsDeviceUndefined_EvenAfterOneThatHadIt()
     {
-        RequireLinux();
-
         byte[] pod = new byte[1024];
         SpaFormatPod.WriteVideoFormat(
             pod,
@@ -381,8 +356,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void ANegotiatingPeer_IsOfferedOneFormatPerDeviceItAccepts_InOrder()
     {
-        RequireLinux();
-
         DrmDevice cardC = DrmDevice.FromNumbers(226, 130);
         DmaBufDeviceOffer[] offers =
         [
@@ -429,8 +402,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void SeveralGpuFormats_AreOfferedPerDeviceInOrder_EachWithItsOwnModifiers()
     {
-        RequireLinux();
-
         // A GPU that imports NV12 linear only and BGRA tiled too; card B imports only BGRA.
         DmaBufDeviceOffer[] offers =
         [
@@ -475,8 +446,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void ModifiersFor_AFormatNotOffered_IsEmpty()
     {
-        RequireLinux();
-
         DmaBufDeviceOffer offer = new(CardA, PixelFormat.Bgra, [0]);
 
         Assert.AreEqual(1, offer.ModifiersFor(PixelFormat.Bgra).Length);
@@ -486,8 +455,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void TheHostMemoryFallback_OffersEveryFormatTheConsumerReads()
     {
-        RequireLinux();
-
         // A consumer that imports BGRA on the GPU but reads a camera's YUYV or NV12 from memory: the
         // DMA-BUF offer stays one format, the fallback lists them all.
         var peer = new PeerCapabilities(true, [CardA.Id]);
@@ -526,8 +493,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void APeerThatDoesNotNegotiate_IsOfferedTheFirstDevicesModifiersWithoutADevice()
     {
-        RequireLinux();
-
         DmaBufDeviceOffer[] offers =
         [
             new(CardA, PixelFormat.Bgra, [0x0100000000000001]),
@@ -560,8 +525,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void DeviceOffers_AreValidatedBeforeAnythingIsSent()
     {
-        RequireLinux();
-
         Assert.ThrowsExactly<ArgumentException>(() => DeviceIdNegotiation.Validate([], "offers"));
         Assert.ThrowsExactly<ArgumentException>(() =>
             DeviceIdNegotiation.Validate([new(CardA, PixelFormat.Bgra, [])], "offers")
@@ -602,8 +565,6 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     [TestMethod]
     public void TheNegotiatedDevice_IsDescribedByTheMatchingOffer()
     {
-        RequireLinux();
-
         var named = new DrmDevice(CardB.Id, "/dev/dri/renderD129");
         DmaBufDeviceOffer[] offers =
         [

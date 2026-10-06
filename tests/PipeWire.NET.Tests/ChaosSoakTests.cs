@@ -22,6 +22,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [TestCategory("Soak")]
@@ -47,12 +48,6 @@ public sealed class ChaosSoakTests : PipeWireTestBase
     private static readonly TimeSpan ActorPause = TimeSpan.FromMilliseconds(25);
 
     private static readonly TimeSpan Budget = TimeSpan.FromMinutes(3);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -371,7 +366,6 @@ public sealed class ChaosSoakTests : PipeWireTestBase
     [TestCategory("RequiresAudioRoute")]
     public async Task SeveralActorsChangingOneGraph_LeaveNothingBehindOnEitherSide()
     {
-        RequireLinux();
         PwTools.Require();
 
         using var cts = new CancellationTokenSource(Budget);

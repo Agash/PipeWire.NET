@@ -15,18 +15,13 @@ namespace PipeWire.NET.Tests;
 /// wpctl for policy, pw-cat for a native client, pw-mon for event ordering.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class ToolOracleTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -46,7 +41,6 @@ public sealed class ToolOracleTests : PipeWireTestBase
     [TestMethod]
     public async Task OurGraph_AgreesWithPwDumpOnEveryObjectKind()
     {
-        RequireLinux();
         CliTool.Require("pw-dump");
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
@@ -198,7 +192,6 @@ public sealed class ToolOracleTests : PipeWireTestBase
     [TestMethod]
     public async Task ThePropertiesTheGatesClassifyOn_AreWhatPwDumpRead()
     {
-        RequireLinux();
         CliTool.Require("pw-dump");
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
@@ -309,7 +302,6 @@ public sealed class ToolOracleTests : PipeWireTestBase
     [TestMethod]
     public async Task AVolumeWpctlSets_IsReportedByUs()
     {
-        RequireLinux();
         CliTool wpctl = CliTool.Require("wpctl");
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
@@ -425,7 +417,6 @@ public sealed class ToolOracleTests : PipeWireTestBase
     [TestMethod]
     public async Task ANativePwCatPlayer_IsSeenAsAStreamAndLinked()
     {
-        RequireLinux();
         CliTool pwcat = CliTool.Require("pw-cat");
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
@@ -508,7 +499,6 @@ public sealed class ToolOracleTests : PipeWireTestBase
     [TestMethod]
     public async Task PwMon_SeesTheSameAdditionsAndRemovalsWeRaise()
     {
-        RequireLinux();
         CliTool pwmon = CliTool.Require("pw-mon");
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(

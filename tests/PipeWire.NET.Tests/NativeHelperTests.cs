@@ -145,14 +145,12 @@ public sealed unsafe class NativeHelperTests : PipeWireTestBase
     // ------------------------------------------------------------------ descriptor duplication
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public void DuplicatingAPlaneDescriptor_GivesADistinctOneThatOutlivesTheOriginal()
     {
         // A frame's descriptors are borrowed for the handler's duration. Planes of a planar format
         // may be backed by different ones, so an importer taking ownership of each needs a copy of
         // each; the frame's own DuplicateFd covers only the first.
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("dup is a libc call, and descriptors are a Linux concept here.");
-
         string path = Path.Combine(Path.GetTempPath(), $"pwnet-dup-{Environment.ProcessId}");
         File.WriteAllText(path, "x");
 
@@ -201,11 +199,9 @@ public sealed unsafe class NativeHelperTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public void DuplicatingAClosedDescriptor_ReportsTheKernelRefusal()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("dup is a libc call, and descriptors are a Linux concept here.");
-
         string path = Path.Combine(Path.GetTempPath(), $"pwnet-dupdead-{Environment.ProcessId}");
         File.WriteAllText(path, "x");
 
@@ -232,11 +228,9 @@ public sealed unsafe class NativeHelperTests : PipeWireTestBase
     /// targets, which is the point of checking it here rather than against a daemon.
     /// </summary>
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public void IsListeningSocket_TellsListeningSocketsFromEverythingElse()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("descriptors are a Linux concept here.");
-
         string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         using (
             var listening = new Socket(

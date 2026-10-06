@@ -89,9 +89,6 @@ internal sealed class VirtualCamera : IAsyncDisposable
     /// </remarks>
     public static async Task<VirtualCamera> StartAsync(CancellationToken ct)
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("v4l2 is a Linux interface.");
-
         string device = $"/dev/video{VideoNr.ToString(CultureInfo.InvariantCulture)}";
 
         // exclusive_caps=0, so the device reports VIDEO_CAPTURE from the moment it exists. With

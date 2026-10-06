@@ -18,18 +18,13 @@ namespace PipeWire.NET.Tests;
 [ExpectsLibraryError("stream error")]
 [ExpectsLibraryError("ParameterChanged handler")]
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class GraphThreadingTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -59,7 +54,6 @@ public sealed class GraphThreadingTests : PipeWireTestBase
     [TestMethod]
     public async Task ReadingTheGraphFromInsideAHandler_DoesNotDeadlock()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-reentrant",
@@ -110,7 +104,6 @@ public sealed class GraphThreadingTests : PipeWireTestBase
     [TestMethod]
     public async Task HandlersRunOnTheLoopThread_NotTheCallersThread()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-threadid",
@@ -152,7 +145,6 @@ public sealed class GraphThreadingTests : PipeWireTestBase
     [TestMethod]
     public async Task AThrowingHandler_DoesNotKillTheLoopOrLoseLaterEvents()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-throwing",
@@ -209,7 +201,6 @@ public sealed class GraphThreadingTests : PipeWireTestBase
     [TestMethod]
     public async Task ManyReadersRacingTheWriter_NeverSeeATornGraph()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-race",
@@ -301,7 +292,6 @@ public sealed class GraphThreadingTests : PipeWireTestBase
     [TestCategory("RequiresPipeWire168")]
     public async Task CreatingFromInsideAHandler_CompletesRatherThanDeadlocking()
     {
-        RequireLinux();
         // Destroying from inside the handler races the same way the hostile creation tests do,
         // and 1.0.5 answers with a hang followed by a dead daemon.
         SessionGates.RequireDaemonAtLeast(1, 6, 8);
@@ -358,7 +348,6 @@ public sealed class GraphThreadingTests : PipeWireTestBase
     [TestMethod]
     public async Task ConcurrentWatchersAndMutators_AllMakeProgress()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-multiwatch",
@@ -421,7 +410,6 @@ public sealed class GraphThreadingTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingFromAThreadPoolThreadWhileEventsFlow_IsClean()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-dispose-race",

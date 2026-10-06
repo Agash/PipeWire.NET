@@ -15,6 +15,7 @@ namespace PipeWire.NET.Tests;
 /// there was never anything to line up with.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -39,12 +40,6 @@ public sealed class AudioTimingTests : PipeWireTestBase
         throw new InvalidOperationException("the snapshot stream ended before the condition held");
     }
 
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
-
     /// <summary>
     /// Every audio frame carries the cycle time it was queued in, it advances, and the header
     /// timestamp the output wrote does not survive the converters in between.
@@ -58,7 +53,6 @@ public sealed class AudioTimingTests : PipeWireTestBase
     [TestMethod]
     public async Task AudioFrames_CarryAdvancingQueuedTimesAndNoHeaderTimestamp()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -161,7 +155,6 @@ public sealed class AudioTimingTests : PipeWireTestBase
     [TestMethod]
     public async Task AnAudioOutput_ReportsANonZeroQueueDepth()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -215,7 +208,6 @@ public sealed class AudioTimingTests : PipeWireTestBase
     [TestMethod]
     public async Task AnAudioOutput_ReportsItsPlaybackLatency()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(

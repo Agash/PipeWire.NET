@@ -18,18 +18,13 @@ namespace PipeWire.NET.Tests;
 /// real producer, a tool the library did not write - and require the views to agree afterwards.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class MultiClientHarmonyTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(90);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private sealed class Client : IAsyncDisposable
     {
@@ -76,7 +71,6 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
     [TestMethod]
     public async Task EightContextsInOneProcess_AllConvergeOnTheSameGraph()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // One process holding eight connections is not exotic - a host application, its plugins and
@@ -177,7 +171,6 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
     [TestMethod]
     public async Task TwoOfOurClientsAndPwCliFightingOverOneVolume_EndUpAgreeing()
     {
-        RequireLinux();
         PwTools.Require();
         using var cts = new CancellationTokenSource(Budget);
 
@@ -290,7 +283,6 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
     [TestMethod]
     public async Task MetadataWrittenByEveryKindOfClient_ReachesEveryOtherOne()
     {
-        RequireLinux();
         PwTools.Require();
         using var cts = new CancellationTokenSource(Budget);
 
@@ -425,7 +417,6 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
     [TestCategory("RequiresGStreamer")]
     public async Task ARealProducerAndOurFilterAndAnObserver_AllRunAtOnce()
     {
-        RequireLinux();
         GstTestSource.RequireGStreamer();
         PwTools.Require();
         using var cts = new CancellationTokenSource(Budget);
@@ -564,7 +555,6 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
     [TestMethod]
     public async Task ClientsJoiningAndLeavingWhileTheGraphChurns_NeverMissTheFinalState()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // Connections opening and closing while the graph is being rebuilt underneath them. A client
@@ -664,7 +654,6 @@ public sealed class MultiClientHarmonyTests : PipeWireTestBase
     [TestMethod]
     public async Task OneClientDyingWithWorkInFlight_LeavesTheOthersHealthy()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using Client survivor = await ConnectAsync("pwnet-survivor", cts.Token);

@@ -54,13 +54,10 @@ internal static class PwTools
     }
 
     /// <summary>True when the pw-* tools are present.</summary>
-    public static bool IsAvailable { get; } =
-        OperatingSystem.IsLinux() && PwLink is not null && PwCli is not null;
+    public static bool IsAvailable { get; } = PwLink is not null && PwCli is not null;
 
     public static void Require()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
         if (!IsAvailable)
             Assert.Inconclusive("pw-link / pw-cli not present - skipping third-party graph test.");
     }

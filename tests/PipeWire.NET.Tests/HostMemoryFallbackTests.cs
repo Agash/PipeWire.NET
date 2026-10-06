@@ -9,6 +9,7 @@ namespace PipeWire.NET.Tests;
 /// buffer: the stream backs its pool with memfd memory and fills it through FillFrame.
 /// </summary>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -21,9 +22,6 @@ public sealed class HostMemoryFallbackTests : PipeWireTestBase
     [TestMethod]
     public async Task ADmaBufOutput_ServesAMemoryConsumerThroughItsFallback()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-fallback",

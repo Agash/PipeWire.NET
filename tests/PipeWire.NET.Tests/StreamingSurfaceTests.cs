@@ -17,6 +17,7 @@ namespace PipeWire.NET.Tests;
 /// looks like working code and produces a stream nobody can synchronise.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -24,12 +25,6 @@ public sealed class StreamingSurfaceTests
 {
     private const string Pipeline =
         "videotestsrc is-live=true pattern=smpte ! video/x-raw,format=BGRA,width=320,height=240,framerate=30/1";
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Ctx, GstTestSource Src)> SourceAsync(string name)
     {
@@ -53,7 +48,6 @@ public sealed class StreamingSurfaceTests
     [TestCategory("RequiresGStreamer")]
     public async Task AnOwnedFrame_CarriesWhatAConsumerPullsItFor()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         (PipeWireContext ctx, GstTestSource src) = await SourceAsync("pwnet-surface-owned");
         await using (ctx)
@@ -97,7 +91,6 @@ public sealed class StreamingSurfaceTests
     [TestCategory("RequiresGStreamer")]
     public async Task ABorrowedFrame_ArrivesAndDescribesItself()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         (PipeWireContext ctx, GstTestSource src) = await SourceAsync("pwnet-surface-borrow");
         await using (ctx)
@@ -133,7 +126,6 @@ public sealed class StreamingSurfaceTests
     [TestCategory("RequiresGStreamer")]
     public async Task AStreamingCapture_ReportsItsQueueAndClock()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         (PipeWireContext ctx, GstTestSource src) = await SourceAsync("pwnet-surface-queue");
         await using (ctx)
@@ -186,7 +178,6 @@ public sealed class StreamingSurfaceTests
     [TestCategory("RequiresGStreamer")]
     public async Task UpdatingPropertiesOnALiveStream_IsAccepted()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         (PipeWireContext ctx, GstTestSource src) = await SourceAsync("pwnet-surface-props");
         await using (ctx)
@@ -224,7 +215,6 @@ public sealed class StreamingSurfaceTests
     [TestCategory("RequiresGStreamer")]
     public async Task SkippingFrames_DoesNotStopTheStream()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         (PipeWireContext ctx, GstTestSource src) = await SourceAsync("pwnet-surface-skip");
         await using (ctx)
@@ -272,7 +262,6 @@ public sealed class StreamingSurfaceTests
     [TestCategory("RequiresGStreamer")]
     public async Task HeldFrames_KeepTheirBuffersWhileTheStreamRuns()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         (PipeWireContext ctx, GstTestSource src) = await SourceAsync("pwnet-surface-hold");
         await using (ctx)
@@ -327,7 +316,6 @@ public sealed class StreamingSurfaceTests
     [TestCategory("RequiresGStreamer")]
     public async Task ARenegotiationAGstProducerMayNotAnswer_LeavesThisSideUsable()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         (PipeWireContext ctx, GstTestSource src) = await SourceAsync("pwnet-surface-gstreneg");
         await using (ctx)
@@ -397,7 +385,6 @@ public sealed class StreamingSurfaceTests
     [TestMethod]
     public async Task RequestingADifferentFormat_IsSentAndSurvived()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
 
         await using var ctx = new PipeWireContext(
@@ -489,7 +476,6 @@ public sealed class StreamingSurfaceTests
     [TestCategory("RequiresGStreamer")]
     public async Task AMemFdFrame_MapsToItsOwnPixelsAtItsOffset()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         (PipeWireContext ctx, GstTestSource src) = await SourceAsync("pwnet-surface-memfd");
         await using (ctx)
@@ -535,7 +521,6 @@ public sealed class StreamingSurfaceTests
     [TestCategory("RequiresGStreamer")]
     public async Task APullModeCapture_CanTriggerItsOwnCycles()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         (PipeWireContext ctx, GstTestSource src) = await SourceAsync("pwnet-surface-pull");
         await using (ctx)

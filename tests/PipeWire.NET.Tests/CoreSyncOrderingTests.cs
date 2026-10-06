@@ -16,18 +16,13 @@ namespace PipeWire.NET.Tests;
 /// cref="PipeWireRegistry.Current"/> instead of polling for the result to show up.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class CoreSyncOrderingTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -47,7 +42,6 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
     [TestMethod]
     public async Task AfterARoundTrip_EveryObjectCreatedBeforeItIsInTheGraph()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-order-create",
@@ -95,7 +89,6 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
     [TestMethod]
     public async Task AfterARoundTrip_ALinkAndItsPortsAreAllVisibleTogether()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-order-link",
@@ -154,7 +147,6 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
         // writer -> daemon -> session manager -> daemon -> reader, and neither client's barrier
         // creates a happens-before with the middle hop. What can be relied on is that the change
         // arrives, so that is what is waited for; the timeout is the assertion.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext a, PipeWireRegistry ra) = await ConnectAsync(
             "pwnet-order-meta-a",
@@ -214,7 +206,6 @@ public sealed class CoreSyncOrderingTests : PipeWireTestBase
         // The half of the contract that does hold: everything this connection sent before the
         // barrier has been processed by the daemon when the barrier completes. A global created
         // before it is therefore in our own registry by then, with no polling.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-order-own",

@@ -16,18 +16,13 @@ namespace PipeWire.NET.Tests;
 [ExpectsLibraryError("handler threw")]
 [ExpectsLibraryError("ParameterChanged handler")]
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class RegistryRobustnessTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -57,7 +52,6 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     [TestMethod]
     public async Task EveryEventHandlerThrowing_DoesNotStopTheGraph()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-throwall",
@@ -158,7 +152,6 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     [TestMethod]
     public async Task AHandlerThatThrowsOnEveryEvent_StillLeavesTheGraphConsistent()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-consistent",
@@ -195,7 +188,6 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     [TestMethod]
     public async Task AThrowingSubscriber_DoesNotStarveTheOnesRegisteredAfterIt()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-starve",
@@ -243,7 +235,6 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     [TestMethod]
     public async Task AThrowingSubscriber_DoesNotBreakWatchAsync()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-watchstarve",
@@ -275,7 +266,6 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     [TestMethod]
     public async Task AHandlerThatDisposesTheRegistry_DoesNotDeadlockOrAbort()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-suicidal",
@@ -337,7 +327,6 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     [TestMethod]
     public async Task CreateLink_RejectsBothWrongDirectionsIndependently()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-dirs",
@@ -378,7 +367,6 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     [TestMethod]
     public async Task CreateLink_RejectsNullPortsBeforeTouchingTheDaemon()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-nullports",
@@ -410,7 +398,6 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
     [TestMethod]
     public async Task UsingADisposedRegistry_ThrowsRatherThanMisbehaving()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-afterdispose",

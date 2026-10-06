@@ -14,6 +14,7 @@ namespace PipeWire.NET.Tests;
 /// no planar frame ever crossed. The capture now takes either shape.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -28,9 +29,6 @@ public sealed class PlanarRoundTripTests : PipeWireTestBase
     [DataRow(PixelFormat.Yuv420)]
     public async Task PlanarVideo_ArrivesWithEveryPlane(PixelFormat format)
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-planar",

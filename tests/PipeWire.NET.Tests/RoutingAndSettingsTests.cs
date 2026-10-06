@@ -14,6 +14,7 @@ namespace PipeWire.NET.Tests;
 /// rather than only that a builder method exists.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -21,19 +22,12 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(40);
 
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
-
     private static string Unique(string prefix) =>
         $"{prefix}_{Environment.ProcessId}_{Random.Shared.Next():x}";
 
     [TestMethod]
     public async Task ANodeCreatedWithATarget_CarriesTargetObjectAndNotTheDeprecatedKey()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-target",
@@ -96,7 +90,6 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
     [TestMethod]
     public async Task AVirtualSource_IsCreatedAsSomethingToCaptureFrom()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-vsource",
@@ -130,7 +123,6 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
     [TestMethod]
     public async Task TheSettingsStore_ReportsTheClockAsIntegersRatherThanJson()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-settings",
@@ -182,7 +174,6 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
     [TestMethod]
     public async Task PinningTheQuantumAndReleasingIt_LeavesTheGraphAsItWasFound()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-quantum",
@@ -229,7 +220,6 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
     {
         // Pin to the rate already running, so the graph never hears a change, then release.
         // Affects every client on the machine while pinned, so it is released again immediately.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext("pwnet-rate", ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
@@ -268,7 +258,6 @@ public sealed class RoutingAndSettingsTests : PipeWireTestBase
     [TestMethod]
     public async Task AQuantumTheDaemonRejects_IsAcceptedAndIgnoredRatherThanRefused()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-badquantum",

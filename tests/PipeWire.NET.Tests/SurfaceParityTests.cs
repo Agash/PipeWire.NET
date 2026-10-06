@@ -15,18 +15,13 @@ namespace PipeWire.NET.Tests;
 /// pinned by the tests that already cover the original sibling.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class SurfaceParityTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<PipeWireContext> ConnectAsync(
         string name,
@@ -42,7 +37,6 @@ public sealed class SurfaceParityTests : PipeWireTestBase
     [TestMethod]
     public async Task AnOutput_CanConnectToANodeRatherThanAnId()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using PipeWireContext ctx = await ConnectAsync("pwnet-parity-connect", cts.Token);
@@ -82,7 +76,6 @@ public sealed class SurfaceParityTests : PipeWireTestBase
     [TestMethod]
     public async Task AVirtualSource_CanBeCreatedInOneCall()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using PipeWireContext ctx = await ConnectAsync("pwnet-parity-source", cts.Token);
@@ -112,7 +105,6 @@ public sealed class SurfaceParityTests : PipeWireTestBase
     [TestMethod]
     public async Task EveryStreamType_CanTriggerAndCanWait()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using PipeWireContext ctx = await ConnectAsync("pwnet-parity-trigger", cts.Token);
@@ -166,7 +158,6 @@ public sealed class SurfaceParityTests : PipeWireTestBase
     [TestMethod]
     public async Task EveryDisposableType_TakesBothFormsAndRepeats()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using PipeWireContext ctx = await ConnectAsync("pwnet-parity-dispose", cts.Token);
@@ -208,7 +199,6 @@ public sealed class SurfaceParityTests : PipeWireTestBase
     [TestMethod]
     public async Task APermissionsRead_RefusesToOverlapAndStopsAfterDisposal()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using PipeWireContext ctx = await ConnectAsync("pwnet-perm-guard", cts.Token);
@@ -271,7 +261,6 @@ public sealed class SurfaceParityTests : PipeWireTestBase
     [TestMethod]
     public async Task RemovalReachesBothProxyShapes()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using PipeWireContext ctx = await ConnectAsync("pwnet-removed-shapes", cts.Token);
@@ -312,7 +301,6 @@ public sealed class SurfaceParityTests : PipeWireTestBase
     [TestMethod]
     public async Task RemovePort_RefusesAPortItDoesNotOwn()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using PipeWireContext ctx = await ConnectAsync("pwnet-removeport-guard", cts.Token);
@@ -352,7 +340,6 @@ public sealed class SurfaceParityTests : PipeWireTestBase
     [TestMethod]
     public async Task APermissionWrite_RefusesWhatItCannotSend()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using PipeWireContext ctx = await ConnectAsync("pwnet-perm-args", cts.Token);
@@ -432,7 +419,6 @@ public sealed class SurfaceParityTests : PipeWireTestBase
     [ExpectsLibraryError("a deliberate error, to prove the call reaches the daemon")]
     public async Task EveryStreamMember_WorksConnectedAndIsQuietAfterDisposal()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using PipeWireContext ctx = await ConnectAsync("pwnet-connected-surface", cts.Token);

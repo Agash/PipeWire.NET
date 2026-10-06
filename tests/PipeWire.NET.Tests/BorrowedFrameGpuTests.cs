@@ -24,6 +24,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [SupportedOSPlatform("linux")]
 public sealed class BorrowedFrameGpuTests : PipeWireTestBase
 {
@@ -35,9 +36,6 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
 
     private static GbmAllocator RequireGbm()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-
         if (!File.Exists(RenderNode))
             Assert.Inconclusive($"No GPU render node ({RenderNode}).");
 

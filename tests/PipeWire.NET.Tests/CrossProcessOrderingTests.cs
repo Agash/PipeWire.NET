@@ -17,18 +17,13 @@ namespace PipeWire.NET.Tests;
 /// serves has no third party in it and is ordered.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class CrossProcessOrderingTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -50,7 +45,6 @@ public sealed class CrossProcessOrderingTests : PipeWireTestBase
     {
         // The optimistic local apply. The value is in the writer's own cache when SetAsync returns,
         // whatever the session manager is doing, because the store applied it on the way out.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-xproc-self",
@@ -92,7 +86,6 @@ public sealed class CrossProcessOrderingTests : PipeWireTestBase
         // before the event is waited for, so if the barrier did order the session manager's hop the
         // value would already be there. It is recorded rather than asserted either way: the point
         // is that the event is what can be relied on, and it must arrive.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext a, PipeWireRegistry ra) = await ConnectAsync("pwnet-xproc-a", cts.Token);
         (PipeWireContext b, PipeWireRegistry rb) = await ConnectAsync("pwnet-xproc-b", cts.Token);
@@ -160,7 +153,6 @@ public sealed class CrossProcessOrderingTests : PipeWireTestBase
         // The control. Same client, same barrier, same read, with the session manager taken out of
         // the path: this process serves the store, so the write is applied before the round trip
         // that follows it can complete. If this raced too, the diagnosis above would be wrong.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-xproc-own",

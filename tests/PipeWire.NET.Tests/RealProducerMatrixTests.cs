@@ -16,6 +16,7 @@ namespace PipeWire.NET.Tests;
 /// a wrong answer there is silent - a torn or short frame rather than an exception.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [TestCategory("RequiresGStreamer")]
@@ -26,8 +27,6 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
 
     private static void Require()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
         GstTestSource.RequireGStreamer();
     }
 

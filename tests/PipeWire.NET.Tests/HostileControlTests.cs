@@ -17,18 +17,13 @@ namespace PipeWire.NET.Tests;
 [ExpectsLibraryError("handler threw")]
 [ExpectsLibraryError("ParameterChanged handler")]
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class HostileControlTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -48,7 +43,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task DestroyingANodeWhileItsParametersAreBeingRead_FailsCleanly()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-hostile-vanish",
@@ -88,7 +82,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingAControlWhileItIsBeingUsedFromAnotherThread_DoesNotCrash()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-hostile-dispose",
@@ -144,7 +137,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task CancellingEveryParameterReadAtAnArbitraryPoint_LeavesNothingBehind()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-hostile-cancel",
@@ -188,7 +180,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task ManyOverlappingReadsOfDifferentParameters_DoNotCrossTheirAnswers()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-hostile-overlap",
@@ -254,7 +245,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task WritingAParameterThatIsNonsenseForTheObject_IsIgnoredRatherThanFatal()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-hostile-write",
@@ -310,7 +300,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task AVolumeAtTheEdgesOfWhatAFloatCanHold_IsRefusedOrClampedButNeverCorrupting()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-hostile-volume",
@@ -366,7 +355,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task AChannelVolumeCountThatDoesNotMatchTheNode_DoesNotCorruptTheOnesThatDo()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-hostile-chan",
@@ -455,7 +443,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task BindingEveryObjectInTheGraphAtOnce_AndDroppingThemAllOutOfOrder()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-hostile-bindall",
@@ -508,7 +495,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task SubscribingThenDestroyingTheNodeUnderneath_DoesNotFireIntoFreedMemory()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-hostile-sub",
@@ -544,7 +530,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task AHandlerThatThrowsOnEveryEvent_DoesNotStopTheOthersOrTheGraph()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-hostile-throw",
@@ -585,7 +570,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task APropertyDictionaryBigEnoughToLeaveTheStack_IsSentIntact()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-hostile-props",
@@ -627,7 +611,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task ConcurrentWritersToTheSameMetadataKey_AllCompleteAndTheStoreStaysConsistent()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-hostile-meta",
@@ -693,7 +676,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingTheStoreWhileAWriteIsWaitingForItsEcho_ReleasesTheWriter()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-hostile-metadisp",
@@ -732,7 +714,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task ABurstOfWritesToOneKey_NeverReadsBackAnOlderValue()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-hostile-burst",
@@ -788,7 +769,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task AnotherClientChangingAKeyWeJustWrote_IsStillReported()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // Two independent connections: suppressing our own superseded echoes must not suppress
@@ -884,7 +864,6 @@ public sealed class HostileControlTests : PipeWireTestBase
     [TestMethod]
     public async Task StartingAContextFromSeveralThreadsAtOnce_StartsItExactlyOnce()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // Two threads both seeing an unstarted context would both call pw_thread_loop_start; the

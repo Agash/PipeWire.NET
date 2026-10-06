@@ -25,18 +25,13 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class ThreadAffinityTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<PipeWireContext> ConnectAsync(
         string name,
@@ -58,7 +53,6 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
     [TestMethod]
     public async Task AnRtFilter_ProcessesOffTheLoopThread()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using PipeWireContext ctx = await ConnectAsync("pwnet-rt-affinity", cts.Token);
@@ -139,7 +133,6 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
     [TestMethod]
     public async Task TwoContexts_EachKeepTheirCallbacksOnTheirOwnLoop()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using PipeWireContext first = await ConnectAsync("pwnet-affinity-one", cts.Token);
@@ -195,7 +188,6 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
     [TestMethod]
     public async Task AContextBlockedInAHandler_DoesNotStallAnother()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using PipeWireContext blocked = await ConnectAsync(

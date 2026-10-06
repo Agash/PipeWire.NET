@@ -25,6 +25,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -35,12 +36,6 @@ public sealed class TransportEndToEndTests
     private const int Width = 64;
     private const int Height = 32;
     private const int Rate = 48000;
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<uint> NodeIdAsync(PipeWireVideoOutput output, CancellationToken ct)
     {
@@ -66,7 +61,6 @@ public sealed class TransportEndToEndTests
     [TestMethod]
     public async Task ARepublishedFrame_KeepsTheTimestampThePublisherGaveIt()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -188,7 +182,6 @@ public sealed class TransportEndToEndTests
     [TestMethod]
     public async Task APublishedPair_KeepsTheOffsetItWasPublishedWith()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -348,8 +341,6 @@ public sealed class TransportEndToEndTests
     [TestCategory("RequiresGpu")]
     public async Task ADecodedGpuFrame_IsRepublishedZeroCopyWithItsTiming()
     {
-        RequireLinux();
-
         if (!File.Exists("/dev/dri/renderD128"))
             Assert.Inconclusive("No GPU render node.");
 
@@ -522,7 +513,6 @@ public sealed class TransportEndToEndTests
     [TestMethod]
     public async Task ACaptureSession_TakesVideoAndAudioOnOneClock()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(

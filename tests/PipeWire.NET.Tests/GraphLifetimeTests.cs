@@ -16,18 +16,13 @@ namespace PipeWire.NET.Tests;
 /// one registry is how a test removes a node without a public destroy-any-global API.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class GraphLifetimeTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(20);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -57,7 +52,6 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task WhenANodeGoesAway_ItsPortsLeaveTheGraphToo()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // The observer outlives the owner, so it sees the whole removal sequence.
@@ -114,7 +108,6 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingTheOwningRegistryTwice_DestroysEachProxyOnce()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-dispose",
@@ -158,7 +151,6 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task ADestroyedNodesProxyIsReleasedByTheRemovalPath()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-release",
@@ -211,7 +203,6 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task WatchAsync_NeverGoesBackwardsAndEndsAtTheCurrentGraph()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-watch",
@@ -253,7 +244,6 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
         // The watch has no cancellation token of its own here, so disposal is the only thing
         // that can end it. Without the Finish hook the consumer would wait on the channel
         // for ever, holding the test host with it.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-watchend",
@@ -276,7 +266,6 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task ACreatedNodeCarriesUsablePermissions()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-perms",
@@ -322,7 +311,6 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
         // lingering nodes and a link, a served device, a served store with a key in it -
         // tears each one down through its own API, and then requires the graph to be free
         // of all of them. Anything left behind is a disposal path that does not work.
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-cleanup",

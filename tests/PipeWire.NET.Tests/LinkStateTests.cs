@@ -16,18 +16,13 @@ namespace PipeWire.NET.Tests;
 /// the link's own info event, which is what this binds.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class LinkStateTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -67,7 +62,6 @@ public sealed class LinkStateTests : PipeWireTestBase
     [TestMethod]
     public async Task ABoundLink_ReportsItsStateAndItsEndpoints()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-linkstate",
@@ -142,7 +136,6 @@ public sealed class LinkStateTests : PipeWireTestBase
     [TestMethod]
     public async Task ALinkThatChangesState_ReportsEveryChange()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-linkstate-events",
@@ -226,7 +219,6 @@ public sealed class LinkStateTests : PipeWireTestBase
         // The registry says a port exists and which way it faces. What it carries is on the port's
         // own params, which is why this binds it: without that a caller cannot tell what a port
         // will accept before linking to it, nor what it settled on afterwards.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-portparams",
@@ -303,7 +295,6 @@ public sealed class LinkStateTests : PipeWireTestBase
         // pw_port_methods has no set_param. A port's format comes out of the negotiation between
         // the nodes at either end, so a caller reaching in to set one is asking for something the
         // protocol cannot express, and it should fail here rather than look like a daemon problem.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-portset",
@@ -344,7 +335,6 @@ public sealed class LinkStateTests : PipeWireTestBase
     [TestMethod]
     public async Task BindingSomethingThatIsNotALink_IsRefusedBeforeItReachesTheDaemon()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-linkstate-wrong",
@@ -373,7 +363,6 @@ public sealed class LinkStateTests : PipeWireTestBase
     {
         // Subscribing re-enumerates immediately on the daemon side, so the first event needs no
         // graph change to arrive. A handler that throws must be contained the same way.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-portsub",
@@ -473,7 +462,6 @@ public sealed class LinkStateTests : PipeWireTestBase
     {
         // The endpoints and the factory are what the link is, not properties of it: smuggling
         // one in as a property would route the link elsewhere, so the builder refuses them.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-linkprops",

@@ -213,6 +213,7 @@ public sealed class SequenceAndPortConfigTests : PipeWireTestBase
     // ------------------------------------------------------------------ live session
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     [TestCategory("Integration")]
     [TestCategory("RequiresDaemon")]
     public async Task APortConfigWrite_ReachesTheDaemon()
@@ -221,9 +222,6 @@ public sealed class SequenceAndPortConfigTests : PipeWireTestBase
         // one to write: whether the daemon accepts or refuses, the write path itself is what
         // is under test, and both outcomes complete the round trip. The node is throwaway
         // because a successful write destroys and recreates its ports.
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
 
         await using var ctx = new PipeWireContext(

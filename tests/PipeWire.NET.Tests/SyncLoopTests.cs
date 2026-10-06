@@ -24,6 +24,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -33,12 +34,6 @@ public sealed class SyncLoopTests
 
     private const int Rate = 48000;
     private const int Channels = 2;
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static PipeWireAudioOutput SilentOutput(PipeWireContext ctx, string nodeName)
     {
@@ -90,7 +85,6 @@ public sealed class SyncLoopTests
     [TestMethod]
     public async Task AnAnnouncedProcessLatency_IsWhatTheDaemonReportsForTheNode()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // Deliberately odd, so a match cannot be a default the daemon already held.
@@ -155,7 +149,6 @@ public sealed class SyncLoopTests
     [TestMethod]
     public async Task AResamplingStream_IsGivenARateMatchArea()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // 44100 against a graph that almost always runs at 48000, so a resampler is inserted.
@@ -338,7 +331,6 @@ public sealed class SyncLoopTests
     [TestMethod]
     public async Task ARateCorrectionOnAPlaybackStream_ScalesWhatItsProducerIsAskedFor()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         RateSweep r = await SweepAsync("pwnet-setrate-out", correctTheOutput: true, cts.Token);
@@ -359,7 +351,6 @@ public sealed class SyncLoopTests
     [TestMethod]
     public async Task ARateCorrectionOnACaptureStream_ScalesWhatItIsHanded()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         RateSweep r = await SweepAsync("pwnet-setrate-in", correctTheOutput: false, cts.Token);
@@ -393,7 +384,6 @@ public sealed class SyncLoopTests
     [TestMethod]
     public async Task AStreamingPair_RunsWithoutAccumulatingXruns()
     {
-        RequireLinux();
         PwTop.Require();
 
         using var cts = new CancellationTokenSource(Budget);
@@ -444,7 +434,6 @@ public sealed class SyncLoopTests
     [TestMethod]
     public async Task DrainingAnOutput_DeliversTheTailRatherThanDroppingIt()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string nodeName = $"pwnet-drain-{Environment.ProcessId}";

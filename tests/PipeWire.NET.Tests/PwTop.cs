@@ -55,13 +55,11 @@ internal static class PwTop
     private static readonly string? Tool = Resolve();
 
     /// <summary>True when <c>pw-top</c> is installed.</summary>
-    public static bool IsAvailable { get; } = OperatingSystem.IsLinux() && Tool is not null;
+    public static bool IsAvailable { get; } = Tool is not null;
 
     /// <summary>Skips the calling test when <c>pw-top</c> is not installed.</summary>
     public static void Require()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
         if (!IsAvailable)
             Assert.Inconclusive("pw-top not present.");
     }

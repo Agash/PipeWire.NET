@@ -47,18 +47,13 @@ namespace PipeWire.NET.Tests;
 [TestCategory("KillsTheDaemon")]
 [DoNotParallelize]
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class PermissionRefusalTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static string Unique(string p) =>
         $"{p}_{Environment.ProcessId}_{Random.Shared.Next():x}";
@@ -75,7 +70,6 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
         // A real refusal, and what the store does with one: the write was applied optimistically,
         // the daemon said no, and no echo is coming to correct it, so the key must read back as
         // never written rather than as the refused value.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string name = Unique("pwnet-selfrestrict");
@@ -143,7 +137,6 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
     [TestMethod]
     public async Task ClientControlGuards_RefuseBadInputBeforeTheDaemon()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string name = Unique("pwnet-clientguards");
@@ -184,7 +177,6 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
         // Creation refused at the factory is the error path object creation exists for: the
         // daemon answers the request with an error rather than an object, and the wait must
         // fail with it instead of hanging until the caller's budget.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string name = Unique("pwnet-factorydeny");
@@ -235,7 +227,6 @@ public sealed class PermissionRefusalTests : PipeWireTestBase
     [TestMethod]
     public async Task ASecurityContextGivenADescriptorThatCannotListen_IsRefusedBeforeItIsSent()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(

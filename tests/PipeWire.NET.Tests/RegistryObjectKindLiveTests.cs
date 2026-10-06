@@ -10,6 +10,7 @@ namespace PipeWire.NET.Tests;
 /// these prove the daemon actually sends what the parsing expects.
 /// </summary>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -17,16 +18,9 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(15);
 
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
-
     [TestMethod]
     public async Task ARealSession_ReportsTheObjectKindsItsGraphIsBuiltFrom()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var context = new PipeWireContext(
@@ -60,7 +54,6 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
     [TestMethod]
     public async Task EveryObjectTheRegistryReports_ResolvesBackToItselfById()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var context = new PipeWireContext(
@@ -103,7 +96,6 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
     [TestMethod]
     public async Task AModulesDetails_ArriveOnlyOnceItIsBound()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var context = new PipeWireContext(
@@ -145,7 +137,6 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
     [TestMethod]
     public async Task EveryObjectInTheGraph_CarriesASerialThatIsUniqueToIt()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var context = new PipeWireContext(
@@ -190,7 +181,6 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
     [TestMethod]
     public async Task ADeviceBackedNode_NamesADeviceThatIsInTheGraph()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var context = new PipeWireContext(
@@ -219,7 +209,6 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
         // Binding is what makes the daemon start producing reports, so there is nothing to observe
         // until a client asks. Each one is a Profiler object carrying a cycle's timings, which is
         // what pw-top renders.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var context = new PipeWireContext(

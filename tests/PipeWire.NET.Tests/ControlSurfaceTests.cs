@@ -21,18 +21,13 @@ namespace PipeWire.NET.Tests;
 // workaround for the daemon, not a fix for anything here.
 [DoNotParallelize]
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class ControlSurfaceTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(40);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -49,7 +44,6 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     [TestMethod]
     public async Task ANodesSupportedFormats_CanBeEnumerated()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-formats",
@@ -80,7 +74,6 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     [TestMethod]
     public async Task TheDefaultAudioSource_CanBeSetToWhatItAlreadyIs()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-defsource",
@@ -118,7 +111,6 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     [TestMethod]
     public async Task AStoreAndAClientControl_RefuseWorkAfterDisposal()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-disposed",
@@ -161,7 +153,6 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     [TestMethod]
     public async Task UpdatingPermissionsWithNothingToApply_IsRejectedBeforeItReachesTheDaemon()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-perms",
@@ -190,7 +181,6 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     [TestMethod]
     public async Task TheContextLock_IsHandedOutWhileOpenAndRefusedOnceDisposed()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         var ctx = new PipeWireContext("pwnet-lock", ConsoleTestLoggerFactory.Instance);
@@ -221,7 +211,6 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
         // per binding, and several enumerations sharing one answers table keyed by sequence.
         // 1.0.5 emits the current volume as the first subscribed event where 1.6.8 emits only
         // the change, so this expectation only holds where the daemon behaves the newer way.
-        RequireLinux();
         SessionGates.RequireDaemonAtLeast(1, 6, 8);
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
@@ -292,7 +281,6 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     {
         // Every argument guard on the node surface: none of these may reach the daemon, so all
         // of them are checked against a node that is otherwise fully usable.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-nodeguards",
@@ -349,7 +337,6 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     {
         // Disposal here does no I/O, so the synchronous form must tear down exactly what the
         // asynchronous one does.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         var ctx = new PipeWireContext("pwnet-syncdispose", ConsoleTestLoggerFactory.Instance);
@@ -371,7 +358,6 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     {
         // A default stored by an empty name would drift onto whatever the daemon picks, so the
         // empty case is refused here rather than written.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-defguards",
@@ -412,7 +398,6 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task RetaggingAConnection_ReachesTheDaemonAndComesBack()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         const string Before = "pwnet-retag";
@@ -488,7 +473,6 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task AClientsPermissions_CanBeReadBack()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
             "pwnet-perm-read",
@@ -545,7 +529,6 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task AProxyWhoseObjectIsDestroyed_IsToldAboutIt()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
             "pwnet-removed",
@@ -590,7 +573,6 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task AHealthyConnection_ReportsNoFaultAndAcceptsALostHandler()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-fault", cts.Token);
 

@@ -16,18 +16,13 @@ namespace PipeWire.NET.Tests;
 /// asserting one shape at rest, these check every snapshot published during churn.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class GraphInvariantTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     /// <summary>Every dangling reference in one snapshot, as readable text.</summary>
     private static List<string> DanglingReferences(PipeWireGraphSnapshot g)
@@ -61,7 +56,6 @@ public sealed class GraphInvariantTests : PipeWireTestBase
         // patchbay watching a few hundred nodes would pay a proxy each to learn about the one it
         // cares about, so change notification is opt-in per object through BindNode and
         // InfoChanged. This pins the assumption that costs.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-global-once",
@@ -139,7 +133,6 @@ public sealed class GraphInvariantTests : PipeWireTestBase
     [TestMethod]
     public async Task DanglingReferencesSeenDuringChurn_DoNotSurviveIt()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -208,7 +201,6 @@ public sealed class GraphInvariantTests : PipeWireTestBase
     [TestMethod]
     public async Task ASnapshotHeldAcrossChurn_KeepsEveryReferenceItCouldResolveWhenTaken()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(

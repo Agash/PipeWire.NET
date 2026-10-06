@@ -16,20 +16,14 @@ namespace PipeWire.NET.Tests;
 [SupportedOSPlatform("linux")]
 public sealed partial class DescriptorAndExceptionTests : PipeWireTestBase
 {
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("descriptors are a Linux concept here.");
-    }
-
     /// <summary>
     /// The duplicate must not survive an exec. Checked against the kernel rather than against the
     /// flag we passed, because the flag being wrong is the failure.
     /// </summary>
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public void ADuplicatedPlaneDescriptor_CarriesCloseOnExec()
     {
-        RequireLinux();
         string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         File.WriteAllText(path, "x");
         try
@@ -54,9 +48,9 @@ public sealed partial class DescriptorAndExceptionTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public void ADescriptorHandle_ClosesWhatItOwnsAndRefusesToHandOutAClosedOne()
     {
-        RequireLinux();
         string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         File.WriteAllText(path, "x");
         try
@@ -180,9 +174,9 @@ public sealed partial class DescriptorAndExceptionTests : PipeWireTestBase
 
     /// <summary>A borrowed handle is held for the whole call, not just until the first await.</summary>
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task BorrowAsync_HoldsTheHandleUntilTheWorkCompletes()
     {
-        RequireLinux();
         using var listening = new Socket(
             AddressFamily.Unix,
             SocketType.Stream,
@@ -211,9 +205,9 @@ public sealed partial class DescriptorAndExceptionTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public void Borrow_ReturnsWhatTheWorkProducedAndReleasesAfterwards()
     {
-        RequireLinux();
         using var socket = new Socket(
             AddressFamily.Unix,
             SocketType.Stream,

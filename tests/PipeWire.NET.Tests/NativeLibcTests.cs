@@ -31,22 +31,15 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [SupportedOSPlatform("linux")]
 public sealed class NativeLibcTests
 {
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("These are libc entry points.");
-    }
-
     /// <summary>An eventfd timeline signals and is taken, which is the whole explicit-sync pairing.</summary>
     [TestMethod]
     public void AnEventfdTimeline_SignalsAndIsTaken()
     {
-        RequireLinux();
-
         int fd = Descriptors.CreateEventfd();
         Assert.IsTrue(fd >= 0, "eventfd returned no descriptor");
 
@@ -91,8 +84,6 @@ public sealed class NativeLibcTests
     [TestMethod]
     public unsafe void AFailedLibcCall_ReportsItsErrno()
     {
-        RequireLinux();
-
         const int EBADF = 9;
 
         int fd = Descriptors.CreateEventfd();
@@ -118,8 +109,6 @@ public sealed class NativeLibcTests
     [TestMethod]
     public void TheEintrConstant_MatchesThisSystemsErrnoHeader()
     {
-        RequireLinux();
-
         string[] candidates =
         [
             "/usr/include/asm-generic/errno-base.h",
@@ -156,8 +145,6 @@ public sealed class NativeLibcTests
     [TestMethod]
     public void ADuplicatedDescriptor_IsDistinctAndCloseOnExec()
     {
-        RequireLinux();
-
         const int FGetfd = 1;
         const int FdCloexec = 1;
 
@@ -200,8 +187,6 @@ public sealed class NativeLibcTests
     [TestMethod]
     public void ANonSocket_IsNotReportedAsAListeningSocket()
     {
-        RequireLinux();
-
         int fd = Descriptors.CreateEventfd();
         try
         {
@@ -224,8 +209,6 @@ public sealed class NativeLibcTests
     [TestMethod]
     public void TheGeneratedTimespec_IsTwoPointerWidthFields()
     {
-        RequireLinux();
-
         Assert.AreEqual(
             2 * IntPtr.Size,
             Unsafe.SizeOf<PosixTimespec>(),
@@ -245,8 +228,6 @@ public sealed class NativeLibcTests
     [TestMethod]
     public void AnUnsignalledEventfdWait_TimesOutAfterItsDeadline()
     {
-        RequireLinux();
-
         int fd = Descriptors.CreateEventfd();
         try
         {
@@ -275,8 +256,6 @@ public sealed class NativeLibcTests
     [TestMethod]
     public void AnEventfdWaitOnAClosedDescriptor_Fails()
     {
-        RequireLinux();
-
         int fd = Descriptors.CreateEventfd();
         Descriptors.CloseDescriptor(fd);
 
@@ -295,8 +274,6 @@ public sealed class NativeLibcTests
     [TestMethod]
     public void AnEventfd_IsRecognisedAndNothingElseIs()
     {
-        RequireLinux();
-
         int fd = Descriptors.CreateEventfd();
         using SafeFileHandle devNull = File.OpenHandle(
             "/dev/null",
@@ -331,8 +308,6 @@ public sealed class NativeLibcTests
     [TestMethod]
     public void ASyncDescriptorOfNeitherKind_FailsTheWaitAndPromisesNoRelease()
     {
-        RequireLinux();
-
         using SafeFileHandle devNull = File.OpenHandle(
             "/dev/null",
             FileMode.Open,

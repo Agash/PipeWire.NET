@@ -11,21 +11,15 @@ namespace PipeWire.NET.Tests;
 /// stderr is not something a test can assert on without capturing another process's output.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class PipeWireLogTests : PipeWireTestBase
 {
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
-
     [TestMethod]
     public async Task EveryLevel_IsAcceptedAndLeavesTheLibraryUsable()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
         // Settable before anything exists, which is the point: a caller turning logging up to
@@ -56,8 +50,6 @@ public sealed class PipeWireLogTests : PipeWireTestBase
     [TestMethod]
     public void ALevelOutsideTheEnum_IsRefusedRatherThanPassedToTheLibrary()
     {
-        RequireLinux();
-
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
             PipeWireLog.SetLevel((PipeWireLogLevel)99)
         );

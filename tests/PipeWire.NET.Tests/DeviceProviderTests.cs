@@ -18,18 +18,13 @@ namespace PipeWire.NET.Tests;
 [ExpectsLibraryError("handler threw")]
 [ExpectsLibraryError("ParameterChanged handler")]
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class DeviceProviderTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(40);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static string Unique() =>
         $"pwnet_device_{Environment.ProcessId}_{Random.Shared.Next():x}";
@@ -126,7 +121,6 @@ public sealed class DeviceProviderTests : PipeWireTestBase
     [TestMethod]
     public async Task ADeviceWeServe_AppearsInTheGraphAndLeavesTheSessionResponsive()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -176,7 +170,6 @@ public sealed class DeviceProviderTests : PipeWireTestBase
     [TestMethod]
     public async Task ADeviceWeServe_AnswersItsProfilesThroughTheOrdinaryClientPath()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -238,7 +231,6 @@ public sealed class DeviceProviderTests : PipeWireTestBase
     [TestMethod]
     public async Task ADeviceWeServe_AnswersAFilteredEnumerationWithOnlyMatches()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -352,7 +344,6 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         // so by the time the list head itself is freed, no hook can outlive it. A use-after-free
         // here does not fail an assert, it takes the process down, which is why the test's only
         // real assertion is that the session is still answering afterwards.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -414,7 +405,6 @@ public sealed class DeviceProviderTests : PipeWireTestBase
     {
         // A device that answers nothing is legal. It is what this library builds today, since child
         // node publication is out of scope, so it has to work rather than merely not crash.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -441,7 +431,6 @@ public sealed class DeviceProviderTests : PipeWireTestBase
     {
         // The hosting path allocates unmanaged memory per device and frees it on disposal. A leak
         // here is invisible until a long-running process has served a few thousand.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -474,7 +463,6 @@ public sealed class DeviceProviderTests : PipeWireTestBase
     {
         // The daemon re-reads rather than being handed the parameter, so a replacement set must
         // be what the next enumeration answers with.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -552,7 +540,6 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         // device.name and device.description are this call's own arguments, not overrides a
         // properties bag can smuggle in: an empty target would be a node that silently never
         // links rather than an error the daemon reports.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -597,7 +584,6 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         // The hostile shape for the hosting path: the export proxy is destroyed while another
         // client has enumerations in flight against it. Anything that outlives the teardown here
         // ends the test host, not the test.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -673,7 +659,6 @@ public sealed class DeviceProviderTests : PipeWireTestBase
     {
         // The daemon gates on the parameter list the device announced at export: asking for what
         // was never listed is an error, not an empty answer.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -726,7 +711,6 @@ public sealed class DeviceProviderTests : PipeWireTestBase
     {
         // The full write path through the daemon: another client writes, our set_param parses,
         // and the host observes it.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -801,7 +785,6 @@ public sealed class DeviceProviderTests : PipeWireTestBase
     {
         // A subscriber that throws must not take the binding with it: the fault is logged and
         // enumeration still answers afterwards.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -858,7 +841,6 @@ public sealed class DeviceProviderTests : PipeWireTestBase
     [TestMethod]
     public async Task RouteVolumeGuards_RefuseBadInputBeforeTheDaemon()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -918,7 +900,6 @@ public sealed class DeviceProviderTests : PipeWireTestBase
     {
         // Routes work the same exchange as profiles, through the same provider: a second client
         // enumerates them and writes one back.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(

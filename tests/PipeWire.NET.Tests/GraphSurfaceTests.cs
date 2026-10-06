@@ -23,18 +23,13 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class GraphSurfaceTests
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(45);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<PipeWireNode> WaitForNodeAsync(
         PipeWireRegistry reg,
@@ -92,7 +87,6 @@ public sealed class GraphSurfaceTests
     [TestMethod]
     public async Task EveryNodeCreationBuilder_ReachesTheCreatedNode()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string nodeName = $"pwnet-builder-{Environment.ProcessId}";
@@ -170,7 +164,6 @@ public sealed class GraphSurfaceTests
     [TestMethod]
     public async Task TheLinkCreationBuilders_ReachTheCreatedLink()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string name = $"pwnet-linkbuilder-{Environment.ProcessId}";
@@ -298,7 +291,6 @@ public sealed class GraphSurfaceTests
     [TestMethod]
     public async Task TheGraphClock_DescribesARealRateAndABoundedDrift()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string nodeName = $"pwnet-clockrate-{Environment.ProcessId}";
@@ -408,7 +400,6 @@ public sealed class GraphSurfaceTests
     [TestMethod]
     public async Task TheCaptureMetadata_IsCoherentOnFramesCarryingRealPixels()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         const int width = 64,

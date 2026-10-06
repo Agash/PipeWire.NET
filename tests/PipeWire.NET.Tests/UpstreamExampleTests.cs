@@ -25,6 +25,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -34,12 +35,6 @@ public sealed class UpstreamExampleTests
 
     private const int Width = 320;
     private const int Height = 240;
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<uint> WaitForNodeIdAsync(
         PipeWireVideoOutput output,
@@ -67,7 +62,6 @@ public sealed class UpstreamExampleTests
     [TestMethod]
     public async Task AProducerOfferingANewFormat_KeepsItsConsumer()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -136,7 +130,6 @@ public sealed class UpstreamExampleTests
     [TestMethod]
     public async Task AProducerOfferingARange_LetsTheConsumerFixateWithinIt()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -223,7 +216,6 @@ public sealed class UpstreamExampleTests
     [TestMethod]
     public async Task AProducerServingFromARing_DeliversAnUnbrokenSequence()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         const int rate = 48000,
@@ -329,7 +321,6 @@ public sealed class UpstreamExampleTests
     [TestMethod]
     public async Task AConsumerAskingForASizeTheProducerLacks_TakesWhatItIsGiven()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -419,7 +410,6 @@ public sealed class UpstreamExampleTests
     [TestMethod]
     public async Task PixelsWrittenByOneFilter_AreReadByAnotherOverADspVideoLink()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -637,7 +627,6 @@ public sealed class UpstreamExampleTests
     [TestMethod]
     public async Task TimedMidiEventsWrittenByOneFilter_ArriveAtAnotherInTime()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // A note-on and a note-off as UMP packets, at distinct offsets inside the cycle.
@@ -782,7 +771,6 @@ public sealed class UpstreamExampleTests
     [TestMethod]
     public async Task EveryDspFormat_ReachesTheGraphAsTheStringPipeWireReads()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(

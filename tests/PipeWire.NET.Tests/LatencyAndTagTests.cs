@@ -228,6 +228,7 @@ public sealed class LatencyAndTagTests : PipeWireTestBase
     // ------------------------------------------------------------------ live session
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     [TestCategory("Integration")]
     [TestCategory("RequiresDaemon")]
     public async Task ALiveAdapterNode_AnswersLatencyAndTagQueries()
@@ -237,9 +238,6 @@ public sealed class LatencyAndTagTests : PipeWireTestBase
         // all, and writes are the follower's business (a null sink refuses them). What is under
         // test is this library's half: reads surface as null, refusals as errors carrying the
         // daemon's code, and neither hangs the round-trip.
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
 
         await using var ctx = new PipeWireContext(

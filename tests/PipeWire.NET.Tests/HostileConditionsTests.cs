@@ -22,18 +22,13 @@ namespace PipeWire.NET.Tests;
 [ExpectsLibraryError("stream error")]
 [ExpectsLibraryError("ParameterChanged handler")]
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class HostileConditionsTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(40);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     // ------------------------------------------------------------------ lifecycle order
 
@@ -67,7 +62,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     [TestMethod]
     public async Task EveryAccessorOnADisposedCapture_AnswersInsteadOfTouchingTheStream()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-hc-disposed",
@@ -122,7 +116,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     [TestMethod]
     public async Task PullingWithoutOptingIn_ReturnsNothing()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-hc-nopull",
@@ -160,7 +153,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     [TestMethod]
     public async Task StartingTwice_IsRefusedWithoutLeakingTheFirstLoop()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-hc-twice",
@@ -188,7 +180,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     [TestMethod]
     public async Task BuildingARegistryOnAnUnstartedContext_FailsRatherThanCrashing()
     {
-        RequireLinux();
         await using var ctx = new PipeWireContext(
             "pwnet-hc-unstarted",
             ConsoleTestLoggerFactory.Instance
@@ -212,7 +203,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingAnUnstartedContext_IsClean()
     {
-        RequireLinux();
         var ctx = new PipeWireContext("pwnet-hc-nostart", ConsoleTestLoggerFactory.Instance);
 
         // Nothing was allocated natively; unwinding must cope with that rather than freeing nulls.
@@ -223,7 +213,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     [TestMethod]
     public async Task UsingAContextAfterDisposal_ThrowsRatherThanTouchingFreedMemory()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         var ctx = new PipeWireContext("pwnet-hc-afterdispose", ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
@@ -246,7 +235,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingWhileTheRegistryIsStillAlive_DoesNotCrash()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         var ctx = new PipeWireContext("pwnet-hc-order", ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync(cts.Token);
@@ -272,7 +260,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     [DataRow("\t\n\r")]
     public async Task ANodeNameThatIsHostileOrExotic_IsHandledOrRefusedCleanly(string name)
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-hc-names",
@@ -314,7 +301,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     [TestMethod]
     public async Task ANameContainingAnEmbeddedNul_DoesNotTruncateSilentlyIntoAnotherProperty()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-hc-nul",
@@ -348,7 +334,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     [TestMethod]
     public async Task AVeryLongNodeName_IsAcceptedOrRefusedButNeverTruncatedSilently()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-hc-long",
@@ -374,7 +359,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     [TestMethod]
     public async Task CapturingFromANodeThatDoesNotExist_FailsOrIdlesButNeverHangs()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-hc-nowhere",
@@ -432,7 +416,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     [TestMethod]
     public async Task CapturingFromANodeThatDisappearsBeforeWeConnect_IsHandled()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-hc-gone",
@@ -464,7 +447,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     [TestMethod]
     public async Task ManySimultaneousContexts_AllConnectAndAllReleaseTheirDescriptors()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         int fdsBefore = OpenFds();
@@ -515,7 +497,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     [TestMethod]
     public async Task AStormOfCreatesAndRemoves_KeepsTheGraphAccurate()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-hc-storm",
@@ -618,7 +599,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
     [TestMethod]
     public async Task BeingDisconnectedByTheDaemon_IsSurvivedAndObservable()
     {
-        RequireLinux();
         PwTools.Require();
         using var cts = new CancellationTokenSource(Budget);
 

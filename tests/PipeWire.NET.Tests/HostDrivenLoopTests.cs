@@ -23,6 +23,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -41,12 +42,6 @@ public sealed partial class HostDrivenLoopTests
     [LibraryImport("libc", EntryPoint = "poll", SetLastError = true)]
     private static partial int Poll(ref PollFd fds, nuint nfds, int timeout);
 
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
-
     /// <summary>
     /// A host that polls the loop descriptor and iterates gets the graph, on its own thread.
     /// </summary>
@@ -59,7 +54,6 @@ public sealed partial class HostDrivenLoopTests
     [TestMethod]
     public async Task AHostThatPumpsTheLoop_ReceivesEventsOnItsOwnThread()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
 
         await using var ctx = new PipeWireContext(
@@ -140,7 +134,6 @@ public sealed partial class HostDrivenLoopTests
     [TestMethod]
     public async Task TheHostDrivenCalls_RefuseAContextThatOwnsItsThread()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
         await using var ctx = new PipeWireContext(

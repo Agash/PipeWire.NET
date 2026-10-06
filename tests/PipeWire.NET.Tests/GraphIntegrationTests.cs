@@ -9,18 +9,13 @@ namespace PipeWire.NET.Tests;
 /// ports, removing the link, and the ordering between events and <see cref="PipeWireRegistry.Current"/>.
 /// </summary>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class GraphIntegrationTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(15);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         CancellationToken cancellationToken
@@ -56,7 +51,6 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
     [TestMethod]
     public async Task InitialEnumeration_ReportsTheGraphWithoutASettleDelay()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(cts.Token);
         await using (context)
@@ -71,7 +65,6 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
     [TestMethod]
     public async Task CreateVirtualNode_AppearsInTheGraphWithFourPorts()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(cts.Token);
         await using (context)
@@ -104,7 +97,6 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
     [TestMethod]
     public async Task CreateLink_ThenRemove_IsVisibleFromBothPorts()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(cts.Token);
         await using (context)
@@ -154,7 +146,6 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
     [TestMethod]
     public async Task CreateLink_RejectsPortsFacingTheWrongWay()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(cts.Token);
         await using (context)
@@ -183,7 +174,6 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
     [TestMethod]
     public async Task GranularEvents_NeverPrecedeTheSnapshotTheyDescribe()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(cts.Token);
         await using (context)
@@ -219,7 +209,6 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
     [TestMethod]
     public async Task CreateVirtualNode_HonoursCancellation()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(cts.Token);
         await using (context)
@@ -237,7 +226,6 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
     [TestMethod]
     public async Task PublishedSnapshots_DoNotChangeUnderTheirHolder()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(cts.Token);
         await using (context)

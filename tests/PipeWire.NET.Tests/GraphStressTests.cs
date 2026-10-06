@@ -12,6 +12,7 @@ namespace PipeWire.NET.Tests;
 /// graph layer, not to demonstrate it working.
 /// </summary>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -31,12 +32,6 @@ public sealed class GraphStressTests : PipeWireTestBase
     private static readonly TimeSpan ChurnPause = TimeSpan.FromMilliseconds(25);
 
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -142,7 +137,6 @@ public sealed class GraphStressTests : PipeWireTestBase
     [DataRow(64 * 1024)]
     public async Task ALongDescription_IsAcceptedRatherThanHittingOurOwnBuffer(int length)
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-long",
@@ -174,7 +168,6 @@ public sealed class GraphStressTests : PipeWireTestBase
     [TestMethod]
     public async Task AMultiByteDescription_IsMeasuredInBytesNotChars()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-utf8",
@@ -199,7 +192,6 @@ public sealed class GraphStressTests : PipeWireTestBase
     [TestMethod]
     public async Task RepeatedCreateAndDestroy_LeaksNeitherDescriptorsNorMemory()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-churn",
@@ -292,7 +284,6 @@ public sealed class GraphStressTests : PipeWireTestBase
     [TestMethod]
     public async Task ConcurrentCreates_AllSucceedAndAllReachTheGraph()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-parallel",
@@ -340,7 +331,6 @@ public sealed class GraphStressTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingWhileCreationsAreInFlight_DoesNotCrash()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-teardown",
@@ -419,7 +409,6 @@ public sealed class GraphStressTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingWithNoCancellationToken_StillReleasesInFlightCreations()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-notoken",
@@ -493,7 +482,6 @@ public sealed class GraphStressTests : PipeWireTestBase
     [TestMethod]
     public async Task CancellingMidCreation_LeavesNothingBehind()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-cancel",
@@ -551,7 +539,6 @@ public sealed class GraphStressTests : PipeWireTestBase
     [TestMethod]
     public async Task ManyWatchersSubscribingAndLeaving_DoNotAccumulate()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-watchers",
@@ -584,7 +571,6 @@ public sealed class GraphStressTests : PipeWireTestBase
     [TestMethod]
     public async Task ASnapshotHeldAcrossHeavyChurn_StaysInternallyConsistent()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-consistency",
@@ -632,7 +618,6 @@ public sealed class GraphStressTests : PipeWireTestBase
     [TestMethod]
     public async Task RemovingAnIdThatNeverExisted_IsReportedAsAFailure()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-bogus",
@@ -651,7 +636,6 @@ public sealed class GraphStressTests : PipeWireTestBase
     [TestMethod]
     public async Task RemovingAnObjectTwice_IsRefusedRatherThanFatal()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-double",

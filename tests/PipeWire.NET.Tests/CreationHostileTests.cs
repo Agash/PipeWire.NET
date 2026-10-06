@@ -13,18 +13,13 @@ namespace PipeWire.NET.Tests;
 /// valid a moment ago. These drive the cases that only occur when something else is churning.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class CreationHostileTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -44,7 +39,6 @@ public sealed class CreationHostileTests : PipeWireTestBase
     [TestMethod]
     public async Task ACreationTheDaemonRefuses_FaultsTheCallerRatherThanHanging()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-create-refused",
@@ -87,7 +81,6 @@ public sealed class CreationHostileTests : PipeWireTestBase
     [TestCategory("RequiresPipeWire168")]
     public async Task AnObjectRemovedTheInstantItAppears_LeavesNoWaiterBehind()
     {
-        RequireLinux();
         SessionGates.RequireDaemonAtLeast(1, 6, 8);
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
@@ -161,7 +154,6 @@ public sealed class CreationHostileTests : PipeWireTestBase
         // object exists on the daemon and can be destroyed by anyone before the filing happens.
         // Nothing observable moves when a proxy is left filed for a removed object, which is why
         // this counts the table directly rather than descriptors.
-        RequireLinux();
         SessionGates.RequireDaemonAtLeast(1, 6, 8);
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
@@ -251,7 +243,6 @@ public sealed class CreationHostileTests : PipeWireTestBase
     [TestMethod]
     public async Task AnIdReusedByANewObject_DoesNotChangeAnOlderSnapshot()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-id-reuse",
@@ -324,7 +315,6 @@ public sealed class CreationHostileTests : PipeWireTestBase
     [TestMethod]
     public async Task BindingAnIdOfTheWrongKind_IsRefusedBeforeItReachesTheDaemon()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-kind-mismatch",

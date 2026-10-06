@@ -16,18 +16,13 @@ namespace PipeWire.NET.Tests;
 /// pieces still fit when used together and in the order a real program would use them.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class RealWorldScenarioTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(40);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -68,7 +63,6 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
     [TestMethod]
     public async Task AStreamingMixer_BuildsItsGraphSetsLevelsAndTearsItDownCleanly()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-scenario-mixer",
@@ -199,7 +193,6 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
     [TestMethod]
     public async Task DestroyingANodeMidGraph_TakesItsLinksWithItAndLeavesNothingDangling()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-scenario-cascade",
@@ -273,7 +266,6 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
     [TestMethod]
     public async Task AFilterInsertedBetweenTwoNodes_ProcessesWhatPassesThrough()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-scenario-insert",
@@ -382,7 +374,6 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
     [TestMethod]
     public async Task ARealGStreamerProducer_IsDiscoveredNamedAndControllable()
     {
-        RequireLinux();
         GstTestSource.RequireGStreamer();
 
         using var cts = new CancellationTokenSource(Budget);
@@ -465,7 +456,6 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
     [TestMethod]
     public async Task ADeviceItsNodesAndTheDefaultSink_AgreeWithEachOther()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-scenario-device",
@@ -548,7 +538,6 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
     [TestMethod]
     public async Task AUiHoldingASnapshotWhileTheGraphChanges_KeepsAConsistentView()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-scenario-ui",

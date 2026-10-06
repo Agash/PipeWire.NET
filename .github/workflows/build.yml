@@ -85,59 +85,8 @@ jobs:
         run: dotnet build PipeWire.NET.slnx --no-restore -c Release
 
       - name: Test (non-integration on host runner)
-        run: dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+        run: dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output unit.cobertura.xml
              --filter "TestCategory!=Integration"
-
-      - name: Summarize coverage
-        # Renders the cobertura totals into the run summary. Uploading the raw XML alone means nobody
-        # ever looks at it; this puts the numbers on the run page itself.
-        if: always()
-        shell: bash
-        run: |
-          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import glob, xml.etree.ElementTree as ET
-
-          files = sorted(glob.glob('**/coverage.cobertura.xml', recursive=True))
-          if not files:
-              print('### Coverage\n\nNo coverage report was produced.')
-              raise SystemExit(0)
-
-          # Multi-targeted runs emit one report per TFM; they cover the same code, so report the first
-          # and note how many were produced rather than double-counting.
-          root = ET.parse(files[0]).getroot()
-
-          def pct(attr):
-              return float(root.get(attr) or 0) * 100
-
-          print('### Coverage (unit tests only)\n')
-          print('_The daemon-backed legs run separately and are not counted here._\n')
-          print('| Metric | Covered | Total | Rate |')
-          print('| --- | ---: | ---: | ---: |')
-          print(f"| Lines | {root.get('lines-covered')} | {root.get('lines-valid')} | {pct('line-rate'):.1f}% |")
-          print(f"| Branches | {root.get('branches-covered')} | {root.get('branches-valid')} | {pct('branch-rate'):.1f}% |")
-
-          packages = root.findall('.//package')
-          if packages:
-              print('\n<details><summary>Per assembly</summary>\n')
-              print('| Assembly | Lines | Branches |')
-              print('| --- | ---: | ---: |')
-              for p in sorted(packages, key=lambda p: p.get('name') or ''):
-                  lr = float(p.get('line-rate') or 0) * 100
-                  br = float(p.get('branch-rate') or 0) * 100
-                  print(f"| {p.get('name')} | {lr:.1f}% | {br:.1f}% |")
-              print('\n</details>')
-
-          if len(files) > 1:
-              print(f"\n_{len(files)} reports produced (one per target framework); totals shown for `{files[0]}`._")
-          PY
-
-      - name: Upload coverage report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage
-          if-no-files-found: warn
-          path: '**/coverage.cobertura.xml'
 
       - name: Install ClangSharpPInvokeGenerator + native runtime packages
         run: |
@@ -197,7 +146,7 @@ jobs:
           PIPEWIRE_LOG: ${{ runner.temp }}/pw-native-nodaemon.log
         timeout-minutes: 10
         run: dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release
-             --filter "TestCategory=Integration&TestCategory!=RequiresDaemon&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon" --max-parallel-test-modules 1
+             --filter "TestCategory=Integration&TestCategory!=RequiresDaemon&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon" --max-parallel-test-modules 1 --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output no-daemon.cobertura.xml
 
       - name: Name the test that hung
         if: failure()
@@ -221,7 +170,7 @@ jobs:
           source build/session.sh
           pwnet_session_start
           pwnet_session_run dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
-            --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon" --max-parallel-test-modules 1
+            --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon" --max-parallel-test-modules 1             --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output daemon.cobertura.xml
           exit $PWNET_LAST_RC
 
       - name: Session diagnostics
@@ -300,7 +249,7 @@ jobs:
           source build/session.sh
           pwnet_session_start
           pwnet_session_run dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
-            --filter "TestCategory=RequiresGpu&TestCategory!=RequiresGStreamer" --max-parallel-test-modules 1
+            --filter "TestCategory=RequiresGpu&TestCategory!=RequiresGStreamer" --max-parallel-test-modules 1             --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output dmabuf.cobertura.xml
           echo "::notice::DMA-BUF leg exit $PWNET_LAST_RC (non-gating: a hosted runner has no GPU to import with)"
 
       - name: Daemon end-to-end tests (GStreamer real sources)
@@ -313,8 +262,17 @@ jobs:
           source build/session.sh
           pwnet_session_start
           pwnet_session_run dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
-            --filter "TestCategory=RequiresGStreamer&TestCategory!=RequiresGpu&TestCategory!=PenTest" --max-parallel-test-modules 1
+            --filter "TestCategory=RequiresGStreamer&TestCategory!=RequiresGpu&TestCategory!=PenTest" --max-parallel-test-modules 1             --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output gstreamer.cobertura.xml
           exit $PWNET_LAST_RC
+
+      - name: Upload coverage reports
+        # Every leg above writes its own report; the coverage job merges them with the Windows leg's.
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-linux
+          if-no-files-found: warn
+          path: "**/*.cobertura.xml"
 
       - name: Pack
         if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
@@ -365,7 +323,15 @@ jobs:
         run: dotnet build PipeWire.NET.slnx -c Release
 
       - name: Unit tests
-        run: dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release --filter "TestCategory!=Integration"
+        run: dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release --filter "TestCategory!=Integration" --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output windows.cobertura.xml
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-windows
+          if-no-files-found: warn
+          path: "**/*.cobertura.xml"
 
   aot_arm64:
     name: Native AOT and ABI on arm64
@@ -460,6 +426,61 @@ jobs:
 
           echo "$OUT" | grep -q "connected to daemon" || { echo "AOT binary did not reach the daemon"; exit 1; }
           test $PWNET_LAST_RC -le 1
+
+  coverage:
+    name: Coverage (every leg merged)
+    # The unit leg runs managed code only; the daemon, DMA-BUF and GStreamer legs run the native paths
+    # it cannot reach, and the Windows leg checks the managed layer is portable. The figure that means
+    # anything is their union.
+    needs: [build_and_test, windows_unit]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-*
+          path: coverage
+
+      - name: Merge
+        shell: pwsh
+        run: |
+          $reports = @(Get-ChildItem coverage -Recurse -Filter '*.cobertura.xml' | ForEach-Object FullName)
+          $totals = ./eng/merge-coverage.ps1 -Reports $reports -Output merged.cobertura.xml
+          [xml]$merged = Get-Content -Raw merged.cobertura.xml
+          $rows = foreach ($package in $merged.coverage.packages.package | Sort-Object name) {
+            "| $($package.name) | $(([double]$package.'line-rate').ToString('P1')) | $(([double]$package.'branch-rate').ToString('P1')) |"
+          }
+          @(
+            '### Coverage, every leg merged'
+            ''
+            '| Metric | Covered | Total | Rate |'
+            '| --- | ---: | ---: | ---: |'
+            "| Lines | $($totals.LinesCovered) | $($totals.LinesValid) | $($totals.Lines.ToString('P1')) |"
+            "| Branches | $($totals.BranchesCovered) | $($totals.BranchesValid) | $($totals.Branches.ToString('P1')) |"
+            ''
+            '<details><summary>Per assembly</summary>'
+            ''
+            '| Assembly | Lines | Branches |'
+            '| --- | ---: | ---: |'
+            $rows
+            ''
+            '</details>'
+          ) | Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-merged
+          path: merged.cobertura.xml
 
   daemon_version_skew:
     name: Daemon skew (PipeWire ${{ matrix.os }})

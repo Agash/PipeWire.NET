@@ -24,6 +24,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresGpu")]
 [SupportedOSPlatform("linux")]
@@ -31,8 +32,6 @@ public sealed class DrmSyncobjTests
 {
     private static void RequireSyncobjs()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("DRM syncobjs are a Linux interface.");
         if (!DrmSyncobj.IsAvailable)
             Assert.Inconclusive("no render node whose driver supports timeline syncobjs.");
     }

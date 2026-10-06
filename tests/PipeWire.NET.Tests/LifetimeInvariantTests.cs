@@ -10,6 +10,7 @@ namespace PipeWire.NET.Tests;
 /// contracts rather than assumed from the design.
 /// </summary>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -17,16 +18,9 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(20);
 
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
-
     [TestMethod]
     public async Task TheSnapshotVersionNeverGoesBackwards_AcrossEveryEventPath()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -75,7 +69,6 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
     [TestMethod]
     public async Task ACreationWaiterCannotMissItsGlobal_HoweverTheEventsInterleave()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // The race is between the bound event registering a waiter and OnGlobal completing it. It
@@ -118,7 +111,6 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingTheContextFirst_LeavesBoundControlsSafeToDispose()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         var ctx = new PipeWireContext("pwnet-order", ConsoleTestLoggerFactory.Instance);
@@ -144,8 +136,6 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingTheContextConcurrentlyWithTeardown_DoesNotThrowOutOfDispose()
     {
-        RequireLinux();
-
         // Its own budget: eight rounds need more than 20s.
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
@@ -197,7 +187,6 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingTheContextWithACreationInFlight_FailsTheCreationFast()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         var ctx = new PipeWireContext(
@@ -229,7 +218,6 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
         // Disposal wins over a start that never happened: there is no loop thread to start and
         // no connection to make, so the call fails at the gate rather than halfway through
         // native setup.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         var ctx = new PipeWireContext("pwnet-deadstart", ConsoleTestLoggerFactory.Instance);
@@ -243,7 +231,6 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
     [TestMethod]
     public async Task AControlLeftToTheFinalizer_ReleasesWithoutAborting()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -281,7 +268,6 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingAFilterWhileItsCallbackIsRunning_DoesNotFreeWhatTheCallbackIsUsing()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
         // Callback state is freed by the handle after the native object is destroyed, and the loop
@@ -363,7 +349,6 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
     [TestMethod]
     public async Task AStreamWhoseNodeTheDaemonDestroys_ReportsItAndStaysSafeToUse()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget * 2);
 
         await using var ctx = new PipeWireContext(

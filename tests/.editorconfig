@@ -1,0 +1,3 @@
+[*.cs]
+# A test for one operating system says so with [OSCondition] instead of checking and skipping at run time.
+dotnet_diagnostic.MSTEST0061.severity = error

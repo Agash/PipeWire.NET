@@ -10,18 +10,13 @@ namespace PipeWire.NET.Tests;
 /// Filters: a node of this process's own, inside the graph, processing audio as it passes through.
 /// </summary>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class FilterTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(25);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     /// <summary>
     /// Puts a filter into the graph and links its output to a sink, so the graph has a reason to
@@ -67,7 +62,6 @@ public sealed class FilterTests : PipeWireTestBase
     [TestMethod]
     public async Task AConnectedFilter_AppearsInTheGraphWithItsPorts()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -116,7 +110,6 @@ public sealed class FilterTests : PipeWireTestBase
     [TestMethod]
     public async Task AFilterLinkedIntoTheGraph_IsDrivenAndSeesItsBuffers()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -170,7 +163,6 @@ public sealed class FilterTests : PipeWireTestBase
     [TestMethod]
     public async Task AProcessCallbackThatThrows_DoesNotTakeTheProcessDown()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -222,7 +214,6 @@ public sealed class FilterTests : PipeWireTestBase
     [TestMethod]
     public async Task AddingAPortAfterConnecting_IsRefused()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -245,7 +236,6 @@ public sealed class FilterTests : PipeWireTestBase
     [TestMethod]
     public async Task AFilterPortWithNoBuffer_ReportsAnEmptySpanRatherThanCrashing()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -266,7 +256,6 @@ public sealed class FilterTests : PipeWireTestBase
     [TestMethod]
     public async Task AFilterPortOfADisposedFilter_RefusesReadsRatherThanReadingFreedMemory()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -287,7 +276,6 @@ public sealed class FilterTests : PipeWireTestBase
     [TestMethod]
     public async Task AMidiPort_RefusesAudioReadsRatherThanAliasingSequences()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -314,7 +302,6 @@ public sealed class FilterTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingTheContextBeforeTheFilter_IsSafe()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         var ctx = new PipeWireContext("pwnet-filter-order", ConsoleTestLoggerFactory.Instance);
@@ -338,7 +325,6 @@ public sealed class FilterTests : PipeWireTestBase
         // they declare DSP formats the graph links by.
         // 1.0.5 reports a fresh unlinked filter as driving where 1.6.8 does not,
         // so this expectation only holds where the daemon behaves the newer way.
-        RequireLinux();
         SessionGates.RequireDaemonAtLeast(1, 6, 8);
         using var cts = new CancellationTokenSource(Budget);
 
@@ -392,7 +378,6 @@ public sealed class FilterTests : PipeWireTestBase
     {
         // Every guard on the filter answers from local state: nothing here reaches the daemon,
         // so a filter that was never connected must still refuse work rather than crashing in it.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -424,7 +409,6 @@ public sealed class FilterTests : PipeWireTestBase
     public async Task CreatingAFilterOnAnUnstartedContext_IsRefused()
     {
         // Connecting is what fails, not creating: without a core there is nothing to build on.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -448,7 +432,6 @@ public sealed class FilterTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task APortRemovedFromALiveFilter_LeavesTheRestOfItWorking()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -490,7 +473,6 @@ public sealed class FilterTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task AConnectedFilter_CanBeRetagged()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -548,7 +530,6 @@ public sealed class FilterTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task AFilter_CanSubscribeToItsNodesCommands()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(

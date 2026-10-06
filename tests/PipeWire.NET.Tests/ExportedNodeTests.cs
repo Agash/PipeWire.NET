@@ -26,6 +26,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -35,12 +36,6 @@ public sealed class ExportedNodeTests
 
     private const int Rate = 48000;
     private const int Channels = 1;
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     /// <summary>
     /// An exported node reaches the graph under the name and media class it was given.
@@ -53,7 +48,6 @@ public sealed class ExportedNodeTests
     [TestMethod]
     public async Task AnExportedNode_AppearsInTheGraph()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string name = $"pwnet-export-{Environment.ProcessId}";
@@ -135,7 +129,6 @@ public sealed class ExportedNodeTests
     [TestMethod]
     public async Task AnExportedSource_NegotiatesAndItsSamplesReachAConsumer()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string name = $"pwnet-exportsrc-{Environment.ProcessId}";
@@ -290,7 +283,6 @@ public sealed class ExportedNodeTests
     [TestMethod]
     public async Task AnExportedSource_IsRoutedToByTheSessionManager()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string name = $"pwnet-exportauto-{Environment.ProcessId}";
@@ -413,7 +405,6 @@ public sealed class ExportedNodeTests
     [TestMethod]
     public async Task ASpaFactorysNode_CanBeExported()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string name = $"pwnet-exportspa-{Environment.ProcessId}";
@@ -481,7 +472,6 @@ public sealed class ExportedNodeTests
     [TestMethod]
     public async Task AnExportedSink_IsHandedWhatAProducerSends()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string sinkName = $"pwnet-exportsink-{Environment.ProcessId}";
@@ -613,7 +603,6 @@ public sealed class ExportedNodeTests
     [TestMethod]
     public async Task DisposingAnExportedNode_RemovesItFromTheGraph()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string name = $"pwnet-exportgone-{Environment.ProcessId}";
@@ -682,7 +671,6 @@ public sealed class ExportedNodeTests
     [TestMethod]
     public async Task AProcessHandlerThatThrows_DropsTheCycleInsteadOfKillingTheProcess()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string name = $"pwnet-exportthrow-{Environment.ProcessId}";
@@ -801,7 +789,6 @@ public sealed class ExportedNodeTests
     [TestCategory("RequiresGStreamer")]
     public async Task AnExportedSource_IsReadCorrectlyByGStreamer()
     {
-        RequireLinux();
         GstTestSource.RequireGStreamer();
         using var cts = new CancellationTokenSource(Budget);
 
@@ -1056,7 +1043,6 @@ public sealed class ExportedNodeTests
     [TestMethod]
     public async Task AnExportedSourceReconfiguredWhileProcessing_KeepsItsDataIntact()
     {
-        RequireLinux();
         const int Rounds = 6;
         using var cts = new CancellationTokenSource(Budget * 2);
 
@@ -1242,7 +1228,6 @@ public sealed class ExportedNodeTests
     [TestCategory("RequiresDaemon")]
     public async Task ANodeThatMissesACycle_CanReportTheXrunToTheGraph()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string name = $"pwnet-xrun-{Environment.ProcessId}";
@@ -1325,7 +1310,6 @@ public sealed class ExportedNodeTests
     [TestMethod]
     public async Task AnExportedNodeWithNoHandler_IsStillDrivenAndProducesSilence()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string name = $"pwnet-nohandler-{Environment.ProcessId}";

@@ -16,18 +16,13 @@ namespace PipeWire.NET.Tests;
 /// stride or channel count hides.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class AudioRoundTripTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(40);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -62,7 +57,6 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
         // channel after it is offset by the shortfall for the rest of the buffer: the audio keeps
         // playing and the channels swap, which is much harder to notice than silence. The library
         // truncates to whole frames, and the consumer is where that is visible.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -140,7 +134,6 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
         AudioSampleFormat format
     )
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
             $"pwnet-art-{rate}-{channels}",
@@ -230,7 +223,6 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     [TestMethod]
     public async Task APublishedNode_IsARoutableGraphNodeLikeAnyOther()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
             "pwnet-art-routable",
@@ -294,7 +286,6 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     [TestMethod]
     public async Task AProducerThatWritesNothing_IsTreatedAsSilenceNotAsAFailure()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
             "pwnet-art-silent",
@@ -335,7 +326,6 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     [TestMethod]
     public async Task AProducerWhoseCallbackThrows_DoesNotKillTheStream()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
             "pwnet-art-throw",
@@ -397,7 +387,6 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     [TestMethod]
     public async Task ConnectingTwice_IsRefused()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
             "pwnet-art-twice",
@@ -433,7 +422,6 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     [DataRow(48000, -1)]
     public async Task NonsenseStreamGeometry_IsRefusedAtConstruction(int rate, int channels)
     {
-        RequireLinux();
         await using var ctx = new PipeWireContext(
             "pwnet-art-bad",
             ConsoleTestLoggerFactory.Instance
@@ -448,7 +436,6 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     [TestMethod]
     public async Task AStreamRequiresAContextAndAName()
     {
-        RequireLinux();
         await using var ctx = new PipeWireContext(
             "pwnet-art-null",
             ConsoleTestLoggerFactory.Instance
@@ -480,7 +467,6 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
         // The premise A/V sync rests on: streams driven by one graph share its clock, so their
         // timestamps are on the same timeline. Before io_changed was wired there was no way to
         // ask, and a consumer had to assume it.
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync("pwnet-clock", cts.Token);
 
@@ -539,7 +525,6 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
     [ExpectsLibraryError("stream error: a test said so")]
     public async Task AStreamThatCannotGoOn_CanSaySoAndDisposeEitherWay()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry reg) = await ConnectAsync(
             "pwnet-art-seterror",

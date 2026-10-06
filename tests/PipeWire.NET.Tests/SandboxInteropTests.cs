@@ -28,18 +28,13 @@ namespace PipeWire.NET.Tests;
 // workaround for the daemon, not a fix for anything here.
 [DoNotParallelize]
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class SandboxInteropTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(40);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     /// <summary>
     /// A descriptor connected to someone else's sandbox is what a portal hands out, and starting
@@ -48,7 +43,6 @@ public sealed class SandboxInteropTests : PipeWireTestBase
     [TestMethod]
     public async Task StartAsync_OverASocketConnectedToAThirdPartySandbox_ReachesTheDaemon()
     {
-        RequireLinux();
         CliTool.Require("pw-container");
         using var cts = new CancellationTokenSource(Budget);
 
@@ -87,7 +81,6 @@ public sealed class SandboxInteropTests : PipeWireTestBase
     [TestMethod]
     public async Task AConnectionThroughAThirdPartySandbox_IsRestricted()
     {
-        RequireLinux();
         CliTool.Require("pw-container");
         CliTool.Require("pw-cli");
         using var cts = new CancellationTokenSource(Budget);
@@ -108,7 +101,6 @@ public sealed class SandboxInteropTests : PipeWireTestBase
     [TestMethod]
     public async Task ASandboxWeCreate_AcceptsAThirdPartyClient()
     {
-        RequireLinux();
         CliTool.Require("pw-cli");
         using var cts = new CancellationTokenSource(Budget);
 

@@ -15,6 +15,7 @@ namespace PipeWire.NET.Tests;
 /// answer far from here. These pin the completion rules directly.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -24,12 +25,6 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
 
     /// <summary>A global id the daemon will never have issued.</summary>
     private const uint NoSuchGlobal = 0x7FFF_0000;
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -49,7 +44,6 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
         // pw_registry_destroy_global returns 0 rather than an async sequence, so there is no tag to
         // correlate the daemon's answer against and the refusal arrives on the core error stream.
         // Reported through the round-trip or not at all.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-sync-refuse",
@@ -77,7 +71,6 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
         // A barrier issues nothing, so nothing on the shared core error stream is its to report.
         // Failing on a neighbour's refusal turns every enumeration wait into a lottery on what else
         // the connection happens to be doing.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-sync-barrier",
@@ -115,7 +108,6 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
     [TestMethod]
     public async Task ManyRoundTripsAtOnce_EachCompletesOnItsOwnReply()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-sync-many",
@@ -149,7 +141,6 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
     [TestMethod]
     public async Task ARoundTripCancelledAtEveryPointInItsLife_NeverCompletesTwice()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-sync-cancel",
@@ -195,7 +186,6 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingTheContextWithARoundTripOutstanding_ReleasesItRatherThanHanging()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // The case with no token of its own. A round-trip is completed by a reply on the loop, and
@@ -236,7 +226,6 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
     [TestMethod]
     public async Task AFailedRequestFaultsItsOwnWaiter_AndLeavesOthersAlone()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-sync-error",
@@ -277,7 +266,6 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
     [TestMethod]
     public async Task RemovingSomethingThatCannotBeRemoved_SaysSoRatherThanReportingSuccess()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-rm-contract",
@@ -312,7 +300,6 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
     [TestMethod]
     public async Task RoundTripsFromSeveralThreadsOnOneContext_DoNotCrossTheirCompletions()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-sync-threads",
@@ -363,7 +350,6 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
         // token trips, so the daemon may apply it anyway. That is documented rather than prevented,
         // because preventing it would mean a rollback the protocol has no way to express. What must
         // not happen is the two disagreeing afterwards, or the connection being left unusable.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-cancel-write",
@@ -449,7 +435,6 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
     [TestMethod]
     public async Task ABindingDisposedTwiceAndThenFinalized_DestroysItsProxyExactlyOnce()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-sync-once",

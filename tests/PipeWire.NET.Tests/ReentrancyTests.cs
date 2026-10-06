@@ -15,18 +15,13 @@ namespace PipeWire.NET.Tests;
 /// the call site, so it is pinned here rather than left to be discovered in a host application.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class ReentrancyTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -46,7 +41,6 @@ public sealed class ReentrancyTests : PipeWireTestBase
     [TestMethod]
     public async Task ReadingAndBindingFromInsideAGraphCallback_Works()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-reentrant-read",
@@ -107,7 +101,6 @@ public sealed class ReentrancyTests : PipeWireTestBase
     [TestMethod]
     public async Task SubscribingAndUnsubscribingFromInsideAHandler_DoesNotDisturbTheOthers()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-reentrant-sub",
@@ -180,7 +173,6 @@ public sealed class ReentrancyTests : PipeWireTestBase
     [TestMethod]
     public async Task AMetadataHandlerWritingBackToTheStore_DoesNotDeadlock()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-reentrant-meta",
@@ -250,7 +242,6 @@ public sealed class ReentrancyTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingAControlFromInsideItsOwnCallback_TearsDownWithoutCrashing()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-reentrant-dispose",
@@ -314,7 +305,6 @@ public sealed class ReentrancyTests : PipeWireTestBase
         // no timeout anywhere to break it. There is no correct way to satisfy the request, so the
         // only useful answer is a clear refusal. The wait below is the real assertion: if this ever
         // regresses to a join, the test times out instead of hanging the run for ever.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-dispose-self",

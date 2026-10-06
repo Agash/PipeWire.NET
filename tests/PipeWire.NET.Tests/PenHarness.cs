@@ -27,6 +27,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("PenTest")]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
@@ -72,9 +73,6 @@ public sealed class PenHarness : PipeWireTestBase
 
     private static CancellationTokenSource Budget()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-
         return new CancellationTokenSource(TimeSpan.FromSeconds(Seconds));
     }
 

@@ -15,18 +15,13 @@ namespace PipeWire.NET.Tests;
 /// sequence a consumer actually performs working. The risk is in the joins between calls, not the calls.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class GraphScenarioTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -69,7 +64,6 @@ public sealed class GraphScenarioTests : PipeWireTestBase
     [TestMethod]
     public async Task Patchbay_RendersRewiresAndRedrawsFromNotifications()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-patchbay",
@@ -160,7 +154,6 @@ public sealed class GraphScenarioTests : PipeWireTestBase
     [TestMethod]
     public async Task Patchbay_MustNotTrustAStaleIdAfterRemoval()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-staleid",
@@ -214,7 +207,6 @@ public sealed class GraphScenarioTests : PipeWireTestBase
     [TestMethod]
     public async Task TransportAgent_PublishedNodeIsDiscoverableByNameAndAgreesOnItsId()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-agent",
@@ -273,7 +265,6 @@ public sealed class GraphScenarioTests : PipeWireTestBase
     [TestMethod]
     public async Task TransportAgent_SelectsTargetsByClassAndDataDirectionOnly()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-select",
@@ -345,7 +336,6 @@ public sealed class GraphScenarioTests : PipeWireTestBase
     [TestMethod]
     public async Task RoutingSetup_SurvivesTheProcessThatBuiltItAndIsRemovableLater()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         (PipeWireContext observerContext, PipeWireRegistry observer) = await ConnectAsync(
@@ -459,7 +449,6 @@ public sealed class GraphScenarioTests : PipeWireTestBase
     [TestMethod]
     public async Task RoutingSetup_IsRebuildableWithoutAccumulating()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext context, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-rebuild",

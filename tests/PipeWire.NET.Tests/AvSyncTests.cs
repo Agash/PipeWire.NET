@@ -32,6 +32,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -50,12 +51,6 @@ public sealed class AvSyncTests
     private sealed record Leg(long[] Time, long[] ReceivedNs, long[] Delay, long[] Clock);
 
     private sealed record Capture(Leg Video, Leg Audio, bool VideoDrove);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     /// <summary>CLOCK_MONOTONIC in nanoseconds - the clock pw_stream_get_nsec reads.</summary>
     private static long NowNs() =>
@@ -232,7 +227,6 @@ public sealed class AvSyncTests
     [TestMethod]
     public async Task AudioAndVideoPublishedTogether_ArriveOnOneTimeline()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
         Capture c = await CaptureBothLegsAsync("pwnet-avsync", videoOffsetNs: null, cts.Token);
@@ -297,7 +291,6 @@ public sealed class AvSyncTests
     [TestMethod]
     public async Task AnOffsetPublishedIntoTheVideo_IsRecoveredByTheConsumer()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
 
         Capture baseline = await CaptureBothLegsAsync("pwnet-avbase", videoOffsetNs: 0, cts.Token);
@@ -341,7 +334,6 @@ public sealed class AvSyncTests
     [TestMethod]
     public async Task ADesyncedStream_IsDrivenBackIntoSync()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
         Capture c = await CaptureBothLegsAsync("pwnet-avresync", videoOffsetNs: null, cts.Token);
@@ -409,7 +401,6 @@ public sealed class AvSyncTests
     [TestMethod]
     public async Task ApplyingTheReportedDelay_KeepsPresentationOrder()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
         Capture c = await CaptureBothLegsAsync("pwnet-avdelay", videoOffsetNs: null, cts.Token);
@@ -470,7 +461,6 @@ public sealed class AvSyncTests
     [TestCategory("RequiresGStreamer")]
     public async Task OneGStreamerPipeline_VideoCarriesItsRunningTimeAndAudioTheGraphs()
     {
-        RequireLinux();
         GstTestSource.RequireGStreamer();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 

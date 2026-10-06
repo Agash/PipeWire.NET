@@ -31,6 +31,7 @@ namespace PipeWire.NET.Tests;
 /// way that goes, and neither do these tests.
 /// </summary>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 // Every test here constructs a PipeWireContext, and that constructor already calls pw_init, so
 // none of them is a unit test: the Windows leg and the arm64 ABI leg both run everything outside
 // this category and have no libpipewire to run it against. The four that need no daemon are the
@@ -42,7 +43,6 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
     [TestMethod]
     public async Task StartAsync_BorrowOnly_LeavesTheCallerHandleUsableAndLeaksNoDuplicate()
     {
-        RequireLinux();
         string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         using FileStream stream = OpenTempFile(path);
 
@@ -79,7 +79,6 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
     [TestMethod]
     public async Task StartAsync_NullHandle_ThrowsArgumentNull_BeforeAnyDescriptorWork()
     {
-        RequireLinux();
         await using PipeWireContext context = new("fd-ownership-test");
 
         Assert.ThrowsExactly<ArgumentNullException>(() => context.StartAsync((SafeHandle)null!));
@@ -88,7 +87,6 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
     [TestMethod]
     public async Task StartAsync_InvalidHandle_ThrowsArgument_BeforeAnyDescriptorWork()
     {
-        RequireLinux();
         await using PipeWireContext context = new("fd-ownership-test");
         using SafeFileHandle invalid = new(new IntPtr(-1), ownsHandle: true);
 
@@ -108,7 +106,6 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
     [TestMethod]
     public async Task StartAsync_AfterAFailedAttempt_TheContextIsStartableAgain()
     {
-        RequireLinux();
         string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         using FileStream stream = OpenTempFile(path);
 
@@ -249,7 +246,6 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task StartAsync_OverAConnectedDaemonSocket_ConnectsAndLeavesTheSocketUsable()
     {
-        RequireLinux();
         using CancellationTokenSource cts = new(Budget);
 
         using Socket socket = await ConnectDaemonSocketAsync(cts.Token);
@@ -292,7 +288,6 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task StartAsync_OverARawDescriptor_ConnectsAndTakesOwnership()
     {
-        RequireLinux();
         using CancellationTokenSource cts = new(Budget);
 
         using Socket socket = await ConnectDaemonSocketAsync(cts.Token);
@@ -323,12 +318,6 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
     }
 
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static FileStream OpenTempFile(string path) =>
         new(

@@ -24,6 +24,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [SupportedOSPlatform("linux")]
 public sealed class TransportLifetimeTests : PipeWireTestBase
 {
@@ -35,9 +36,6 @@ public sealed class TransportLifetimeTests : PipeWireTestBase
 
     private static GbmAllocator RequireGbm()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-
         if (!File.Exists(RenderNode))
             Assert.Inconclusive($"No GPU render node ({RenderNode}).");
 
@@ -185,9 +183,6 @@ public sealed class TransportLifetimeTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task EachTriggeredPublish_ReachesTheConsumerWithItsContent()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
 
         await using var ctx = new PipeWireContext(

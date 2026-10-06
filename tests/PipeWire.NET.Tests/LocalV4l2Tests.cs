@@ -22,6 +22,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [TestCategory("RequiresCamera")]
@@ -29,12 +30,6 @@ namespace PipeWire.NET.Tests;
 public sealed class LocalV4l2Tests
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(60);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     /// <summary>
     /// A v4l2 camera reaches the graph, and frames captured from it carry real pixels.
@@ -48,7 +43,6 @@ public sealed class LocalV4l2Tests
     [TestMethod]
     public async Task AV4l2Camera_IsEnumeratedAndCapturedFrom()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using VirtualCamera camera = await VirtualCamera.StartAsync(cts.Token);
@@ -143,7 +137,6 @@ public sealed class LocalV4l2Tests
     [TestMethod]
     public async Task TheV4l2MonitorFactory_CanBeExportedDirectly()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(

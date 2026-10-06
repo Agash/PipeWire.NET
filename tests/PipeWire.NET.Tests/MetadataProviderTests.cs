@@ -13,18 +13,13 @@ namespace PipeWire.NET.Tests;
 /// works and that the session survives it.
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class MetadataProviderTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(40);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static string Unique() => $"pwnet-own-{Environment.ProcessId}-{Random.Shared.Next():x}";
 
@@ -34,7 +29,6 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         // Native strings end at the first NUL while the managed cache keys on the whole string.
         // Writing one would file an entry here the daemon records under a truncated key, and the
         // two would never reconcile - so the write is refused rather than half-applied.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -59,7 +53,6 @@ public sealed class MetadataProviderTests : PipeWireTestBase
     [TestMethod]
     public async Task AStoreWeServe_LeavesTheSessionResponsive()
     {
-        RequireLinux();
         CliTool cli = CliTool.Require("pw-cli");
         using var cts = new CancellationTokenSource(Budget);
 
@@ -95,7 +88,6 @@ public sealed class MetadataProviderTests : PipeWireTestBase
     [TestMethod]
     public async Task AStoreWeServe_ReportsEveryChangeItAccepts()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -141,7 +133,6 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         // One set per entry drops the loop lock between each, so a reader can catch the store
         // half-cleared. A null key is the implementation's own clear form: it empties the subject
         // and emits one notification without letting go of the lock.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -181,7 +172,6 @@ public sealed class MetadataProviderTests : PipeWireTestBase
     [TestMethod]
     public async Task ClearingAnEmptyStore_IsNotAnError()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -208,7 +198,6 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         // Exporting is what publishes the global; without it the store works locally and
         // nothing else ever sees it. Disposing then using it is refused like any other use
         // after disposal.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -248,7 +237,6 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         // consuming over one connection wedges the session, so no test does that here.
         // Clearing the session's shared store would take every client's defaults with it, so
         // the store cleared here is one this same test serves instead.
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -346,8 +334,6 @@ public sealed class MetadataProviderTests : PipeWireTestBase
     [TestMethod]
     public async Task BindingAStoreThroughTheConnectionThatServesIt_IsRefusedRatherThanHanging()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
         await using var ctx = new PipeWireContext(

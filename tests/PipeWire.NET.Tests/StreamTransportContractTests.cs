@@ -24,6 +24,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [SupportedOSPlatform("linux")]
 public sealed partial class StreamTransportContractTests : PipeWireTestBase
 {
@@ -71,8 +72,6 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
 
     private static GbmAllocator RequireGbm()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
         if (!File.Exists("/dev/dri/renderD128"))
             Assert.Inconclusive("No GPU render node.");
 
@@ -101,9 +100,6 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task AProducersPixels_ReachTheConsumerUnaltered()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
 
         await using var ctx = new PipeWireContext(
@@ -320,9 +316,6 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
     [TestCategory("RequiresDaemon")]
     public async Task AProducersSamples_ReachTheConsumerUnalteredAndStamped()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         const int rate = 48000,
             channels = 1;

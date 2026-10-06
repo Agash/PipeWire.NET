@@ -11,18 +11,13 @@ namespace PipeWire.NET.Tests;
 /// a device route, and reading the session's default sink.
 /// </summary>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class ParameterAndMetadataTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(20);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
@@ -44,7 +39,6 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     [TestMethod]
     public async Task AVirtualSink_ReportsAVolumeAndAcceptsANewOne()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-params",
@@ -88,7 +82,6 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     [TestMethod]
     public async Task MuteAndChannelVolumes_RoundTripThroughTheDaemon()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-mute",
@@ -151,7 +144,6 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     [TestMethod]
     public async Task PropertyInfo_NamesTheControlsTheNodeActuallyHas()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-propinfo",
@@ -187,7 +179,6 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     [TestMethod]
     public async Task AskingForAParameterANodeDoesNotHave_IsRefusedByTheDaemon()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-noparam",
@@ -224,7 +215,6 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     [TestMethod]
     public async Task BindingSomethingThatIsNotThatKind_IsRefusedBeforeTouchingTheDaemon()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-bindkind",
@@ -251,7 +241,6 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     [TestMethod]
     public async Task ADevice_ReportsTheProfilesAndRoutesItsCardOffers()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-device",
@@ -294,7 +283,6 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     [TestCategory("RequiresAudioRoute")]
     public async Task TheDefaultStore_ReportsTheSessionDefaultSink()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-metadata",
@@ -364,7 +352,6 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     [TestMethod]
     public async Task TheSettingsStore_ReportsTheGraphClock()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-settings",
@@ -396,7 +383,6 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     [TestMethod]
     public async Task SubscribingToProps_RaisesWhenSomethingElseChangesTheVolume()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-subscribe",
@@ -438,7 +424,6 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     [TestMethod]
     public async Task DisposingABindingWhileAReadIsInFlight_DoesNotHangOrCrash()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-bindrace",
@@ -471,7 +456,6 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     [TestMethod]
     public async Task ANodeDescribesItsOwnParameters_BeforeAnythingIsAskedOfIt()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-info",
@@ -510,7 +494,6 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     [TestMethod]
     public async Task ADeviceDescribesItsOwnParameters_Too()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-devinfo",
@@ -538,7 +521,6 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     [TestMethod]
     public async Task AClientCanBeBoundAndItsPropertiesUpdated()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-clientprops",
@@ -590,7 +572,6 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
     [TestCategory("KillsTheDaemon")]
     public async Task ConfiningAClient_LeavesItOnlyWhatItWasGrantedAndConnected()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         string appName = Unique("pwnet-confined");
         (PipeWireContext managerCtx, PipeWireRegistry manager) = await ConnectAsync(

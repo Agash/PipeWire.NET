@@ -21,18 +21,13 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class RegistryRefusalTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     /// <summary>An id that is nothing at all is refused by every entry point that takes one.</summary>
     /// <remarks>
@@ -43,7 +38,6 @@ public sealed class RegistryRefusalTests : PipeWireTestBase
     [TestMethod]
     public async Task EveryLookupByGlobalId_RefusesAnIdTheGraphDoesNotHave()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -94,7 +88,6 @@ public sealed class RegistryRefusalTests : PipeWireTestBase
     [TestMethod]
     public async Task ADisposedRegistry_RefusesEveryCallAndEndsItsWatch()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(

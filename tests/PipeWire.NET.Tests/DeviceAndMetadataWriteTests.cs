@@ -22,12 +22,6 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(25);
 
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
-
     private static async Task<(PipeWireContext Context, PipeWireRegistry Registry)> ConnectAsync(
         string name,
         CancellationToken cancellationToken
@@ -41,9 +35,9 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task APropertyANodeDoesNotSupport_IsReportedAbsentRatherThanGuessedAt()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-latency",
@@ -137,9 +131,9 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task ReapplyingTheActiveRoute_IsAcceptedAndChangesNothing()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-setroute",
@@ -199,9 +193,9 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task ADevicesRoutes_CarryTheirOwnVolumeAndSurviveBeingReadBack()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-routes",
@@ -261,9 +255,9 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task ADevicesProfiles_AreEnumerableAndTheCurrentOneIsAmongThem()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-profiles",
@@ -304,9 +298,9 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task AMetadataEntry_CanBeWrittenReadBackAndRemoved()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-metawrite",
@@ -382,9 +376,9 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task TheDefaultSinkCanBeSetToWhatItAlreadyIs_WithoutDisturbingTheSession()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-defsink",
@@ -440,9 +434,9 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task ANodeNameWithCharactersThatWouldBreakJson_IsEscapedRatherThanCorrupting()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-jsonesc",
@@ -522,9 +516,9 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task SwitchingACardProfileAndPuttingItBack_ReplacesItsNodesBothTimes()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-profileswitch",
@@ -744,9 +738,9 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Linux)]
     public async Task SettingARouteVolumeAndRestoringIt_ChangesTheHardwareMixer()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         (PipeWireContext ctx, PipeWireRegistry registry) = await ConnectAsync(
             "pwnet-routevol",

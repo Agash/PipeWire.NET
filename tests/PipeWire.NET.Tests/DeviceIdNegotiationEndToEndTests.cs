@@ -25,6 +25,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [SupportedOSPlatform("linux")]
 public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
 {
@@ -48,9 +49,6 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
     /// <summary>The render node the buffers are allocated on, and an allocator for it.</summary>
     private static (DrmDevice Device, GbmAllocator Gbm) RealDevice()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-
         ImmutableArray<DrmDevice> nodes = DrmDevice.EnumerateRenderNodes();
         if (nodes.IsEmpty)
             Assert.Inconclusive("No GPU render node - skipping device-ID negotiation.");

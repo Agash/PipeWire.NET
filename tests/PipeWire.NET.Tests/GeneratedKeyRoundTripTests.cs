@@ -23,6 +23,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -32,12 +33,6 @@ public sealed class GeneratedKeyRoundTripTests
 
     private const int Rate = 48000;
     private const int Channels = 2;
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     /// <summary>
     /// Properties this library writes under generated keys come back out of <c>pw-dump</c> under
@@ -50,7 +45,6 @@ public sealed class GeneratedKeyRoundTripTests
     [TestMethod]
     public async Task PropertiesWrittenUnderGeneratedKeys_AreReadBackByPwDumpUnderTheSameNames()
     {
-        RequireLinux();
         PwTools.Require();
 
         using var cts = new CancellationTokenSource(Budget);
@@ -149,7 +143,6 @@ public sealed class GeneratedKeyRoundTripTests
     [TestMethod]
     public async Task TheGeneratedInterfaceTypeNames_AreTheOnesTheDaemonReports()
     {
-        RequireLinux();
         PwTools.Require();
 
         using var cts = new CancellationTokenSource(Budget);
@@ -224,7 +217,6 @@ public sealed class GeneratedKeyRoundTripTests
     [TestMethod]
     public async Task TheGraphClock_AdvancesMonotonicallyWhileStreaming()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -307,7 +299,6 @@ public sealed class GeneratedKeyRoundTripTests
     [TestMethod]
     public async Task ADrivingOutput_ProducesCyclesOnItsTimer()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(

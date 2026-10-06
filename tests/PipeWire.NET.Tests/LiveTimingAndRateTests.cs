@@ -25,6 +25,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
@@ -34,12 +35,6 @@ public sealed class LiveTimingAndRateTests
 
     private const int Rate = 48000;
     private const int Channels = 2;
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     /// <summary>Starts a silent output and a capture bound to it, both streaming.</summary>
     private static async Task<(
@@ -95,7 +90,6 @@ public sealed class LiveTimingAndRateTests
     [TestMethod]
     public async Task AStreamingPair_ReportsEveryQueueFieldAndTheDepthMoves()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         (PipeWireContext ctx, PipeWireAudioOutput output, PipeWireAudioCapture capture) =
@@ -169,7 +163,6 @@ public sealed class LiveTimingAndRateTests
     [TestMethod]
     public async Task TheRateController_StaysBoundedWhenDrivenFromALiveQueue()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         (PipeWireContext ctx, PipeWireAudioOutput output, PipeWireAudioCapture capture) =
@@ -248,7 +241,6 @@ public sealed class LiveTimingAndRateTests
     [TestMethod]
     public async Task AStreamGoingLive_DeliversItsNodeCommandsToSubscribers()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -314,7 +306,6 @@ public sealed class LiveTimingAndRateTests
     [TestMethod]
     public async Task PropertiesSetBeforeConnecting_ReachTheDaemonsNode()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         string marker = $"marker-{Guid.NewGuid():N}";

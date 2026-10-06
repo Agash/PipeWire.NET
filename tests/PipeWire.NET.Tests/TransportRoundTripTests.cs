@@ -24,6 +24,7 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [TestCategory("RequiresGpu")]
@@ -54,8 +55,6 @@ public sealed class TransportRoundTripTests
 
     private static GbmAllocator RequireGbm()
     {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
         if (!File.Exists("/dev/dri/renderD128"))
             Assert.Inconclusive("No GPU render node.");
 

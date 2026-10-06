@@ -20,17 +20,12 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [SupportedOSPlatform("linux")]
 public sealed class InProcessGraphTests
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(45);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux library.");
-    }
 
     /// <summary>
     /// A self-connected context comes up and has a graph of its own, without any daemon.
@@ -52,7 +47,6 @@ public sealed class InProcessGraphTests
     [TestMethod]
     public async Task ASelfConnectedContext_HasItsOwnGraphWithNoDaemon()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -114,7 +108,6 @@ public sealed class InProcessGraphTests
     [TestMethod]
     public async Task LoadingAModuleAfterStarting_IsRefused()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(
@@ -137,7 +130,6 @@ public sealed class InProcessGraphTests
     [TestMethod]
     public async Task AMissingModule_FailsTheStartRatherThanBeingIgnored()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         await using var ctx = new PipeWireContext(

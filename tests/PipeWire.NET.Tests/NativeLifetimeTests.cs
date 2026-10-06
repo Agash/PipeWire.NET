@@ -20,18 +20,13 @@ namespace PipeWire.NET.Tests;
 /// </para>
 /// </remarks>
 [TestClass]
+[OSCondition(OperatingSystems.Linux)]
 [TestCategory("Integration")]
 [TestCategory("RequiresDaemon")]
 [SupportedOSPlatform("linux")]
 public sealed class NativeLifetimeTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(40);
-
-    private static void RequireLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-            Assert.Inconclusive("PipeWire is a Linux daemon.");
-    }
 
     private static async Task<PipeWireGraphSnapshot> WaitForAsync(
         PipeWireRegistry registry,
@@ -49,7 +44,6 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task DestroyingTheContextWhileOwningProxies_DoesNotAbort()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         var ctx = new PipeWireContext("pwnet-nl-owned", ConsoleTestLoggerFactory.Instance);
@@ -89,7 +83,6 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task ProxiesReleasedByFinalizationAfterTheContextIsGone_DoNotAbort()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // No ordering guarantee remains except the handle ref-count.
@@ -111,7 +104,6 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task ALingeringNodeSurvivesItsCreatorBeingFinalized_NotJustDisposed()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // Linger is a property of the object on the daemon, not an artefact of shutdown: the
@@ -149,7 +141,6 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task AControlDroppedWithoutDisposing_IsStillCollectable()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // A listener needs the daemon to be able to find the managed object, and the obvious way to
@@ -199,7 +190,6 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task ManyContextsCreatedAndDisposed_DoNotAccumulateProcessResources()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // pw_init is called per context and pw_deinit is never called. The balancing call is not
@@ -353,7 +343,6 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task TheLoopOutlivesEveryProxyThatReferencesIt()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // The ref-count exists so the loop cannot be destroyed while a proxy still needs it to
@@ -384,7 +373,6 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task AForeignObjectIsNeverDestroyedThroughAProxyWeDoNotOwn()
     {
-        RequireLinux();
         PwTools.Require();
         using var cts = new CancellationTokenSource(Budget);
 
@@ -445,7 +433,6 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task DestroyingTheContextWhileAStreamIsConnected_DoesNotAbandonIt()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // pw_stream is the one PipeWire object still held as a raw pointer rather than a handle,
@@ -475,7 +462,6 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task ASnapshotOutlivingTheNativeObjectsItDescribes_IsStillReadable()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
 
         // A snapshot is an immutable observation, not a handle. It must stay readable after every
@@ -513,7 +499,6 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task EveryGraphChangedNotification_SeesTheSnapshotItDescribes()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-nl-ordering",
@@ -555,7 +540,6 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task CreatingWhileTheInitialEnumerationIsStillArriving_Succeeds()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-nl-burst",
@@ -592,7 +576,6 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
     [TestMethod]
     public async Task CreatingBeforeTheRegistryHasSeenAnything_Succeeds()
     {
-        RequireLinux();
         using var cts = new CancellationTokenSource(Budget);
         await using var ctx = new PipeWireContext(
             "pwnet-nl-immediate",
