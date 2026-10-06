@@ -518,6 +518,34 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     public void SkipCurrentFrame() => _core?.SkipCurrentBuffer();
 
     /// <summary>
+    /// From inside a <c>FrameReady</c> handler: keeps this frame's buffer from the producer until the
+    /// returned hold is disposed, so its memory and descriptors can be read after the handler returns,
+    /// a GPU reading them in place.
+    /// </summary>
+    /// <returns>
+    /// The hold. Disposing it hands the buffer back (and signals its release point under explicit
+    /// sync), from any thread; a stream that stops or renegotiates first takes the buffer back itself.
+    /// </returns>
+    /// <remarks>
+    /// The producer writes into the buffers it negotiated, eight unless it allocated fewer, so a held
+    /// buffer is one it cannot reuse: hold the few frames a reader has in flight, and let go as soon as
+    /// it has read them.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">Not called from a <c>FrameReady</c> handler.</exception>
+    public PipeWireFrameHold HoldCurrentFrame()
+    {
+        PipeWireStreamCore core =
+            _core ?? throw new InvalidOperationException("The capture is not connected.");
+        PipeWireStreamCore.BufferHold buffer = core.HoldCurrentBuffer();
+        SyncRelease release = _cycleRelease;
+        _cycleRelease = default;
+        return new PipeWireFrameHold(this, buffer, release);
+    }
+
+    // Lets a hold signal its release point through this capture's reporting.
+    internal void Released(SyncRelease release) => SignalRelease(release);
+
+    /// <summary>
     /// Asks the producer to renegotiate, offering a different size or frame rate.
     /// </summary>
     /// <param name="formats">Pixel formats to offer, most preferred first.</param>
@@ -1109,11 +1137,23 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
                 break;
         }
 
-        FrameReady?.Invoke(this, frame);
-
-        // Not retained, so the handler was the last reader.
-        SignalRelease(release);
+        // A handler that holds the frame takes its release with the hold; otherwise the handler was
+        // the last reader.
+        _cycleRelease = release;
+        try
+        {
+            FrameReady?.Invoke(this, frame);
+        }
+        finally
+        {
+            release = _cycleRelease;
+            _cycleRelease = default;
+            SignalRelease(release);
+        }
     }
+
+    // The release point of the frame being handed to FrameReady, until a hold takes it. Loop thread only.
+    private SyncRelease _cycleRelease;
 
     /// <summary>Waits for a frame's acquire point, on a syncobj or on upstream's eventfd stand-in.</summary>
     /// <remarks>

@@ -488,6 +488,7 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
             return;
 
         pw_buffer* buf = Native.pw_stream_dequeue_buffer(stream);
+        self._currentBuffer = buf;
         if (buf is null)
         {
             // No buffer queued for this cycle: the producer hasn't filled one yet (start-up) or is
@@ -567,11 +568,20 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         }
         finally
         {
-            // Returned rather than queued when the handler said it did not use the buffer.
-            // Returning makes it immediately available to dequeue again without counting as
-            // consumed, which is what a consumer skipping a frame means; queueing it would report
-            // data the consumer never took and skew the queue depth a rate controller reads.
-            if (Volatile.Read(ref self._skipCurrent))
+            self._currentBuffer = null;
+            BufferHold? hold = self._holdCurrent;
+            self._holdCurrent = null;
+
+            // Kept when a handler holds it: the holder queues it back when it lets go. Returned
+            // rather than queued when the handler said it did not use the buffer. Returning makes it
+            // immediately available to dequeue again without counting as consumed, which is what a
+            // consumer skipping a frame means; queueing it would report data the consumer never took
+            // and skew the queue depth a rate controller reads.
+            if (hold is not null && hold.Keep())
+            {
+                self._held.Add((nint)buf);
+            }
+            else if (Volatile.Read(ref self._skipCurrent))
             {
                 Volatile.Write(ref self._skipCurrent, false);
                 Native.pw_stream_return_buffer(stream, buf);
@@ -586,6 +596,72 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
     // Set by a handler, read once by the finally above. Only ever touched on the loop thread, but
     // volatile so the write inside the handler cannot be sunk past the read.
     private bool _skipCurrent;
+
+    // The buffer the running handler was given, and the hold it asked for. Loop thread only.
+    private pw_buffer* _currentBuffer;
+    private BufferHold? _holdCurrent;
+
+    // Buffers kept past their cycle, queued back when their holder lets go. Touched on the loop thread
+    // or under the loop lock.
+    private readonly HashSet<nint> _held = [];
+
+    /// <summary>
+    /// From inside a buffer handler: keeps this cycle's buffer from the producer until the hold is
+    /// released, instead of queueing it back when the handler returns.
+    /// </summary>
+    /// <returns>The hold; releasing it queues the buffer back. Asking twice in one cycle returns the same hold.</returns>
+    /// <exception cref="InvalidOperationException">Not called from a buffer handler.</exception>
+    internal BufferHold HoldCurrentBuffer()
+    {
+        if (!_ctx.IsOnLoopThread || _currentBuffer is null)
+        {
+            throw new InvalidOperationException(
+                "A buffer can be held only from inside the handler it was delivered to."
+            );
+        }
+
+        return _holdCurrent ??= new BufferHold(this, _currentBuffer);
+    }
+
+    // Queues a held buffer back, from any thread. A buffer the stream has since removed, or a stream
+    // that has gone, has nothing to return.
+    private void Requeue(pw_buffer* buffer)
+    {
+        using (_ctx.Lock())
+        {
+            if (!_disposed && _stream is not null && _held.Remove((nint)buffer))
+            {
+                Native.pw_stream_queue_buffer(_stream, buffer);
+            }
+        }
+    }
+
+    /// <summary>A buffer kept past its cycle, queued back once when released.</summary>
+    internal sealed class BufferHold
+    {
+        private readonly PipeWireStreamCore _core;
+        private readonly pw_buffer* _buffer;
+        private int _released;
+
+        internal BufferHold(PipeWireStreamCore core, pw_buffer* buffer)
+        {
+            _core = core;
+            _buffer = buffer;
+        }
+
+        // Whether the buffer stays held when its cycle ends: false when it was released inside the
+        // handler, which then queues it as usual.
+        internal bool Keep() => Volatile.Read(ref _released) == 0;
+
+        /// <summary>Queues the buffer back to the producer; later calls do nothing.</summary>
+        public void Release()
+        {
+            if (Interlocked.Exchange(ref _released, 1) == 0)
+            {
+                _core.Requeue(_buffer);
+            }
+        }
+    }
 
     /// <summary>
     /// From inside a buffer handler: return this cycle's buffer unused instead of queueing it.
@@ -626,6 +702,9 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         PipeWireStreamCore? self = FromData(data);
         if (self is null)
             return;
+
+        // A held buffer the stream takes away is the stream's to free; its hold has nothing to return.
+        _ = self._held.Remove((nint)buffer);
         try
         {
             self._onRemoveBuffer?.Invoke(buffer);

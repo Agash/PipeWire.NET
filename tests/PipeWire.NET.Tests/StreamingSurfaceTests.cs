@@ -261,6 +261,58 @@ public sealed class StreamingSurfaceTests
     }
 
     /// <summary>
+    /// A held frame's buffer stays with the consumer: while held it is never delivered again, and the
+    /// stream keeps running on the producer's other buffers. Letting go returns it to rotation.
+    /// </summary>
+    /// <remarks>
+    /// A consumer holds the few frames it has in flight. Holding every buffer would leave the producer
+    /// nothing to write into and the graph no cycle in which to recycle what comes back.
+    /// </remarks>
+    [TestMethod]
+    [TestCategory("RequiresGStreamer")]
+    public async Task HeldFrames_KeepTheirBuffersWhileTheStreamRuns()
+    {
+        RequireLinux();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
+        (PipeWireContext ctx, GstTestSource src) = await SourceAsync("pwnet-surface-hold");
+        await using (ctx)
+        await using (src)
+        {
+            const int InFlight = 3;
+            Queue<(long Fd, PipeWireFrameHold Hold)> held = new();
+            int seen = 0;
+            int reused = 0;
+            await using var cap = new PipeWireVideoCapture(ctx, "pwnet-surface-hold-sink");
+            cap.FrameReady += (s, frame) =>
+            {
+                long fd = frame.Planes.IsEmpty ? frame.Fd : frame.Planes[0].Fd;
+                if (held.Any(h => h.Fd == fd))
+                {
+                    reused++;
+                }
+
+                held.Enqueue((fd, s.HoldCurrentFrame()));
+                if (held.Count > InFlight)
+                {
+                    held.Dequeue().Hold.Dispose();
+                }
+
+                Interlocked.Increment(ref seen);
+            };
+
+            cap.Connect(src.NodeId);
+            await cap.WaitForStreamingAsync(cts.Token);
+            await Task.Delay(1500, cts.Token);
+
+            Assert.IsTrue(
+                Volatile.Read(ref seen) > 20,
+                $"{seen} frames arrived with {InFlight} held"
+            );
+            Assert.AreEqual(0, reused, "a held buffer was delivered again before it was released");
+        }
+    }
+
+    /// <summary>
     /// A renegotiation request sent to a real gst producer leaves this side usable, whether or not
     /// the producer answers.
     /// </summary>

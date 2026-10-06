@@ -1279,6 +1279,8 @@ PipeWire.NET.Media.PipeWireBufferType.MemFd = PipeWireBufferType
 PipeWire.NET.Media.PipeWireBufferType.MemPtr = PipeWireBufferType
 PipeWire.NET.Media.PipeWireBufferType.Unknown = PipeWireBufferType
 PipeWire.NET.Media.PipeWireBufferType.value__ = Int32
+PipeWire.NET.Media.PipeWireFrameHold
+PipeWire.NET.Media.PipeWireFrameHold.Dispose()
 PipeWire.NET.Media.PipeWireRateController
 PipeWire.NET.Media.PipeWireRateController..ctor()
 PipeWire.NET.Media.PipeWireRateController.Bandwidth : Double
@@ -1349,6 +1351,7 @@ PipeWire.NET.Media.PipeWireVideoCapture.FrameReady event
 PipeWire.NET.Media.PipeWireVideoCapture.FrameReadyHandler
 PipeWire.NET.Media.PipeWireVideoCapture.GetControl(UInt32)
 PipeWire.NET.Media.PipeWireVideoCapture.GraphClock : Nullable<PipeWireGraphClock>
+PipeWire.NET.Media.PipeWireVideoCapture.HoldCurrentFrame()
 PipeWire.NET.Media.PipeWireVideoCapture.IsDriving : Boolean
 PipeWire.NET.Media.PipeWireVideoCapture.IsLazy : Boolean
 PipeWire.NET.Media.PipeWireVideoCapture.LastProcessError : Exception

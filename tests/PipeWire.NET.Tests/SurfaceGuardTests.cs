@@ -239,6 +239,7 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
             videoIn.GetControl(0)
         );
         videoIn.SkipCurrentFrame();
+        Assert.ThrowsExactly<InvalidOperationException>(() => videoIn.HoldCurrentFrame());
         videoIn.TriggerProcess();
         videoIn.SetError(-5, "no stream");
         Assert.AreEqual(0, videoIn.UpdateProperties(retag));
