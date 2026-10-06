@@ -1281,6 +1281,10 @@ PipeWire.NET.Media.PipeWireBufferType.Unknown = PipeWireBufferType
 PipeWire.NET.Media.PipeWireBufferType.value__ = Int32
 PipeWire.NET.Media.PipeWireFrameHold
 PipeWire.NET.Media.PipeWireFrameHold.Dispose()
+PipeWire.NET.Media.PipeWireOutputFrame
+PipeWire.NET.Media.PipeWireOutputFrame.BufferIndex : Int32
+PipeWire.NET.Media.PipeWireOutputFrame.Dispose()
+PipeWire.NET.Media.PipeWireOutputFrame.Publish()
 PipeWire.NET.Media.PipeWireRateController
 PipeWire.NET.Media.PipeWireRateController..ctor()
 PipeWire.NET.Media.PipeWireRateController.Bandwidth : Double
@@ -1443,6 +1447,7 @@ PipeWire.NET.Media.PipeWireVideoOutput.NegotiatedDevice : Nullable<DrmDevice>
 PipeWire.NET.Media.PipeWireVideoOutput.NextPresentationTimestampNs : Nullable<Int64>
 PipeWire.NET.Media.PipeWireVideoOutput.NodeId : Nullable<UInt32>
 PipeWire.NET.Media.PipeWireVideoOutput.ProcessErrorCount : Int64
+PipeWire.NET.Media.PipeWireVideoOutput.PushFrames : Boolean
 PipeWire.NET.Media.PipeWireVideoOutput.Queue : Nullable<PipeWireStreamQueue>
 PipeWire.NET.Media.PipeWireVideoOutput.RateMatch : Nullable<PipeWireRateMatch>
 PipeWire.NET.Media.PipeWireVideoOutput.ReleaseDmaBuf event
@@ -1451,12 +1456,14 @@ PipeWire.NET.Media.PipeWireVideoOutput.RequestFormat(ReadOnlySpan<PixelFormat>, 
 PipeWire.NET.Media.PipeWireVideoOutput.SetControl(UInt32, ReadOnlySpan<Single>, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.SetError(Int32, String, CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.SetRate(Double, CancellationToken)
+PipeWire.NET.Media.PipeWireVideoOutput.SharesBuffers : Boolean
 PipeWire.NET.Media.PipeWireVideoOutput.StampSyncPoints(Int32, UInt64, UInt64)
 PipeWire.NET.Media.PipeWireVideoOutput.StateChanged event
 PipeWire.NET.Media.PipeWireVideoOutput.StateChangedHandler
 PipeWire.NET.Media.PipeWireVideoOutput.Time : Nullable<PipeWireStreamTime>
 PipeWire.NET.Media.PipeWireVideoOutput.TriggerProcess()
 PipeWire.NET.Media.PipeWireVideoOutput.TriggerProcessAndWaitAsync(CancellationToken)
+PipeWire.NET.Media.PipeWireVideoOutput.TryBeginFrame(PipeWireOutputFrame&)
 PipeWire.NET.Media.PipeWireVideoOutput.UpdateProperties(IReadOnlyDictionary<String, String>)
 PipeWire.NET.Media.PipeWireVideoOutput.WaitForNodeIdAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.WaitForStreamingAsync(CancellationToken)

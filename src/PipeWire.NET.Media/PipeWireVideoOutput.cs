@@ -1064,6 +1064,20 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     /// </summary>
     public bool HostMemoryFallback { get; set; }
 
+    /// <summary>
+    /// Whether the application queues shared buffers itself, rendering each frame into a buffer it takes
+    /// with <see cref="TryBeginFrame"/> on its own thread, as GStreamer's pipewiresink does. Set before
+    /// connecting. Cycles then publish what it queued, and <see cref="FillDmaBuf"/> is not raised; a
+    /// consumer that settled on memory is still filled through <see cref="FillFrame"/>.
+    /// </summary>
+    public bool PushFrames { get; set; }
+
+    /// <summary>
+    /// Whether frames are pushed into shared buffers now: <see cref="PushFrames"/> is set and the
+    /// consumer settled on a shared buffer. False before a consumer settles and when it reads memory.
+    /// </summary>
+    public bool SharesBuffers => _core?.ProducerDequeues ?? false;
+
     /// <summary>How much this stream currently holds, or null when it cannot be read.</summary>
     /// <remarks>
     /// The error term for a rate controller. Pair it with <see cref="PipeWireRateController"/> to
@@ -1143,7 +1157,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     {
         if (_dmaBufMode && _sharedNegotiated)
         {
-            FillDmaBufBuffer(buf, in clock);
+            FillDmaBufBuffer(buf);
             return;
         }
 
@@ -1176,7 +1190,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             return;
 
         d->chunk->size = (uint)byteLen;
-        WritePresentationTime(buf, in clock);
+        WritePresentationTime(buf);
     }
 
     /// <summary>
@@ -1218,13 +1232,8 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     /// anything that does not - GStreamer's pipewiresink, for one - leaves it frozen. A caller with
     /// media timestamps of its own supplies them through <see cref="NextPresentationTimestampNs"/>.
     /// </remarks>
-    private unsafe void WritePresentationTime(
-        pw_buffer* buf,
-        in PipeWireStreamCore.StreamClock clock
-    )
+    private unsafe void WritePresentationTime(pw_buffer* buf)
     {
-        _ = clock;
-
         // Taken, not just read: a supplied time applies to one frame, so the next cycle falls back
         // to the stream clock unless the caller sets it again.
         long? supplied = NextPresentationTimestampNs;
@@ -1271,14 +1280,113 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     // Producer process for a dmabuf buffer: the dmabuf layout (offset/stride) was fixed in add_buffer, so
     // here we only ask the app to render the frame and then mark each plane's chunk size to publish it (or
     // 0 to emit an empty frame). The fd/plane geometry never changes, hence no per-frame copy.
-    private unsafe void FillDmaBufBuffer(pw_buffer* buf, in PipeWireStreamCore.StreamClock clock)
+    private unsafe void FillDmaBufBuffer(pw_buffer* buf)
     {
+        if (!TryOpenDmaBufFrame(buf, out DmaBufFrame frame))
+            return;
+
+        bool publish = FillDmaBuf?.Invoke(this, frame.Index) ?? false;
+        CloseDmaBufFrame(buf, in frame, publish);
+    }
+
+    /// <summary>
+    /// Takes a free shared buffer for the application to render the next frame into on its own thread,
+    /// with no copy; <see cref="PipeWireOutputFrame.Publish"/> queues it to the consumer. One frame is
+    /// open at a time. Under explicit sync the consumer's release is waited for here.
+    /// </summary>
+    /// <param name="frame">The open frame; dispose it, published or not.</param>
+    /// <returns>
+    /// False, with nothing to dispose, unless <see cref="SharesBuffers"/> and a buffer is free: one
+    /// frame waits for the consumer at most, so while the last one published has not been taken the
+    /// frame is skipped, and the consumer never falls behind by more than a frame.
+    /// </returns>
+    /// <exception cref="InvalidOperationException">A frame is already open.</exception>
+    public unsafe bool TryBeginFrame(out PipeWireOutputFrame frame)
+    {
+        frame = default;
+        PipeWireStreamCore? core = _core;
+        if (core is null || !core.ProducerDequeues)
+            return false;
+
+        lock (_pushGate)
+        {
+            if (_openFrame is not null)
+                throw new InvalidOperationException("A frame is already open.");
+
+            pw_buffer* buf = core.DequeueForProducer();
+            if (buf is null)
+                return false;
+
+            if (!TryOpenDmaBufFrame(buf, out DmaBufFrame opened))
+            {
+                _ = core.QueueFromProducer(buf, publish: false);
+                return false;
+            }
+
+            _openFrame = new OpenFrame(core, (nint)buf, opened);
+            frame = new PipeWireOutputFrame(this, opened.Index);
+            return true;
+        }
+    }
+
+    // Ends the open frame: queued to the consumer when published, otherwise returned unused.
+    internal unsafe void EndFrame(bool publish)
+    {
+        lock (_pushGate)
+        {
+            if (_openFrame is not { } open)
+                return;
+
+            _openFrame = null;
+            var buf = (pw_buffer*)open.Buffer;
+            if (!_ctx.TryLock(out PipeWireContext.LoopLock scope))
+                return;
+
+            // Under the loop lock, which is recursive: the stream may not take the buffer away
+            // between the check and the stamping.
+            using (scope)
+            {
+                if (!open.Core.IsHeldByProducer(buf))
+                    return;
+
+                if (publish)
+                {
+                    DmaBufFrame opened = open.Frame;
+                    CloseDmaBufFrame(buf, in opened, publish: true);
+                }
+
+                if (open.Core.QueueFromProducer(buf, publish) && publish)
+                    open.Core.TriggerProcess();
+            }
+        }
+    }
+
+    private readonly Lock _pushGate = new();
+    private OpenFrame? _openFrame;
+
+    // The buffer an application is rendering into, from TryBeginFrame until its frame ends.
+    private sealed record OpenFrame(PipeWireStreamCore Core, nint Buffer, DmaBufFrame Frame);
+
+    // A pool buffer being filled: its index and the sync points it is stamped with.
+    private readonly record struct DmaBufFrame(
+        int Index,
+        nint Sync,
+        bool SyncReady,
+        ulong AcquirePoint,
+        ulong ReleasePoint
+    );
+
+    // Readies a buffer to be rendered into: its sizes cleared and, under explicit sync, the consumer's
+    // release waited for. False when it cannot be rendered into this time.
+    private unsafe bool TryOpenDmaBufFrame(pw_buffer* buf, out DmaBufFrame frame)
+    {
+        frame = default;
         spa_buffer* sb = buf->buffer;
         if (sb is null)
-            return;
+            return false;
         int index = (int)(nint)buf->user_data - 1; // we store index+1 so 0 means "unassigned"
         if (index < 0 || (uint)index >= (uint)MaxPoolBuffers)
-            return;
+            return false;
 
         // Cleared before the handler, for the same reason as the host-memory path: a throw must
         // publish nothing rather than republish the previous frame's sizes.
@@ -1340,12 +1448,22 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 LogReleaseTimedOut(index, (*sync).release_point, ReleaseTimeout.TotalMilliseconds);
             else
                 LogReleaseFailed(index, (*sync).release_point, missed.Errno);
-            return;
+            return false;
         }
 
-        bool publish = FillDmaBuf?.Invoke(this, index) ?? false;
+        frame = new DmaBufFrame(index, (nint)sync, syncReady, acquirePoint, releasePoint);
+        return true;
+    }
 
-        if (syncReady)
+    // Stamps a rendered buffer's sync points and, when it holds a frame, the sizes that publish it.
+    private unsafe void CloseDmaBufFrame(pw_buffer* buf, in DmaBufFrame frame, bool publish)
+    {
+        spa_buffer* sb = buf->buffer;
+        int index = frame.Index;
+        var sync = (spa_meta_sync_timeline*)frame.Sync;
+        ulong acquirePoint = frame.AcquirePoint;
+        ulong releasePoint = frame.ReleasePoint;
+        if (frame.SyncReady)
         {
             // Fresh every cycle: the flag re-arms the promise protocol, the points are this
             // frame's, and the acquire signal releases the consumer's wait. Stamped even for a
@@ -1385,7 +1503,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             c->size = sb->datas[i].maxsize;
         }
 
-        WritePresentationTime(buf, in clock);
+        WritePresentationTime(buf);
     }
 
     /// <summary>Finds the sync timeline meta of a pool buffer, when the peer agreed to carry one.</summary>
@@ -1430,6 +1548,8 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         SpaFormatPod.VideoFormatInfo parsed = SpaFormatPod.ParseVideoFormat(param, Format);
         Volatile.Write(ref _fmtCell, new NegotiatedFormat(parsed));
         _sharedNegotiated = parsed.Modifier != DrmFormatModifier.Invalid;
+        if (_core is { } core)
+            core.ProducerDequeues = PushFrames && _sharedNegotiated;
         LogOnFormat(parsed.Modifier, parsed.ModifierNeedsFixation);
     }
 

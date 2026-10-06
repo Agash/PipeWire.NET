@@ -487,6 +487,11 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         if (stream is null)
             return;
 
+        // A producer that dequeues on its own thread is the only one that may: the stream's queues
+        // have one reader each, and the cycle publishes what it queued.
+        if (Volatile.Read(ref self._producerDequeues))
+            return;
+
         pw_buffer* buf = Native.pw_stream_dequeue_buffer(stream);
         self._currentBuffer = buf;
         if (buf is null)
@@ -621,6 +626,72 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         }
 
         return _holdCurrent ??= new BufferHold(this, _currentBuffer);
+    }
+
+    // Set while the producer dequeues buffers itself; process cycles then leave the queues to it.
+    private bool _producerDequeues;
+
+    /// <summary>
+    /// Whether the producer dequeues buffers on its own thread (<see cref="DequeueForProducer"/>) instead of
+    /// being handed one each cycle.
+    /// </summary>
+    internal bool ProducerDequeues
+    {
+        get => Volatile.Read(ref _producerDequeues);
+        set => Volatile.Write(ref _producerDequeues, value);
+    }
+
+    /// <summary>
+    /// Dequeues a free buffer for the producer to fill on its own thread; it stays held until
+    /// <see cref="QueueFromProducer"/> hands it back. Null when none is free, when a frame it queued
+    /// still waits for the consumer, or when the stream has gone.
+    /// </summary>
+    internal pw_buffer* DequeueForProducer()
+    {
+        using (_ctx.Lock())
+        {
+            pw_stream* stream = _stream;
+            if (_disposed || stream is null)
+                return null;
+
+            // One frame waits for the consumer at most. A producer faster than its consumer would
+            // otherwise fill the queue, and the consumer would take every frame a queue's length late.
+            pw_time time;
+            if (
+                Native.pw_stream_get_time_n(stream, &time, (nuint)sizeof(pw_time)) == 0
+                && time.queued_buffers > 0
+            )
+                return null;
+
+            pw_buffer* buffer = Native.pw_stream_dequeue_buffer(stream);
+            if (buffer is not null)
+                _held.Add((nint)buffer);
+            return buffer;
+        }
+    }
+
+    /// <summary>Whether a buffer from <see cref="DequeueForProducer"/> is still the producer's; call under the loop lock.</summary>
+    internal bool IsHeldByProducer(pw_buffer* buffer) =>
+        !_disposed && _stream is not null && _held.Contains((nint)buffer);
+
+    /// <summary>
+    /// Hands back a buffer from <see cref="DequeueForProducer"/>: queued to the consumer when it holds a
+    /// frame, otherwise returned unused. False when the stream removed it meanwhile or has gone.
+    /// </summary>
+    internal bool QueueFromProducer(pw_buffer* buffer, bool publish)
+    {
+        using (_ctx.Lock())
+        {
+            pw_stream* stream = _stream;
+            if (_disposed || stream is null || !_held.Remove((nint)buffer))
+                return false;
+
+            if (publish)
+                Native.pw_stream_queue_buffer(stream, buffer);
+            else
+                Native.pw_stream_return_buffer(stream, buffer);
+            return true;
+        }
     }
 
     // Queues a held buffer back, from any thread. A buffer the stream has since removed, or a stream
