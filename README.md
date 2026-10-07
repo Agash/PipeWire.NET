@@ -45,6 +45,7 @@ graph, changing a volume, capturing audio and publishing a node, picking up the 
 | List what exists, watch it change | `PipeWireRegistry`, below |
 | Set a volume, switch a card profile, read session defaults | [one object at a time](#acting-on-one-object) |
 | Capture or publish audio and video | [streams](#streaming), [docs/streaming.md](docs/streaming.md) |
+| Keep video on the GPU, hold frames, push from your own thread | [docs/streaming.md](docs/streaming.md#zero-copy) |
 | Run DSP in the graph, publish a virtual device | [docs/serving.md](docs/serving.md) |
 | Work out which type you want | [docs/choosing-a-type.md](docs/choosing-a-type.md) |
 
