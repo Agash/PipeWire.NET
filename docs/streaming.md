@@ -101,14 +101,20 @@ loop, such as a renderer or an encoder's output, pushes instead, as GStreamer's 
 `PushFrames` before connecting, then for each frame:
 
 ```csharp
+await using var output = new PipeWireVideoOutput(ctx, "my-renderer", 1920, 1080) { PushFrames = true };
+output.Connect();
+
+// For each frame the renderer makes:
 if (output.TryBeginFrame(out PipeWireOutputFrame frame))
 {
     using (frame)
     {
-        if (output.SharesBuffers)
-            Render(frame.BufferIndex);              // the application's own DMA-BUF, no copy
-        else
-            Write(frame.Pixels, frame.Stride);      // the daemon's memory, written once
+        // With shared buffers, frame.BufferIndex names the application's own DMA-BUF to render into,
+        // with no copy; otherwise the frame is the daemon's memory, written once.
+        if (!output.SharesBuffers)
+        {
+            Render(frame.Pixels, frame.Stride, 1920, 1080);
+        }
 
         frame.Publish();
     }
