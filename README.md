@@ -84,6 +84,15 @@ await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationTo
 }
 ```
 
+To wait for something to appear, `WaitForAsync` returns it once a snapshot has it, and
+`WaitUntilAsync` returns the first snapshot a condition holds for:
+
+```csharp
+PipeWireNode mic = await registry.WaitForAsync(
+    g => g.Nodes.FirstOrDefault(n => n.NodeName == "alsa_input.usb-mic"),
+    cancellationToken);
+```
+
 ### Connecting over a portal fd
 
 A sandboxed client may not see the daemon socket. xdg-desktop-portal's ScreenCast

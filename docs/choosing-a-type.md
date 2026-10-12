@@ -27,6 +27,7 @@ from the other two, and what it costs to take that role and not perform it;
 | I want to ... | type | how you get one |
 |---|---|---|
 | list what exists | `PipeWireGraphSnapshot` | `registry.Current`, or `registry.WatchAsync` per change |
+| wait for something to exist | the object, or a `PipeWireGraphSnapshot` | `registry.WaitForAsync` / `registry.WaitUntilAsync` |
 | read one object's fields | `PipeWireNode`, `PipeWirePort`, `PipeWireLink`, `PipeWireDevice`, `PipeWireClient`, `PipeWireModule`, `PipeWireFactory`, `PipeWireMetadata`, `PipeWireCore`, `PipeWireProfiler`, `PipeWireSecurityContext` | off the snapshot |
 | set a node's volume or mute | `PipeWireNodeProxy` | `registry.BindNode(id)` |
 | switch a card profile or route | `PipeWireDeviceProxy` | `registry.BindDevice(id)` |

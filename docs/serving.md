@@ -31,10 +31,7 @@ Its ports arrive as separate globals shortly after the node, so wait for them be
 ```csharp
 PipeWireNode sink = await registry.CreateVirtualSinkAsync("My mix", cancellationToken: cancellationToken);
 
-await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
-{
-    if (graph.GetPortsForNode(sink.NodeId).Length == 4) break;
-}
+await registry.WaitUntilAsync(g => g.GetPortsForNode(sink.NodeId).Length == 4, cancellationToken);
 ```
 
 `CreateVirtualSource` is the same factory with `media.class` set to `Audio/Source`, which is how a

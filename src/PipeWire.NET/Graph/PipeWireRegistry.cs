@@ -695,6 +695,74 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
+    /// Completes once the graph satisfies a condition: at once when it already does, otherwise on the
+    /// first change after which it does.
+    /// </summary>
+    /// <param name="condition">Evaluated against each snapshot, on the caller's continuation.</param>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <returns>The first snapshot the condition held for.</returns>
+    /// <exception cref="ObjectDisposedException">The registry was disposed before the condition held.</exception>
+    /// <remarks>
+    /// Change-driven through <see cref="WatchAsync"/>, so a condition that holds only between two
+    /// snapshots can be missed; wait for states, not transitions. Bound the wait with
+    /// <paramref name="cancellationToken"/>: a condition that never holds waits for ever.
+    /// </remarks>
+    public async Task<PipeWireGraphSnapshot> WaitUntilAsync(
+        Func<PipeWireGraphSnapshot, bool> condition,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        await foreach (
+            PipeWireGraphSnapshot graph in WatchAsync(cancellationToken).ConfigureAwait(false)
+        )
+        {
+            if (condition(graph))
+                return graph;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        throw new ObjectDisposedException(GetType().FullName);
+    }
+
+    /// <summary>
+    /// Waits until something can be found in the graph and returns it: a node by name, the ports of
+    /// a node once they are announced.
+    /// </summary>
+    /// <typeparam name="T">What is looked for.</typeparam>
+    /// <param name="find">Returns what it looks for in a snapshot, or null while it is not there.</param>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    /// <returns>The first non-null result.</returns>
+    /// <exception cref="ObjectDisposedException">The registry was disposed before it was found.</exception>
+    /// <example>
+    /// <code>
+    /// PipeWireNode mic = await registry.WaitForAsync(
+    ///     g => g.Nodes.FirstOrDefault(n => n.NodeName == "alsa_input.usb-mic"),
+    ///     ct);
+    /// </code>
+    /// </example>
+    public async Task<T> WaitForAsync<T>(
+        Func<PipeWireGraphSnapshot, T?> find,
+        CancellationToken cancellationToken = default
+    )
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(find);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        await foreach (
+            PipeWireGraphSnapshot graph in WatchAsync(cancellationToken).ConfigureAwait(false)
+        )
+        {
+            if (find(graph) is { } found)
+                return found;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        throw new ObjectDisposedException(GetType().FullName);
+    }
+
+    /// <summary>
     /// Invokes every subscriber, isolating each one.
     /// </summary>
     /// <remarks>
@@ -826,8 +894,7 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
     /// <see cref="WatchAsync"/> or <see cref="PortAdded"/> rather than assuming they are present:
     /// <code>
     /// var node = await registry.CreateVirtualSinkAsync("Mix", ct);
-    /// await foreach (var graph in registry.WatchAsync(ct))
-    ///     if (graph.GetPortsForNode(node.NodeId).Length == 4) break;
+    /// await registry.WaitUntilAsync(g => g.GetPortsForNode(node.NodeId).Length == 4, ct);
     /// </code>
     /// </para>
     /// <para>

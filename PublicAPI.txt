@@ -979,7 +979,9 @@ PipeWire.NET.Graph.PipeWireRegistry.PortRemoved event
 PipeWire.NET.Graph.PipeWireRegistry.ReadModuleDetailsAsync(UInt32, CancellationToken)
 PipeWire.NET.Graph.PipeWireRegistry.RemoveLinkAsync(PipeWireLink, CancellationToken)
 PipeWire.NET.Graph.PipeWireRegistry.RemoveLinkAsync(UInt32, CancellationToken)
+PipeWire.NET.Graph.PipeWireRegistry.WaitForAsync(Func<PipeWireGraphSnapshot, T>, CancellationToken)
 PipeWire.NET.Graph.PipeWireRegistry.WaitForInitialEnumerationAsync(CancellationToken)
+PipeWire.NET.Graph.PipeWireRegistry.WaitUntilAsync(Func<PipeWireGraphSnapshot, Boolean>, CancellationToken)
 PipeWire.NET.Graph.PipeWireRegistry.WatchAsync(CancellationToken)
 PipeWire.NET.Graph.PipeWireSecurityContext
 PipeWire.NET.Graph.PipeWireSecurityContext.Equals(Object)
