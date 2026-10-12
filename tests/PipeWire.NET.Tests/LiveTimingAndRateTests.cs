@@ -104,6 +104,7 @@ public sealed class LiveTimingAndRateTests
             {
                 if (output.Queue is { } q)
                     samples.Add(q);
+                // Sampled at its own cadence, the way a monitoring consumer reads it.
                 await Task.Delay(50, cts.Token);
             }
 
@@ -197,6 +198,7 @@ public sealed class LiveTimingAndRateTests
                     observations++;
                 }
 
+                // The control loop runs on its own timer, as a consumer's rate controller does.
                 await Task.Delay(20, cts.Token);
             }
 
@@ -262,6 +264,10 @@ public sealed class LiveTimingAndRateTests
         // Subscribed before connecting: the hook has to be installed at core creation, not on
         // subscription, or the commands raised while going live are missed entirely.
         output.CommandReceived += commands.Add;
+        var commanded = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        output.CommandReceived += _ => commanded.TrySetResult();
 
         output.FillSamples += (_, samples, _, _, _) =>
         {
@@ -278,8 +284,7 @@ public sealed class LiveTimingAndRateTests
         capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
-        for (var i = 0; i < 60 && commands.IsEmpty; i++)
-            await Task.Delay(50, cts.Token);
+        _ = await commanded.Task.Within(TimeSpan.FromSeconds(3), cts.Token);
 
         Assert.IsFalse(
             commands.IsEmpty,
@@ -348,28 +353,20 @@ public sealed class LiveTimingAndRateTests
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireNode? node = null;
-        for (var i = 0; i < 60 && node is null; i++)
-        {
-            node = reg.Current.Nodes.FirstOrDefault(n =>
-                string.Equals(n.NodeName, sinkName, StringComparison.Ordinal)
-            );
-
-            if (node?.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_NODE_DESCRIPTION) is null)
-            {
-                node = null;
-                await Task.Delay(50, cts.Token);
-            }
-        }
-
-        Assert.IsNotNull(
-            node,
-            $"the capture node {sinkName} never appeared with its extra properties"
-        );
+        PipeWireNode node = await reg.WaitForAsync(
+                g =>
+                    g.Nodes.FirstOrDefault(n =>
+                        string.Equals(n.NodeName, sinkName, StringComparison.Ordinal)
+                        && n.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_NODE_DESCRIPTION)
+                            is not null
+                    ),
+                cts.Token
+            )
+            .OrFail($"the capture node {sinkName} never appeared with its extra properties");
 
         Assert.AreEqual(
             marker,
-            node!.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_NODE_DESCRIPTION),
+            node.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_NODE_DESCRIPTION),
             "a property set through ExtraProperties never reached the daemon's node"
         );
 

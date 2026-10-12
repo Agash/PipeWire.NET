@@ -35,21 +35,15 @@ public sealed class GraphSurfaceTests
         PipeWireRegistry reg,
         string name,
         CancellationToken ct
-    )
-    {
-        for (var i = 0; i < 100; i++)
-        {
-            PipeWireNode? n = reg.Current.Nodes.FirstOrDefault(x =>
-                string.Equals(x.NodeName, name, StringComparison.Ordinal)
-            );
-
-            if (n is not null)
-                return n;
-            await Task.Delay(50, ct);
-        }
-
-        throw new InvalidOperationException($"node {name} never appeared");
-    }
+    ) =>
+        await reg.WaitForAsync(
+                g =>
+                    g.Nodes.FirstOrDefault(x =>
+                        string.Equals(x.NodeName, name, StringComparison.Ordinal)
+                    ),
+                ct
+            )
+            .OrFail($"node {name} never appeared");
 
     /// <summary>
     /// The object's properties once binding it has merged its full info into the snapshot.
@@ -60,21 +54,18 @@ public sealed class GraphSurfaceTests
     /// <c>audio.position</c> or a caller's own marker is absent until the object is bound and its info
     /// arrives. Waiting on the key that proves the info landed keeps that race out of the assertions.
     /// </remarks>
-    private static async Task<PipeWireProperties> WaitForBoundPropertiesAsync(
-        Func<PipeWireProperties?> read,
+    private static Task<PipeWireProperties> WaitForBoundPropertiesAsync(
+        PipeWireRegistry reg,
+        Func<PipeWireGraphSnapshot, PipeWireProperties?> read,
         string key,
         CancellationToken ct
-    )
-    {
-        for (var i = 0; i < 100; i++)
-        {
-            if (read() is { } props && props.GetValueOrDefault(key) is not null)
-                return props;
-            await Task.Delay(50, ct);
-        }
-
-        throw new InvalidOperationException($"binding never delivered '{key}'");
-    }
+    ) =>
+        reg.WaitForAsync(
+                g =>
+                    read(g) is { } props && props.GetValueOrDefault(key) is not null ? props : null,
+                ct
+            )
+            .OrFail($"binding never delivered '{key}'");
 
     /// <summary>
     /// Every node-creation builder call reaches the node the daemon ends up holding.
@@ -121,7 +112,8 @@ public sealed class GraphSurfaceTests
         // registry event never carries them and only the node's own info reports what it holds.
         await using PipeWireNodeProxy control = reg.BindNode(node.NodeId);
         PipeWireProperties props = await WaitForBoundPropertiesAsync(
-            () => reg.Current.Nodes.FirstOrDefault(n => n.NodeId == node.NodeId)?.Properties,
+            reg,
+            g => g.Nodes.FirstOrDefault(n => n.NodeId == node.NodeId)?.Properties,
             PipeWireKeys.SPA_KEY_AUDIO_POSITION,
             cts.Token
         );
@@ -202,21 +194,22 @@ public sealed class GraphSurfaceTests
         PipeWireNode sinkNode = await WaitForNodeAsync(reg, $"{name}-sink", cts.Token);
         PipeWireNode srcNode = await WaitForNodeAsync(reg, $"{name}-src", cts.Token);
 
-        PipeWirePort? outPort = null;
-        PipeWirePort? inPort = null;
-        for (var i = 0; i < 100 && (outPort is null || inPort is null); i++)
-        {
-            PipeWireGraphSnapshot g = reg.Current;
-            outPort ??= g.Ports.FirstOrDefault(p =>
-                p.NodeId == srcNode.NodeId && p.PortDirection == PipeWirePortDirection.Out
-            );
-            inPort ??= g.Ports.FirstOrDefault(p =>
-                p.NodeId == sinkNode.NodeId && p.PortDirection == PipeWirePortDirection.In
-            );
-
-            if (outPort is null || inPort is null)
-                await Task.Delay(50, cts.Token);
-        }
+        PipeWirePort? outPort = await reg.WaitForAsync(
+                g =>
+                    g.Ports.FirstOrDefault(p =>
+                        p.NodeId == srcNode.NodeId && p.PortDirection == PipeWirePortDirection.Out
+                    ),
+                cts.Token
+            )
+            .OrDefaultWithin(TimeSpan.FromSeconds(5), cts.Token);
+        PipeWirePort? inPort = await reg.WaitForAsync(
+                g =>
+                    g.Ports.FirstOrDefault(p =>
+                        p.NodeId == sinkNode.NodeId && p.PortDirection == PipeWirePortDirection.In
+                    ),
+                cts.Token
+            )
+            .OrDefaultWithin(TimeSpan.FromSeconds(5), cts.Token);
 
         if (outPort is null || inPort is null)
             Assert.Inconclusive("the two nodes never both exposed a port to link.");
@@ -232,7 +225,8 @@ public sealed class GraphSurfaceTests
         // its endpoints and origin - so the link is found by id and bound for its full properties.
         await using PipeWireLinkProxy control = reg.BindLink(link.LinkId);
         PipeWireProperties made = await WaitForBoundPropertiesAsync(
-            () => reg.Current.Links.FirstOrDefault(l => l.LinkId == link.LinkId)?.Properties,
+            reg,
+            g => g.Links.FirstOrDefault(l => l.LinkId == link.LinkId)?.Properties,
             "pwnet.test.marker",
             cts.Token
         );
@@ -309,8 +303,25 @@ public sealed class GraphSurfaceTests
             AudioSampleFormat.F32Le
         );
 
+        // A clock a running driver has published, not the first one readable. While a driver is
+        // still coming up the daemon writes only clock.nsec (context.c, "if (n->info.state <
+        // PW_NODE_STATE_RUNNING) ... clock.nsec = get_time_ns(...)") and leaves next_nsec from the
+        // driver's previous run, so a snapshot taken then has next_nsec behind nsec by however long
+        // the driver was suspended - upstream's behaviour, not a wrong read. A position that has
+        // advanced between two cycles is a driver that is running and writing the whole clock.
+        ulong? firstPosition = null;
+        var running = new TaskCompletionSource<PipeWireGraphClock>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
         output.FillSamples += (_, samples, _, _, _) =>
         {
+            if (output.GraphClock is { RateDen: > 0 } read)
+            {
+                firstPosition ??= read.Position;
+                if (read.Position > firstPosition)
+                    running.TrySetResult(read);
+            }
+
             samples.Clear();
             return samples.Length;
         };
@@ -321,26 +332,9 @@ public sealed class GraphSurfaceTests
         capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
-        // A clock a running driver has published, not the first one readable. While a driver is
-        // still coming up the daemon writes only clock.nsec (context.c, "if (n->info.state <
-        // PW_NODE_STATE_RUNNING) ... clock.nsec = get_time_ns(...)") and leaves next_nsec from the
-        // driver's previous run, so a snapshot taken then has next_nsec behind nsec by however long
-        // the driver was suspended - upstream's behaviour, not a wrong read. A position that has
-        // advanced between two reads is a driver that is running and writing the whole clock.
-        PipeWireGraphClock? clock = null;
-        ulong? firstPosition = null;
-        for (var i = 0; i < 100 && clock is null; i++)
-        {
-            if (output.GraphClock is { RateDen: > 0 } read)
-            {
-                firstPosition ??= read.Position;
-                if (read.Position > firstPosition)
-                    clock = read;
-            }
-
-            if (clock is null)
-                await Task.Delay(50, cts.Token);
-        }
+        PipeWireGraphClock? clock = await running.Task.Within(TimeSpan.FromSeconds(5), cts.Token)
+            ? running.Task.Result
+            : null;
 
         Assert.IsNotNull(
             clock,
@@ -434,7 +428,7 @@ public sealed class GraphSurfaceTests
 
         uint? nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
-        var verified = 0;
+        var verified = new Tally();
         var failures = new List<string>();
 
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-cursor-sink");
@@ -465,16 +459,16 @@ public sealed class GraphSurfaceTests
                     failures.Add("a damage region falls outside the frame");
             }
 
-            Interlocked.Increment(ref verified);
+            verified.Increment();
         };
 
         capture.Connect(nodeId!.Value, [PixelFormat.Bgra]);
         await capture.WaitForStreamingAsync(cts.Token);
-        await Task.Delay(800, cts.Token);
+        _ = await verified.AtLeast(6).Within(TimeSpan.FromSeconds(5), cts.Token);
 
         Assert.IsTrue(
-            Volatile.Read(ref verified) > 5,
-            $"only {Volatile.Read(ref verified)} intact frames arrived to inspect"
+            verified.Value > 5,
+            $"only {verified.Value} intact frames arrived to inspect"
         );
 
         Assert.AreEqual(0, failures.Count, string.Join("; ", failures.Distinct()));

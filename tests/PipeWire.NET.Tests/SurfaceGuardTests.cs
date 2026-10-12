@@ -575,14 +575,11 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
 
         await provider.ReadyAsync(cts.Token);
 
-        PipeWireMetadataProxy? store = null;
-        for (var i = 0; i < 80 && store is null; i++)
-        {
-            await reg.WaitForInitialEnumerationAsync(cts.Token);
-            store = reg.BindMetadata(storeName);
-            if (store is null)
-                await Task.Delay(50, cts.Token);
-        }
+        PipeWireMetadataProxy? store = await reg.BindMetadataWhenPresentAsync(
+            storeName,
+            TimeSpan.FromSeconds(4),
+            cts.Token
+        );
 
         if (store is null)
             Assert.Inconclusive("the exported store never came back through the registry.");
@@ -611,8 +608,9 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
             // zero is a rate a caller would act on.
             await store.SetAsync("clock.rate", "banana", null, cancellationToken: cts.Token);
 
-            for (var i = 0; i < 100 && store.Get("clock.rate") is null; i++)
-                await Task.Delay(50, cts.Token);
+            _ = await store
+                .UntilEntry("clock.rate", v => v is not null)
+                .Within(TimeSpan.FromSeconds(5), cts.Token);
 
             Assert.AreEqual("banana", store.Get("clock.rate"), "the write never came back");
             Assert.IsNull(store.ClockRate, "a value that is not a number was read as one");
@@ -620,8 +618,9 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
             // Clearing a key removes it rather than leaving an empty string behind.
             await store.SetAsync("clock.rate", null, null, cancellationToken: cts.Token);
 
-            for (var i = 0; i < 100 && store.Get("clock.rate") is not null; i++)
-                await Task.Delay(50, cts.Token);
+            _ = await store
+                .UntilEntry("clock.rate", v => v is null)
+                .Within(TimeSpan.FromSeconds(5), cts.Token);
 
             Assert.IsNull(store.Get("clock.rate"), "a cleared key was left in the store");
         }

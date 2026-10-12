@@ -28,25 +28,11 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
         return (context, registry);
     }
 
-    /// <summary>Waits for a predicate to hold on a published snapshot.</summary>
-    private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry,
-        Func<PipeWireGraphSnapshot, bool> until,
-        CancellationToken cancellationToken
-    )
-    {
-        await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
-            if (until(graph))
-                return graph;
-
-        throw new InvalidOperationException("the snapshot stream ended before the condition held");
-    }
-
     private static Task<PipeWireGraphSnapshot> WaitForPortsAsync(
         PipeWireRegistry registry,
         uint nodeId,
         CancellationToken cancellationToken
-    ) => WaitForAsync(registry, g => g.GetPortsForNode(nodeId).Length == 4, cancellationToken);
+    ) => registry.WaitUntilAsync(g => g.GetPortsForNode(nodeId).Length == 4, cancellationToken);
 
     [TestMethod]
     public async Task InitialEnumeration_ReportsTheGraphWithoutASettleDelay()
@@ -105,8 +91,7 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
             PipeWireNode a = await registry.CreateVirtualSinkAsync("A", "pwnet_link_a", cts.Token);
             PipeWireNode b = await registry.CreateVirtualSinkAsync("B", "pwnet_link_b", cts.Token);
 
-            PipeWireGraphSnapshot ready = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot ready = await registry.WaitUntilAsync(
                 g =>
                     g.GetPortsForNode(a.NodeId).Length == 4
                     && g.GetPortsForNode(b.NodeId).Length == 4,
@@ -139,7 +124,7 @@ public sealed class GraphIntegrationTests : PipeWireTestBase
             );
 
             await registry.RemoveLinkAsync(link, cts.Token);
-            await WaitForAsync(registry, g => g.GetLink(link.LinkId) is null, cts.Token);
+            await registry.WaitUntilAsync(g => g.GetLink(link.LinkId) is null, cts.Token);
         }
     }
 

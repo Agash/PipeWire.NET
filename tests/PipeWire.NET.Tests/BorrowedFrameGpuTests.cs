@@ -104,15 +104,7 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
             output.FillDmaBuf += (_, _) => true;
             output.ConnectDmaBuf([modifier]);
 
-            uint? nodeId = null;
-            for (var i = 0; i < 60 && nodeId is null; i++)
-            {
-                nodeId = output.NodeId;
-                if (nodeId is null)
-                    await Task.Delay(50, cts.Token);
-            }
-
-            Assert.IsNotNull(nodeId, "the dmabuf producer was never assigned a node id");
+            uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
             await using var capture = new PipeWireVideoCapture(ctx, "pwnet-borrow-gpu-sink")
             {
@@ -126,16 +118,12 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
                     Interlocked.Increment(ref sawDmaBuf);
             };
 
-            capture.Connect(nodeId!.Value, [PixelFormat.Bgra], modifiers: [modifier]);
+            capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
 
-            BorrowedVideoFrame borrowed = default;
-            var got = false;
-            for (var i = 0; i < 120 && !got; i++)
-            {
-                got = capture.TryGetBorrowedFrame(out borrowed) && borrowed.IsFdBacked;
-                if (!got)
-                    await Task.Delay(50, cts.Token);
-            }
+            (bool got, BorrowedVideoFrame borrowed) = await capture.TakeFdBackedAsync(
+                TimeSpan.FromMilliseconds(6000),
+                cts.Token
+            );
 
             Assert.IsTrue(
                 Volatile.Read(ref sawDmaBuf) > 0,
@@ -237,30 +225,19 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
             output.FillDmaBuf += (_, _) => true;
             output.ConnectDmaBuf([modifier]);
 
-            uint? nodeId = null;
-            for (var i = 0; i < 60 && nodeId is null; i++)
-            {
-                nodeId = output.NodeId;
-                if (nodeId is null)
-                    await Task.Delay(50, cts.Token);
-            }
-
-            Assert.IsNotNull(nodeId);
+            uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
             await using var capture = new PipeWireVideoCapture(ctx, "pwnet-borrow-once-sink")
             {
                 Retention = FrameRetention.Borrowed,
             };
 
-            capture.Connect(nodeId!.Value, [PixelFormat.Bgra], modifiers: [modifier]);
+            capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
 
-            var got = false;
-            for (var i = 0; i < 120 && !got; i++)
-            {
-                got = capture.TryGetBorrowedFrame(out BorrowedVideoFrame first) && first.IsFdBacked;
-                if (!got)
-                    await Task.Delay(50, cts.Token);
-            }
+            (bool got, BorrowedVideoFrame first) = await capture.TakeFdBackedAsync(
+                TimeSpan.FromMilliseconds(6000),
+                cts.Token
+            );
 
             Assert.IsTrue(got, "borrowed retention never produced an fd-backed frame");
 

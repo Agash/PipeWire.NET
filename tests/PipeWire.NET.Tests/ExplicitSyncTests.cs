@@ -60,6 +60,9 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
             bool streaming = false;
             int framesConsumed = 0,
                 syncFrames = 0;
+            var enough = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously
+            );
             ulong maxAcquireSeen = 0,
                 maxReleaseSeen = 0;
             long stamped = 0;
@@ -122,6 +125,8 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
                     maxAcquireSeen = timeline.AcquirePoint;
                 if (timeline.ReleasePoint > maxReleaseSeen)
                     maxReleaseSeen = timeline.ReleasePoint;
+                if (syncFrames >= 10)
+                    enough.TrySetResult();
             };
             capture.Connect(
                 nodeId.Value,
@@ -133,8 +138,13 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
             // Not driven from here. This node is not the graph's driver, and pw_stream_trigger_process
             // on a node that is not one reaches the real driver as RequestProcess, which an audio
             // adapter refuses - once per call, logged as an error. The consumer drives the graph.
-
-            await Task.Delay(TimeSpan.FromSeconds(6));
+            // A plain consumer's frames carry no timeline, so its ten frames are counted apart.
+            capture.FrameReady += (_, _) =>
+            {
+                if (!consumerSyncs && framesConsumed >= 10)
+                    enough.TrySetResult();
+            };
+            _ = await enough.Task.Within(TimeSpan.FromSeconds(6), CancellationToken.None);
 
             int seen = Volatile.Read(ref framesConsumed);
             int synced = Volatile.Read(ref syncFrames);
@@ -272,7 +282,11 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
 
             // Which buffer each delivery used, by the consumer's descriptor number for its dmabuf -
             // stable for the life of the pool - and when it arrived.
-            var deliveries = new List<(long Fd, long AtTicks)>();
+            var deliveries = new Collected<(long Fd, long AtTicks)>();
+            long awaitedFd = -1;
+            var cameBack = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously
+            );
             await using var capture = new PipeWireVideoCapture(consumerCtx, "pwnet-gate-sink")
             {
                 Retention = FrameRetention.Borrowed,
@@ -283,6 +297,8 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
                     return;
                 lock (deliveries)
                     deliveries.Add((frame.Planes[0].Fd, DateTime.UtcNow.Ticks));
+                if (frame.Planes[0].Fd == Interlocked.Read(ref awaitedFd))
+                    cameBack.TrySetResult();
             };
             capture.Connect(
                 nodeId,
@@ -293,7 +309,7 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
             await capture.WaitForStreamingAsync(cts.Token);
 
             // Let the pool turn over so every buffer has been seen at least once.
-            await Task.Delay(1000, cts.Token);
+            _ = await deliveries.Reaching(2 * poolCap).Within(TimeSpan.FromSeconds(5), cts.Token);
 
             Assert.IsTrue(
                 capture.TryGetBorrowedFrame(out BorrowedVideoFrame held),
@@ -302,12 +318,15 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
             long heldFd = held[0].Fd;
             long heldAt = DateTime.UtcNow.Ticks;
 
+            // Held across many cycles at 30 fps: long enough for the producer to come round to this
+            // buffer several times if the release point did not gate it.
             await Task.Delay(600, cts.Token);
 
             long releasedAt = DateTime.UtcNow.Ticks;
+            Interlocked.Exchange(ref awaitedFd, heldFd);
             capture.ReleaseBorrowedFrame();
 
-            await Task.Delay(1500, cts.Token);
+            _ = await cameBack.Task.Within(TimeSpan.FromSeconds(5), cts.Token);
 
             (long Fd, long AtTicks)[] seen;
             lock (deliveries)
@@ -392,7 +411,7 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
             poolCap
         ];
         var signalledAt = new System.Collections.Concurrent.ConcurrentDictionary<ulong, long>();
-        var arrivals = new List<(ulong Point, long AtTicks)>();
+        var arrivals = new Collected<(ulong Point, long AtTicks)>();
 
         try
         {
@@ -494,7 +513,7 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
                 );
                 await capture.WaitForStreamingAsync(cts.Token);
 
-                await Task.Delay(3000, cts.Token);
+                _ = await arrivals.Reaching(10).Within(TimeSpan.FromSeconds(5), cts.Token);
             }
             finally
             {

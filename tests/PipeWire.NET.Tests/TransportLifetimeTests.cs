@@ -107,27 +107,17 @@ public sealed class TransportLifetimeTests : PipeWireTestBase
                 output.FillDmaBuf += (_, _) => true;
                 output.ConnectDmaBuf([modifier]);
 
-                uint? nodeId = null;
-                for (var i = 0; i < 60 && nodeId is null; i++)
-                {
-                    nodeId = output.NodeId;
-                    if (nodeId is null)
-                        await Task.Delay(50, cts.Token);
-                }
-
-                Assert.IsNotNull(nodeId, "the producer was never given a node id");
+                uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
                 await using var capture = new PipeWireVideoCapture(ctx, "pwnet-release-sink");
-                var frames = 0;
-                capture.FrameReady += (_, _) => Interlocked.Increment(ref frames);
-                capture.Connect(nodeId!.Value, [PixelFormat.Bgra], modifiers: [modifier]);
+                var frames = new Tally();
+                capture.FrameReady += (_, _) => frames.Increment();
+                capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
 
-                await Task.Delay(TimeSpan.FromSeconds(3), cts.Token);
+                // Streamed until the pool has turned over a few times.
+                _ = await frames.AtLeast(20).Within(TimeSpan.FromSeconds(3), cts.Token);
 
-                Assert.IsTrue(
-                    Volatile.Read(ref frames) > 0,
-                    "no frames flowed, so no pool was built"
-                );
+                Assert.IsTrue(frames.Value > 0, "no frames flowed, so no pool was built");
                 Assert.IsFalse(allocated.IsEmpty, "the app was never asked to back a buffer");
 
                 // Teardown is what triggers the releases: the pool goes away with the stream.
@@ -216,17 +206,9 @@ public sealed class TransportLifetimeTests : PipeWireTestBase
         // never report completion, whatever the caller waits for.
         output.Connect(autoConnect: false, driver: true);
 
-        uint? nodeId = null;
-        for (var i = 0; i < 60 && nodeId is null; i++)
-        {
-            nodeId = output.NodeId;
-            if (nodeId is null)
-                await Task.Delay(50, cts.Token);
-        }
+        uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
-        Assert.IsNotNull(nodeId, "the producer was never given a node id");
-
-        var tags = new List<byte>();
+        var tags = new Collected<byte>();
         var torn = 0;
 
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-trigwait-sink");
@@ -256,9 +238,11 @@ public sealed class TransportLifetimeTests : PipeWireTestBase
             }
         };
 
-        capture.Connect(nodeId!.Value, [PixelFormat.Bgra]);
+        capture.Connect(nodeId, [PixelFormat.Bgra]);
         await capture.WaitForStreamingAsync(cts.Token);
 
+        // The driver role is assigned with no event to wait on, and a self-paced driver has no
+        // cycle until it is triggered: read until it is reported.
         for (var i = 0; i < 100 && !output.IsDriving; i++)
             await Task.Delay(50, cts.Token);
         Assert.IsTrue(
@@ -267,6 +251,9 @@ public sealed class TransportLifetimeTests : PipeWireTestBase
         );
 
         int before = Volatile.Read(ref filled);
+        int tagsBefore;
+        lock (tags)
+            tagsBefore = tags.Count;
 
         const int triggers = 8;
         for (var i = 0; i < triggers; i++)
@@ -304,7 +291,8 @@ public sealed class TransportLifetimeTests : PipeWireTestBase
             }
         }
 
-        await Task.Delay(300, cts.Token);
+        // The last triggered frame is still on its way to the consumer.
+        _ = await tags.Reaching(tagsBefore + triggers).Within(TimeSpan.FromSeconds(2), cts.Token);
 
         byte[] seen;
         lock (tags)

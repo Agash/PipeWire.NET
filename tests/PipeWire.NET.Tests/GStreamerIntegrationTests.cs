@@ -315,11 +315,9 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
             input,
             cts.Token
         );
-        await WaitForAsync(
-            () => seen.Any(f => f.Width == 160),
-            TimeSpan.FromSeconds(15),
-            "no frame ever arrived from the first producer"
-        );
+        await cap.Until(() => seen.Any(f => f.Width == 160))
+            .WaitAsync(TimeSpan.FromSeconds(15), cts.Token)
+            .OrFail("no frame ever arrived from the first producer");
 
         await reg.DestroyGlobalAsync(toFirst.LinkId, cts.Token);
         await reg.CreateLinkAsync(
@@ -328,11 +326,11 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
             cts.Token
         );
 
-        await WaitForAsync(
-            () => seen.Any(f => f.Width == 320 && f.Height == 240),
-            TimeSpan.FromSeconds(15),
-            "the stream linked to the second producer never delivered its geometry, so it did not negotiate again"
-        );
+        await cap.Until(() => seen.Any(f => f.Width == 320 && f.Height == 240))
+            .WaitAsync(TimeSpan.FromSeconds(15), cts.Token)
+            .OrFail(
+                "the stream linked to the second producer never delivered its geometry, so it did not negotiate again"
+            );
 
         Assert.AreEqual(
             0,
@@ -356,37 +354,11 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
         uint nodeId,
         PipeWirePortDirection direction,
         CancellationToken ct
-    )
-    {
-        while (true)
-        {
-            PipeWirePort? port = reg
-                .Current.GetPortsForNode(nodeId)
-                .FirstOrDefault(p => p.PortDirection == direction);
-            if (port is not null)
-                return port;
-            await Task.Delay(50, ct);
-        }
-    }
-
-    private static async Task WaitForAsync(Func<bool> condition, TimeSpan budget, string message)
-    {
-        if (!await TryWaitAsync(condition, budget))
-            Assert.Fail(message);
-    }
-
-    private static async Task<bool> TryWaitAsync(Func<bool> condition, TimeSpan budget)
-    {
-        DateTime deadline = DateTime.UtcNow + budget;
-        while (DateTime.UtcNow < deadline)
-        {
-            if (condition())
-                return true;
-            await Task.Delay(100);
-        }
-
-        return condition();
-    }
+    ) =>
+        await reg.WaitForAsync(
+            g => g.GetPortsForNode(nodeId).FirstOrDefault(p => p.PortDirection == direction),
+            ct
+        );
 
     [TestMethod]
     [TestCategory("Integration")]
@@ -409,14 +381,11 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync();
 
-        // The node may have arrived before the registry; poll briefly to be robust.
-        PipeWireNode? found = null;
-        for (int i = 0; i < 20 && found is null; i++)
-        {
-            found = reg.Nodes.FirstOrDefault(s => s.NodeName == node);
-            if (found is null)
-                await Task.Delay(100);
-        }
+        // The node may reach the registry a moment after the initial enumeration.
+        PipeWireNode? found = await reg.WaitForAsync(g =>
+                g.Nodes.FirstOrDefault(s => s.NodeName == node)
+            )
+            .OrDefaultWithin(TimeSpan.FromSeconds(2), CancellationToken.None);
 
         Assert.IsNotNull(found, "gst source should be discoverable via the registry");
         Assert.AreEqual(
@@ -635,8 +604,8 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
             )
         );
 
-        var vClk = new List<long>();
-        var aClk = new List<long>();
+        var vClk = new Collected<long>();
+        var aClk = new Collected<long>();
         bool audioNonSilent = false;
         const int cap = 64; // bound memory; we collect over a window rather than a fixed count.
 
@@ -675,24 +644,12 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
             targetObjectName: aNode
         );
 
-        // Poll until BOTH legs have stamped a few frames (don't couple to either's exact cadence): a live
-        // source flushes its preroll as a burst then paces, and in this dual-sink pipeline the video leg
-        // starts a beat behind audio, so a fixed delay can sample before video's first cycle. Give it up
-        // to ~12s to get both flowing before snapshotting.
+        // Until BOTH legs have stamped a few frames (not coupled to either's exact cadence): a live
+        // source flushes its preroll as a burst then paces, and in this dual-sink pipeline the video
+        // leg starts a beat behind audio. Up to ~12s to get both flowing before snapshotting.
         const int minSamples = 3;
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(12);
-        while (DateTime.UtcNow < deadline)
-        {
-            int vc,
-                ac;
-            lock (vClk)
-                vc = vClk.Count;
-            lock (aClk)
-                ac = aClk.Count;
-            if (vc >= minSamples && ac >= minSamples)
-                break;
-            await Task.Delay(100);
-        }
+        _ = await Task.WhenAll(vClk.Reaching(minSamples), aClk.Reaching(minSamples))
+            .Within(TimeSpan.FromSeconds(12), CancellationToken.None);
 
         long[] v,
             a;

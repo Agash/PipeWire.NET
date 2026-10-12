@@ -89,25 +89,27 @@ public sealed class GeneratedKeyRoundTripTests
 
         Assert.IsTrue(changed > 0, "the daemon accepted no property change");
 
-        PwDump.Entry? seen = null;
-        for (var attempt = 0; attempt < 40 && seen is null; attempt++)
-        {
-            PwDump dump = await PwDump.CaptureAsync(cts.Token);
-            seen = dump.OfKind("Node")
-                .FirstOrDefault(e =>
-                    string.Equals(
-                        e.Prop(PipeWireKeys.PW_KEY_NODE_NAME),
-                        nodeName,
-                        StringComparison.Ordinal
-                    )
-                );
+        // The daemon holds the change once the graph reports it; pw-dump then reads it from there.
+        _ = await reg.WaitUntilAsync(
+                g =>
+                    g.Nodes.Any(n =>
+                        string.Equals(n.NodeName, nodeName, StringComparison.Ordinal)
+                        && n.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_NODE_DESCRIPTION)
+                            == description
+                    ),
+                cts.Token
+            )
+            .Within(TimeSpan.FromSeconds(4), cts.Token);
 
-            if (seen is null || seen.Prop(PipeWireKeys.PW_KEY_NODE_DESCRIPTION) is null)
-            {
-                seen = null;
-                await Task.Delay(100, cts.Token);
-            }
-        }
+        PwDump dump = await PwDump.CaptureAsync(cts.Token);
+        PwDump.Entry? seen = dump.OfKind("Node")
+            .FirstOrDefault(e =>
+                string.Equals(
+                    e.Prop(PipeWireKeys.PW_KEY_NODE_NAME),
+                    nodeName,
+                    StringComparison.Ordinal
+                )
+            );
 
         Assert.IsNotNull(seen, $"pw-dump never reported a node named {nodeName}");
 
@@ -163,8 +165,8 @@ public sealed class GeneratedKeyRoundTripTests
             cancellationToken: cts.Token
         );
 
-        for (var i = 0; i < 100 && !reg.Current.Ports.Any(p => p.NodeId == sink.NodeId); i++)
-            await Task.Delay(50, cts.Token);
+        _ = await reg.WaitUntilAsync(g => g.Ports.Any(p => p.NodeId == sink.NodeId), cts.Token)
+            .Within(TimeSpan.FromSeconds(5), cts.Token);
 
         Assert.IsTrue(
             reg.Current.Ports.Any(p => p.NodeId == sink.NodeId),
@@ -235,8 +237,23 @@ public sealed class GeneratedKeyRoundTripTests
             AudioSampleFormat.F32Le
         );
 
+        // Read once a cycle, from the cycle itself: each reading is a clock the graph has just
+        // published.
+        var readings = new Collected<(ulong TimeNs, ulong Position)>();
         output.FillSamples += (_, samples, _, _, _) =>
         {
+            if (output.GraphClock is { } clock && clock.TimeNs > 0)
+            {
+                lock (readings)
+                {
+                    if (
+                        readings.Count < 6
+                        && (readings.Count == 0 || clock.TimeNs != readings[^1].TimeNs)
+                    )
+                        readings.Add((clock.TimeNs, clock.Position));
+                }
+            }
+
             samples.Clear();
             return samples.Length;
         };
@@ -248,17 +265,7 @@ public sealed class GeneratedKeyRoundTripTests
         capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
-        var readings = new List<(ulong TimeNs, ulong Position)>();
-        for (var i = 0; i < 40 && readings.Count < 6; i++)
-        {
-            if (output.GraphClock is { } clock && clock.TimeNs > 0)
-            {
-                if (readings.Count == 0 || clock.TimeNs != readings[^1].TimeNs)
-                    readings.Add((clock.TimeNs, clock.Position));
-            }
-
-            await Task.Delay(50, cts.Token);
-        }
+        _ = await readings.Reaching(6).Within(TimeSpan.FromSeconds(2), cts.Token);
 
         Assert.IsTrue(
             readings.Count >= 6,
@@ -336,6 +343,7 @@ public sealed class GeneratedKeyRoundTripTests
             Assert.Inconclusive("the daemon did not grant this stream the driver role.");
 
         Volatile.Write(ref cycles, 0);
+        // A measured window: the cycles counted in it give the driving rate.
         await Task.Delay(500, cts.Token);
 
         int seen = Volatile.Read(ref cycles);

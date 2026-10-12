@@ -136,17 +136,9 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
 
         output.Connect(autoConnect: false);
 
-        uint? nodeId = null;
-        for (var i = 0; i < 60 && nodeId is null; i++)
-        {
-            nodeId = output.NodeId;
-            if (nodeId is null)
-                await Task.Delay(50, cts.Token);
-        }
+        uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
-        Assert.IsNotNull(nodeId, "the producer was never given a node id");
-
-        var verified = 0;
+        var verified = new Tally();
         var mismatches = new List<string>();
 
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-content-sink");
@@ -170,19 +162,16 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
                 }
             }
 
-            Interlocked.Increment(ref verified);
+            verified.Increment();
         };
 
-        capture.Connect(nodeId!.Value, [PixelFormat.Bgra]);
+        capture.Connect(nodeId, [PixelFormat.Bgra]);
         await capture.WaitForStreamingAsync(cts.Token);
-        await Task.Delay(900, cts.Token);
+        _ = await verified.AtLeast(6).Within(TimeSpan.FromSeconds(5), cts.Token);
 
         Assert.AreEqual(0, mismatches.Count, string.Join("; ", mismatches.Take(3)));
 
-        Assert.IsTrue(
-            Volatile.Read(ref verified) > 5,
-            $"only {Volatile.Read(ref verified)} frames arrived intact"
-        );
+        Assert.IsTrue(verified.Value > 5, $"only {verified.Value} frames arrived intact");
     }
 
     /// <summary>
@@ -243,31 +232,19 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
             output.FillDmaBuf += (_, _) => true;
             output.ConnectDmaBuf([modifier]);
 
-            uint? nodeId = null;
-            for (var i = 0; i < 60 && nodeId is null; i++)
-            {
-                nodeId = output.NodeId;
-                if (nodeId is null)
-                    await Task.Delay(50, cts.Token);
-            }
-
-            Assert.IsNotNull(nodeId, "the producer was never given a node id");
+            uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
             await using var capture = new PipeWireVideoCapture(ctx, "pwnet-zerocopy-sink")
             {
                 Retention = FrameRetention.Borrowed,
             };
 
-            capture.Connect(nodeId!.Value, [PixelFormat.Bgra], modifiers: [modifier]);
+            capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
 
-            BorrowedVideoFrame frame = default;
-            var got = false;
-            for (var i = 0; i < 120 && !got; i++)
-            {
-                got = capture.TryGetBorrowedFrame(out frame) && frame.IsFdBacked;
-                if (!got)
-                    await Task.Delay(50, cts.Token);
-            }
+            (bool got, BorrowedVideoFrame frame) = await capture.TakeFdBackedAsync(
+                TimeSpan.FromMilliseconds(6000),
+                cts.Token
+            );
 
             Assert.IsTrue(got, "no fd-backed frame ever arrived");
 
@@ -350,6 +327,7 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
         output.Connect(autoConnect: false);
 
         var got = new List<float>();
+        var heard = new Tally();
         long stampedFrames = 0;
         var badRate = 0;
 
@@ -370,8 +348,14 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
             lock (got)
             {
                 if (got.Count < 20000)
+                {
                     foreach (float v in floats)
+                    {
                         got.Add(v);
+                        if (v != 0f)
+                            heard.Increment();
+                    }
+                }
             }
         };
 
@@ -383,7 +367,9 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
         );
 
         await capture.WaitForStreamingAsync(cts.Token);
-        await Task.Delay(800, cts.Token);
+
+        // Counted from the producer's first sample: the link can deliver silence before it.
+        _ = await heard.AtLeast(2001).Within(TimeSpan.FromSeconds(5), cts.Token);
 
         float[] samplesSeen;
         lock (got)

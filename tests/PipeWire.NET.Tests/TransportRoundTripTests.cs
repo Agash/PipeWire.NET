@@ -41,18 +41,6 @@ public sealed class TransportRoundTripTests
     /// <summary>How far ahead of its cycle the origin publishes, for the loop to preserve.</summary>
     private const long LeadNs = 250_000_000;
 
-    private static async Task<uint> NodeIdAsync(PipeWireVideoOutput output, CancellationToken ct)
-    {
-        for (var i = 0; i < 60; i++)
-        {
-            if (output.NodeId is { } id)
-                return id;
-            await Task.Delay(50, ct);
-        }
-
-        throw new InvalidOperationException("a producer was never given a node id");
-    }
-
     private static GbmAllocator RequireGbm()
     {
         if (!File.Exists("/dev/dri/renderD128"))
@@ -121,7 +109,7 @@ public sealed class TransportRoundTripTests
             };
 
             originVideo.ConnectDmaBuf([modifier]);
-            uint originVideoNode = await NodeIdAsync(originVideo, cts.Token);
+            uint originVideoNode = await originVideo.WaitForNodeIdAsync(cts.Token);
 
             uint sample = 0;
             await using var originAudio = new PipeWireAudioOutput(
@@ -207,7 +195,7 @@ public sealed class TransportRoundTripTests
             };
 
             relayVideoOut.ConnectDmaBuf([modifier]);
-            uint relayVideoNode = await NodeIdAsync(relayVideoOut, cts.Token);
+            uint relayVideoNode = await relayVideoOut.WaitForNodeIdAsync(cts.Token);
 
             await using var relayAudioOut = new PipeWireAudioOutput(
                 ctx,
@@ -229,7 +217,7 @@ public sealed class TransportRoundTripTests
             relayAudioOut.Connect(autoConnect: false);
 
             // - The far end -
-            var offsets = new List<long>();
+            var offsets = new Collected<long>();
             var dmaBufOut = 0;
 
             await using var finalVideo = new PipeWireVideoCapture(ctx, "pwnet-loop-v-out");
@@ -249,6 +237,7 @@ public sealed class TransportRoundTripTests
             finalVideo.Connect(relayVideoNode, [PixelFormat.Bgra], modifiers: [modifier]);
 
             var audioOut = new List<float>();
+            var audioHeard = new Tally();
             await using var finalAudio = new PipeWireAudioCapture(ctx, "pwnet-loop-a-out");
             finalAudio.FrameReady += (_, f) =>
             {
@@ -257,7 +246,11 @@ public sealed class TransportRoundTripTests
                     if (audioOut.Count > 20000)
                         return;
                     foreach (float v in MemoryMarshal.Cast<byte, float>(f.Samples))
+                    {
                         audioOut.Add(v);
+                        if (v != 0f)
+                            audioHeard.Increment();
+                    }
                 }
             };
 
@@ -271,7 +264,10 @@ public sealed class TransportRoundTripTests
             await finalVideo.WaitForStreamingAsync(cts.Token);
             await finalAudio.WaitForStreamingAsync(cts.Token);
 
-            await Task.Delay(2500, cts.Token);
+            // Until frames and audio have made it round the loop, counted from the first real
+            // sample: the relay can play silence before the origin's audio reaches it.
+            _ = await Task.WhenAll(offsets.Reaching(5), audioHeard.AtLeast(600))
+                .Within(TimeSpan.FromSeconds(5), cts.Token);
 
             long[] measured;
             float[] heard;

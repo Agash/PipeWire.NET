@@ -55,8 +55,8 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
         long modifier = (long)GbmAllocator.LinearModifier;
         var indexes = new ConcurrentQueue<int>();
         bool streaming = false;
-        int frames = 0,
-            dmaBufFrames = 0;
+        int frames = 0;
+        var dmaBufFrames = new Tally();
 
         await using var ctx = new PipeWireContext(name, ConsoleTestLoggerFactory.Instance);
         await ctx.StartAsync();
@@ -92,33 +92,30 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
         output.StateChanged += (_, _, s) => streaming = s == PipeWireStreamState.Streaming;
         output.ConnectDmaBuf([modifier]);
 
-        uint? nodeId = null;
-        for (int i = 0; i < 50 && nodeId is null; i++)
-        {
-            nodeId = output.NodeId;
-            if (nodeId is null)
-                await Task.Delay(50);
-        }
-
-        if (nodeId is null)
-            Assert.Inconclusive("the producer was never given a node id.");
+        uint nodeId = await output
+            .WaitForNodeIdAsync()
+            .WaitAsync(TimeSpan.FromSeconds(10))
+            .OrFail("the producer was never given a node id");
 
         await using var capture = new PipeWireVideoCapture(ctx, $"{name}-sink");
         capture.FrameReady += (_, frame) =>
         {
             Interlocked.Increment(ref frames);
             if (frame.BufferType == PipeWireBufferType.DmaBuf)
-                Interlocked.Increment(ref dmaBufFrames);
+                dmaBufFrames.Increment();
         };
 
-        capture.Connect(nodeId!.Value, [PixelFormat.Bgra], modifiers: [modifier]);
+        capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
 
         // Not driven from here. This node is not the graph's driver, and pw_stream_trigger_process
         // on a node that is not one reaches the real driver as RequestProcess, which an audio
         // adapter refuses - once per call, logged as an error. The consumer drives the graph.
-        await Task.Delay(TimeSpan.FromSeconds(3));
+        // Streamed until the pool has turned over several times.
+        _ = await dmaBufFrames
+            .AtLeast(4 * PoolCap)
+            .Within(TimeSpan.FromSeconds(5), CancellationToken.None);
 
-        return (Volatile.Read(ref frames), Volatile.Read(ref dmaBufFrames), [.. indexes]);
+        return (Volatile.Read(ref frames), dmaBufFrames.Value, [.. indexes]);
     }
 
     [TestMethod]
@@ -427,6 +424,7 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
                 return 1;
             };
 
+            using var released = new SemaphoreSlim(0);
             output.ReleaseDmaBuf += (_, index) =>
             {
                 lock (gate)
@@ -435,6 +433,8 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
                         violations.Add($"index {index} released without being live");
                     releases++;
                 }
+
+                released.Release();
             };
 
             output.FillDmaBuf += (_, _) => true;
@@ -444,7 +444,7 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
 
             for (int round = 0; round < Rounds; round++)
             {
-                int dmaBufFrames = 0;
+                var dmaBufFrames = new Tally();
 
                 await using (
                     var capture = new PipeWireVideoCapture(ctx, $"pwnet-dmabuf-churn-sink-{round}")
@@ -453,35 +453,48 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
                     capture.FrameReady += (_, frame) =>
                     {
                         if (frame.BufferType == PipeWireBufferType.DmaBuf)
-                            Interlocked.Increment(ref dmaBufFrames);
+                            dmaBufFrames.Increment();
                     };
 
                     capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
 
-                    for (int i = 0; i < 100 && Volatile.Read(ref dmaBufFrames) < 10; i++)
-                        await Task.Delay(50);
+                    _ = await dmaBufFrames
+                        .AtLeast(10)
+                        .Within(TimeSpan.FromMilliseconds(5000), CancellationToken.None);
                 }
 
-                if (round == 0 && Volatile.Read(ref dmaBufFrames) == 0)
+                if (round == 0 && dmaBufFrames.Value == 0)
                     Assert.Inconclusive(
                         "the first round produced no dmabuf frames, so there is no pool to churn."
                     );
 
                 Assert.IsTrue(
-                    Volatile.Read(ref dmaBufFrames) >= 10,
+                    dmaBufFrames.Value >= 10,
                     $"round {round}: only {dmaBufFrames} dmabuf frames after the producer was renegotiated"
                 );
 
                 // The consumer is gone, so its link is, and upstream clears the producer's format
                 // and every buffer with it. Waiting for that is the proof the round renegotiated.
-                for (int i = 0; i < 100; i++)
+                using (var limit = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
                 {
-                    lock (gate)
+                    while (true)
                     {
-                        if (live.Count == 0)
+                        lock (gate)
+                        {
+                            if (live.Count == 0)
+                                break;
+                        }
+
+                        try
+                        {
+                            await released.WaitAsync(limit.Token);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // Out of time: the assertion below names what is still live.
                             break;
+                        }
                     }
-                    await Task.Delay(50);
                 }
 
                 lock (gate)
@@ -595,21 +608,16 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
             output.FillDmaBuf += (_, _) => true;
             output.ConnectDmaBuf([modifier]);
 
-            uint? nodeId = null;
-            for (var i = 0; i < 50 && nodeId is null; i++)
-            {
-                nodeId = output.NodeId;
-                if (nodeId is null)
-                    await Task.Delay(50);
-            }
-
-            if (nodeId is null)
-                Assert.Inconclusive("the producer was never given a node id.");
+            uint nodeId = await output
+                .WaitForNodeIdAsync()
+                .WaitAsync(TimeSpan.FromSeconds(10))
+                .OrFail("the producer was never given a node id");
 
             await using var capture = new PipeWireVideoCapture(ctx, $"pwnet-badalloc-sink-{mode}");
             capture.FrameReady += (_, _) => Interlocked.Increment(ref framesSeen);
-            capture.Connect(nodeId!.Value, [PixelFormat.Bgra], modifiers: [modifier]);
+            capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
 
+            // An absence is asserted below: nothing may be published, which only a window shows.
             await Task.Delay(TimeSpan.FromSeconds(3));
 
             Assert.AreNotEqual(

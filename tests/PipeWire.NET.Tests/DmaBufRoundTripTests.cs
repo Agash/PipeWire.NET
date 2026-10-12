@@ -54,8 +54,8 @@ public sealed class DmaBufRoundTripTests : PipeWireTestBase
 
             long modifier = (long)GbmAllocator.LinearModifier;
             bool streaming = false;
-            int framesConsumed = 0,
-                dmaBufConsumed = 0;
+            int framesConsumed = 0;
+            var dmaBufConsumed = new Tally();
             long firstFd = -1;
 
             await using var output = new PipeWireVideoOutput(
@@ -80,15 +80,7 @@ public sealed class DmaBufRoundTripTests : PipeWireTestBase
             output.StateChanged += (_, _, s) => streaming = s == PipeWireStreamState.Streaming;
             output.ConnectDmaBuf([modifier]);
 
-            uint? nodeId = null;
-            for (int i = 0; i < 50 && nodeId is null; i++)
-            {
-                nodeId = output.NodeId;
-                if (nodeId is null)
-                    await Task.Delay(50);
-            }
-
-            Assert.IsNotNull(nodeId, "producer node should be assigned an id");
+            uint nodeId = await output.WaitForNodeIdAsync().WaitAsync(TimeSpan.FromSeconds(10));
 
             await using var capture = new PipeWireVideoCapture(ctx, "stx-dmabuf-roundtrip-sink");
             capture.FrameReady += (_, frame) =>
@@ -96,20 +88,21 @@ public sealed class DmaBufRoundTripTests : PipeWireTestBase
                 Interlocked.Increment(ref framesConsumed);
                 if (frame.BufferType == PipeWireBufferType.DmaBuf)
                 {
-                    Interlocked.Increment(ref dmaBufConsumed);
+                    dmaBufConsumed.Increment();
                     Interlocked.CompareExchange(ref firstFd, frame.Fd, -1);
                 }
             };
-            capture.Connect(nodeId.Value, [PixelFormat.Bgra], modifiers: [modifier]);
+            capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
 
             // Not driven from here. This node is not the graph's driver, and pw_stream_trigger_process
             // on a node that is not one reaches the real driver as RequestProcess, which an audio
             // adapter refuses - once per call, logged as an error. The consumer drives the graph.
-
-            await Task.Delay(TimeSpan.FromSeconds(4));
+            _ = await dmaBufConsumed
+                .AtLeast(10)
+                .Within(TimeSpan.FromSeconds(4), CancellationToken.None);
 
             Assert.IsTrue(
-                dmaBufConsumed >= 10,
+                dmaBufConsumed.Value >= 10,
                 $"expected >=10 DMA-BUF frames through the dmabuf path, got {dmaBufConsumed} dmabuf of {framesConsumed} total"
             );
             Assert.IsTrue(

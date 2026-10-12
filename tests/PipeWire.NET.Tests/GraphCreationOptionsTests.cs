@@ -29,19 +29,6 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         return (context, registry);
     }
 
-    private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry,
-        Func<PipeWireGraphSnapshot, bool> until,
-        CancellationToken cancellationToken
-    )
-    {
-        await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
-            if (until(graph))
-                return graph;
-
-        throw new InvalidOperationException("the snapshot stream ended before the condition held");
-    }
-
     private static string Unique(string prefix) =>
         $"{prefix}_{Environment.ProcessId}_{Random.Shared.Next():x}";
 
@@ -184,8 +171,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
                         .ExecuteAsync(cts.Token)
                 ).NodeId;
 
-                await WaitForAsync(
-                    observer,
+                await observer.WaitUntilAsync(
                     g => g.GetNode(lingering) is not null && g.GetNode(transient) is not null,
                     cts.Token
                 );
@@ -195,8 +181,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
 
             // The transient node leaving is the signal that the disconnect has been processed, so
             // the lingering node's survival is then a real observation rather than a race.
-            PipeWireGraphSnapshot after = await WaitForAsync(
-                observer,
+            PipeWireGraphSnapshot after = await observer.WaitUntilAsync(
                 g => g.GetNode(transient) is null,
                 cts.Token
             );
@@ -207,7 +192,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
             );
 
             await observer.DestroyGlobalAsync(lingering, cts.Token);
-            await WaitForAsync(observer, g => g.GetNode(lingering) is null, cts.Token);
+            await observer.WaitUntilAsync(g => g.GetNode(lingering) is null, cts.Token);
         }
     }
 
@@ -226,8 +211,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
             PipeWireNode a = await registry.CreateVirtualSinkAsync("PA", "pwnet_pa", cts.Token);
             PipeWireNode b = await registry.CreateVirtualSinkAsync("PB", "pwnet_pb", cts.Token);
 
-            PipeWireGraphSnapshot ready = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot ready = await registry.WaitUntilAsync(
                 g =>
                     g.GetPortsForNode(a.NodeId).Length == 4
                     && g.GetPortsForNode(b.NodeId).Length == 4,
@@ -266,8 +250,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
                 "pwnet_version",
                 cts.Token
             );
-            PipeWireGraphSnapshot graph = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
                 g => g.GetPortsForNode(node.NodeId).Length == 4,
                 cts.Token
             );
@@ -455,22 +438,13 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
         CancellationToken cancellationToken
     )
     {
-        var seen = 0;
+        int Count(PipeWireGraphSnapshot g) =>
+            g.GetPortsForNode(nodeId).Count(p => p.PortDirection == direction);
 
-        for (int attempt = 0; attempt < 100; attempt++)
-        {
-            await registry.WaitForInitialEnumerationAsync(cancellationToken);
-
-            seen = registry
-                .Current.GetPortsForNode(nodeId)
-                .Count(p => p.PortDirection == direction);
-            if (seen >= expected)
-                return seen;
-
-            await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
-        }
-
-        return seen;
+        _ = await registry
+            .WaitUntilAsync(g => Count(g) >= expected, cancellationToken)
+            .Within(TimeSpan.FromSeconds(5), cancellationToken);
+        return Count(registry.Current);
     }
 
     [TestMethod]
@@ -684,8 +658,7 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
 
-            PipeWireGraphSnapshot gone = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot gone = await registry.WaitUntilAsync(
                 g => g.GetNode(node.NodeId) is null,
                 cts.Token
             );

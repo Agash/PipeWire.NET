@@ -34,24 +34,11 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
         return (context, registry);
     }
 
-    private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry,
-        Func<PipeWireGraphSnapshot, bool> until,
-        CancellationToken cancellationToken
-    )
-    {
-        await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
-            if (until(graph))
-                return graph;
-
-        throw new InvalidOperationException("the snapshot stream ended before the condition held");
-    }
-
     private static Task<PipeWireGraphSnapshot> WaitForPortsAsync(
         PipeWireRegistry r,
         uint nodeId,
         CancellationToken ct
-    ) => WaitForAsync(r, g => g.GetPortsForNode(nodeId).Length == 4, ct);
+    ) => r.WaitUntilAsync(g => g.GetPortsForNode(nodeId).Length == 4, ct);
 
     // ---------------------------------------------------------------- we create, they see
 
@@ -187,8 +174,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
                 cts.Token
             );
 
-            PipeWireGraphSnapshot linked = await WaitForAsync(
-                reg,
+            PipeWireGraphSnapshot linked = await reg.WaitUntilAsync(
                 g => g.GetOutputLinksForPort(output.PortId).Length == 1,
                 cts.Token
             );
@@ -239,8 +225,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
             PipeWireLink link = await reg.CreateLink(output, input).ExecuteAsync(cts.Token);
             await PwTools.DisconnectAsync(link.LinkId, cts.Token);
 
-            PipeWireGraphSnapshot after = await WaitForAsync(
-                reg,
+            PipeWireGraphSnapshot after = await reg.WaitUntilAsync(
                 g => g.GetLink(link.LinkId) is null,
                 cts.Token
             );
@@ -272,8 +257,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
 
             await PwTools.DestroyAsync(node.NodeId, cts.Token);
 
-            PipeWireGraphSnapshot after = await WaitForAsync(
-                reg,
+            PipeWireGraphSnapshot after = await reg.WaitUntilAsync(
                 g => g.GetNode(node.NodeId) is null,
                 cts.Token
             );
@@ -318,8 +302,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
             await filter.ConnectAsync(cancellationToken: cts.Token);
             uint filterNode = await filter.WaitForNodeIdAsync(cts.Token);
 
-            PipeWireGraphSnapshot seen = await WaitForAsync(
-                reg,
+            PipeWireGraphSnapshot seen = await reg.WaitUntilAsync(
                 g => g.GetNode(filterNode) is not null,
                 cts.Token
             );
@@ -362,9 +345,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
 
             // pw-loopback publishes a pair: input.NAME (Stream/Input/Audio) and output.NAME
             // (Stream/Output/Audio).
-            PipeWireGraphSnapshot graph = await WaitForAsync(
-                reg,
-                // Both directions, not just "has any port". A loopback's input node publishes its
+            PipeWireGraphSnapshot graph = await reg.WaitUntilAsync( // Both directions, not just "has any port". A loopback's input node publishes its
                 // inputs first and its monitors a moment later, so wait for both directions,
                 // not just any port.
                 g =>
@@ -447,8 +428,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
                     cts.Token
                 );
 
-                PipeWireGraphSnapshot graph = await WaitForAsync(
-                    reg,
+                PipeWireGraphSnapshot graph = await reg.WaitUntilAsync(
                     g =>
                         g.Nodes.Any(n =>
                             n.NodeName == "input.pwnet_tp_vanish"
@@ -464,8 +444,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
                 );
             } // the loopback process is killed here
 
-            PipeWireGraphSnapshot after = await WaitForAsync(
-                reg,
+            PipeWireGraphSnapshot after = await reg.WaitUntilAsync(
                 g => g.GetNode(theirNode) is null,
                 cts.Token
             );
@@ -556,8 +535,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
                     $"pwnet_tp_cb:{input.PortName}",
                     cts.Token
                 );
-                PipeWireGraphSnapshot on = await WaitForAsync(
-                    reg,
+                PipeWireGraphSnapshot on = await reg.WaitUntilAsync(
                     g => g.GetOutputLinksForPort(output.PortId).Length == 1,
                     cts.Token
                 );
@@ -566,8 +544,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
                     on.GetOutputLinksForPort(output.PortId).Single().LinkId,
                     cts.Token
                 );
-                await WaitForAsync(
-                    reg,
+                await reg.WaitUntilAsync(
                     g => g.GetOutputLinksForPort(output.PortId).Length == 0,
                     cts.Token
                 );
@@ -624,8 +601,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
                 cts.Token
             );
 
-            PipeWireGraphSnapshot graph = await WaitForAsync(
-                reg,
+            PipeWireGraphSnapshot graph = await reg.WaitUntilAsync(
                 g =>
                     g.GetOutputLinksForPort(outputs[0].PortId).Length == 1
                     && g.GetOutputLinksForPort(outputs[1].PortId).Length == 1,
@@ -666,8 +642,7 @@ public sealed class ThirdPartyGraphTests : PipeWireTestBase
         PipeWireNode a = await reg.CreateVirtualSink(nameA).WithName(nameA).ExecuteAsync(ct);
         PipeWireNode b = await reg.CreateVirtualSink(nameB).WithName(nameB).ExecuteAsync(ct);
 
-        PipeWireGraphSnapshot ready = await WaitForAsync(
-            reg,
+        PipeWireGraphSnapshot ready = await reg.WaitUntilAsync(
             g => g.GetPortsForNode(a.NodeId).Length == 4 && g.GetPortsForNode(b.NodeId).Length == 4,
             ct
         );

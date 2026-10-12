@@ -28,19 +28,6 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(40);
 
-    private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry,
-        Func<PipeWireGraphSnapshot, bool> until,
-        CancellationToken ct
-    )
-    {
-        await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(ct))
-            if (until(graph))
-                return graph;
-
-        throw new InvalidOperationException("the snapshot stream ended before the condition held");
-    }
-
     [TestMethod]
     public async Task DestroyingTheContextWhileOwningProxies_DoesNotAbort()
     {
@@ -93,6 +80,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         GC.Collect();
         GC.WaitForPendingFinalizers();
 
+        // Released handles are torn down on the loop threads; a beat for that to happen, or crash.
         await Task.Delay(500, cts.Token);
 
         Assert.IsTrue(
@@ -118,6 +106,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         GC.Collect();
         GC.WaitForPendingFinalizers();
 
+        // Released handles are torn down on the loop threads; a beat for that to happen, or crash.
         await Task.Delay(500, cts.Token);
 
         await using var observer = new PipeWireContext(
@@ -392,8 +381,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
             cts.Token
         );
 
-        PipeWireGraphSnapshot graph = await WaitForAsync(
-            reg,
+        PipeWireGraphSnapshot graph = await reg.WaitUntilAsync(
             g => g.Nodes.Any(n => n.NodeName == "input.pwnet_nl_foreign"),
             cts.Token
         );
@@ -448,7 +436,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
             return s.Length;
         };
         output.Connect(autoConnect: false);
-        await Task.Delay(300, cts.Token);
+        _ = await output.WaitForNodeIdAsync(cts.Token);
 
         await ctx.DisposeAsync();
         await output.DisposeAsync();
@@ -478,7 +466,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
                 .WithName("pwnet_nl_outlive")
                 .ExecuteAsync(cts.Token);
             nodeId = node.NodeId;
-            held = await WaitForAsync(reg, g => g.GetPortsForNode(nodeId).Length == 4, cts.Token);
+            held = await reg.WaitUntilAsync(g => g.GetPortsForNode(nodeId).Length == 4, cts.Token);
 
             await reg.DisposeAsync();
             await ctx.DisposeAsync();
@@ -525,9 +513,9 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
         PipeWireNode node = await reg.CreateVirtualSink("Order")
             .WithName("pwnet_nl_order")
             .ExecuteAsync(cts.Token);
-        await WaitForAsync(reg, g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
+        await reg.WaitUntilAsync(g => g.GetPortsForNode(node.NodeId).Length == 4, cts.Token);
         await reg.DestroyGlobalAsync(node.NodeId, cts.Token);
-        await WaitForAsync(reg, g => g.GetNode(node.NodeId) is null, cts.Token);
+        await reg.WaitUntilAsync(g => g.GetNode(node.NodeId) is null, cts.Token);
 
         Assert.IsTrue(Volatile.Read(ref seen) > 0, "no GraphChanged fired, so nothing was checked");
         Assert.AreEqual(

@@ -366,6 +366,7 @@ public sealed class HostileControlTests : PipeWireTestBase
             PipeWireNode node = await registry
                 .CreateVirtualSink("ChannelCount")
                 .WithName(UniqueName("pwnet_chancount"))
+                .WithoutRestoredProps()
                 .ExecuteAsync(cts.Token);
 
             await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
@@ -401,32 +402,23 @@ public sealed class HostileControlTests : PipeWireTestBase
                 "the channel map must still describe the node, not the last bad write"
             );
 
-            // Read until the node has applied it, and write again if something else wrote over it.
-            // A set is a request the node processes on its own time. Under the full suite's load,
-            // on the lab box, a fresh node read two channels at unity for two seconds after this
-            // write, while 25 runs of the test alone never did: another writer (the session
-            // manager still configuring the new node) landing after ours. Corruption, the subject
-            // here, is a matching write that never takes, and that still fails; the history of
-            // every read is in the message either way.
+            // Read until the node has applied it: a set is a request the node processes on its own
+            // time. The node opted out of the session manager's restore, so this write is the only
+            // one. Corruption, the subject here, is a matching write that never takes; the history of
+            // every read is in the message.
             var history = new List<string>();
-            ImmutableArray<float> after = [];
-            for (int write = 0; write < 3 && !Matches(after); write++)
-            {
-                await control.SetChannelVolumesAsync([0.3f, 0.7f], cts.Token);
-                for (int i = 0; i < 20; i++)
+            await control.SetChannelVolumesAsync([0.3f, 0.7f], cts.Token);
+            ImmutableArray<float> after = await control.SettleAsync(
+                SpaParamType.Props,
+                ct => control.GetChannelVolumesAsync(ct),
+                v =>
                 {
-                    after = await control.GetChannelVolumesAsync(cts.Token);
-                    history.Add($"w{write}:[{string.Join(",", after)}]");
-                    if (Matches(after))
-                        break;
-                    await Task.Delay(50, cts.Token);
-                }
-            }
-
-            if (history.Count > 1)
-                Console.Error.WriteLine(
-                    $"channel volumes converged after: {string.Join(" ", history)}"
-                );
+                    history.Add($"[{string.Join(",", v)}]");
+                    return Matches(v);
+                },
+                TimeSpan.FromSeconds(5),
+                cts.Token
+            );
 
             Assert.IsTrue(
                 Matches(after),

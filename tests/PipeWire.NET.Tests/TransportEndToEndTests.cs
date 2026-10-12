@@ -37,18 +37,6 @@ public sealed class TransportEndToEndTests
     private const int Height = 32;
     private const int Rate = 48000;
 
-    private static async Task<uint> NodeIdAsync(PipeWireVideoOutput output, CancellationToken ct)
-    {
-        for (var i = 0; i < 60; i++)
-        {
-            if (output.NodeId is { } id)
-                return id;
-            await Task.Delay(50, ct);
-        }
-
-        throw new InvalidOperationException("the producer was never given a node id");
-    }
-
     /// <summary>
     /// A republished frame keeps the presentation time the publisher gave it.
     /// </summary>
@@ -105,9 +93,9 @@ public sealed class TransportEndToEndTests
         };
 
         output.Connect(autoConnect: false);
-        uint nodeId = await NodeIdAsync(output, cts.Token);
+        uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
-        var received = new List<long>();
+        var received = new Collected<long>();
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-republish-sink");
         capture.FrameReady += (_, f) =>
         {
@@ -123,15 +111,7 @@ public sealed class TransportEndToEndTests
         capture.Connect(nodeId, [PixelFormat.Bgra]);
         await capture.WaitForStreamingAsync(cts.Token);
 
-        for (var i = 0; i < 80; i++)
-        {
-            lock (received)
-            {
-                if (received.Count >= 5)
-                    break;
-            }
-            await Task.Delay(50, cts.Token);
-        }
+        _ = await received.Reaching(5).Within(TimeSpan.FromMilliseconds(4000), cts.Token);
 
         long[] sent,
             got;
@@ -225,7 +205,7 @@ public sealed class TransportEndToEndTests
         };
 
         video.Connect(autoConnect: false);
-        uint videoNode = await NodeIdAsync(video, cts.Token);
+        uint videoNode = await video.WaitForNodeIdAsync(cts.Token);
 
         // Audio published alongside, carrying a ramp so its own delivery can be verified.
         uint n = 0;
@@ -247,7 +227,7 @@ public sealed class TransportEndToEndTests
 
         audio.Connect(autoConnect: false);
 
-        var offsets = new List<long>();
+        var offsets = new Collected<long>();
         long audioSamples = 0;
 
         await using var videoSink = new PipeWireVideoCapture(ctx, "pwnet-avpublish-v-sink");
@@ -279,15 +259,7 @@ public sealed class TransportEndToEndTests
         await videoSink.WaitForStreamingAsync(cts.Token);
         await audioSink.WaitForStreamingAsync(cts.Token);
 
-        for (var i = 0; i < 100; i++)
-        {
-            lock (offsets)
-            {
-                if (offsets.Count >= 5)
-                    break;
-            }
-            await Task.Delay(50, cts.Token);
-        }
+        _ = await offsets.Reaching(5).Within(TimeSpan.FromMilliseconds(5000), cts.Token);
 
         long[] measured;
         lock (offsets)
@@ -412,15 +384,7 @@ public sealed class TransportEndToEndTests
 
                 output.ConnectDmaBuf([modifier]);
 
-                uint? nodeId = null;
-                for (var i = 0; i < 60 && nodeId is null; i++)
-                {
-                    nodeId = output.NodeId;
-                    if (nodeId is null)
-                        await Task.Delay(50, cts.Token);
-                }
-
-                Assert.IsNotNull(nodeId, "the republishing producer was never given a node id");
+                uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
                 await using var capture = new PipeWireVideoCapture(ctx, "pwnet-republish-gpu-sink")
                 {
@@ -441,15 +405,23 @@ public sealed class TransportEndToEndTests
                     }
                 };
 
-                capture.Connect(nodeId!.Value, [PixelFormat.Bgra], modifiers: [modifier]);
+                capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
 
                 BorrowedVideoFrame borrowed = default;
                 var got = false;
-                for (var i = 0; i < 120 && !got; i++)
+                using (var frameBudget = CancellationTokenSource.CreateLinkedTokenSource(cts.Token))
                 {
-                    got = capture.TryGetBorrowedFrame(out borrowed) && borrowed.IsFdBacked;
-                    if (!got)
-                        await Task.Delay(50, cts.Token);
+                    frameBudget.CancelAfter(TimeSpan.FromSeconds(6));
+                    while (!got && !frameBudget.IsCancellationRequested)
+                    {
+                        if (
+                            !await capture
+                                .NextFrame()
+                                .Within(TimeSpan.FromSeconds(6), frameBudget.Token)
+                        )
+                            break;
+                        got = capture.TryGetBorrowedFrame(out borrowed) && borrowed.IsFdBacked;
+                    }
                 }
 
                 Assert.IsTrue(got, "no fd-backed frame was republished");
@@ -538,7 +510,7 @@ public sealed class TransportEndToEndTests
         };
 
         video.Connect(autoConnect: false);
-        uint videoNode = await NodeIdAsync(video, cts.Token);
+        uint videoNode = await video.WaitForNodeIdAsync(cts.Token);
 
         uint n = 0;
         await using var audio = new PipeWireAudioOutput(
@@ -589,20 +561,20 @@ public sealed class TransportEndToEndTests
             };
 
             long videoClock = 0;
-            var frames = 0;
+            var frames = new Tally();
             videoSink.FrameReady += (_, f) =>
             {
                 if (f.GraphTimeNs is { } t)
                     Volatile.Write(ref videoClock, t);
-                Interlocked.Increment(ref frames);
+                frames.Increment();
             };
 
             videoSink.Connect(videoNode, [PixelFormat.Bgra]);
             await videoSink.WaitForStreamingAsync(cts.Token);
-            await Task.Delay(600, cts.Token);
+            _ = await frames.AtLeast(3).Within(TimeSpan.FromSeconds(5), cts.Token);
 
             Assert.IsTrue(
-                Volatile.Read(ref frames) > 0,
+                frames.Value > 0,
                 $"{retention} retention delivered no frames in the session"
             );
 
@@ -623,19 +595,13 @@ public sealed class TransportEndToEndTests
             if (retention == FrameRetention.Owned)
             {
                 var pulled = false;
-                for (var i = 0; i < 40 && !pulled; i++)
+                _ = await videoSink.NextFrame().Within(TimeSpan.FromSeconds(2), cts.Token);
+                if (videoSink.TryGetFrame(out PulledVideoFrame? kept) && kept is not null)
                 {
-                    if (videoSink.TryGetFrame(out PulledVideoFrame? kept) && kept is not null)
+                    using (kept)
                     {
-                        using (kept)
-                        {
-                            Assert.AreEqual(Width, kept.Width);
-                            pulled = true;
-                        }
-                    }
-                    else
-                    {
-                        await Task.Delay(25, cts.Token);
+                        Assert.AreEqual(Width, kept.Width);
+                        pulled = true;
                     }
                 }
 

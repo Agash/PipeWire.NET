@@ -73,8 +73,7 @@ internal static class SessionGates
         );
         try
         {
-            while (!HasAudioRoute(registry.Current))
-                await Task.Delay(250, linked.Token).ConfigureAwait(false);
+            _ = await registry.WaitUntilAsync(HasAudioRoute, linked.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
             when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)

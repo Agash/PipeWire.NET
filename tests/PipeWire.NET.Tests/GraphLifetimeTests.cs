@@ -36,19 +36,6 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
         return (context, registry);
     }
 
-    private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry,
-        Func<PipeWireGraphSnapshot, bool> until,
-        CancellationToken cancellationToken
-    )
-    {
-        await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
-            if (until(graph))
-                return graph;
-
-        throw new InvalidOperationException("the snapshot stream ended before the condition held");
-    }
-
     [TestMethod]
     public async Task WhenANodeGoesAway_ItsPortsLeaveTheGraphToo()
     {
@@ -79,8 +66,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
                 );
                 nodeId = node.NodeId;
 
-                PipeWireGraphSnapshot seen = await WaitForAsync(
-                    observer,
+                PipeWireGraphSnapshot seen = await observer.WaitUntilAsync(
                     g => g.GetPortsForNode(nodeId).Length == 4,
                     cts.Token
                 );
@@ -89,8 +75,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
                 await owner.DisposeAsync();
             }
 
-            PipeWireGraphSnapshot after = await WaitForAsync(
-                observer,
+            PipeWireGraphSnapshot after = await observer.WaitUntilAsync(
                 g => g.GetNode(nodeId) is null,
                 cts.Token
             );
@@ -135,8 +120,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
             await using (watcherContext)
             await using (watcher)
             {
-                PipeWireGraphSnapshot after = await WaitForAsync(
-                    watcher,
+                PipeWireGraphSnapshot after = await watcher.WaitUntilAsync(
                     g => g.GetNode(node.NodeId) is null,
                     cts.Token
                 );
@@ -163,8 +147,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
             PipeWireNode a = await registry.CreateVirtualSinkAsync("L1", "pwnet_rel_a", cts.Token);
             PipeWireNode b = await registry.CreateVirtualSinkAsync("L2", "pwnet_rel_b", cts.Token);
 
-            PipeWireGraphSnapshot ready = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot ready = await registry.WaitUntilAsync(
                 g =>
                     g.GetPortsForNode(a.NodeId).Length == 4
                     && g.GetPortsForNode(b.NodeId).Length == 4,
@@ -185,8 +168,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
             );
 
             await registry.RemoveLinkAsync(link, cts.Token);
-            PipeWireGraphSnapshot after = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot after = await registry.WaitUntilAsync(
                 g => g.GetLink(link.LinkId) is null,
                 cts.Token
             );
@@ -289,8 +271,7 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
             Assert.IsTrue(node.Permissions.HasFlag(PipeWirePermissions.Read));
             Assert.IsTrue(node.CanInvokeMethods, "a node this client created is its own to drive");
 
-            PipeWireGraphSnapshot graph = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
                 g => g.GetPortsForNode(node.NodeId).Length == 4,
                 cts.Token
             );
@@ -371,15 +352,11 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
             await using var readerRegistry = new PipeWireRegistry(reader);
             await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
 
-            PipeWireMetadataProxy? store = null;
-            long appearUntil = Environment.TickCount64 + 20_000;
-            while (store is null && Environment.TickCount64 < appearUntil)
-            {
-                await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
-                store = readerRegistry.BindMetadata(tag + "_meta");
-                if (store is null)
-                    await Task.Delay(TimeSpan.FromMilliseconds(100), cts.Token);
-            }
+            PipeWireMetadataProxy? store = await readerRegistry.BindMetadataWhenPresentAsync(
+                tag + "_meta",
+                TimeSpan.FromSeconds(20),
+                cts.Token
+            );
 
             if (store is null)
                 Assert.Inconclusive("the served store never appeared in the graph.");
@@ -415,23 +392,16 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
             // expires the budget instead of reaching the assertions below. The link is
             // matched by its endpoints rather than its id: ids are reused under churn, so a
             // resolved id alone proves nothing about our link.
-            long settleUntil = Environment.TickCount64 + 30_000;
-            while (Environment.TickCount64 < settleUntil)
-            {
-                await registry.WaitForInitialEnumerationAsync(cts.Token);
-                PipeWireGraphSnapshot seen = registry.Current;
-                if (
-                    !LeftoversPresent(seen, tag)
-                    && !seen.Links.Any(l =>
-                        l.OutputPortId == output.PortId && l.InputPortId == input.PortId
-                    )
+            _ = await registry
+                .WaitUntilAsync(
+                    seen =>
+                        !LeftoversPresent(seen, tag)
+                        && !seen.Links.Any(l =>
+                            l.OutputPortId == output.PortId && l.InputPortId == input.PortId
+                        ),
+                    cts.Token
                 )
-                {
-                    break;
-                }
-
-                await Task.Delay(TimeSpan.FromMilliseconds(100), cts.Token);
-            }
+                .Within(TimeSpan.FromSeconds(30), cts.Token);
 
             PipeWireGraphSnapshot final = registry.Current;
             Assert.IsFalse(LeftoversPresent(final, tag), DescribeLeftovers(final, tag));
@@ -459,19 +429,10 @@ public sealed class GraphLifetimeTests : PipeWireTestBase
         // bare cancellation from somewhere inside the wait.
         try
         {
-            while (true)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                PipeWirePort? port = registry
-                    .Current.GetPortsForNode(nodeId)
-                    .FirstOrDefault(p => p.PortDirection == direction);
-                if (port is not null)
-                    return port;
-
-                await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
-                await registry.WaitForInitialEnumerationAsync(cancellationToken);
-            }
+            return await registry.WaitForAsync(
+                g => g.GetPortsForNode(nodeId).FirstOrDefault(p => p.PortDirection == direction),
+                cancellationToken
+            );
         }
         catch (OperationCanceledException)
         {

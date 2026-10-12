@@ -172,7 +172,14 @@ public sealed class LinkStateTests : PipeWireTestBase
 
             await using (PipeWireLinkProxy control = registry.BindLink(link.LinkId))
             {
-                control.StateChanged += c => seen.Enqueue(c.State);
+                var changed = new TaskCompletionSource(
+                    TaskCreationOptions.RunContinuationsAsynchronously
+                );
+                control.StateChanged += c =>
+                {
+                    seen.Enqueue(c.State);
+                    changed.TrySetResult();
+                };
 
                 await control.ReadyAsync(cts.Token);
 
@@ -186,8 +193,7 @@ public sealed class LinkStateTests : PipeWireTestBase
                 // is the one an event has to carry.
                 await registry.DestroyGlobalAsync(sink.NodeId, cts.Token);
 
-                for (int attempt = 0; attempt < 100 && seen.IsEmpty; attempt++)
-                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+                _ = await changed.Task.Within(TimeSpan.FromSeconds(5), cts.Token);
 
                 Assert.IsFalse(
                     seen.IsEmpty,
@@ -265,13 +271,13 @@ public sealed class LinkStateTests : PipeWireTestBase
 
                 // And what it settled on. Negotiation is asynchronous, so this is waited for rather
                 // than read once: empty is a legitimate answer while the link is still negotiating.
-                ImmutableArray<SpaObject> negotiated = [];
-                for (int attempt = 0; attempt < 60 && negotiated.IsEmpty; attempt++)
-                {
-                    negotiated = await port.EnumerateFormatsAsync(cts.Token);
-                    if (negotiated.IsEmpty)
-                        await Task.Delay(TimeSpan.FromMilliseconds(100), cts.Token);
-                }
+                ImmutableArray<SpaObject> negotiated = await port.SettleAsync(
+                    SpaParamType.Format,
+                    ct => port.EnumerateFormatsAsync(ct),
+                    f => !f.IsEmpty,
+                    TimeSpan.FromSeconds(6),
+                    cts.Token
+                );
 
                 Console.Error.WriteLine(
                     $"port {output.PortId}: {supported.Length} accepted, {negotiated.Length} negotiated"

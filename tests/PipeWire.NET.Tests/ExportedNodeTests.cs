@@ -73,20 +73,16 @@ public sealed class ExportedNodeTests
             }
         );
 
-        PipeWireNode? seen = null;
-        for (var i = 0; i < 100 && seen is null; i++)
-        {
-            seen = reg.Current.Nodes.FirstOrDefault(n =>
-                string.Equals(n.NodeName, name, StringComparison.Ordinal)
-            );
+        PipeWireNode seen = await reg.WaitForAsync(
+                g =>
+                    g.Nodes.FirstOrDefault(n =>
+                        string.Equals(n.NodeName, name, StringComparison.Ordinal)
+                    ),
+                cts.Token
+            )
+            .OrFail("the exported node never appeared in the graph");
 
-            if (seen is null)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsNotNull(seen, "the exported node never appeared in the graph");
-
-        Assert.AreEqual("Audio/Source", seen!.MediaClass, "the exported node lost its media class");
+        Assert.AreEqual("Audio/Source", seen.MediaClass, "the exported node lost its media class");
 
         Assert.AreEqual(
             "exported by PipeWire.NET",
@@ -97,19 +93,17 @@ public sealed class ExportedNodeTests
         // A node with no ports is in the graph but cannot be linked to, which presents downstream
         // as "no target node available" when something tries to connect - a message that says
         // nothing about ports. Asserting it here names the cause instead.
-        List<PipeWirePort> ports = [];
-        for (var i = 0; i < 60 && ports.Count == 0; i++)
-        {
-            ports = [.. reg.Current.Ports.Where(p => p.NodeId == seen.NodeId)];
-            if (ports.Count == 0)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsTrue(
-            ports.Count > 0,
-            "the exported node has no ports in the graph, so nothing can link to it - the node's "
-                + "port_info emission did not register a port"
-        );
+        PipeWirePort[] ports = await reg.WaitForAsync(
+                g =>
+                    g.Ports.Where(p => p.NodeId == seen.NodeId).ToArray() is { Length: > 0 } all
+                        ? all
+                        : null,
+                cts.Token
+            )
+            .OrFail(
+                "the exported node has no ports in the graph, so nothing can link to it - the node's "
+                    + "port_info emission did not register a port"
+            );
 
         Assert.IsTrue(
             ports.Any(p => p.PortDirection == PipeWirePortDirection.Out),
@@ -162,20 +156,16 @@ public sealed class ExportedNodeTests
             return floats.Length * 4;
         };
 
-        PipeWireNode? exported = null;
-        for (var i = 0; i < 100 && exported is null; i++)
-        {
-            exported = reg.Current.Nodes.FirstOrDefault(n =>
-                string.Equals(n.NodeName, name, StringComparison.Ordinal)
-            );
+        PipeWireNode exported = await reg.WaitForAsync(
+                g =>
+                    g.Nodes.FirstOrDefault(n =>
+                        string.Equals(n.NodeName, name, StringComparison.Ordinal)
+                    ),
+                cts.Token
+            )
+            .OrFail("the exported node never appeared in the graph");
 
-            if (exported is null)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsNotNull(exported, "the exported node never appeared in the graph");
-
-        var received = new List<float>();
+        var received = new Collected<float>();
         await using var capture = new PipeWireAudioCapture(ctx, $"{name}-sink");
         capture.FrameReady += (_, f) =>
         {
@@ -198,36 +188,24 @@ public sealed class ExportedNodeTests
         // The one race to avoid is connecting before the node's port is registered. A node reaches
         // the registry before its ports do, and a target with nothing to link to yet is refused as
         // "no target node available", so the port is awaited first.
-        PipeWirePort? source = null;
-        for (var i = 0; i < 100 && source is null; i++)
-        {
-            source = reg.Current.Ports.FirstOrDefault(p =>
-                p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.Out
-            );
-
-            if (source is null)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsNotNull(source, "the exported node never registered an output port to route to");
+        PipeWirePort source = await reg.WaitForAsync(
+                g =>
+                    g.Ports.FirstOrDefault(p =>
+                        p.NodeId == exported.NodeId && p.PortDirection == PipeWirePortDirection.Out
+                    ),
+                cts.Token
+            )
+            .OrFail("the exported node never registered an output port to route to");
 
         capture.Connect(
-            exported!.NodeId,
+            exported.NodeId,
             sampleRate: Rate,
             channels: Channels,
             format: AudioSampleFormat.F32Le
         );
         await capture.WaitForStreamingAsync(cts.Token);
 
-        for (var i = 0; i < 100; i++)
-        {
-            lock (received)
-            {
-                if (received.Count > 2000)
-                    break;
-            }
-            await Task.Delay(50, cts.Token);
-        }
+        _ = await received.Reaching(2000 + 1).Within(TimeSpan.FromMilliseconds(5000), cts.Token);
 
         float[] got;
         lock (received)
@@ -314,34 +292,26 @@ public sealed class ExportedNodeTests
             return floats.Length * 4;
         };
 
-        PipeWireNode? exported = null;
-        for (var i = 0; i < 100 && exported is null; i++)
-        {
-            exported = reg.Current.Nodes.FirstOrDefault(n =>
-                string.Equals(n.NodeName, name, StringComparison.Ordinal)
-            );
-
-            if (exported is null)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsNotNull(exported, "the exported node never appeared in the graph");
+        PipeWireNode exported = await reg.WaitForAsync(
+                g =>
+                    g.Nodes.FirstOrDefault(n =>
+                        string.Equals(n.NodeName, name, StringComparison.Ordinal)
+                    ),
+                cts.Token
+            )
+            .OrFail("the exported node never appeared in the graph");
 
         // Wait for the port before asking to be routed to it.
-        var hasPort = false;
-        for (var i = 0; i < 100 && !hasPort; i++)
-        {
-            hasPort = reg.Current.Ports.Any(p =>
-                p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.Out
-            );
+        await reg.WaitUntilAsync(
+                g =>
+                    g.Ports.Any(p =>
+                        p.NodeId == exported.NodeId && p.PortDirection == PipeWirePortDirection.Out
+                    ),
+                cts.Token
+            )
+            .OrFail("the exported node never exposed an output port to route to");
 
-            if (!hasPort)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsTrue(hasPort, "the exported node never exposed an output port to route to");
-
-        var received = new List<float>();
+        var received = new Collected<float>();
         await using var capture = new PipeWireAudioCapture(ctx, $"{name}-sink");
         capture.FrameReady += (_, f) =>
         {
@@ -355,7 +325,7 @@ public sealed class ExportedNodeTests
         };
 
         capture.Connect(
-            exported!.NodeId,
+            exported.NodeId,
             sampleRate: Rate,
             channels: Channels,
             format: AudioSampleFormat.F32Le
@@ -368,27 +338,16 @@ public sealed class ExportedNodeTests
         // to this node falls back to the default source and streams that source's silence, which a
         // sample count alone takes for success. That is how this test once passed while nothing was
         // routed to the exported node at all.
-        bool linked = false;
-        for (var i = 0; i < 100 && !linked; i++)
-        {
-            linked = reg.Current.Links.Any(l =>
-                l.OutputNodeId == exported.NodeId && l.InputNodeId == captureNode
-            );
-            if (!linked)
-                await Task.Delay(50, cts.Token);
-        }
+        await reg.WaitUntilAsync(
+                g =>
+                    g.Links.Any(l =>
+                        l.OutputNodeId == exported.NodeId && l.InputNodeId == captureNode
+                    ),
+                cts.Token
+            )
+            .OrFail("the session manager never linked the consumer to the exported node");
 
-        Assert.IsTrue(linked, "the session manager never linked the consumer to the exported node");
-
-        for (var i = 0; i < 100; i++)
-        {
-            lock (received)
-            {
-                if (received.Count > 2000)
-                    break;
-            }
-            await Task.Delay(50, cts.Token);
-        }
+        _ = await received.Reaching(2000 + 1).Within(TimeSpan.FromMilliseconds(5000), cts.Token);
 
         AssertRamp(received, "routed by the session manager");
     }
@@ -444,19 +403,15 @@ public sealed class ExportedNodeTests
 
         await using (node)
         {
-            PipeWireNode? seen = null;
-            for (var i = 0; i < 100 && seen is null; i++)
-            {
-                seen = reg.Current.Nodes.FirstOrDefault(n =>
-                    string.Equals(n.NodeName, name, StringComparison.Ordinal)
-                );
-
-                if (seen is null)
-                    await Task.Delay(50, cts.Token);
-            }
-
-            Assert.IsNotNull(seen, "the exported SPA factory node never appeared in the graph");
-            Assert.AreEqual("Audio/Source", seen!.MediaClass);
+            PipeWireNode seen = await reg.WaitForAsync(
+                    g =>
+                        g.Nodes.FirstOrDefault(n =>
+                            string.Equals(n.NodeName, name, StringComparison.Ordinal)
+                        ),
+                    cts.Token
+                )
+                .OrFail("the exported SPA factory node never appeared in the graph");
+            Assert.AreEqual("Audio/Source", seen.MediaClass);
         }
     }
 
@@ -485,7 +440,7 @@ public sealed class ExportedNodeTests
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-        var consumed = new List<float>();
+        var consumed = new Collected<float>();
 
         await using PipeWireNodeProvider sink = PipeWireNodeProvider.Create(
             ctx,
@@ -495,46 +450,44 @@ public sealed class ExportedNodeTests
             new Dictionary<string, string> { [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Sink" }
         );
 
+        // The graph drives the sink before the producer is linked to it, so it is handed silence
+        // first; collection starts with the first sample the producer wrote.
         sink.ProcessCallback = (_, data) =>
         {
             ReadOnlySpan<float> floats = MemoryMarshal.Cast<byte, float>(data);
             lock (consumed)
             {
-                if (consumed.Count < 8000)
-                    foreach (float v in floats)
+                foreach (float v in floats)
+                {
+                    if (consumed.Count >= 8000)
+                        break;
+                    if (consumed.Count > 0 || v != 0f)
                         consumed.Add(v);
+                }
             }
             return 0;
         };
 
-        PipeWireNode? exported = null;
-        for (var i = 0; i < 100 && exported is null; i++)
-        {
-            exported = reg.Current.Nodes.FirstOrDefault(n =>
-                string.Equals(n.NodeName, sinkName, StringComparison.Ordinal)
-            );
-
-            if (exported is null)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsNotNull(exported, "the exported sink never appeared in the graph");
+        PipeWireNode exported = await reg.WaitForAsync(
+                g =>
+                    g.Nodes.FirstOrDefault(n =>
+                        string.Equals(n.NodeName, sinkName, StringComparison.Ordinal)
+                    ),
+                cts.Token
+            )
+            .OrFail("the exported sink never appeared in the graph");
 
         // The port first, for the reason the source test gives: a node reaches the registry before
         // its ports, and a producer targeting a node with no port yet is refused as "no target node
         // available" rather than linked later.
-        PipeWirePort? input = null;
-        for (var i = 0; i < 100 && input is null; i++)
-        {
-            input = reg.Current.Ports.FirstOrDefault(p =>
-                p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.In
-            );
-
-            if (input is null)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsNotNull(input, "the exported sink never registered an input port to route to");
+        PipeWirePort input = await reg.WaitForAsync(
+                g =>
+                    g.Ports.FirstOrDefault(p =>
+                        p.NodeId == exported.NodeId && p.PortDirection == PipeWirePortDirection.In
+                    ),
+                cts.Token
+            )
+            .OrFail("the exported sink never registered an input port to route to");
 
         // An ordinary producer, which knows nothing about how the sink is implemented.
         uint next = 0;
@@ -554,17 +507,9 @@ public sealed class ExportedNodeTests
             return samples.Length;
         };
 
-        output.Connect(exported!.NodeId);
+        output.Connect(exported.NodeId);
 
-        for (var i = 0; i < 120; i++)
-        {
-            lock (consumed)
-            {
-                if (consumed.Count > 1000)
-                    break;
-            }
-            await Task.Delay(50, cts.Token);
-        }
+        _ = await consumed.Reaching(1001).Within(TimeSpan.FromSeconds(6), cts.Token);
 
         float[] got;
         lock (consumed)
@@ -580,15 +525,10 @@ public sealed class ExportedNodeTests
         Assert.IsTrue(sink.HasProcessed, "the exported sink was linked but never driven");
         Assert.IsNull(sink.LastCallbackError, $"a sink callback faulted: {sink.LastCallbackError}");
 
-        Assert.IsTrue(got.Length > 500, $"the exported sink was handed only {got.Length} samples");
-
-        int start = 0;
-        while (start < got.Length && got[start] == 0f)
-            start++;
-
         Assert.IsTrue(
-            got.Length - start > 200,
-            "the exported sink was handed only silence, so the producer's data never reached it"
+            got.Length > 500,
+            $"the exported sink was handed {got.Length} of the producer's samples after its silence, "
+                + "so the producer's data never reached it"
         );
     }
 
@@ -622,31 +562,19 @@ public sealed class ExportedNodeTests
             PipeWireExportedFormat.AudioF32(Rate, Channels)
         );
 
-        var appeared = false;
-        for (var i = 0; i < 100 && !appeared; i++)
-        {
-            appeared = reg.Current.Nodes.Any(n =>
-                string.Equals(n.NodeName, name, StringComparison.Ordinal)
-            );
-            if (!appeared)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsTrue(appeared, "the exported node never appeared, so its removal proves nothing");
+        await reg.WaitUntilAsync(
+                g => g.Nodes.Any(n => string.Equals(n.NodeName, name, StringComparison.Ordinal)),
+                cts.Token
+            )
+            .OrFail("the exported node never appeared, so its removal proves nothing");
 
         await node.DisposeAsync();
 
-        var gone = false;
-        for (var i = 0; i < 100 && !gone; i++)
-        {
-            gone = !reg.Current.Nodes.Any(n =>
-                string.Equals(n.NodeName, name, StringComparison.Ordinal)
-            );
-            if (!gone)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsTrue(gone, "the exported node outlived its disposal, so the graph still holds it");
+        await reg.WaitUntilAsync(
+                g => !g.Nodes.Any(n => string.Equals(n.NodeName, name, StringComparison.Ordinal)),
+                cts.Token
+            )
+            .OrFail("the exported node outlived its disposal, so the graph still holds it");
 
         // Disposing twice is what a using block layered over an explicit dispose does routinely.
         await node.DisposeAsync();
@@ -684,7 +612,7 @@ public sealed class ExportedNodeTests
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-        var calls = 0;
+        var calls = new Tally();
 
         await using PipeWireNodeProvider node = PipeWireNodeProvider.Create(
             ctx,
@@ -696,57 +624,45 @@ public sealed class ExportedNodeTests
 
         node.ProcessCallback = (_, _) =>
         {
-            Interlocked.Increment(ref calls);
+            calls.Increment();
             throw new InvalidOperationException("deliberate fault from a process handler");
         };
 
-        PipeWireNode? exported = null;
-        for (var i = 0; i < 100 && exported is null; i++)
-        {
-            exported = reg.Current.Nodes.FirstOrDefault(n =>
-                string.Equals(n.NodeName, name, StringComparison.Ordinal)
-            );
+        PipeWireNode exported = await reg.WaitForAsync(
+                g =>
+                    g.Nodes.FirstOrDefault(n =>
+                        string.Equals(n.NodeName, name, StringComparison.Ordinal)
+                    ),
+                cts.Token
+            )
+            .OrFail("the exported node never appeared, so nothing would have driven it");
 
-            if (exported is null)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsNotNull(
-            exported,
-            "the exported node never appeared, so nothing would have driven it"
-        );
-
-        var hasPort = false;
-        for (var i = 0; i < 100 && !hasPort; i++)
-        {
-            hasPort = reg.Current.Ports.Any(p =>
-                p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.Out
-            );
-
-            if (!hasPort)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsTrue(
-            hasPort,
-            "the exported node never exposed a port, so it would never be scheduled"
-        );
+        await reg.WaitUntilAsync(
+                g =>
+                    g.Ports.Any(p =>
+                        p.NodeId == exported.NodeId && p.PortDirection == PipeWirePortDirection.Out
+                    ),
+                cts.Token
+            )
+            .OrFail("the exported node never exposed a port, so it would never be scheduled");
 
         await using var capture = new PipeWireAudioCapture(ctx, $"{name}-sink");
         capture.Connect(
-            exported!.NodeId,
+            exported.NodeId,
             sampleRate: Rate,
             channels: Channels,
             format: AudioSampleFormat.F32Le
         );
 
         await capture.WaitForStreamingAsync(cts.Token);
-        await Task.Delay(700, cts.Token);
+
+        // Several faulting cycles, so the graph has carried on past the first.
+        _ = await calls.AtLeast(3).Within(TimeSpan.FromSeconds(5), cts.Token);
 
         // Reaching this line at all is most of the assertion: before the callback was guarded, the
         // throw above ended the test host here rather than failing this test.
         Assert.IsTrue(
-            Volatile.Read(ref calls) > 0,
+            calls.Value > 0,
             "the handler was never invoked, so the throw was never actually exercised"
         );
 
@@ -833,24 +749,18 @@ public sealed class ExportedNodeTests
             return floats.Length * 4;
         };
 
-        PipeWirePort? port = null;
-        for (var i = 0; i < 100 && port is null; i++)
-        {
-            port = reg.Current.Ports.FirstOrDefault(p =>
-                reg.Current.Nodes.Any(n =>
-                    n.NodeId == p.NodeId
-                    && string.Equals(n.NodeName, name, StringComparison.Ordinal)
-                )
-                && p.PortDirection == PipeWirePortDirection.Out
-            );
-            if (port is null)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsNotNull(
-            port,
-            "the exported node never registered an output port for GStreamer to reach"
-        );
+        PipeWirePort port = await reg.WaitForAsync(
+                g =>
+                    g.Ports.FirstOrDefault(p =>
+                        g.Nodes.Any(n =>
+                            n.NodeId == p.NodeId
+                            && string.Equals(n.NodeName, name, StringComparison.Ordinal)
+                        )
+                        && p.PortDirection == PipeWirePortDirection.Out
+                    ),
+                cts.Token
+            )
+            .OrFail("the exported node never registered an output port for GStreamer to reach");
 
         var psi = new ProcessStartInfo("/usr/bin/gst-launch-1.0")
         {
@@ -1074,30 +984,27 @@ public sealed class ExportedNodeTests
             return floats.Length * 4;
         };
 
-        PipeWireNode? exported = null;
-        PipeWirePort? source = null;
-        for (var i = 0; i < 100 && source is null; i++)
-        {
-            exported ??= reg.Current.Nodes.FirstOrDefault(n =>
-                string.Equals(n.NodeName, name, StringComparison.Ordinal)
-            );
-            if (exported is not null)
-            {
-                source = reg.Current.Ports.FirstOrDefault(p =>
-                    p.NodeId == exported.NodeId && p.PortDirection == PipeWirePortDirection.Out
-                );
-            }
-
-            if (source is null)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsNotNull(source, "the exported node never registered an output port to route to");
+        PipeWireNode exported = await reg.WaitForAsync(
+                g =>
+                    g.Nodes.FirstOrDefault(n =>
+                        string.Equals(n.NodeName, name, StringComparison.Ordinal)
+                    ),
+                cts.Token
+            )
+            .OrFail("the exported node never appeared in the graph");
+        PipeWirePort source = await reg.WaitForAsync(
+                g =>
+                    g.Ports.FirstOrDefault(p =>
+                        p.NodeId == exported.NodeId && p.PortDirection == PipeWirePortDirection.Out
+                    ),
+                cts.Token
+            )
+            .OrFail("the exported node never registered an output port to route to");
 
         for (int round = 0; round < Rounds; round++)
         {
-            var first = new List<float>();
-            var second = new List<float>();
+            var first = new Collected<float>();
+            var second = new Collected<float>();
 
             await using (
                 PipeWireAudioCapture a = await ConnectRampConsumerAsync(
@@ -1142,7 +1049,7 @@ public sealed class ExportedNodeTests
         PipeWireContext ctx,
         string name,
         uint target,
-        List<float> received,
+        Collected<float> received,
         CancellationToken ct
     )
     {
@@ -1168,18 +1075,8 @@ public sealed class ExportedNodeTests
         return capture;
     }
 
-    private static async Task WaitForSamplesAsync(List<float> received, CancellationToken ct)
-    {
-        for (var i = 0; i < 100; i++)
-        {
-            lock (received)
-            {
-                if (received.Count > 2000)
-                    return;
-            }
-            await Task.Delay(50, ct);
-        }
-    }
+    private static Task WaitForSamplesAsync(Collected<float> received, CancellationToken ct) =>
+        received.Reaching(2001).Within(TimeSpan.FromSeconds(5), ct);
 
     private static void AssertRamp(List<float> received, string what)
     {
@@ -1246,13 +1143,13 @@ public sealed class ExportedNodeTests
             new Dictionary<string, string> { [PipeWireKeys.PW_KEY_MEDIA_CLASS] = "Audio/Source" }
         );
 
-        var reported = 0;
+        var reported = new Tally();
         var accepted = 0;
 
         node.ProcessCallback = (self, data) =>
         {
             // Reported from the realtime thread, which is where the graph expects its callbacks.
-            if (Interlocked.Increment(ref reported) <= 3 && self.ReportXrun(1000, 250))
+            if (reported.Increment() <= 3 && self.ReportXrun(1000, 250))
                 Interlocked.Increment(ref accepted);
 
             return 0;
@@ -1261,11 +1158,9 @@ public sealed class ExportedNodeTests
         // Something has to pull, or the node is never scheduled and no callbacks are installed.
         await using var capture = new PipeWireAudioCapture(ctx, name + "-sink");
         capture.Connect(await WaitForNodeIdAsync(reg, name, cts.Token));
+        _ = await reported.AtLeast(3).Within(TimeSpan.FromSeconds(5), cts.Token);
 
-        for (var i = 0; i < 100 && Volatile.Read(ref reported) == 0; i++)
-            await Task.Delay(50, cts.Token);
-
-        Assert.IsTrue(Volatile.Read(ref reported) > 0, "the exported node was never driven");
+        Assert.IsTrue(reported.Value > 0, "the exported node was never driven");
 
         Assert.IsTrue(
             Volatile.Read(ref accepted) > 0,
@@ -1277,22 +1172,17 @@ public sealed class ExportedNodeTests
         PipeWireRegistry reg,
         string nodeName,
         CancellationToken cancellationToken
-    )
-    {
-        for (var i = 0; i < 100; i++)
-        {
-            PipeWireNode? found = reg.Current.Nodes.FirstOrDefault(n =>
-                string.Equals(n.NodeName, nodeName, StringComparison.Ordinal)
-            );
-
-            if (found is not null)
-                return found.NodeId;
-            await Task.Delay(50, cancellationToken);
-        }
-
-        Assert.Fail($"the node '{nodeName}' never reached the graph");
-        return 0;
-    }
+    ) =>
+        (
+            await reg.WaitForAsync(
+                    g =>
+                        g.Nodes.FirstOrDefault(n =>
+                            string.Equals(n.NodeName, nodeName, StringComparison.Ordinal)
+                        ),
+                    cancellationToken
+                )
+                .OrFail($"the node '{nodeName}' never reached the graph")
+        ).NodeId;
 
     /// <summary>A node with no process handler is driven anyway, and produces silence.</summary>
     /// <remarks>
@@ -1333,39 +1223,31 @@ public sealed class ExportedNodeTests
 
         // Deliberately no ProcessCallback.
 
-        PipeWireNode? exported = null;
-        for (var i = 0; i < 100 && exported is null; i++)
-        {
-            exported = reg.Current.Nodes.FirstOrDefault(n =>
-                string.Equals(n.NodeName, name, StringComparison.Ordinal)
-            );
+        PipeWireNode exported = await reg.WaitForAsync(
+                g =>
+                    g.Nodes.FirstOrDefault(n =>
+                        string.Equals(n.NodeName, name, StringComparison.Ordinal)
+                    ),
+                cts.Token
+            )
+            .OrFail("the exported node never appeared in the graph");
 
-            if (exported is null)
-                await Task.Delay(50, cts.Token);
-        }
+        PipeWirePort source = await reg.WaitForAsync(
+                g =>
+                    g.Ports.FirstOrDefault(p =>
+                        p.NodeId == exported.NodeId && p.PortDirection == PipeWirePortDirection.Out
+                    ),
+                cts.Token
+            )
+            .OrFail("the exported node never registered an output port to route to");
 
-        Assert.IsNotNull(exported, "the exported node never appeared in the graph");
-
-        PipeWirePort? source = null;
-        for (var i = 0; i < 100 && source is null; i++)
-        {
-            source = reg.Current.Ports.FirstOrDefault(p =>
-                p.NodeId == exported!.NodeId && p.PortDirection == PipeWirePortDirection.Out
-            );
-
-            if (source is null)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsNotNull(source, "the exported node never registered an output port to route to");
-
-        var frames = 0;
+        var frames = new Tally();
         var nonZero = 0;
 
         await using var capture = new PipeWireAudioCapture(ctx, $"{name}-sink");
         capture.FrameReady += (_, f) =>
         {
-            Interlocked.Increment(ref frames);
+            frames.Increment();
             ReadOnlySpan<float> floats = MemoryMarshal.Cast<byte, float>(f.Samples);
             foreach (float v in floats)
             {
@@ -1378,15 +1260,14 @@ public sealed class ExportedNodeTests
         };
 
         capture.Connect(
-            exported!.NodeId,
+            exported.NodeId,
             sampleRate: Rate,
             channels: Channels,
             format: AudioSampleFormat.F32Le
         );
         await capture.WaitForStreamingAsync(cts.Token);
 
-        for (var i = 0; i < 100 && Volatile.Read(ref frames) < 10; i++)
-            await Task.Delay(50, cts.Token);
+        _ = await frames.AtLeast(10).Within(TimeSpan.FromMilliseconds(5000), cts.Token);
 
         Assert.IsTrue(node.HasBeenScheduled, "a node with no handler was never driven at all");
 

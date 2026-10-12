@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PipeWire.NET.Graph;
+using PipeWire.NET.Spa;
 
 namespace PipeWire.NET.Tests;
 
@@ -277,14 +278,16 @@ public sealed class ToolOracleTests : PipeWireTestBase
         HashSet<uint> wanted = theirs(dump).ToHashSet();
         List<uint> missing = [];
 
-        for (int attempt = 0; attempt < 40; attempt++)
+        if (
+            await registry
+                .WaitUntilAsync(g => !wanted.Except(ours(g)).Any(), cancellationToken)
+                .Within(TimeSpan.FromSeconds(2), cancellationToken)
+        )
         {
-            missing = [.. wanted.Except(ours(registry.Current).ToHashSet()).Order()];
-            if (missing.Count == 0)
-                return;
-
-            await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
+            return;
         }
+
+        missing = [.. wanted.Except(ours(registry.Current).ToHashSet()).Order()];
 
         // Still absent. Anything that has left the graph since the first dump was never going to
         // arrive, so the question is only about what is still there.
@@ -314,6 +317,7 @@ public sealed class ToolOracleTests : PipeWireTestBase
             PipeWireNode node = await registry
                 .CreateVirtualSink("WpctlOracle")
                 .WithName(Unique("pwnet_wpctl"))
+                .WithoutRestoredProps()
                 .ExecuteAsync(cts.Token);
             string nodeName = node.NodeName!;
 
@@ -344,15 +348,17 @@ public sealed class ToolOracleTests : PipeWireTestBase
             float cubic = await ReadWpctlVolumeAsync(wpctl, id, cts.Token);
             float expected = cubic * cubic * cubic;
 
-            bool sawIt = await EventuallyAsync(
-                async () =>
-                {
-                    ImmutableArray<float> volumes = await control.GetChannelVolumesAsync(cts.Token);
-                    return !volumes.IsDefaultOrEmpty
-                        && volumes.All(v => Math.Abs(v - expected) < 0.005f);
-                },
-                TimeSpan.FromSeconds(15),
-                cts.Token
+            static bool Applied(ImmutableArray<float> volumes, float expected) =>
+                !volumes.IsDefaultOrEmpty && volumes.All(v => Math.Abs(v - expected) < 0.005f);
+            bool sawIt = Applied(
+                await control.SettleAsync(
+                    SpaParamType.Props,
+                    ct => control.GetChannelVolumesAsync(ct),
+                    v => Applied(v, expected),
+                    TimeSpan.FromSeconds(15),
+                    cts.Token
+                ),
+                expected
             );
 
             if (!sawIt)
@@ -449,17 +455,15 @@ public sealed class ToolOracleTests : PipeWireTestBase
 
             try
             {
-                bool appeared = await EventuallyAsync(
-                    async () =>
-                    {
-                        await registry.WaitForInitialEnumerationAsync(cts.Token);
-                        return registry.Current.Nodes.Any(n =>
-                            string.Equals(n.NodeName, name, StringComparison.Ordinal)
-                        );
-                    },
-                    TimeSpan.FromSeconds(20),
-                    cts.Token
-                );
+                bool appeared = await registry
+                    .WaitUntilAsync(
+                        g =>
+                            g.Nodes.Any(n =>
+                                string.Equals(n.NodeName, name, StringComparison.Ordinal)
+                            ),
+                        cts.Token
+                    )
+                    .Within(TimeSpan.FromSeconds(20), cts.Token);
 
                 if (!appeared)
                     Assert.Inconclusive("pw-cat did not publish a node on this session.");
@@ -470,15 +474,12 @@ public sealed class ToolOracleTests : PipeWireTestBase
 
                 // Its ports have to reach us too, not just the node.
                 Assert.IsTrue(
-                    await EventuallyAsync(
-                        async () =>
-                        {
-                            await registry.WaitForInitialEnumerationAsync(cts.Token);
-                            return !registry.Current.GetPortsForNode(published.NodeId).IsEmpty;
-                        },
-                        TimeSpan.FromSeconds(15),
-                        cts.Token
-                    ),
+                    await registry
+                        .WaitUntilAsync(
+                            g => !g.GetPortsForNode(published.NodeId).IsEmpty,
+                            cts.Token
+                        )
+                        .Within(TimeSpan.FromSeconds(15), cts.Token),
                     "a native player's node arrived without its ports"
                 );
             }
@@ -526,13 +527,17 @@ public sealed class ToolOracleTests : PipeWireTestBase
 
             using Process mon = pwmon.Start();
             var monitorOutput = new System.Text.StringBuilder();
+            using var monitorGrew = new SemaphoreSlim(0);
             Task pump = Task.Run(
                 async () =>
                 {
                     string? line;
                     while ((line = await mon.StandardOutput.ReadLineAsync(cts.Token)) is not null)
+                    {
                         lock (monitorOutput)
                             monitorOutput.AppendLine(line);
+                        monitorGrew.Release();
+                    }
                 },
                 cts.Token
             );
@@ -542,12 +547,8 @@ public sealed class ToolOracleTests : PipeWireTestBase
                 // Waited for rather than slept through. pw-mon dumps the whole graph before it
                 // starts reporting changes, and how long that takes is the session's size and the
                 // machine's load, neither of which a fixed delay knows about.
-                bool dumped = await EventuallyAsync(
-                    () =>
-                    {
-                        lock (monitorOutput)
-                            return Task.FromResult(monitorOutput.Length > 0);
-                    },
+                bool dumped = await Waits.Within(
+                    ct => monitorGrew.WaitAsync(ct),
                     TimeSpan.FromSeconds(10),
                     cts.Token
                 );
@@ -566,17 +567,23 @@ public sealed class ToolOracleTests : PipeWireTestBase
                 // pw-mon prints both an added and a removed record for the id. Its exact wording is
                 // version-dependent, so the id appearing at all is what is asserted, and it is
                 // polled for rather than assumed to have arrived within a fixed window.
-                bool mentioned = await EventuallyAsync(
-                    () =>
-                    {
-                        string current;
-                        lock (monitorOutput)
-                            current = monitorOutput.ToString();
+                bool Mentioned()
+                {
+                    string current;
+                    lock (monitorOutput)
+                        current = monitorOutput.ToString();
 
-                        return Task.FromResult(
-                            current.Contains($"id: {node.NodeId}", StringComparison.Ordinal)
-                                || current.Contains($"id:{node.NodeId}", StringComparison.Ordinal)
-                        );
+                    return (
+                        current.Contains($"id: {node.NodeId}", StringComparison.Ordinal)
+                        || current.Contains($"id:{node.NodeId}", StringComparison.Ordinal)
+                    );
+                }
+
+                bool mentioned = await Waits.Within(
+                    async ct =>
+                    {
+                        while (!Mentioned())
+                            await monitorGrew.WaitAsync(ct);
                     },
                     TimeSpan.FromSeconds(10),
                     cts.Token
@@ -606,22 +613,5 @@ public sealed class ToolOracleTests : PipeWireTestBase
                 mon.WaitForExit(3000);
             }
         }
-    }
-
-    private static async Task<bool> EventuallyAsync(
-        Func<Task<bool>> condition,
-        TimeSpan within,
-        CancellationToken cancellationToken
-    )
-    {
-        long deadline = Environment.TickCount64 + (long)within.TotalMilliseconds;
-        while (Environment.TickCount64 < deadline)
-        {
-            if (await condition())
-                return true;
-            await Task.Delay(50, cancellationToken);
-        }
-
-        return await condition();
     }
 }

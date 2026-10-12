@@ -395,17 +395,14 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             {
                 await store.ReadyAsync(cts.Token);
 
-                // Polled, not read once. The "default" store is served by the session manager, so its
-                // entries travel wireplumber -> daemon -> here and are not ordered against our own
-                // core sync: ReadyAsync proves the bind was processed, not that the contents have
-                // arrived. Reading once turns that race into a skip.
-                string? currentName = null;
-                for (int i = 0; i < 50 && currentName is null; i++)
-                {
-                    currentName = store.DefaultAudioSink?.NameValue;
-                    if (currentName is null)
-                        await Task.Delay(100, cts.Token);
-                }
+                // Waited for, not read once. The "default" store is served by the session manager,
+                // so its entries travel wireplumber -> daemon -> here and are not ordered against
+                // our own core sync: ReadyAsync proves the bind was processed, not that the contents
+                // have arrived. Reading once turns that race into a skip.
+                _ = await store
+                    .UntilEntry("default.audio.sink", v => v is not null)
+                    .Within(TimeSpan.FromSeconds(5), cts.Token);
+                string? currentName = store.DefaultAudioSink?.NameValue;
 
                 if (currentName is null)
                     Assert.Inconclusive("this session has no default sink set.");
@@ -714,14 +711,10 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
 
                 // Teardown is not synchronous with the profile write, so the set is given time to
                 // settle before anything is claimed about it.
-                List<string> stale = [];
-                for (int attempt = 0; attempt < 100; attempt++)
-                {
-                    stale = [.. CardNodeNames().Except(beforeNames)];
-                    if (stale.Count == 0)
-                        break;
-                    await Task.Delay(100, cts.Token);
-                }
+                _ = await registry
+                    .WaitUntilAsync(_ => !CardNodeNames().Except(beforeNames).Any(), cts.Token)
+                    .Within(TimeSpan.FromSeconds(10), cts.Token);
+                List<string> stale = [.. CardNodeNames().Except(beforeNames)];
 
                 // The half this test is named for. Restoring the index while the other profile's
                 // nodes stay on the card is not a restore: they remain as candidate sinks and
@@ -739,6 +732,7 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
 
     [TestMethod]
     [OSCondition(OperatingSystems.Linux)]
+    [DoNotParallelize] // switches a session-wide WirePlumber setting for its duration
     public async Task SettingARouteVolumeAndRestoringIt_ChangesTheHardwareMixer()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
@@ -774,6 +768,17 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             float[] restore = [.. original.Items.OfType<SpaFloat>().Select(f => f.Value)];
             Assert.IsTrue(restore.Length > 0);
 
+            // The session manager stores a card's route volumes and reapplies them whenever the
+            // routes change or a stream arrives, which can land after the write below and before it
+            // is read back. Its route restore is switched off for the test and put back afterwards,
+            // as the card's own volume is.
+            await using IAsyncDisposable noRouteRestore = await SessionSettings.OverrideAsync(
+                registry,
+                "device.restore-routes",
+                "false",
+                cts.Token
+            );
+
             // Whether the card survived the test, so the restore below knows if there is
             // anything to restore to. On a session whose ALSA devices flap, the card can be
             // withdrawn between binding and writing; that is the session's instability, and it
@@ -781,45 +786,39 @@ public sealed class DeviceAndMetadataWriteTests : PipeWireTestBase
             bool cardGone = false;
             try
             {
-                // The write is retried, not just the read. The session manager keeps its own
-                // stored volume for a device and reapplies it whenever the routes change or a
-                // stream arrives, so a value written once can be overwritten before it can be
-                // read back - which is a policy engine doing its job, not the write failing.
-                // Retrying makes the test ask what it means to ask: can a write reach the
-                // hardware mixer at all.
-                SpaObject? changed = null;
-                float first = float.NaN;
-                for (int attempt = 0; attempt < 10; attempt++)
-                {
-                    float[] test = [.. restore.Select(_ => 0.37f)];
-                    await control.SetRouteVolumeAsync(
-                        index,
-                        device,
-                        test,
-                        originalMute,
-                        save: false,
-                        cts.Token
-                    );
+                float[] test = [.. restore.Select(_ => 0.37f)];
+                await control.SetRouteVolumeAsync(
+                    index,
+                    device,
+                    test,
+                    originalMute,
+                    save: false,
+                    cts.Token
+                );
 
-                    ImmutableArray<SpaObject> after = await control.GetActiveRoutesAsync(cts.Token);
-                    changed = after.FirstOrDefault(r =>
-                        r[SpaParamRoute.Index] is SpaInt i && i.Value == index
-                    );
-
-                    if (
-                        changed?[SpaParamRoute.Props] is SpaObject routeProps
-                        && routeProps[SpaProp.ChannelVolumes] is SpaArray volumes
-                        && !volumes.Items.IsDefaultOrEmpty
-                        && volumes.Items[0] is SpaFloat value
-                    )
+                // Read once the device reports its routes changed: the write is processed by the
+                // daemon before the card has applied it.
+                (SpaObject? changed, float first) = await control.SettleAsync(
+                    SpaParamType.Route,
+                    async ct =>
                     {
-                        first = value.Value;
-                        if (Math.Abs(first - 0.37f) <= 0.02f)
-                            break;
-                    }
-
-                    await Task.Delay(100, cts.Token);
-                }
+                        ImmutableArray<SpaObject> after = await control.GetActiveRoutesAsync(ct);
+                        SpaObject? route = after.FirstOrDefault(r =>
+                            r[SpaParamRoute.Index] is SpaInt i && i.Value == index
+                        );
+                        float level =
+                            route?[SpaParamRoute.Props] is SpaObject routeProps
+                            && routeProps[SpaProp.ChannelVolumes] is SpaArray volumes
+                            && !volumes.Items.IsDefaultOrEmpty
+                            && volumes.Items[0] is SpaFloat value
+                                ? value.Value
+                                : float.NaN;
+                        return (route, level);
+                    },
+                    r => Math.Abs(r.level - 0.37f) <= 0.02f,
+                    TimeSpan.FromSeconds(5),
+                    cts.Token
+                );
 
                 Assert.IsNotNull(changed, "the route must still be active after being written to");
                 Assert.AreEqual(0.37f, first, 0.02f, "the hardware volume did not take");

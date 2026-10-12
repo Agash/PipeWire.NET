@@ -156,8 +156,9 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
             cancellationToken: cts.Token
         );
 
-        for (var i = 0; i < 200 && !secondReg.Current.Nodes.Any(n => n.NodeId == sink.NodeId); i++)
-            await Task.Delay(50, cts.Token);
+        _ = await secondReg
+            .WaitUntilAsync(g => g.Nodes.Any(n => n.NodeId == sink.NodeId), cts.Token)
+            .Within(TimeSpan.FromSeconds(10), cts.Token);
 
         Assert.IsTrue(
             secondReg.Current.Nodes.Any(n => n.NodeId == sink.NodeId),
@@ -258,19 +259,14 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
         CancellationToken cancellationToken
     )
     {
-        for (var i = 0; i < 200; i++)
-        {
-            PipeWirePort? port = registry.Current.Ports.FirstOrDefault(p =>
-                p.NodeId == nodeId && p.PortDirection == direction
-            );
-
-            if (port is not null)
-                return port.PortId;
-
-            await Task.Delay(50, cancellationToken);
-        }
-
-        Assert.Fail($"node {nodeId} never published a {direction} port");
-        return 0;
+        PipeWirePort port = await registry
+            .WaitForAsync(
+                g =>
+                    g.Ports.FirstOrDefault(p => p.NodeId == nodeId && p.PortDirection == direction),
+                cancellationToken
+            )
+            .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
+            .OrFail($"node {nodeId} never published a {direction} port");
+        return port.PortId;
     }
 }

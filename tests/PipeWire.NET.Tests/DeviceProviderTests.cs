@@ -149,8 +149,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
 
             // The daemon publishing it is the whole point: a device that exports but never becomes a
             // global has failed silently.
-            PipeWireGraphSnapshot graph = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
                 g => g.Devices.Any(d => d.DeviceName == name),
                 cts.Token
             );
@@ -164,7 +163,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             Assert.IsTrue(registry.Current.Nodes.Length > 0, "the session stopped answering");
         }
 
-        await WaitForAsync(registry, g => !g.Devices.Any(d => d.DeviceName == name), cts.Token);
+        await registry.WaitUntilAsync(g => !g.Devices.Any(d => d.DeviceName == name), cts.Token);
     }
 
     [TestMethod]
@@ -192,8 +191,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             }
         );
 
-        PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry,
+        PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
             g => g.Devices.Any(d => d.DeviceName == name),
             cts.Token
         );
@@ -253,8 +251,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             }
         );
 
-        PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry,
+        PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
             g => g.Devices.Any(d => d.DeviceName == name),
             cts.Token
         );
@@ -366,8 +363,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             }
         );
 
-        PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry,
+        PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
             g => g.Devices.Any(d => d.DeviceName == name),
             cts.Token
         );
@@ -423,7 +419,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             "An empty device"
         );
 
-        await WaitForAsync(registry, g => g.Devices.Any(d => d.DeviceName == name), cts.Token);
+        await registry.WaitUntilAsync(g => g.Devices.Any(d => d.DeviceName == name), cts.Token);
     }
 
     [TestMethod]
@@ -485,8 +481,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             }
         );
 
-        PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry,
+        PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
             g => g.Devices.Any(d => d.DeviceName == name),
             cts.Token
         );
@@ -513,19 +508,18 @@ public sealed class DeviceProviderTests : PipeWireTestBase
 
         Assert.HasCount(3, provider.GetParameter(SpaParamType.EnumProfile));
 
-        // Polled, not read once. SetParameter returns when the info event is queued on the
-        // provider's loop; the reader is a second connection, so the daemon has to process that
-        // event before it re-reads instead of answering the enumeration it cached. Nothing here
-        // can make that crossing synchronous, and a single read just races it.
-        int answered = 0;
-        for (int attempt = 0; attempt < 40 && answered != 3; attempt++)
-        {
-            answered = (
-                await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token)
-            ).Length;
-            if (answered != 3)
-                await Task.Delay(50, cts.Token);
-        }
+        // Read again on each change, not once. SetParameter returns when the info event is queued
+        // on the provider's loop; the reader is a second connection, so the daemon has to process
+        // that event before it re-reads instead of answering the enumeration it cached. Nothing
+        // here can make that crossing synchronous, and a single read just races it.
+        int answered = await control.SettleAsync(
+            SpaParamType.EnumProfile,
+            async ct =>
+                (await control.EnumerateParametersAsync(SpaParamType.EnumProfile, ct)).Length,
+            n => n == 3,
+            TimeSpan.FromSeconds(4),
+            cts.Token
+        );
 
         Assert.AreEqual(
             3,
@@ -570,8 +564,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
 
         Assert.AreEqual(name, provider.Name);
 
-        PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry,
+        PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
             g => g.Devices.Any(d => d.DeviceName == name),
             cts.Token
         );
@@ -606,8 +599,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             }
         );
 
-        PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry,
+        PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
             g => g.Devices.Any(d => d.DeviceName == name),
             cts.Token
         );
@@ -641,6 +633,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             }
         });
 
+        // A while of hammering before the device goes, so disposal lands mid-enumeration.
         await Task.Delay(TimeSpan.FromMilliseconds(500), cts.Token);
         provider.Dispose();
 
@@ -681,8 +674,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             }
         );
 
-        PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry,
+        PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
             g => g.Devices.Any(d => d.DeviceName == name),
             cts.Token
         );
@@ -737,10 +729,18 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             SpaParamType Id,
             SpaObject? Value
         )>();
-        provider.ParameterWritten += (p, id, value) => seen.Add((id, value));
+        var written = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        provider.ParameterWritten += (p, id, value) =>
+        {
+            seen.Add((id, value));
+            if (
+                id == SpaParamType.Profile
+                && (value?[(uint)SpaParamProfile.Index] as SpaInt)?.Value == 1
+            )
+                written.TrySetResult();
+        };
 
-        PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry,
+        PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
             g => g.Devices.Any(d => d.DeviceName == name),
             cts.Token
         );
@@ -758,24 +758,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         await control.ReadyAsync(cts.Token);
         await control.SetProfileAsync(1, cancellationToken: cts.Token);
 
-        bool arrived = false;
-        for (int attempt = 0; attempt < 150 && !arrived; attempt++)
-        {
-            foreach ((SpaParamType got, SpaObject? value) in seen)
-            {
-                if (
-                    got == SpaParamType.Profile
-                    && (value?[(uint)SpaParamProfile.Index] as SpaInt)?.Value == 1
-                )
-                {
-                    arrived = true;
-                    break;
-                }
-            }
-
-            if (!arrived)
-                await Task.Delay(TimeSpan.FromMilliseconds(100), cts.Token);
-        }
+        bool arrived = await written.Task.Within(TimeSpan.FromSeconds(15), cts.Token);
 
         Assert.IsTrue(arrived, "the profile write never reached the hosting process");
     }
@@ -807,8 +790,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             }
         );
 
-        PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry,
+        PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
             g => g.Devices.Any(d => d.DeviceName == name),
             cts.Token
         );
@@ -863,8 +845,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             }
         );
 
-        PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry,
+        PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
             g => g.Devices.Any(d => d.DeviceName == name),
             cts.Token
         );
@@ -927,10 +908,18 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             SpaParamType Id,
             SpaObject? Value
         )>();
-        provider.ParameterWritten += (p, id, value) => seen.Add((id, value));
+        var written = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        provider.ParameterWritten += (p, id, value) =>
+        {
+            seen.Add((id, value));
+            if (
+                id == SpaParamType.Route
+                && (value?[(uint)SpaParamRoute.Index] as SpaInt)?.Value == 1
+            )
+                written.TrySetResult();
+        };
 
-        PipeWireGraphSnapshot graph = await WaitForAsync(
-            registry,
+        PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
             g => g.Devices.Any(d => d.DeviceName == name),
             cts.Token
         );
@@ -963,44 +952,8 @@ public sealed class DeviceProviderTests : PipeWireTestBase
 
         await control.SetRouteAsync(1, 0, cancellationToken: cts.Token);
 
-        bool arrived = false;
-        for (int attempt = 0; attempt < 150 && !arrived; attempt++)
-        {
-            foreach ((SpaParamType got, SpaObject? value) in seen)
-            {
-                if (
-                    got == SpaParamType.Route
-                    && (value?[(uint)SpaParamRoute.Index] as SpaInt)?.Value == 1
-                )
-                {
-                    arrived = true;
-                    break;
-                }
-            }
-
-            if (!arrived)
-                await Task.Delay(TimeSpan.FromMilliseconds(100), cts.Token);
-        }
+        bool arrived = await written.Task.Within(TimeSpan.FromSeconds(15), cts.Token);
 
         Assert.IsTrue(arrived, "the route write never reached the hosting process");
-    }
-
-    private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry,
-        Func<PipeWireGraphSnapshot, bool> predicate,
-        CancellationToken cancellationToken
-    )
-    {
-        for (int attempt = 0; attempt < 100; attempt++)
-        {
-            PipeWireGraphSnapshot graph = registry.Current;
-            if (predicate(graph))
-                return graph;
-
-            await Task.Delay(100, cancellationToken).ConfigureAwait(false);
-        }
-
-        Assert.Fail("the graph never reached the expected state");
-        return registry.Current;
     }
 }

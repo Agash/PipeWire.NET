@@ -83,8 +83,8 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
         var buffers = new List<GbmAllocator.Buffer>();
         var handed = new List<DrmDevice?>();
         int frames = 0,
-            dmaBufFrames = 0,
             syncFrames = 0;
+        var dmaBufFrames = new Tally();
         long stamped = 0;
 
         int Back(int index, DrmDevice? device, Span<VideoPlane> planes)
@@ -155,15 +155,15 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
             {
                 Interlocked.Increment(ref frames);
                 if (frame.BufferType == PipeWireBufferType.DmaBuf)
-                    Interlocked.Increment(ref dmaBufFrames);
+                    dmaBufFrames.Increment();
                 if (frame.SyncTimeline is not null)
                     Interlocked.Increment(ref syncFrames);
             };
             connectCapture(capture, nodeId);
 
-            DateTime deadline = DateTime.UtcNow + (budget ?? TimeSpan.FromSeconds(10));
-            while (DateTime.UtcNow < deadline && Volatile.Read(ref dmaBufFrames) < wantFrames)
-                await Task.Delay(100);
+            _ = await dmaBufFrames
+                .AtLeast(wantFrames)
+                .Within(budget ?? TimeSpan.FromSeconds(10), CancellationToken.None);
 
             ImmutableArray<DrmDevice?> allocated;
             lock (handed)
@@ -171,7 +171,7 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
 
             return new Outcome(
                 Volatile.Read(ref frames),
-                Volatile.Read(ref dmaBufFrames),
+                dmaBufFrames.Value,
                 Volatile.Read(ref syncFrames),
                 output.NegotiatedDevice,
                 capture.NegotiatedDevice,

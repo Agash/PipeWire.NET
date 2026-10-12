@@ -223,6 +223,7 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
             PipeWireNode node = await registry
                 .CreateVirtualSink("Subscribe")
                 .WithName($"pwnet_sub_{Environment.ProcessId}_{Random.Shared.Next():x}")
+                .WithoutRestoredProps()
                 .ExecuteAsync(cts.Token);
 
             await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
@@ -292,6 +293,7 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
             PipeWireNode node = await registry
                 .CreateVirtualSink("Guards")
                 .WithName($"pwnet_guards_{Environment.ProcessId}_{Random.Shared.Next():x}")
+                .WithoutRestoredProps()
                 .ExecuteAsync(cts.Token);
 
             await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
@@ -409,24 +411,17 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
         await using (reg)
         {
             // This process's own client, found by the name the context connected under.
-            PipeWireClient? own = null;
-            for (var i = 0; i < 100 && own is null; i++)
-            {
-                own = reg.Current.Clients.FirstOrDefault(c =>
-                    c.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? v)
-                    && v == Before
-                );
+            PipeWireClient own = await reg.WaitForAsync(
+                    g =>
+                        g.Clients.FirstOrDefault(c =>
+                            c.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? v)
+                            && v == Before
+                        ),
+                    cts.Token
+                )
+                .OrFail($"no client in the graph is this process (application.name '{Before}')");
 
-                if (own is null)
-                    await Task.Delay(50, cts.Token);
-            }
-
-            Assert.IsNotNull(
-                own,
-                $"no client in the graph is this process (application.name '{Before}')"
-            );
-
-            await using PipeWireClientProxy client = reg.BindClient(own!.Id);
+            await using PipeWireClientProxy client = reg.BindClient(own.Id);
             await client.ReadyAsync(cts.Token);
 
             Assert.AreEqual(
@@ -444,16 +439,16 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
                 "the new application.name changed nothing, so it was never stored"
             );
 
-            for (var i = 0; i < 100; i++)
-            {
-                if (
-                    client.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? now)
-                    && now == After
-                )
-                    return;
-
-                await Task.Delay(50, cts.Token);
-            }
+            // The info event that carries the new name to the proxy also updates the graph, which
+            // is when this is checked again.
+            bool Renamed() =>
+                client.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? now)
+                && now == After;
+            if (
+                await reg.WaitUntilAsync(_ => Renamed(), cts.Token)
+                    .Within(TimeSpan.FromSeconds(5), cts.Token)
+            )
+                return;
 
             Assert.Fail(
                 "the daemon never sent the retagged application.name back on the client's info event"
@@ -482,21 +477,17 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
         await using (ctx)
         await using (reg)
         {
-            PipeWireClient? own = null;
-            for (var i = 0; i < 100 && own is null; i++)
-            {
-                own = reg.Current.Clients.FirstOrDefault(c =>
-                    c.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? v)
-                    && v == "pwnet-perm-read"
-                );
+            PipeWireClient own = await reg.WaitForAsync(
+                    g =>
+                        g.Clients.FirstOrDefault(c =>
+                            c.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? v)
+                            && v == "pwnet-perm-read"
+                        ),
+                    cts.Token
+                )
+                .OrFail("no client in the graph is this process");
 
-                if (own is null)
-                    await Task.Delay(50, cts.Token);
-            }
-
-            Assert.IsNotNull(own, "no client in the graph is this process");
-
-            await using PipeWireClientProxy client = reg.BindClient(own!.Id);
+            await using PipeWireClientProxy client = reg.BindClient(own.Id);
             await client.ReadyAsync(cts.Token);
 
             ImmutableArray<PipeWireObjectPermission> permissions = await client.GetPermissionsAsync(

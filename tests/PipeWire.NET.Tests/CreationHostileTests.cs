@@ -224,8 +224,10 @@ public sealed class CreationHostileTests : PipeWireTestBase
                 }
 
                 // Every object this test made is gone, so every proxy it filed should be too.
-                for (int attempt = 0; attempt < 100 && registry.OwnedProxyCount > before; attempt++)
-                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+                // Proxies are dropped as their globals leave the graph: checked on each change.
+                _ = await registry
+                    .WaitUntilAsync(_ => registry.OwnedProxyCount <= before, cts.Token)
+                    .Within(TimeSpan.FromSeconds(5), cts.Token);
 
                 Assert.AreEqual(
                     before,

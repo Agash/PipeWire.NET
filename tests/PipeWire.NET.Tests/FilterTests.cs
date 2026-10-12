@@ -40,20 +40,14 @@ public sealed class FilterTests : PipeWireTestBase
 
         // Both ends' ports reach the registry a moment after their nodes do, so both are waited
         // for - the sink's are no more immediate than the filter's.
-        PipeWirePort? source = null;
-        PipeWirePort? target = null;
-        while (source is null || target is null)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            await registry.WaitForInitialEnumerationAsync(cancellationToken);
-
-            PipeWireGraphSnapshot graph = registry.Current;
-            source ??= graph.GetPortsForNode(filterNodeId).FirstOrDefault(p => p.IsDataOutput);
-            target ??= graph.GetPortsForNode(sink.NodeId).FirstOrDefault(p => p.IsDataInput);
-
-            if (source is null || target is null)
-                await Task.Delay(TimeSpan.FromMilliseconds(25), cancellationToken);
-        }
+        PipeWirePort source = await registry.WaitForAsync(
+            g => g.GetPortsForNode(filterNodeId).FirstOrDefault(p => p.IsDataOutput),
+            cancellationToken
+        );
+        PipeWirePort target = await registry.WaitForAsync(
+            g => g.GetPortsForNode(sink.NodeId).FirstOrDefault(p => p.IsDataInput),
+            cancellationToken
+        );
 
         await registry.CreateLink(source, target).ExecuteAsync(cancellationToken);
         return (sink, filterNodeId);
@@ -93,14 +87,9 @@ public sealed class FilterTests : PipeWireTestBase
 
         // The registry has to see it as an ordinary node, because that is what it is to everything
         // else in the graph.
-        ImmutableArray<PipeWirePort> ports = [];
-        while (ports.Length < 4)
-        {
-            await registry.WaitForInitialEnumerationAsync(cts.Token);
-            ports = registry.Current.GetPortsForNode(nodeId);
-            if (ports.Length < 4)
-                await Task.Delay(TimeSpan.FromMilliseconds(25), cts.Token);
-        }
+        ImmutableArray<PipeWirePort> ports = (
+            await registry.WaitUntilAsync(g => g.GetPortsForNode(nodeId).Length >= 4, cts.Token)
+        ).GetPortsForNode(nodeId);
 
         Assert.IsNotNull(registry.Current.GetNode(nodeId), "the filter must appear as a node");
         Assert.AreEqual(2, ports.Count(p => p.IsDataInput));

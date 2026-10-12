@@ -58,13 +58,8 @@ public sealed class StreamingSurfaceTests
             cap.Connect(src.NodeId);
             await cap.WaitForStreamingAsync(cts.Token);
 
-            PulledVideoFrame? frame = null;
-            for (int i = 0; i < 100; i++)
-            {
-                if (cap.TryGetFrame(out frame))
-                    break;
-                await Task.Delay(50, cts.Token);
-            }
+            _ = await cap.NextFrame().Within(TimeSpan.FromSeconds(5), cts.Token);
+            _ = cap.TryGetFrame(out PulledVideoFrame? frame);
 
             Assert.IsNotNull(frame, "retention was on but nothing was ever retained");
             using (frame)
@@ -101,14 +96,8 @@ public sealed class StreamingSurfaceTests
             cap.Connect(src.NodeId);
             await cap.WaitForStreamingAsync(cts.Token);
 
-            BorrowedVideoFrame frame = default;
-            bool got = false;
-            for (int i = 0; i < 100 && !got; i++)
-            {
-                got = cap.TryGetBorrowedFrame(out frame);
-                if (!got)
-                    await Task.Delay(50, cts.Token);
-            }
+            _ = await cap.NextFrame().Within(TimeSpan.FromSeconds(5), cts.Token);
+            bool got = cap.TryGetBorrowedFrame(out BorrowedVideoFrame frame);
 
             Assert.IsTrue(got, "borrowed retention was on but nothing was ever retained");
             Assert.AreEqual(320, frame.Width);
@@ -131,7 +120,7 @@ public sealed class StreamingSurfaceTests
         await using (ctx)
         await using (src)
         {
-            var pts = new List<long>();
+            var pts = new Collected<long>();
             await using var cap = new PipeWireVideoCapture(ctx, "pwnet-surface-queue-sink");
             cap.FrameReady += (_, f) =>
             {
@@ -143,7 +132,7 @@ public sealed class StreamingSurfaceTests
             };
             cap.Connect(src.NodeId);
             await cap.WaitForStreamingAsync(cts.Token);
-            await Task.Delay(600, cts.Token);
+            _ = await pts.Reaching(8).Within(TimeSpan.FromSeconds(5), cts.Token);
 
             Assert.IsNotNull(cap.Queue, "a streaming stream must be able to report its queue");
             Assert.IsNotNull(cap.GraphClock, "io_changed should have delivered the position area");
@@ -196,14 +185,11 @@ public sealed class StreamingSurfaceTests
             // Still delivering afterwards: a retag must not disturb the link. Counting frames
             // across the change is what shows that, where reading the queue only shows the object
             // is still alive.
-            var after = 0;
-            cap.FrameReady += (_, _) => Interlocked.Increment(ref after);
-            await Task.Delay(500, cts.Token);
+            var after = new Tally();
+            cap.FrameReady += (_, _) => after.Increment();
+            _ = await after.AtLeast(1).Within(TimeSpan.FromSeconds(5), cts.Token);
 
-            Assert.IsTrue(
-                Volatile.Read(ref after) > 0,
-                "no frame arrived after the stream was retagged"
-            );
+            Assert.IsTrue(after.Value > 0, "no frame arrived after the stream was retagged");
         }
     }
 
@@ -220,31 +206,28 @@ public sealed class StreamingSurfaceTests
         await using (ctx)
         await using (src)
         {
-            int seen = 0;
+            var seen = new Tally();
             await using var cap = new PipeWireVideoCapture(ctx, "pwnet-surface-skip-sink");
             cap.FrameReady += (s, _) =>
             {
                 // Every other frame goes back unused.
-                if (Interlocked.Increment(ref seen) % 2 == 0)
+                if (seen.Increment() % 2 == 0)
                     s.SkipCurrentFrame();
             };
 
             cap.Connect(src.NodeId);
             await cap.WaitForStreamingAsync(cts.Token);
-            await Task.Delay(700, cts.Token);
+            _ = await seen.AtLeast(5).Within(TimeSpan.FromSeconds(5), cts.Token);
 
-            Assert.IsTrue(
-                Volatile.Read(ref seen) > 4,
-                "too few frames arrived while skipping half"
-            );
+            Assert.IsTrue(seen.Value > 4, "too few frames arrived while skipping half");
 
             // And it is still delivering after all that skipping, which returning a buffer unused
             // must not disturb.
-            int atRest = Volatile.Read(ref seen);
-            await Task.Delay(400, cts.Token);
+            int atRest = seen.Value;
+            _ = await seen.AtLeast(atRest + 1).Within(TimeSpan.FromSeconds(5), cts.Token);
 
             Assert.IsTrue(
-                Volatile.Read(ref seen) > atRest,
+                seen.Value > atRest,
                 "frames stopped arriving after buffers were skipped"
             );
         }
@@ -269,7 +252,7 @@ public sealed class StreamingSurfaceTests
         {
             const int InFlight = 3;
             Queue<(long Fd, PipeWireFrameHold Hold)> held = new();
-            int seen = 0;
+            var seen = new Tally();
             int reused = 0;
             await using var cap = new PipeWireVideoCapture(ctx, "pwnet-surface-hold-sink");
             cap.FrameReady += (s, frame) =>
@@ -286,17 +269,14 @@ public sealed class StreamingSurfaceTests
                     held.Dequeue().Hold.Dispose();
                 }
 
-                Interlocked.Increment(ref seen);
+                _ = seen.Increment();
             };
 
             cap.Connect(src.NodeId);
             await cap.WaitForStreamingAsync(cts.Token);
-            await Task.Delay(1500, cts.Token);
+            _ = await seen.AtLeast(21).Within(TimeSpan.FromSeconds(10), cts.Token);
 
-            Assert.IsTrue(
-                Volatile.Read(ref seen) > 20,
-                $"{seen} frames arrived with {InFlight} held"
-            );
+            Assert.IsTrue(seen.Value > 20, $"{seen.Value} frames arrived with {InFlight} held");
             Assert.AreEqual(0, reused, "a held buffer was delivered again before it was released");
         }
     }
@@ -321,24 +301,19 @@ public sealed class StreamingSurfaceTests
         await using (ctx)
         await using (src)
         {
-            var frames = 0;
+            var frames = new Tally();
             PipeWireStreamState last = PipeWireStreamState.Unconnected;
 
             await using (var cap = new PipeWireVideoCapture(ctx, "pwnet-surface-gstreneg-sink"))
             {
-                cap.FrameReady += (_, _) => Interlocked.Increment(ref frames);
+                cap.FrameReady += (_, _) => frames.Increment();
                 cap.StateChanged += (_, _, state) => last = state;
 
                 cap.Connect(src.NodeId);
                 await cap.WaitForStreamingAsync(cts.Token);
+                _ = await frames.AtLeast(1).Within(TimeSpan.FromSeconds(5), cts.Token);
 
-                for (var i = 0; i < 100 && Volatile.Read(ref frames) == 0; i++)
-                    await Task.Delay(50, cts.Token);
-
-                Assert.IsTrue(
-                    Volatile.Read(ref frames) > 0,
-                    "the gst producer never delivered a frame"
-                );
+                Assert.IsTrue(frames.Value > 0, "the gst producer never delivered a frame");
 
                 PixelFormat[] formats = [PixelFormat.Bgra];
                 Assert.IsTrue(
@@ -410,39 +385,29 @@ public sealed class StreamingSurfaceTests
 
         src.Connect(autoConnect: false);
 
-        uint? nodeId = null;
-        for (var i = 0; i < 100 && nodeId is null; i++)
-        {
-            nodeId = src.NodeId;
-            if (nodeId is null)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsNotNull(nodeId, "the producer was never given a node id");
+        uint nodeId = await src.WaitForNodeIdAsync(cts.Token);
 
         await using var cap = new PipeWireVideoCapture(ctx, "pwnet-surface-reneg-sink");
 
-        var before = 0;
-        var afterReneg = 0;
+        var before = new Tally();
+        var afterReneg = new Tally();
         var renegotiated = false;
         var states = new ConcurrentQueue<PipeWireStreamState>();
 
         cap.FrameReady += (_, _) =>
         {
             if (Volatile.Read(ref renegotiated))
-                Interlocked.Increment(ref afterReneg);
+                afterReneg.Increment();
             else
-                Interlocked.Increment(ref before);
+                before.Increment();
         };
 
-        cap.Connect(nodeId!.Value, [PixelFormat.Bgra]);
+        cap.Connect(nodeId, [PixelFormat.Bgra]);
         await cap.WaitForStreamingAsync(cts.Token);
-
-        for (var i = 0; i < 100 && Volatile.Read(ref before) == 0; i++)
-            await Task.Delay(50, cts.Token);
+        _ = await before.AtLeast(1).Within(TimeSpan.FromSeconds(5), cts.Token);
 
         Assert.IsTrue(
-            Volatile.Read(ref before) > 0,
+            before.Value > 0,
             "no frame arrived before the renegotiation, so there was nothing to interrupt"
         );
 
@@ -462,11 +427,10 @@ public sealed class StreamingSurfaceTests
         // buffers, which under load takes longer than any fixed window this used to assume (600 ms,
         // once too short on the lab box); a stream that did not survive never delivers again,
         // however long this waits.
-        for (var i = 0; i < 200 && Volatile.Read(ref afterReneg) == 0; i++)
-            await Task.Delay(50, cts.Token);
+        _ = await afterReneg.AtLeast(1).Within(TimeSpan.FromSeconds(10), cts.Token);
 
         Assert.IsTrue(
-            Volatile.Read(ref afterReneg) > 0,
+            afterReneg.Value > 0,
             "no frame arrived in 10 s after a renegotiation request, so the stream did not survive it; "
                 + $"states since: {string.Join(" -> ", states)}"
         );
@@ -481,7 +445,7 @@ public sealed class StreamingSurfaceTests
         await using (ctx)
         await using (src)
         {
-            var mapped = 0;
+            var mapped = new Tally();
             var other = 0;
             var failures = new List<string>();
 
@@ -498,7 +462,7 @@ public sealed class StreamingSurfaceTests
 
                 string? wrong = GraphSurfaceTests.CompareMappedPixels(f);
                 if (wrong is null)
-                    Interlocked.Increment(ref mapped);
+                    mapped.Increment();
                 else
                     lock (failures)
                         failures.Add(wrong);
@@ -506,13 +470,13 @@ public sealed class StreamingSurfaceTests
 
             cap.Connect(src.NodeId);
             await cap.WaitForStreamingAsync(cts.Token);
-            await Task.Delay(1000, cts.Token);
+            _ = await mapped.AtLeast(6).Within(TimeSpan.FromSeconds(10), cts.Token);
 
             lock (failures)
                 Assert.AreEqual(0, failures.Count, string.Join("; ", failures.Distinct()));
             Assert.IsTrue(
-                Volatile.Read(ref mapped) > 5,
-                $"only {mapped} MemFd frames were mapped ({other} frames of another type), so GStreamer's memfd path was not exercised"
+                mapped.Value > 5,
+                $"only {mapped.Value} MemFd frames were mapped ({other} frames of another type), so GStreamer's memfd path was not exercised"
             );
         }
     }

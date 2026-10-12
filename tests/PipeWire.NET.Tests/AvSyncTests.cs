@@ -114,8 +114,8 @@ public sealed class AvSyncTests
         uint videoNode = await video.WaitForNodeIdAsync(ct);
         uint audioNode = await audio.WaitForNodeIdAsync(ct);
 
-        var v = new List<(long Time, long Rx, long Delay, long Clock)>();
-        var a = new List<(long Time, long Rx, long Delay, long Clock)>();
+        var v = new Collected<(long Time, long Rx, long Delay, long Clock)>();
+        var a = new Collected<(long Time, long Rx, long Delay, long Clock)>();
 
         await using var vCap = new PipeWireVideoCapture(ctx, $"{name}-v-sink");
         vCap.FrameReady += (_, f) =>
@@ -146,19 +146,15 @@ public sealed class AvSyncTests
 
         // Until both legs have delivered enough buffers whose timestamps actually moved. A count
         // alone is not enough: a burst delivered in one cycle satisfies it while spanning no time.
-        DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
-        while (DateTime.UtcNow < deadline)
-        {
-            bool vReady,
-                aReady;
-            lock (v)
-                vReady = v.Count >= 24 && v[^1].Time > v[0].Time;
-            lock (a)
-                aReady = a.Count >= 24 && a[^1].Time > a[0].Time;
-            if (vReady && aReady)
-                break;
-            await Task.Delay(100, ct);
-        }
+        _ = await Waits.Within(
+            until =>
+                Task.WhenAll(
+                    v.Spanning(24, x => x.Time, until),
+                    a.Spanning(24, x => x.Time, until)
+                ),
+            TimeSpan.FromSeconds(15),
+            ct
+        );
 
         bool drove = video.IsDriving;
 
@@ -483,8 +479,8 @@ public sealed class AvSyncTests
             );
         await using (source)
         {
-            var v = new List<(long Time, long Rx)>();
-            var a = new List<(long Time, long Rx)>();
+            var v = new Collected<(long Time, long Rx)>();
+            var a = new Collected<(long Time, long Rx)>();
 
             await using var vCap = new PipeWireVideoCapture(ctx, $"{name}-v-sink");
             vCap.FrameReady += (_, f) =>
@@ -510,19 +506,15 @@ public sealed class AvSyncTests
             };
             aCap.Connect(audioNode, sampleRate: Rate, channels: 2, format: AudioSampleFormat.F32Le);
 
-            DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
-            while (DateTime.UtcNow < deadline)
-            {
-                bool vReady,
-                    aReady;
-                lock (v)
-                    vReady = v.Count >= 24 && v[^1].Time > v[0].Time;
-                lock (a)
-                    aReady = a.Count >= 24 && a[^1].Time > a[0].Time;
-                if (vReady && aReady)
-                    break;
-                await Task.Delay(100, cts.Token);
-            }
+            _ = await Waits.Within(
+                until =>
+                    Task.WhenAll(
+                        v.Spanning(24, x => x.Time, until),
+                        a.Spanning(24, x => x.Time, until)
+                    ),
+                TimeSpan.FromSeconds(20),
+                cts.Token
+            );
 
             Leg Snapshot(List<(long Time, long Rx)> xs)
             {

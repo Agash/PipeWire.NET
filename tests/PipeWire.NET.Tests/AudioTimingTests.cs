@@ -27,19 +27,6 @@ public sealed class AudioTimingTests : PipeWireTestBase
     private const int Channels = 2;
     private const AudioSampleFormat Format = AudioSampleFormat.F32Le;
 
-    private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry,
-        Func<PipeWireGraphSnapshot, bool> until,
-        CancellationToken ct
-    )
-    {
-        await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(ct))
-            if (until(graph))
-                return graph;
-
-        throw new InvalidOperationException("the snapshot stream ended before the condition held");
-    }
-
     /// <summary>
     /// Every audio frame carries the cycle time it was queued in, it advances, and the header
     /// timestamp the output wrote does not survive the converters in between.
@@ -72,9 +59,9 @@ public sealed class AudioTimingTests : PipeWireTestBase
         };
         output.Connect(autoConnect: false);
 
-        await WaitForAsync(reg, g => g.Nodes.Any(n => n.NodeName == nodeName), cts.Token);
+        await reg.WaitUntilAsync(g => g.Nodes.Any(n => n.NodeName == nodeName), cts.Token);
 
-        var stamps = new List<long>();
+        var stamps = new Collected<long>();
         var missing = 0;
         var headers = 0;
 
@@ -103,15 +90,7 @@ public sealed class AudioTimingTests : PipeWireTestBase
         capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
-        for (int i = 0; i < 60; i++)
-        {
-            lock (stamps)
-            {
-                if (stamps.Count >= 8)
-                    break;
-            }
-            await Task.Delay(50, cts.Token);
-        }
+        _ = await stamps.Reaching(8).Within(TimeSpan.FromMilliseconds(3000), cts.Token);
 
         long[] seen;
         lock (stamps)
@@ -179,7 +158,7 @@ public sealed class AudioTimingTests : PipeWireTestBase
         };
         output.Connect(autoConnect: false);
 
-        await WaitForAsync(reg, g => g.Nodes.Any(n => n.NodeName == nodeName), cts.Token);
+        await reg.WaitUntilAsync(g => g.Nodes.Any(n => n.NodeName == nodeName), cts.Token);
 
         await using var capture = new PipeWireAudioCapture(
             ctx,
@@ -187,7 +166,10 @@ public sealed class AudioTimingTests : PipeWireTestBase
         );
         capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
-        await Task.Delay(500, cts.Token);
+
+        // A few cycles through, so the queue has been filled and reported.
+        for (int i = 0; i < 4; i++)
+            _ = await capture.NextFrame().Within(TimeSpan.FromSeconds(2), cts.Token);
 
         PipeWireStreamQueue? queue = output.Queue;
         Assert.IsNotNull(queue, "a running output must report its queue");

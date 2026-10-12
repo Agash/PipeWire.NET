@@ -269,13 +269,10 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
             producer.FillSamples += (_, _, _, _, _) => 0;
             producer.Connect(autoConnect: false);
 
-            for (int i = 0; i < 100 && producer.NodeId is null; i++)
-            {
-                await Task.Delay(50, cts.Token);
-                await registry.WaitForInitialEnumerationAsync(cts.Token);
-            }
-
-            Assert.IsNotNull(producer.NodeId, "the driving producer never reached the graph");
+            _ = await producer
+                .WaitForNodeIdAsync(cts.Token)
+                .WaitAsync(TimeSpan.FromSeconds(5), cts.Token)
+                .OrFail("the driving producer never reached the graph");
 
             await using var consumer = new PipeWireAudioCapture(
                 context,

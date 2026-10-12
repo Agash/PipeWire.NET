@@ -55,24 +55,26 @@ public sealed class LocalV4l2Tests
 
         // The session manager's v4l2 monitor creates the node; it is named after the card.
         PipeWireNode? cam = null;
-        for (var i = 0; i < 150 && cam is null; i++)
-        {
-            cam = reg.Current.Nodes.FirstOrDefault(n =>
-                n.Media == PipeWireMediaKind.Video
-                && n.Flow == PipeWireMediaFlow.Source
-                && (
-                    (
-                        n.Description?.Contains(
-                            VirtualCamera.CardLabel,
-                            StringComparison.OrdinalIgnoreCase
-                        ) ?? false
-                    ) || (n.NodeName?.Contains("v4l2", StringComparison.OrdinalIgnoreCase) ?? false)
-                )
-            );
-
-            if (cam is null)
-                await Task.Delay(100, cts.Token);
-        }
+        cam = await reg.WaitForAsync(
+            g =>
+                g.Nodes.FirstOrDefault(n =>
+                    n.Media == PipeWireMediaKind.Video
+                    && n.Flow == PipeWireMediaFlow.Source
+                    && (
+                        (
+                            n.Description?.Contains(
+                                VirtualCamera.CardLabel,
+                                StringComparison.OrdinalIgnoreCase
+                            ) ?? false
+                        )
+                        || (
+                            n.NodeName?.Contains("v4l2", StringComparison.OrdinalIgnoreCase)
+                            ?? false
+                        )
+                    )
+                ),
+            cts.Token
+        );
 
         if (cam is null)
         {
@@ -82,14 +84,14 @@ public sealed class LocalV4l2Tests
             );
         }
 
-        var frames = 0;
+        var frames = new Tally();
         var nonBlank = 0;
         var geometry = (W: 0, H: 0);
 
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-v4l2-sink");
         capture.FrameReady += (_, f) =>
         {
-            Interlocked.Increment(ref frames);
+            frames.Increment();
             geometry = (f.Width, f.Height);
 
             if (f.Pixels.IsEmpty)
@@ -107,12 +109,9 @@ public sealed class LocalV4l2Tests
 
         capture.Connect(cam!.NodeId);
         await capture.WaitForStreamingAsync(cts.Token);
-        await Task.Delay(1500, cts.Token);
+        _ = await frames.AtLeast(10).Within(TimeSpan.FromSeconds(3), cts.Token);
 
-        Assert.IsTrue(
-            Volatile.Read(ref frames) > 0,
-            "the camera node was linked but delivered no frames"
-        );
+        Assert.IsTrue(frames.Value > 0, "the camera node was linked but delivered no frames");
 
         Assert.IsTrue(
             geometry.W > 0 && geometry.H > 0,

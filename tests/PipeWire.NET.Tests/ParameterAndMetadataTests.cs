@@ -93,6 +93,7 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             PipeWireNode node = await registry
                 .CreateVirtualSink("Mute")
                 .WithName(Unique("pwnet_mute_sink"))
+                .WithoutRestoredProps()
                 .ExecuteAsync(cts.Token);
 
             await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
@@ -110,28 +111,19 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             ImmutableArray<float> channels = await control.GetChannelVolumesAsync(cts.Token);
             Assert.AreEqual(2, channels.Length, "a stereo node has two channel volumes");
 
-            // The write is retried, not just the read. The session manager keeps its own stored
-            // volume per node.name and reapplies it when a stream arrives or the graph changes, so
-            // a value written once can be overwritten before it can be read back - a policy engine
-            // doing its job, not the write failing. Reading in a loop would converge on the
-            // restored value and call it correct; rewriting asks what the test means to ask.
-            ImmutableArray<float> after = [];
-            for (int attempt = 0; attempt < 10; attempt++)
-            {
-                await control.SetChannelVolumesAsync([0.4f, 0.6f], cts.Token);
-
-                after = await control.GetChannelVolumesAsync(cts.Token);
-                if (
-                    after.Length == 2
-                    && Math.Abs(after[0] - 0.4f) <= 0.01f
-                    && Math.Abs(after[1] - 0.6f) <= 0.01f
-                )
-                {
-                    break;
-                }
-
-                await Task.Delay(100, cts.Token);
-            }
+            // The node opted out of the session manager's restore, so the write is the only one; it is
+            // read once the node reports it applied.
+            await control.SetChannelVolumesAsync([0.4f, 0.6f], cts.Token);
+            ImmutableArray<float> after = await control.SettleAsync(
+                SpaParamType.Props,
+                ct => control.GetChannelVolumesAsync(ct),
+                v =>
+                    v.Length == 2
+                    && Math.Abs(v[0] - 0.4f) <= 0.01f
+                    && Math.Abs(v[1] - 0.6f) <= 0.01f,
+                TimeSpan.FromSeconds(5),
+                cts.Token
+            );
 
             Assert.AreEqual(2, after.Length, "a stereo node has two channel volumes");
             Assert.AreEqual(0.4f, after[0], 0.01f);
@@ -307,17 +299,14 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
                 // barrier a read races that burst.
                 await store.ReadyAsync(cts.Token);
 
-                // Polled, not read once. The "default" store is served by the session manager, so its
+                // Waited for, not read once. The "default" store is served by the session manager, so its
                 // entries travel wireplumber -> daemon -> here and are not ordered against our own
                 // core sync: ReadyAsync proves the bind was processed, not that the contents have
                 // arrived. Reading once turns that race into a skip.
-                PipeWireMetadataEntry? sink = null;
-                for (int i = 0; i < 50 && sink is null; i++)
-                {
-                    sink = store.DefaultAudioSink;
-                    if (sink is null)
-                        await Task.Delay(100, cts.Token);
-                }
+                _ = await store
+                    .UntilEntry("default.audio.sink", v => v is not null)
+                    .Within(TimeSpan.FromSeconds(5), cts.Token);
+                PipeWireMetadataEntry? sink = store.DefaultAudioSink;
 
                 if (sink is null)
                     Assert.Inconclusive("this session has no default sink set.");
@@ -595,20 +584,12 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
                 "the application saw no nodes to begin with"
             );
 
-            PipeWireClient? confined = null;
-            for (var i = 0; i < 100 && confined is null; i++)
-            {
-                confined = manager.Current.Clients.FirstOrDefault(c =>
-                    c.ApplicationName == appName
-                );
-                if (confined is null)
-                    await Task.Delay(50, cts.Token);
-            }
-
-            Assert.IsNotNull(
-                confined,
-                "the application's client never reached the manager's graph"
-            );
+            PipeWireClient confined = await manager
+                .WaitForAsync(
+                    g => g.Clients.FirstOrDefault(c => c.ApplicationName == appName),
+                    cts.Token
+                )
+                .OrFail("the application's client never reached the manager's graph");
 
             await using PipeWireClientProxy control = manager.BindClient(confined.Id);
             await control.ConfineToAsync(
@@ -617,8 +598,8 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             );
 
             // Everything but the core is withdrawn from the application's view.
-            for (var i = 0; i < 100 && app.Current.Nodes.Length > 0; i++)
-                await Task.Delay(50, cts.Token);
+            _ = await app.WaitUntilAsync(g => g.Nodes.Length == 0, cts.Token)
+                .Within(TimeSpan.FromSeconds(5), cts.Token);
 
             Assert.AreEqual(
                 0,

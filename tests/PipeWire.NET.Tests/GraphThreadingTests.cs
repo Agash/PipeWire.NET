@@ -38,19 +38,6 @@ public sealed class GraphThreadingTests : PipeWireTestBase
         return (context, registry);
     }
 
-    private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry,
-        Func<PipeWireGraphSnapshot, bool> until,
-        CancellationToken cancellationToken
-    )
-    {
-        await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
-            if (until(graph))
-                return graph;
-
-        throw new InvalidOperationException("the snapshot stream ended before the condition held");
-    }
-
     [TestMethod]
     public async Task ReadingTheGraphFromInsideAHandler_DoesNotDeadlock()
     {
@@ -90,8 +77,7 @@ public sealed class GraphThreadingTests : PipeWireTestBase
                 "pwnet_reentrant",
                 cts.Token
             );
-            await WaitForAsync(
-                registry,
+            await registry.WaitUntilAsync(
                 g => g.GetPortsForNode(node.NodeId).Length == 4,
                 cts.Token
             );
@@ -123,8 +109,7 @@ public sealed class GraphThreadingTests : PipeWireTestBase
                 "pwnet_threadid",
                 cts.Token
             );
-            await WaitForAsync(
-                registry,
+            await registry.WaitUntilAsync(
                 g => g.GetPortsForNode(node.NodeId).Length == 4,
                 cts.Token
             );
@@ -169,8 +154,7 @@ public sealed class GraphThreadingTests : PipeWireTestBase
                 "pwnet_throw_1",
                 cts.Token
             );
-            await WaitForAsync(
-                registry,
+            await registry.WaitUntilAsync(
                 g => g.GetPortsForNode(first.NodeId).Length == 4,
                 cts.Token
             );
@@ -180,8 +164,7 @@ public sealed class GraphThreadingTests : PipeWireTestBase
                 "pwnet_throw_2",
                 cts.Token
             );
-            PipeWireGraphSnapshot after = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot after = await registry.WaitUntilAsync(
                 g => g.GetPortsForNode(second.NodeId).Length == 4,
                 cts.Token
             );
@@ -341,7 +324,7 @@ public sealed class GraphThreadingTests : PipeWireTestBase
                 "the handler never issued its request"
             );
 
-            await WaitForAsync(registry, g => g.GetNode(trigger.NodeId) is null, cts.Token);
+            await registry.WaitUntilAsync(g => g.GetNode(trigger.NodeId) is null, cts.Token);
         }
     }
 
@@ -422,7 +405,7 @@ public sealed class GraphThreadingTests : PipeWireTestBase
             // built it. Disposal takes the loop lock, so this is where an ordering bug shows up.
             // Count what the churn achieved. Without this the test passes even if the very first
             // iteration threw, which would mean the disposal never raced anything.
-            int churned = 0;
+            var churned = new Tally();
             Exception? churnEnded = null;
             Task churn = Task.Run(
                 async () =>
@@ -437,7 +420,7 @@ public sealed class GraphThreadingTests : PipeWireTestBase
                                 cts.Token
                             );
                             await registry.DestroyGlobalAsync(n.NodeId, cts.Token);
-                            Interlocked.Increment(ref churned);
+                            churned.Increment();
                         }
                     }
                     catch (Exception ex)
@@ -449,16 +432,17 @@ public sealed class GraphThreadingTests : PipeWireTestBase
                 CancellationToken.None
             );
 
-            await Task.Delay(150, cts.Token);
+            // Disposed mid-churn: once the loop is under way.
+            _ = await churned.AtLeast(2).Within(TimeSpan.FromSeconds(5), cts.Token);
             await Task.Run(async () => await registry.DisposeAsync(), CancellationToken.None);
             await churn;
 
             Assert.IsTrue(
-                Volatile.Read(ref churned) > 0,
+                churned.Value > 0,
                 "the churn loop never completed an iteration, so disposal raced nothing"
             );
             Assert.IsTrue(
-                churnEnded is not null || Volatile.Read(ref churned) == 30,
+                churnEnded is not null || churned.Value == 30,
                 $"the churn stopped after {churned} iterations without a disposal-related exception"
             );
 

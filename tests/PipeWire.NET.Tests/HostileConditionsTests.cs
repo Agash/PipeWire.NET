@@ -134,17 +134,13 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-hc-nopull-consumer");
         Assert.AreEqual(FrameRetention.None, capture.Retention, "retention must be off by default");
 
-        var delivered = 0;
-        capture.FrameReady += (_, _) => Interlocked.Increment(ref delivered);
+        var delivered = new Tally();
+        capture.FrameReady += (_, _) => delivered.Increment();
         capture.Connect((await source.WaitForNodeIdAsync(cts.Token)), [PixelFormat.Bgra]);
         await capture.WaitForStreamingAsync(cts.Token);
 
-        for (int i = 0; i < 60 && Volatile.Read(ref delivered) < 5; i++)
-            await Task.Delay(50, cts.Token);
-        Assert.IsTrue(
-            Volatile.Read(ref delivered) >= 5,
-            "no frames flowed, so there was nothing to not retain"
-        );
+        _ = await delivered.AtLeast(5).Within(TimeSpan.FromMilliseconds(3000), cts.Token);
+        Assert.IsTrue(delivered.Value >= 5, "no frames flowed, so there was nothing to not retain");
 
         Assert.IsFalse(capture.TryGetFrame(out _));
         Assert.IsFalse(capture.TryGetBorrowedFrame(out _));
@@ -431,7 +427,7 @@ public sealed class HostileConditionsTests : PipeWireTestBase
             .ExecuteAsync(cts.Token);
         uint staleId = node.NodeId;
         await reg.DestroyGlobalAsync(staleId, cts.Token);
-        await WaitForAsync(reg, g => g.GetNode(staleId) is null, cts.Token);
+        await reg.WaitUntilAsync(g => g.GetNode(staleId) is null, cts.Token);
 
         await using var capture = new PipeWireAudioCapture(ctx, "pwnet-hc-gone-consumer");
         try
@@ -485,6 +481,7 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
+        // Descriptors close on the loop threads after the contexts go; a beat for them to.
         await Task.Delay(300, cts.Token);
 
         int fdsAfter = OpenFds();
@@ -531,6 +528,7 @@ public sealed class HostileConditionsTests : PipeWireTestBase
                         {
                             for (int i = 0; i < 10; i++)
                             {
+                                // Paced churn: creations spread over time rather than one burst.
                                 await Task.Delay(TimeSpan.FromMilliseconds(25), cts.Token);
 
                                 // No media.class. The session manager reads that as a routable endpoint and builds
@@ -565,15 +563,10 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         // from a session-manager node that had taken the same id, and it had to treat a nameless
         // node as possibly ours because properties can arrive after the global does. Neither
         // caveat survives a serial.
-        await WaitForAsync(reg, g => StillOurs(g, mine).Length == 0, cts.Token);
+        _ = await reg.WaitUntilAsync(g => StillOurs(g, mine).Length == 0, cts.Token)
+            .Within(TimeSpan.FromSeconds(10), cts.Token);
 
         ulong[] left = StillOurs(reg.Current, mine);
-        for (int attempt = 0; attempt < 20 && left.Length > 0; attempt++)
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(100), cts.Token);
-            await reg.WaitForInitialEnumerationAsync(cts.Token);
-            left = StillOurs(reg.Current, mine);
-        }
 
         Assert.IsEmpty(
             left,
@@ -618,8 +611,12 @@ public sealed class HostileConditionsTests : PipeWireTestBase
 
         // An admin kicking us off, or the daemon restarting: the connection dies underneath a
         // perfectly healthy process. Nothing here may abort or hang.
+        var lost = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        ctx.ConnectionLost += _ => lost.TrySetResult();
         await PwTools.DestroyAsync(clientId.Value, cts.Token);
-        await Task.Delay(1000, cts.Token);
+        await lost
+            .Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token)
+            .OrFail("the context never reported losing its connection");
 
         // Reads must keep working - the snapshot is immutable and independent of the connection.
         PipeWireGraphSnapshot lastKnown = reg.Current;
@@ -666,19 +663,6 @@ public sealed class HostileConditionsTests : PipeWireTestBase
 
     private static int OpenFds() =>
         Directory.GetFileSystemEntries($"/proc/{Environment.ProcessId}/fd").Length;
-
-    private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry,
-        Func<PipeWireGraphSnapshot, bool> until,
-        CancellationToken ct
-    )
-    {
-        await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(ct))
-            if (until(graph))
-                return graph;
-
-        throw new InvalidOperationException("the snapshot stream ended before the condition held");
-    }
 
     /// <summary>
     /// Finds the daemon's Client object for this process.

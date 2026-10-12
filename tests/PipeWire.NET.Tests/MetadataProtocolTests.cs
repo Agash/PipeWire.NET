@@ -140,14 +140,11 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
             provider.Set("a", "1");
             provider.Set("b", "2");
 
-            PipeWireMetadataProxy? consumer = null;
-            for (int attempt = 0; attempt < 80 && consumer is null; attempt++)
-            {
-                await clientReg.WaitForInitialEnumerationAsync(cts.Token);
-                consumer = clientReg.BindMetadata(storeName);
-                if (consumer is null)
-                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
-            }
+            PipeWireMetadataProxy? consumer = await clientReg.BindMetadataWhenPresentAsync(
+                storeName,
+                TimeSpan.FromMilliseconds(4000),
+                cts.Token
+            );
 
             if (consumer is null)
             {
@@ -170,8 +167,9 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                 // this connection's own round trip - but that ordering is the daemon's and the
                 // exporter's between them, and on the desktop session the replay has been seen to
                 // arrive after. A replay that never comes still fails here.
-                for (int attempt = 0; attempt < 100 && consumer.Get("a") is null; attempt++)
-                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+                _ = await consumer
+                    .UntilEntry("a", v => v is not null)
+                    .Within(TimeSpan.FromMilliseconds(5000), cts.Token);
 
                 Assert.AreEqual("1", consumer.Get("a"), "the consumer never received the entries");
                 Assert.AreEqual("2", consumer.Get("b"));
@@ -179,8 +177,9 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                 provider.Clear();
 
                 // Waits for the clear to arrive rather than assuming a barrier orders the server's hop.
-                for (int attempt = 0; attempt < 80 && consumer.Get("a") is not null; attempt++)
-                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+                _ = await consumer
+                    .UntilEntry("a", v => v is null)
+                    .Within(TimeSpan.FromMilliseconds(4000), cts.Token);
 
                 Assert.IsNull(
                     consumer.Get("a"),
@@ -250,14 +249,11 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
             await provider.ReadyAsync(cts.Token);
             provider.Set("a", "1");
 
-            PipeWireMetadataProxy? consumer = null;
-            for (int attempt = 0; attempt < 80 && consumer is null; attempt++)
-            {
-                await clientReg.WaitForInitialEnumerationAsync(cts.Token);
-                consumer = clientReg.BindMetadata(storeName);
-                if (consumer is null)
-                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
-            }
+            PipeWireMetadataProxy? consumer = await clientReg.BindMetadataWhenPresentAsync(
+                storeName,
+                TimeSpan.FromMilliseconds(4000),
+                cts.Token
+            );
 
             Assert.IsNotNull(consumer, "the exported store never reached the other client");
 
@@ -311,8 +307,9 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                 {
                     Assert.IsNotNull(late, "the late client could not bind the store");
 
-                    for (int attempt = 0; attempt < 80 && consumer.Get("a") is not null; attempt++)
-                        await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+                    _ = await consumer
+                        .UntilEntry("a", v => v is null)
+                        .Within(TimeSpan.FromMilliseconds(4000), cts.Token);
 
                     Assert.IsNull(
                         consumer.Get("a"),
@@ -363,14 +360,11 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
             provider.Set("a", "1");
             provider.Set("b", "2");
 
-            PipeWireMetadataProxy? consumer = null;
-            for (int attempt = 0; attempt < 80 && consumer is null; attempt++)
-            {
-                await clientReg.WaitForInitialEnumerationAsync(cts.Token);
-                consumer = clientReg.BindMetadata(storeName);
-                if (consumer is null)
-                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
-            }
+            PipeWireMetadataProxy? consumer = await clientReg.BindMetadataWhenPresentAsync(
+                storeName,
+                TimeSpan.FromMilliseconds(4000),
+                cts.Token
+            );
 
             if (consumer is null)
                 Assert.Inconclusive("the exported store never reached the other client.");
@@ -383,16 +377,18 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                 // so its entries reach the daemon and come back on a hop no barrier here waits
                 // for, and the first burst can legitimately land before they do. The clear below
                 // is waited for the same way, for the same reason.
-                for (int attempt = 0; attempt < 80 && consumer.Get("a") is null; attempt++)
-                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+                _ = await consumer
+                    .UntilEntry("a", v => v is not null)
+                    .Within(TimeSpan.FromMilliseconds(4000), cts.Token);
 
                 Assert.AreEqual("1", consumer.Get("a"), "the consumer never received the entries");
 
                 // pw-metadata with no key clears everything for the subject, from a third process.
                 await PwTools.ClearMetadataAsync(storeName, cts.Token);
 
-                for (int attempt = 0; attempt < 80 && consumer.Get("a") is not null; attempt++)
-                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+                _ = await consumer
+                    .UntilEntry("a", v => v is null)
+                    .Within(TimeSpan.FromMilliseconds(4000), cts.Token);
 
                 Assert.IsNull(
                     consumer.Get("a"),

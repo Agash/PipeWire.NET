@@ -45,19 +45,6 @@ public sealed class GraphStressTests : PipeWireTestBase
         return (context, registry);
     }
 
-    private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry,
-        Func<PipeWireGraphSnapshot, bool> until,
-        CancellationToken cancellationToken
-    )
-    {
-        await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
-            if (until(graph))
-                return graph;
-
-        throw new InvalidOperationException("the snapshot stream ended before the condition held");
-    }
-
     /// <summary>Open file descriptors for this process; the cheapest leak detector on Linux.</summary>
     /// <summary>
     /// Descriptors that could plausibly be ours: sockets, memfds, eventfds, pipes.
@@ -210,7 +197,7 @@ public sealed class GraphStressTests : PipeWireTestBase
                     cts.Token
                 );
                 await registry.DestroyGlobalAsync(warm.NodeId, cts.Token);
-                await WaitForAsync(registry, g => g.GetNode(warm.NodeId) is null, cts.Token);
+                await registry.WaitUntilAsync(g => g.GetNode(warm.NodeId) is null, cts.Token);
             }
 
             GC.Collect();
@@ -232,7 +219,7 @@ public sealed class GraphStressTests : PipeWireTestBase
                     .WithMediaClass("")
                     .ExecuteAsync(cts.Token);
                 await registry.DestroyGlobalAsync(node.NodeId, cts.Token);
-                await WaitForAsync(registry, g => g.GetNode(node.NodeId) is null, cts.Token);
+                await registry.WaitUntilAsync(g => g.GetNode(node.NodeId) is null, cts.Token);
                 await Task.Delay(ChurnPause, cts.Token);
             }
 
@@ -581,8 +568,7 @@ public sealed class GraphStressTests : PipeWireTestBase
         await using (registry)
         {
             PipeWireNode a = await registry.CreateVirtualSinkAsync("CA", "pwnet_ca", cts.Token);
-            PipeWireGraphSnapshot held = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot held = await registry.WaitUntilAsync(
                 g => g.GetPortsForNode(a.NodeId).Length == 4,
                 cts.Token
             );
@@ -654,7 +640,7 @@ public sealed class GraphStressTests : PipeWireTestBase
             // and for any kind of object, so a port or a link can be holding it while GetNode still
             // answers null. Destroying it then would destroy a stranger and report success, which
             // is exactly how this test failed under a full run. Nothing at all may hold the id.
-            await WaitForAsync(registry, g => !g.Objects.Any(o => o.Id == node.NodeId), cts.Token);
+            await registry.WaitUntilAsync(g => !g.Objects.Any(o => o.Id == node.NodeId), cts.Token);
 
             // And it is the object we made that went, not one that inherited its id: serials are
             // monotonic and never reused, so this cannot be satisfied by a recycled id.

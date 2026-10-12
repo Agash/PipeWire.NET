@@ -35,24 +35,11 @@ public sealed class GraphScenarioTests : PipeWireTestBase
         return (context, registry);
     }
 
-    private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry,
-        Func<PipeWireGraphSnapshot, bool> until,
-        CancellationToken cancellationToken
-    )
-    {
-        await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
-            if (until(graph))
-                return graph;
-
-        throw new InvalidOperationException("the snapshot stream ended before the condition held");
-    }
-
     private static Task<PipeWireGraphSnapshot> WaitForPortsAsync(
         PipeWireRegistry registry,
         uint nodeId,
         CancellationToken cancellationToken
-    ) => WaitForAsync(registry, g => g.GetPortsForNode(nodeId).Length == 4, cancellationToken);
+    ) => registry.WaitUntilAsync(g => g.GetPortsForNode(nodeId).Length == 4, cancellationToken);
 
     // ---------------------------------------------------------------- patchbay
 
@@ -84,8 +71,7 @@ public sealed class GraphScenarioTests : PipeWireTestBase
                 cts.Token
             );
 
-            PipeWireGraphSnapshot ready = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot ready = await registry.WaitUntilAsync(
                 g =>
                     g.GetPortsForNode(source.NodeId).Length == 4
                     && g.GetPortsForNode(sink.NodeId).Length == 4,
@@ -134,8 +120,7 @@ public sealed class GraphScenarioTests : PipeWireTestBase
 
             // 4. Unwire, and confirm the cable disappears from both endpoints, not just one.
             await registry.RemoveLinkAsync(link, cts.Token);
-            PipeWireGraphSnapshot unwired = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot unwired = await registry.WaitUntilAsync(
                 g => g.GetLink(link.LinkId) is null,
                 cts.Token
             );
@@ -171,7 +156,7 @@ public sealed class GraphScenarioTests : PipeWireTestBase
             uint id = first.NodeId;
 
             await registry.DestroyGlobalAsync(id, cts.Token);
-            await WaitForAsync(registry, g => g.GetNode(id) is null, cts.Token);
+            await registry.WaitUntilAsync(g => g.GetNode(id) is null, cts.Token);
 
             PipeWireNode second = await registry.CreateVirtualSinkAsync(
                 "Second",
@@ -227,8 +212,7 @@ public sealed class GraphScenarioTests : PipeWireTestBase
             );
             publisher.Connect();
 
-            PipeWireGraphSnapshot graph = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
                 g => g.Nodes.Any(n => n.NodeName == NodeName),
                 cts.Token
             );
@@ -246,8 +230,7 @@ public sealed class GraphScenarioTests : PipeWireTestBase
             );
 
             // The agent then looks up ports to link or to inspect; they must be filed under that id.
-            PipeWireGraphSnapshot withPorts = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot withPorts = await registry.WaitUntilAsync(
                 g => g.GetPortsForNode(published.NodeId).Length > 0,
                 cts.Token
             );
@@ -370,8 +353,7 @@ public sealed class GraphScenarioTests : PipeWireTestBase
                 sourceId = a.NodeId;
                 sinkId = b.NodeId;
 
-                PipeWireGraphSnapshot ready = await WaitForAsync(
-                    builder,
+                PipeWireGraphSnapshot ready = await builder.WaitUntilAsync(
                     g =>
                         g.GetPortsForNode(sourceId).Length == 4
                         && g.GetPortsForNode(sinkId).Length == 4,
@@ -393,16 +375,16 @@ public sealed class GraphScenarioTests : PipeWireTestBase
                     .ExecuteAsync(cts.Token);
                 linkId = link.LinkId;
 
-                await WaitForAsync(observer, g => g.GetLink(linkId) is not null, cts.Token);
+                await observer.WaitUntilAsync(g => g.GetLink(linkId) is not null, cts.Token);
                 await builder.DisposeAsync();
             }
 
             // --- the app is gone. The routing must not be.
-            PipeWireGraphSnapshot after = await WaitForAsync(
-                observer,
+            PipeWireGraphSnapshot after = await observer.WaitUntilAsync(
                 g => g.Nodes.All(n => n.NodeName != "pwnet-routing-builder"),
                 cts.Token
             );
+            // A beat after the creator left, to show nothing removes the lingering objects late.
             await Task.Delay(250, cts.Token);
             after = observer.Current;
 
@@ -423,12 +405,11 @@ public sealed class GraphScenarioTests : PipeWireTestBase
 
             // --- second "run": tear the setup down deliberately.
             await observer.DestroyGlobalAsync(linkId, cts.Token);
-            await WaitForAsync(observer, g => g.GetLink(linkId) is null, cts.Token);
+            await observer.WaitUntilAsync(g => g.GetLink(linkId) is null, cts.Token);
             await observer.DestroyGlobalAsync(sourceId, cts.Token);
             await observer.DestroyGlobalAsync(sinkId, cts.Token);
 
-            PipeWireGraphSnapshot cleaned = await WaitForAsync(
-                observer,
+            PipeWireGraphSnapshot cleaned = await observer.WaitUntilAsync(
                 g => g.GetNode(sourceId) is null && g.GetNode(sinkId) is null,
                 cts.Token
             );
@@ -483,8 +464,7 @@ public sealed class GraphScenarioTests : PipeWireTestBase
                     cts.Token
                 );
 
-                PipeWireGraphSnapshot ready = await WaitForAsync(
-                    registry,
+                PipeWireGraphSnapshot ready = await registry.WaitUntilAsync(
                     g =>
                         g.GetPortsForNode(a.NodeId).Length == 4
                         && g.GetPortsForNode(b.NodeId).Length == 4,
@@ -507,8 +487,7 @@ public sealed class GraphScenarioTests : PipeWireTestBase
                 await registry.DestroyGlobalAsync(a.NodeId, cts.Token);
                 await registry.DestroyGlobalAsync(b.NodeId, cts.Token);
 
-                await WaitForAsync(
-                    registry,
+                await registry.WaitUntilAsync(
                     g =>
                         g.GetNode(a.NodeId) is null
                         && g.GetNode(b.NodeId) is null

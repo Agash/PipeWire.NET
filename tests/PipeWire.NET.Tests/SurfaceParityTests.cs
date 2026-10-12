@@ -205,21 +205,17 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireClient? own = null;
-        for (var i = 0; i < 100 && own is null; i++)
-        {
-            own = reg.Current.Clients.FirstOrDefault(c =>
-                c.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? v)
-                && v == "pwnet-perm-guard"
-            );
+        PipeWireClient own = await reg.WaitForAsync(
+                g =>
+                    g.Clients.FirstOrDefault(c =>
+                        c.Properties.TryGetValue(PipeWireKeys.PW_KEY_APP_NAME, out string? v)
+                        && v == "pwnet-perm-guard"
+                    ),
+                cts.Token
+            )
+            .OrFail("no client in the graph is this process");
 
-            if (own is null)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsNotNull(own, "no client in the graph is this process");
-
-        PipeWireClientProxy client = reg.BindClient(own!.Id);
+        PipeWireClientProxy client = reg.BindClient(own.Id);
         await client.ReadyAsync(cts.Token);
 
         Task<System.Collections.Immutable.ImmutableArray<PipeWireObjectPermission>> first =
@@ -273,17 +269,13 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         );
 
         // A port of that node: a parameter object, like the node itself.
-        PipeWirePort? port = null;
-        for (var i = 0; i < 100 && port is null; i++)
-        {
-            port = reg.Current.Ports.FirstOrDefault(p => p.NodeId == node.NodeId);
-            if (port is null)
-                await Task.Delay(50, cts.Token);
-        }
+        PipeWirePort port = await reg.WaitForAsync(
+                g => g.Ports.FirstOrDefault(p => p.NodeId == node.NodeId),
+                cts.Token
+            )
+            .OrFail("the virtual sink never published a port");
 
-        Assert.IsNotNull(port, "the virtual sink never published a port");
-
-        await using PipeWirePortProxy portProxy = reg.BindPort(port!.PortId);
+        await using PipeWirePortProxy portProxy = reg.BindPort(port.PortId);
         var portRemoved = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously
         );

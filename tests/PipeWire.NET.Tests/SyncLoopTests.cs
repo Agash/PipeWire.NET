@@ -53,26 +53,6 @@ public sealed class SyncLoopTests
         return output;
     }
 
-    private static async Task<PipeWireNode> WaitForNodeAsync(
-        PipeWireRegistry reg,
-        string name,
-        CancellationToken ct
-    )
-    {
-        for (var i = 0; i < 100; i++)
-        {
-            PipeWireNode? n = reg.Current.Nodes.FirstOrDefault(x =>
-                string.Equals(x.NodeName, name, StringComparison.Ordinal)
-            );
-
-            if (n is not null)
-                return n;
-            await Task.Delay(50, ct);
-        }
-
-        throw new InvalidOperationException($"node {name} never appeared");
-    }
-
     /// <summary>
     /// A latency announced by a stream is the latency the daemon then reports for its node.
     /// </summary>
@@ -112,17 +92,33 @@ public sealed class SyncLoopTests
 
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
-        PipeWireNode node = await WaitForNodeAsync(reg, nodeName, cts.Token);
+        PipeWireNode node = await reg.WaitForAsync(
+                g =>
+                    g.Nodes.FirstOrDefault(x =>
+                        string.Equals(x.NodeName, nodeName, StringComparison.Ordinal)
+                    ),
+                cts.Token
+            )
+            .OrFail($"node {nodeName} never appeared");
 
         await using PipeWireNodeProxy control = reg.BindNode(node.NodeId);
 
-        PipeWireProcessLatency? reported = null;
-        for (var i = 0; i < 40 && reported?.Ns != announcedNs; i++)
+        // The announcement may still be on its way: the daemon reports each change to a subscriber.
+        var announced = new TaskCompletionSource<PipeWireProcessLatency>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        control.ParameterChanged += (_, param) =>
         {
-            reported = await control.GetProcessLatencyAsync(cts.Token);
-            if (reported?.Ns != announcedNs)
-                await Task.Delay(100, cts.Token);
-        }
+            if (PipeWireProcessLatency.From(param) is { } latency && latency.Ns == announcedNs)
+                announced.TrySetResult(latency);
+        };
+        control.SubscribeParameters(SpaParamType.ProcessLatency);
+
+        PipeWireProcessLatency? reported = await control.GetProcessLatencyAsync(cts.Token);
+        if (reported?.Ns != announcedNs)
+            reported =
+                await announced.Task.OrDefaultWithin(TimeSpan.FromSeconds(4), cts.Token)
+                ?? reported;
 
         Assert.IsNotNull(
             reported,
@@ -184,27 +180,19 @@ public sealed class SyncLoopTests
 
         output.Connect(autoConnect: false);
 
-        long receivedSamples = 0;
+        var receivedSamples = new Tally();
         await using var capture = new PipeWireAudioCapture(ctx, $"{nodeName}-sink");
-        capture.FrameReady += (_, f) => Interlocked.Add(ref receivedSamples, f.Samples.Length / 4);
+        capture.FrameReady += (_, f) => receivedSamples.Add(f.Samples.Length / 4);
         capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
-        PipeWireRateMatch? match = null;
-        for (var i = 0; i < 60 && match is null; i++)
-        {
-            match = output.RateMatch ?? capture.RateMatch;
-            if (match is null)
-                await Task.Delay(50, cts.Token);
-        }
+        // The area is set up with the link, before the first cycle delivers anything.
+        _ = await receivedSamples.AtLeast(1).Within(TimeSpan.FromSeconds(5), cts.Token);
+        PipeWireRateMatch? match = output.RateMatch ?? capture.RateMatch;
 
         // Not a skip: the sessions this runs in fix the graph at 48000 (clock.allowed-rates), so a
         // 44100 stream is always resampled and a missing area is the reader failing, not the graph.
         Assert.IsNotNull(match, "a 44100 stream in a 48000 graph was offered no rate-match area");
-
-        // The area is set up with the link, a moment before the first cycle delivers anything.
-        for (var i = 0; i < 60 && Interlocked.Read(ref receivedSamples) == 0; i++)
-            await Task.Delay(50, cts.Token);
 
         Assert.IsTrue(
             match!.Value.Rate is > 0.5 and < 2.0,
@@ -219,7 +207,7 @@ public sealed class SyncLoopTests
 
         // And the resampler was actually carrying audio while it reported that.
         Assert.IsTrue(
-            Interlocked.Read(ref receivedSamples) > 0,
+            receivedSamples.Value > 0,
             "the rate-match area was reported on a stream through which nothing flowed"
         );
     }
@@ -444,6 +432,8 @@ public sealed class SyncLoopTests
         // A finite ramp: the producer emits values 1..N and then silence.
         const long total = 40000;
         long produced = 0;
+        var rampDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tailSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         await using var output = new PipeWireAudioOutput(
             ctx,
@@ -462,6 +452,8 @@ public sealed class SyncLoopTests
             {
                 long n = Interlocked.Increment(ref produced);
                 floats[i] = n <= total ? n : 0f;
+                if (n == total)
+                    rampDone.TrySetResult();
             }
 
             return samples.Length;
@@ -482,6 +474,8 @@ public sealed class SyncLoopTests
             {
                 if (v > Volatile.Read(ref highestSeen))
                     Volatile.Write(ref highestSeen, v);
+                if (v >= total - 4096)
+                    tailSeen.TrySetResult();
             }
         };
 
@@ -495,8 +489,7 @@ public sealed class SyncLoopTests
         await capture.WaitForStreamingAsync(cts.Token);
 
         // Wait until the producer has emitted the whole ramp, then drain.
-        for (var i = 0; i < 200 && Interlocked.Read(ref produced) < total; i++)
-            await Task.Delay(20, cts.Token);
+        _ = await rampDone.Task.Within(TimeSpan.FromSeconds(4), cts.Token);
 
         Assert.IsTrue(
             Interlocked.Read(ref produced) >= total,
@@ -505,8 +498,8 @@ public sealed class SyncLoopTests
 
         await output.DrainAsync(cts.Token).WaitAsync(TimeSpan.FromSeconds(15), cts.Token);
 
-        // Give the consumer a moment to be handed what the drain flushed.
-        await Task.Delay(200, cts.Token);
+        // The consumer is handed what the drain flushed on its next cycles.
+        _ = await tailSeen.Task.Within(TimeSpan.FromSeconds(2), cts.Token);
 
         float seen = Volatile.Read(ref highestSeen);
 

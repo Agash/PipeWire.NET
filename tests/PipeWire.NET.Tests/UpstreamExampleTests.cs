@@ -36,21 +36,6 @@ public sealed class UpstreamExampleTests
     private const int Width = 320;
     private const int Height = 240;
 
-    private static async Task<uint> WaitForNodeIdAsync(
-        PipeWireVideoOutput output,
-        CancellationToken ct
-    )
-    {
-        for (var i = 0; i < 60; i++)
-        {
-            if (output.NodeId is { } id)
-                return id;
-            await Task.Delay(50, ct);
-        }
-
-        throw new InvalidOperationException("the producer was never given a node id");
-    }
-
     /// <summary>
     /// <c>video-src-reneg</c>: a producer offers a new size mid-stream and the stream survives it.
     /// </summary>
@@ -89,18 +74,18 @@ public sealed class UpstreamExampleTests
         };
 
         output.Connect(autoConnect: false);
-        uint nodeId = await WaitForNodeIdAsync(output, cts.Token);
+        uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
-        var received = 0;
+        var received = new Tally();
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-srcreneg-sink");
-        capture.FrameReady += (_, _) => Interlocked.Increment(ref received);
+        capture.FrameReady += (_, _) => received.Increment();
         capture.Connect(nodeId, [PixelFormat.Bgra]);
         await capture.WaitForStreamingAsync(cts.Token);
 
-        await Task.Delay(400, cts.Token);
-        Assert.IsTrue(Volatile.Read(ref received) > 0, "nothing flowed before the renegotiation");
+        _ = await received.AtLeast(1).Within(TimeSpan.FromSeconds(5), cts.Token);
+        Assert.IsTrue(received.Value > 0, "nothing flowed before the renegotiation");
 
-        Volatile.Write(ref received, 0);
+        int beforeOffer = received.Value;
 
         PixelFormat[] formats = [PixelFormat.Bgra];
         Assert.IsTrue(
@@ -108,10 +93,10 @@ public sealed class UpstreamExampleTests
             "the producer's renegotiation offer was refused outright"
         );
 
-        await Task.Delay(600, cts.Token);
+        _ = await received.AtLeast(beforeOffer + 1).Within(TimeSpan.FromSeconds(5), cts.Token);
 
         Assert.IsTrue(
-            Volatile.Read(ref received) > 0,
+            received.Value > beforeOffer,
             "the consumer stopped receiving after the producer offered a new format"
         );
 
@@ -154,9 +139,9 @@ public sealed class UpstreamExampleTests
         };
 
         output.Connect(autoConnect: false);
-        uint nodeId = await WaitForNodeIdAsync(output, cts.Token);
+        uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
-        var sizes = new List<(int W, int H)>();
+        var sizes = new Collected<(int W, int H)>();
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-srcfixate-sink");
         capture.FrameReady += (_, f) =>
         {
@@ -176,7 +161,7 @@ public sealed class UpstreamExampleTests
             "the producer's range offer was refused outright"
         );
 
-        await Task.Delay(800, cts.Token);
+        _ = await sizes.Reaching(32).Within(TimeSpan.FromSeconds(5), cts.Token);
 
         (int W, int H)[] seen;
         lock (sizes)
@@ -249,7 +234,7 @@ public sealed class UpstreamExampleTests
 
         output.Connect(autoConnect: false);
 
-        var received = new List<float>();
+        var received = new Collected<float>();
         await using var capture = new PipeWireAudioCapture(ctx, $"{nodeName}-sink");
         capture.FrameReady += (_, f) =>
         {
@@ -275,7 +260,7 @@ public sealed class UpstreamExampleTests
         );
 
         await capture.WaitForStreamingAsync(cts.Token);
-        await Task.Delay(700, cts.Token);
+        _ = await received.Reaching(2001).Within(TimeSpan.FromSeconds(5), cts.Token);
 
         float[] got;
         lock (received)
@@ -345,9 +330,9 @@ public sealed class UpstreamExampleTests
         };
 
         output.Connect(autoConnect: false);
-        uint nodeId = await WaitForNodeIdAsync(output, cts.Token);
+        uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
-        var sizes = new List<(int W, int H)>();
+        var sizes = new Collected<(int W, int H)>();
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-playfixate-sink");
         capture.FrameReady += (_, f) =>
         {
@@ -362,7 +347,7 @@ public sealed class UpstreamExampleTests
         capture.Connect(nodeId, [PixelFormat.Bgra], preferredWidth: 640, preferredHeight: 360);
 
         await capture.WaitForStreamingAsync(cts.Token);
-        await Task.Delay(700, cts.Token);
+        _ = await sizes.Reaching(16).Within(TimeSpan.FromSeconds(5), cts.Token);
 
         (int W, int H)[] seen;
         lock (sizes)
@@ -448,7 +433,7 @@ public sealed class UpstreamExampleTests
         await using PipeWireFilter play = PipeWireFilter.Create(ctx, "pwnet_dsp_play");
         PipeWireFilterPort playIn = play.AddVideoPort(PipeWirePortDirection.In, "input");
 
-        var read = 0;
+        var read = new Tally();
         var nonUniform = 0;
         float lastRead = 0;
         var pixelCounts = new List<int>();
@@ -486,7 +471,7 @@ public sealed class UpstreamExampleTests
             }
 
             Volatile.Write(ref lastRead, first);
-            Interlocked.Increment(ref read);
+            read.Increment();
         };
 
         await source.ConnectAsync(PipeWireFilterFlags.RtProcess, cts.Token);
@@ -496,24 +481,22 @@ public sealed class UpstreamExampleTests
         uint playNode = await play.WaitForNodeIdAsync(cts.Token);
 
         // Both ports have to reach the registry before they can be linked.
-        PipeWirePort? outPort = null,
-            inPort = null;
-        for (var i = 0; i < 100 && (outPort is null || inPort is null); i++)
-        {
-            PipeWireGraphSnapshot g = reg.Current;
-            outPort ??= g.Ports.FirstOrDefault(p =>
-                p.NodeId == srcNode && p.PortDirection == PipeWirePortDirection.Out
-            );
-            inPort ??= g.Ports.FirstOrDefault(p =>
-                p.NodeId == playNode && p.PortDirection == PipeWirePortDirection.In
-            );
-
-            if (outPort is null || inPort is null)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsNotNull(outPort, "the source filter's video port never reached the graph");
-        Assert.IsNotNull(inPort, "the consuming filter's video port never reached the graph");
+        PipeWirePort outPort = await reg.WaitForAsync(
+                g =>
+                    g.Ports.FirstOrDefault(p =>
+                        p.NodeId == srcNode && p.PortDirection == PipeWirePortDirection.Out
+                    ),
+                cts.Token
+            )
+            .OrFail("the source filter's video port never reached the graph");
+        PipeWirePort inPort = await reg.WaitForAsync(
+                g =>
+                    g.Ports.FirstOrDefault(p =>
+                        p.NodeId == playNode && p.PortDirection == PipeWirePortDirection.In
+                    ),
+                cts.Token
+            )
+            .OrFail("the consuming filter's video port never reached the graph");
 
         Assert.AreEqual(
             "32 bit float RGBA video",
@@ -532,18 +515,14 @@ public sealed class UpstreamExampleTests
         source.SetActive(true);
         play.SetActive(true);
 
-        for (var i = 0; i < 80 && Volatile.Read(ref read) < 4; i++)
-            await Task.Delay(50, cts.Token);
+        _ = await read.AtLeast(4).Within(TimeSpan.FromMilliseconds(4000), cts.Token);
 
         Assert.IsTrue(
             Volatile.Read(ref written) > 0,
             "the source filter's process callback never got a video buffer to write into"
         );
 
-        Assert.IsTrue(
-            Volatile.Read(ref read) >= 4,
-            $"only {Volatile.Read(ref read)} cycles carried pixels across the link"
-        );
+        Assert.IsTrue(read.Value >= 4, $"only {read.Value} cycles carried pixels across the link");
 
         Assert.AreEqual(
             0,
@@ -587,11 +566,11 @@ public sealed class UpstreamExampleTests
         play.SetActive(false);
         source.SetActive(false);
 
-        int quiet = Volatile.Read(ref read);
+        int quiet = read.Value;
         for (var i = 0; i < 40; i++)
         {
             await Task.Delay(50, cts.Token);
-            int now = Volatile.Read(ref read);
+            int now = read.Value;
             if (now == quiet)
                 break;
             quiet = now;
@@ -599,7 +578,7 @@ public sealed class UpstreamExampleTests
 
         Assert.AreEqual(
             quiet,
-            Volatile.Read(ref read),
+            read.Value,
             "the consuming filter is still being scheduled after SetActive(false)"
         );
 
@@ -660,7 +639,7 @@ public sealed class UpstreamExampleTests
         await using PipeWireFilter sink = PipeWireFilter.Create(ctx, "pwnet_midi_sink");
         PipeWireFilterPort sinkIn = sink.AddUmpPort(PipeWirePortDirection.In, "input");
 
-        var received = new List<(uint Offset, byte[] Data)>();
+        var received = new Collected<(uint Offset, byte[] Data)>();
         sink.ProcessCallback = (_, _, in _) =>
         {
             SpaSequence? seq = sinkIn.ReadEvents();
@@ -685,40 +664,30 @@ public sealed class UpstreamExampleTests
         uint srcNode = await source.WaitForNodeIdAsync(cts.Token);
         uint sinkNode = await sink.WaitForNodeIdAsync(cts.Token);
 
-        PipeWirePort? outPort = null,
-            inPort = null;
-        for (var i = 0; i < 100 && (outPort is null || inPort is null); i++)
-        {
-            PipeWireGraphSnapshot g = reg.Current;
-            outPort ??= g.Ports.FirstOrDefault(p =>
-                p.NodeId == srcNode && p.PortDirection == PipeWirePortDirection.Out
-            );
-            inPort ??= g.Ports.FirstOrDefault(p =>
-                p.NodeId == sinkNode && p.PortDirection == PipeWirePortDirection.In
-            );
+        PipeWirePort outPort = await reg.WaitForAsync(
+                g =>
+                    g.Ports.FirstOrDefault(p =>
+                        p.NodeId == srcNode && p.PortDirection == PipeWirePortDirection.Out
+                    ),
+                cts.Token
+            )
+            .OrFail("the MIDI source port never reached the graph");
+        PipeWirePort inPort = await reg.WaitForAsync(
+                g =>
+                    g.Ports.FirstOrDefault(p =>
+                        p.NodeId == sinkNode && p.PortDirection == PipeWirePortDirection.In
+                    ),
+                cts.Token
+            )
+            .OrFail("the MIDI sink port never reached the graph");
 
-            if (outPort is null || inPort is null)
-                await Task.Delay(50, cts.Token);
-        }
-
-        Assert.IsNotNull(outPort, "the MIDI source port never reached the graph");
-        Assert.IsNotNull(inPort, "the MIDI sink port never reached the graph");
-
-        PipeWireLink link = await reg.CreateLink(outPort!, inPort!).ExecuteAsync(cts.Token);
+        PipeWireLink link = await reg.CreateLink(outPort, inPort).ExecuteAsync(cts.Token);
         Assert.IsNotNull(link, "the two MIDI ports could not be linked");
 
         source.SetActive(true);
         sink.SetActive(true);
 
-        for (var i = 0; i < 100; i++)
-        {
-            lock (received)
-            {
-                if (received.Count >= 4)
-                    break;
-            }
-            await Task.Delay(50, cts.Token);
-        }
+        _ = await received.Reaching(4).Within(TimeSpan.FromMilliseconds(5000), cts.Token);
 
         (uint Offset, byte[] Data)[] got;
         lock (received)
@@ -796,15 +765,14 @@ public sealed class UpstreamExampleTests
         uint nodeId = await filter.WaitForNodeIdAsync(cts.Token);
 
         // All five have to reach the registry before anything can link to them.
-        List<PipeWirePort> ports = [];
-        for (var i = 0; i < 100 && ports.Count < 5; i++)
-        {
-            ports = [.. reg.Current.Ports.Where(p => p.NodeId == nodeId)];
-            if (ports.Count < 5)
-                await Task.Delay(100, cts.Token);
-        }
-
-        Assert.AreEqual(5, ports.Count, "not every DSP port reached the graph");
+        PipeWirePort[] ports = await reg.WaitForAsync(
+                g =>
+                    g.Ports.Where(p => p.NodeId == nodeId).ToArray() is { Length: 5 } all
+                        ? all
+                        : null,
+                cts.Token
+            )
+            .OrFail("not every DSP port reached the graph");
 
         Dictionary<string, string?> byName = ports.ToDictionary(
             p =>
@@ -831,11 +799,18 @@ public sealed class UpstreamExampleTests
             p.Properties.GetValueOrDefault(PipeWireKeys.PW_KEY_PORT_NAME) == "ump_in"
         );
         await using PipeWirePortProxy bound = reg.BindPort(ump.PortId);
-        for (var i = 0; i < 50 && ump.Properties.GetValueOrDefault("control.ump") is null; i++)
-        {
-            await Task.Delay(100, cts.Token);
-            ump = reg.Current.GetPort(ump.Id) ?? ump;
-        }
+        uint umpId = ump.Id;
+        ump =
+            await reg.WaitForAsync(
+                    g =>
+                        g.GetPort(umpId) is { } p
+                        && p.Properties.GetValueOrDefault("control.ump") is not null
+                            ? p
+                            : null,
+                    cts.Token
+                )
+                .OrDefaultWithin(TimeSpan.FromSeconds(5), cts.Token)
+            ?? ump;
 
         // The daemon only records the distinction from 1.6.8; before that a UMP port really is
         // announced as plain MIDI and there is nothing on the wire to assert against. The rest of

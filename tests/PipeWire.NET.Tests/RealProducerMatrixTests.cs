@@ -150,7 +150,7 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
             "Audio/Source"
         );
 
-        var buffers = 0;
+        var buffers = new Tally();
         var ragged = 0;
         AudioSampleFormat? negotiated = null;
         int seenRate = 0,
@@ -159,7 +159,7 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
         await using var capture = new PipeWireAudioCapture(ctx, $"pwnet-aud-consumer-{node}");
         capture.FrameReady += (_, frame) =>
         {
-            Interlocked.Increment(ref buffers);
+            buffers.Increment();
             negotiated ??= frame.Format;
             seenRate = frame.SampleRate;
             seenChannels = frame.Channels;
@@ -173,7 +173,7 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
         // These are preferences, not observations: PipeWire converts, so asking for the
         // producer's own shape is what proves the request is honoured end to end.
         capture.Connect(src.NodeId, rate, channels, expected);
-        await WaitForAsync(() => Volatile.Read(ref buffers) >= 3, cts.Token);
+        await buffers.AtLeast(3).WaitAsync(TimeSpan.FromSeconds(20), cts.Token);
 
         Assert.IsTrue(buffers > 0, $"{gstFormat} {rate}Hz {channels}ch: no audio arrived");
         Assert.AreEqual(expected, negotiated);
@@ -200,7 +200,7 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
         await using var registry = new PipeWireRegistry(ctx);
         await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-        var frames = 0;
+        var frames = new Tally();
         var states = new List<PipeWireStreamState>();
 
         // node.dont-fallback: once its producer is gone WirePlumber would otherwise move the
@@ -211,11 +211,14 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
         {
             ExtraProperties = new Dictionary<string, string> { ["node.dont-fallback"] = "true" },
         };
-        capture.FrameReady += (_, _) => Interlocked.Increment(ref frames);
+        capture.FrameReady += (_, _) => frames.Increment();
+        var errored = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         capture.StateChanged += (_, _, s) =>
         {
             lock (states)
                 states.Add(s);
+            if (s == PipeWireStreamState.Error)
+                errored.TrySetResult();
         };
 
         uint nodeId;
@@ -229,24 +232,19 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
             nodeId = src.NodeId;
 
             capture.Connect(nodeId, [PixelFormat.Bgra]);
-            await WaitForAsync(() => Volatile.Read(ref frames) >= 3, cts.Token);
+            await frames.AtLeast(3).WaitAsync(TimeSpan.FromSeconds(20), cts.Token);
         } // the producer is killed here
 
-        int atDeath = Volatile.Read(ref frames);
+        int atDeath = frames.Value;
         Assert.IsTrue(atDeath > 0, "no frames arrived before the producer was killed");
-        await WaitForAsync(() => registry.Current.GetNode(nodeId) is null, cts.Token);
+        await registry
+            .WaitUntilAsync(g => g.GetNode(nodeId) is null, cts.Token)
+            .WaitAsync(TimeSpan.FromSeconds(20), cts.Token);
 
         // The consumer must survive its producer, and must be told rather than left hanging: with
         // no fallback allowed, the session manager's answer to the lost target is a stream error,
         // and that has to reach this stream's state.
-        await WaitForAsync(
-            () =>
-            {
-                lock (states)
-                    return states.Contains(PipeWireStreamState.Error);
-            },
-            cts.Token
-        );
+        await errored.Task.WaitAsync(TimeSpan.FromSeconds(20), cts.Token);
         lock (states)
         {
             int streaming = states.IndexOf(PipeWireStreamState.Streaming);
@@ -278,17 +276,18 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
             "Video/Source"
         );
 
-        var a = 0;
-        var b = 0;
+        var a = new Tally();
+        var b = new Tally();
         await using var first = new PipeWireVideoCapture(ctx, "pwnet-fanout-a");
         await using var second = new PipeWireVideoCapture(ctx, "pwnet-fanout-b");
-        first.FrameReady += (_, _) => Interlocked.Increment(ref a);
-        second.FrameReady += (_, _) => Interlocked.Increment(ref b);
+        first.FrameReady += (_, _) => a.Increment();
+        second.FrameReady += (_, _) => b.Increment();
 
         first.Connect(src.NodeId, [PixelFormat.Bgra]);
         second.Connect(src.NodeId, [PixelFormat.Bgra]);
 
-        await WaitForAsync(() => Volatile.Read(ref a) >= 3 && Volatile.Read(ref b) >= 3, cts.Token);
+        await Task.WhenAll(a.AtLeast(3), b.AtLeast(3))
+            .WaitAsync(TimeSpan.FromSeconds(20), cts.Token);
 
         Assert.IsTrue(a >= 3, $"first consumer only saw {a} frames");
         Assert.IsTrue(b >= 3, $"second consumer only saw {b} frames");
@@ -313,16 +312,16 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
         );
 
         // FrameReady is raised from the data thread; an escaping exception there aborts the process.
-        var seen = 0;
+        var seen = new Tally();
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-badconsumer-c");
         capture.FrameReady += (_, _) =>
         {
-            Interlocked.Increment(ref seen);
+            seen.Increment();
             throw new InvalidOperationException("hostile frame handler");
         };
 
         capture.Connect(src.NodeId, [PixelFormat.Bgra]);
-        await WaitForAsync(() => Volatile.Read(ref seen) >= 5, cts.Token);
+        await seen.AtLeast(5).WaitAsync(TimeSpan.FromSeconds(20), cts.Token);
 
         Assert.IsTrue(
             seen >= 5,
@@ -340,7 +339,7 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
         int Height
     )> CaptureVideoAsync(PipeWireContext ctx, uint nodeId, PixelFormat want, CancellationToken ct)
     {
-        var frames = 0;
+        var frames = new Tally();
         var shortFrames = 0;
         PixelFormat? negotiated = null;
         int width = 0,
@@ -349,7 +348,7 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
         await using var capture = new PipeWireVideoCapture(ctx, $"pwnet-consumer-{nodeId}");
         capture.FrameReady += (_, frame) =>
         {
-            Interlocked.Increment(ref frames);
+            frames.Increment();
             negotiated ??= frame.Format;
             width = frame.Width;
             height = frame.Height;
@@ -363,20 +362,8 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
         };
 
         capture.Connect(nodeId, [want]);
-        await WaitForAsync(() => Volatile.Read(ref frames) >= 3, ct);
+        await frames.AtLeast(3).WaitAsync(TimeSpan.FromSeconds(20), ct);
         return (frames, shortFrames, negotiated, width, height);
-    }
-
-    private static async Task WaitForAsync(Func<bool> until, CancellationToken ct)
-    {
-        var sw = Stopwatch.StartNew();
-        while (!until())
-        {
-            ct.ThrowIfCancellationRequested();
-            if (sw.Elapsed > TimeSpan.FromSeconds(20))
-                throw new TimeoutException("condition never held");
-            await Task.Delay(25, ct);
-        }
     }
 }
 

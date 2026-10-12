@@ -258,15 +258,11 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         await using var readerRegistry = new PipeWireRegistry(reader);
         await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
 
-        PipeWireMetadataProxy? store = null;
-        long appearUntil = Environment.TickCount64 + 20_000;
-        while (store is null && Environment.TickCount64 < appearUntil)
-        {
-            await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
-            store = readerRegistry.BindMetadata(name);
-            if (store is null)
-                await Task.Delay(TimeSpan.FromMilliseconds(100), cts.Token);
-        }
+        PipeWireMetadataProxy? store = await readerRegistry.BindMetadataWhenPresentAsync(
+            name,
+            TimeSpan.FromSeconds(20),
+            cts.Token
+        );
 
         if (store is null)
             Assert.Inconclusive("the served store never appeared in the graph.");
@@ -307,13 +303,9 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         CancellationToken cancellationToken
     )
     {
-        for (int attempt = 0; attempt < 150; attempt++)
-        {
-            if (provider.Get(key) == expected)
-                return;
-
-            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
-        }
+        _ = await provider
+            .UntilEntry(key, v => v == expected)
+            .Within(TimeSpan.FromSeconds(15), cancellationToken);
 
         Assert.AreEqual(
             expected,
@@ -348,14 +340,9 @@ public sealed class MetadataProviderTests : PipeWireTestBase
         using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, name);
         await provider.ReadyAsync(cts.Token);
 
-        PipeWireMetadata? store = null;
-        for (var i = 0; i < 100 && store is null; i++)
-        {
-            await registry.WaitForInitialEnumerationAsync(cts.Token);
-            store = registry.Current.GetMetadata(name);
-            if (store is null)
-                await Task.Delay(50, cts.Token);
-        }
+        PipeWireMetadata? store = await registry
+            .WaitForAsync(g => g.GetMetadata(name), cts.Token)
+            .OrDefaultWithin(TimeSpan.FromSeconds(5), cts.Token);
 
         Assert.IsNotNull(store, "the served store never reached the registry");
 

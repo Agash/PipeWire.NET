@@ -36,19 +36,6 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
         return (context, registry);
     }
 
-    private static async Task<PipeWireGraphSnapshot> WaitForAsync(
-        PipeWireRegistry registry,
-        Func<PipeWireGraphSnapshot, bool> until,
-        CancellationToken cancellationToken
-    )
-    {
-        await foreach (PipeWireGraphSnapshot graph in registry.WatchAsync(cancellationToken))
-            if (until(graph))
-                return graph;
-
-        throw new InvalidOperationException("the snapshot stream ended before the condition held");
-    }
-
     [TestMethod]
     public async Task EveryEventHandlerThrowing_DoesNotStopTheGraph()
     {
@@ -99,8 +86,7 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
                 cts.Token
             );
 
-            PipeWireGraphSnapshot ready = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot ready = await registry.WaitUntilAsync(
                 g =>
                     g.GetPortsForNode(a.NodeId).Length == 4
                     && g.GetPortsForNode(b.NodeId).Length == 4,
@@ -123,8 +109,7 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
             await registry.DestroyGlobalAsync(a.NodeId, cts.Token);
             await registry.DestroyGlobalAsync(b.NodeId, cts.Token);
 
-            PipeWireGraphSnapshot end = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot end = await registry.WaitUntilAsync(
                 g =>
                     g.GetNode(a.NodeId) is null
                     && g.GetNode(b.NodeId) is null
@@ -169,8 +154,7 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
                 "pwnet_consistent",
                 cts.Token
             );
-            PipeWireGraphSnapshot graph = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
                 g => g.GetPortsForNode(node.NodeId).Length == 4,
                 cts.Token
             );
@@ -214,8 +198,7 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
                 "pwnet_starve",
                 cts.Token
             );
-            await WaitForAsync(
-                registry,
+            await registry.WaitUntilAsync(
                 g => g.GetPortsForNode(node.NodeId).Length == 4,
                 cts.Token
             );
@@ -253,8 +236,7 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
                 "pwnet_watchstarve",
                 cts.Token
             );
-            PipeWireGraphSnapshot graph = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
                 g => g.GetPortsForNode(node.NodeId).Length == 4,
                 cts.Token
             );
@@ -337,8 +319,7 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
         await using (registry)
         {
             PipeWireNode node = await registry.CreateVirtualSinkAsync("D", "pwnet_dirs", cts.Token);
-            PipeWireGraphSnapshot graph = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
                 g => g.GetPortsForNode(node.NodeId).Length == 4,
                 cts.Token
             );
@@ -381,8 +362,7 @@ public sealed class RegistryRobustnessTests : PipeWireTestBase
                 "pwnet_nullports",
                 cts.Token
             );
-            PipeWireGraphSnapshot graph = await WaitForAsync(
-                registry,
+            PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
                 g => g.GetPortsForNode(node.NodeId).Length == 4,
                 cts.Token
             );

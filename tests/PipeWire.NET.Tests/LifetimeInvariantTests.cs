@@ -377,10 +377,13 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
             samples.Clear();
             return samples.Length;
         };
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         output.StateChanged += (_, _, now) =>
         {
             lock (states)
                 states.Add(now);
+            if (now is PipeWireStreamState.Error or PipeWireStreamState.Unconnected)
+                ended.TrySetResult();
         };
 
         // A sink of our own to play into, rather than whatever the session happens to route to.
@@ -399,16 +402,7 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
 
         await registry.DestroyGlobalAsync(nodeId, cts.Token);
 
-        bool reported = false;
-        for (var i = 0; i < 100 && !reported; i++)
-        {
-            lock (states)
-                reported = states.Any(s =>
-                    s is PipeWireStreamState.Error or PipeWireStreamState.Unconnected
-                );
-            if (!reported)
-                await Task.Delay(50, cts.Token);
-        }
+        bool reported = await ended.Task.Within(TimeSpan.FromSeconds(5), cts.Token);
 
         Assert.IsTrue(reported, "the stream never reported that its node was destroyed");
 

@@ -47,17 +47,11 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
         CancellationToken cancellationToken
     )
     {
-        while (true)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            await registry.WaitForInitialEnumerationAsync(cancellationToken);
-
-            ImmutableArray<PipeWirePort> ports = registry.Current.GetPortsForNode(nodeId);
-            if (ports.Length >= expected)
-                return ports;
-
-            await Task.Delay(TimeSpan.FromMilliseconds(25), cancellationToken);
-        }
+        PipeWireGraphSnapshot graph = await registry.WaitUntilAsync(
+            g => g.GetPortsForNode(nodeId).Length >= expected,
+            cancellationToken
+        );
+        return graph.GetPortsForNode(nodeId);
     }
 
     [TestMethod]
@@ -74,9 +68,12 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             // The shape a streaming app builds: several sources feeding one submix, each at its own
             // level, the submix at a master level.
             string submixName = Unique("pwnet_submix");
+            // The levels below are the application's: the session manager is asked not to restore
+            // its own over them, which it would do whenever it got round to noticing the nodes.
             PipeWireNode submix = await registry
                 .CreateVirtualSink("Submix")
                 .WithName(submixName)
+                .WithoutRestoredProps()
                 .ExecuteAsync(cts.Token);
 
             var sources = new List<PipeWireNode>();
@@ -86,6 +83,7 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
                     await registry
                         .CreateVirtualSink($"Source{i}")
                         .WithName(Unique($"pwnet_src{i}"))
+                        .WithoutRestoredProps()
                         .ExecuteAsync(cts.Token)
                 );
             }
@@ -396,17 +394,10 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
 
             await registry.WaitForInitialEnumerationAsync(cts.Token);
 
-            PipeWireNode? produced = null;
-            while (produced is null)
-            {
-                cts.Token.ThrowIfCancellationRequested();
-                produced = registry.Current.Nodes.FirstOrDefault(n => n.NodeName == name);
-                if (produced is null)
-                {
-                    await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
-                    await registry.WaitForInitialEnumerationAsync(cts.Token);
-                }
-            }
+            PipeWireNode produced = await registry.WaitForAsync(
+                g => g.Nodes.FirstOrDefault(n => n.NodeName == name),
+                cts.Token
+            );
 
             // It is a node like any other: identifiable, with ports. The ports arrive a moment after
             // the node, and capability is answered from them - so waiting for them comes first.
@@ -489,17 +480,14 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             {
                 await defaults.ReadyAsync(cts.Token);
 
-                // Polled, not read once. The "default" store is served by the session manager, so its
-                // entries travel wireplumber -> daemon -> here and are not ordered against our own
-                // core sync: ReadyAsync proves the bind was processed, not that the contents have
-                // arrived. Reading once turns that race into a skip.
-                string? sinkName = null;
-                for (int i = 0; i < 50 && sinkName is null; i++)
-                {
-                    sinkName = defaults.DefaultAudioSink?.NameValue;
-                    if (sinkName is null)
-                        await Task.Delay(100, cts.Token);
-                }
+                // Waited for, not read once. The "default" store is served by the session manager,
+                // so its entries travel wireplumber -> daemon -> here and are not ordered against
+                // our own core sync: ReadyAsync proves the bind was processed, not that the contents
+                // have arrived. Reading once turns that race into a skip.
+                _ = await defaults
+                    .UntilEntry("default.audio.sink", v => v is not null)
+                    .Within(TimeSpan.FromSeconds(5), cts.Token);
+                string? sinkName = defaults.DefaultAudioSink?.NameValue;
 
                 if (sinkName is null)
                     Assert.Inconclusive("this session has no default sink set.");
@@ -596,20 +584,16 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
         CancellationToken cancellationToken
     )
     {
-        // Generous on purpose: a write returns when the daemon has processed it, not when the
-        // node has applied it, and on a session busy retrying dead ALSA devices that lag is
-        // seconds rather than milliseconds. Exiting early on a match keeps the fast case fast.
-        float last = float.NaN;
-        for (int attempt = 0; attempt < 80; attempt++)
-        {
-            last =
-                (await node.GetVolumeAsync(cancellationToken).ConfigureAwait(false)) ?? float.NaN;
-            if (Math.Abs(last - want) <= 0.01f)
-                return last;
-            await Task.Delay(50, cancellationToken).ConfigureAwait(false);
-        }
-
-        return last;
+        // Generous on purpose: on a session busy retrying dead ALSA devices the lag between the
+        // write and the node applying it is seconds rather than milliseconds.
+        return await node.SettleAsync(
+                SpaParamType.Props,
+                async ct => (await node.GetVolumeAsync(ct).ConfigureAwait(false)) ?? float.NaN,
+                v => Math.Abs(v - want) <= 0.01f,
+                TimeSpan.FromSeconds(10),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc cref="SettledVolumeAsync"/>
@@ -619,18 +603,20 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
         CancellationToken cancellationToken
     )
     {
-        float last = float.NaN;
-        for (int attempt = 0; attempt < 80; attempt++)
-        {
-            ImmutableArray<float> volumes = await node.GetChannelVolumesAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            last = volumes.IsDefaultOrEmpty ? float.NaN : volumes[0];
-            if (Math.Abs(last - want) <= 0.01f)
-                return last;
-            await Task.Delay(50, cancellationToken).ConfigureAwait(false);
-        }
-
-        return last;
+        // Generous on purpose: on a session busy retrying dead ALSA devices the lag between the
+        // write and the node applying it is seconds rather than milliseconds.
+        return await node.SettleAsync(
+                SpaParamType.Props,
+                async ct =>
+                {
+                    ImmutableArray<float> volumes = await node.GetChannelVolumesAsync(ct)
+                        .ConfigureAwait(false);
+                    return volumes.IsDefaultOrEmpty ? float.NaN : volumes[0];
+                },
+                v => Math.Abs(v - want) <= 0.01f,
+                TimeSpan.FromSeconds(10),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
     }
 }
