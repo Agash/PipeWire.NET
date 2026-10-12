@@ -1393,6 +1393,7 @@ PipeWire.NET.Media.PipeWireVideoCapture.TriggerProcessAndWaitAsync(CancellationT
 PipeWire.NET.Media.PipeWireVideoCapture.TryGetBorrowedFrame(BorrowedVideoFrame&)
 PipeWire.NET.Media.PipeWireVideoCapture.TryGetFrame(PulledVideoFrame&)
 PipeWire.NET.Media.PipeWireVideoCapture.UpdateProperties(IReadOnlyDictionary<String, String>)
+PipeWire.NET.Media.PipeWireVideoCapture.WaitAcquireOnGpu : Boolean
 PipeWire.NET.Media.PipeWireVideoCapture.WaitForNodeIdAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireVideoCapture.WaitForStreamingAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput
@@ -1646,9 +1647,10 @@ PipeWire.NET.Media.VideoRegion.Width : UInt32
 PipeWire.NET.Media.VideoRegion.X : Int32
 PipeWire.NET.Media.VideoRegion.Y : Int32
 PipeWire.NET.Media.VideoSyncTimeline
-PipeWire.NET.Media.VideoSyncTimeline..ctor(SpaMetaSyncTimelineFlags, UInt64, UInt64)
+PipeWire.NET.Media.VideoSyncTimeline..ctor(SpaMetaSyncTimelineFlags, UInt64, UInt64, Int32)
+PipeWire.NET.Media.VideoSyncTimeline.AcquireFd : Int32
 PipeWire.NET.Media.VideoSyncTimeline.AcquirePoint : UInt64
-PipeWire.NET.Media.VideoSyncTimeline.Deconstruct(SpaMetaSyncTimelineFlags&, UInt64&, UInt64&)
+PipeWire.NET.Media.VideoSyncTimeline.Deconstruct(SpaMetaSyncTimelineFlags&, UInt64&, UInt64&, Int32&)
 PipeWire.NET.Media.VideoSyncTimeline.Equals(Object)
 PipeWire.NET.Media.VideoSyncTimeline.Equals(VideoSyncTimeline)
 PipeWire.NET.Media.VideoSyncTimeline.Flags : SpaMetaSyncTimelineFlags

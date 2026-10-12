@@ -161,6 +161,16 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         Connect(source.NodeId, preferredFormats, cancellationToken: cancellationToken);
     }
 
+    /// <summary>
+    /// Whether the application waits for each explicit-sync frame's acquire point on its own GPU: frames
+    /// are handed on as they arrive, before the producer's GPU has finished writing them, with
+    /// <see cref="VideoSyncTimeline.AcquireFd"/> and <see cref="VideoSyncTimeline.AcquirePoint"/> naming
+    /// what to wait for. Off, the capture waits on the CPU before handing a frame on. The release point is
+    /// signalled when the frame is let go either way, so a GPU reader lets it go once its work has run.
+    /// Set before connecting.
+    /// </summary>
+    public bool WaitAcquireOnGpu { get; set; }
+
     /// <summary>Connects to a source by node id (default: auto-select).</summary>
     /// <param name="targetNodeId">Source node id, or <see cref="AnyNode"/> to auto-select.</param>
     /// <param name="preferredFormats">Preferred pixel formats in priority order.</param>
@@ -1055,6 +1065,11 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         int damageCount = SpaFormatPod.ReadDamage(spaBuf, damage);
         bool hasCursor = SpaFormatPod.TryFindCursor(spaBuf, out VideoCursor cursor);
 
+        bool syncFds = SpaFormatPod.TryFindSyncDataFds(
+            spaBuf,
+            out int acquireFd,
+            out int releaseFd
+        );
         var frame = new VideoFrame(
             pixels,
             d->chunk->stride,
@@ -1074,7 +1089,12 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
             modifier: fdBacked ? fmt.Modifier : DrmFormatModifier.Invalid,
             planes: planes[..planeCount],
             syncTimeline: SpaFormatPod.TryFindSyncTimeline(spaBuf, out SpaFormatPod.SyncTimeline t)
-                ? new VideoSyncTimeline(t.Flags, t.AcquirePoint, t.ReleasePoint)
+                ? new VideoSyncTimeline(
+                    t.Flags,
+                    t.AcquirePoint,
+                    t.ReleasePoint,
+                    WaitAcquireOnGpu && syncFds ? acquireFd : -1
+                )
                 : null,
             crop: SpaFormatPod.FindCrop(spaBuf),
             transform: SpaFormatPod.FindTransform(spaBuf),
@@ -1097,15 +1117,12 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         // is upstream video-play-sync's order: it signals after it has rendered, not when the
         // buffer arrived.
         SyncRelease release = default;
-        if (
-            frame.SyncTimeline is { } timeline
-            && SpaFormatPod.TryFindSyncDataFds(spaBuf, out int acquireFd, out int releaseFd)
-            && acquireFd >= 0
-            && releaseFd >= 0
-        )
+        if (frame.SyncTimeline is { } timeline && syncFds && acquireFd >= 0 && releaseFd >= 0)
         {
+            // A reader that waits on its GPU gets the frame now, with the acquire point to wait for.
             if (
                 timeline.AcquirePoint != 0
+                && !WaitAcquireOnGpu
                 && WaitAcquire(acquireFd, timeline.AcquirePoint) is { Reached: false } missed
             )
             {

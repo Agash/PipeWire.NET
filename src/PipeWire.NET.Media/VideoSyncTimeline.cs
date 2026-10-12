@@ -14,10 +14,16 @@ namespace PipeWire.NET.Media;
 /// </param>
 /// <param name="AcquirePoint">The point to wait for before reading the frame.</param>
 /// <param name="ReleasePoint">The point to signal once the frame is no longer being read.</param>
+/// <param name="AcquireFd">
+/// The acquire timeline's descriptor, borrowed from the buffer, when the capture hands frames on before
+/// they are ready (<see cref="PipeWireVideoCapture.WaitAcquireOnGpu"/>): the reader's GPU waits for
+/// <paramref name="AcquirePoint"/> on it. -1 when the capture waited already.
+/// </param>
 public readonly record struct VideoSyncTimeline(
     SpaMetaSyncTimelineFlags Flags,
     ulong AcquirePoint,
-    ulong ReleasePoint
+    ulong ReleasePoint,
+    int AcquireFd = -1
 )
 {
     /// <summary>True when the producer has not scheduled the release point.</summary>
