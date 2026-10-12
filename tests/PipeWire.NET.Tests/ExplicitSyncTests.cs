@@ -22,8 +22,12 @@ namespace PipeWire.NET.Tests;
 [SupportedOSPlatform("linux")]
 public sealed class ExplicitSyncTests : PipeWireTestBase
 {
+    // An explicit-sync producer serves a consumer that asks for explicit sync with timeline points, and
+    // one that does not with plain buffers (the fallback pool), frames finished before they go out.
     [TestMethod]
-    public async Task SyncProducer_ToSyncConsumer_CarriesPointsAndCompletesTheHandshake()
+    [DataRow(true, DisplayName = "consumer takes explicit sync")]
+    [DataRow(false, DisplayName = "consumer without explicit sync")]
+    public async Task SyncProducer_ServesSyncAndPlainConsumers(bool consumerSyncs)
     {
         if (!File.Exists("/dev/dri/renderD128"))
             Assert.Inconclusive(
@@ -123,7 +127,7 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
                 nodeId.Value,
                 [PixelFormat.Bgra],
                 modifiers: [modifier],
-                requestExplicitSync: true
+                requestExplicitSync: consumerSyncs
             );
 
             // Not driven from here. This node is not the graph's driver, and pw_stream_trigger_process
@@ -136,6 +140,13 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
             int synced = Volatile.Read(ref syncFrames);
             ulong maxAcquire = Volatile.Read(ref maxAcquireSeen);
             ulong maxRelease = Volatile.Read(ref maxReleaseSeen);
+
+            if (!consumerSyncs)
+            {
+                Assert.IsTrue(seen >= 10, $"plain buffers flow to a consumer without sync: {seen}");
+                Assert.AreEqual(0, synced, "frames to a plain consumer carry no timeline");
+                return;
+            }
 
             Assert.IsTrue(
                 synced >= 10,

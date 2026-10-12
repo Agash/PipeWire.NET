@@ -1735,9 +1735,20 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             return;
         }
 
+        // The same pool without the two descriptors, for a consumer that does not take the timeline
+        // meta (the param above requires it): frames then go out finished, as upstream's
+        // video-src-sync falls back.
+        Span<byte> plain = stackalloc byte[256];
+        int pl = SpaFormatPod.WriteVideoBuffersParam(
+            plain,
+            size,
+            stride,
+            dataTypes: 1 << (int)SpaDataType.DmaBuf,
+            blocks: _planeCount
+        );
         Span<byte> syncMeta = stackalloc byte[64];
         int sml = SpaFormatPod.WriteSyncTimelineMetaParam(syncMeta);
-        core.RequestParamsFromCallback(buffers[..bl], meta[..ml], syncMeta[..sml]);
+        core.RequestParamsFromCallback(buffers[..bl], plain[..pl], meta[..ml], syncMeta[..sml]);
     }
 
     // PipeWire allocated an (empty) buffer with _planeCount data blocks; back each block with one plane of
@@ -1815,17 +1826,18 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             throw;
         }
 
-        // In explicit-sync mode the pool carries two extra datas past the planes, so the plane
-        // requirement counts planes, not datas - and a pool shaped any other way does not match
-        // the negotiated contract at all.
-        if (_explicitSync && sb->n_datas != (uint)_planeCount + SyncDataBlocks)
+        // In explicit-sync mode a pool the consumer took with the timeline meta carries two extra
+        // datas past the planes; one it took without (the fallback param) has the planes alone, and
+        // its frames go out finished. A pool shaped any other way does not match either contract.
+        bool synced = _explicitSync && sb->n_datas == (uint)_planeCount + SyncDataBlocks;
+        if (_explicitSync && !synced && sb->n_datas != (uint)_planeCount)
         {
             LogPartialAllocation(index, 0, sb->n_datas);
             _freeBufferIndices.Push(index);
             return; // unbacked: the whole pool fails, see the bound above
         }
 
-        uint planeTotal = _explicitSync ? (uint)_planeCount : sb->n_datas;
+        uint planeTotal = synced ? (uint)_planeCount : sb->n_datas;
 
         // Every block or none. A partial answer leaves the tail spa_data with no fd, and the
         // consumer then imports a descriptor of -1 and fails inside its driver with nothing here to
@@ -1881,7 +1893,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
 
         // Sync timelines last: the planes above must already be valid, because a failure here
         // unwinds the whole buffer and the planes with it.
-        if (_explicitSync && !AttachSyncTimelines(sb, index, ref acquireFd, ref releaseFd))
+        if (synced && !AttachSyncTimelines(sb, index, ref acquireFd, ref releaseFd))
         {
             _freeBufferIndices.Push(index);
             buf->user_data = null;
