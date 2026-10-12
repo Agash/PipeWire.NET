@@ -1282,10 +1282,12 @@ PipeWire.NET.Media.PipeWireBufferType.value__ = Int32
 PipeWire.NET.Media.PipeWireFrameHold
 PipeWire.NET.Media.PipeWireFrameHold.Dispose()
 PipeWire.NET.Media.PipeWireOutputFrame
+PipeWire.NET.Media.PipeWireOutputFrame.Acquire : Nullable<PipeWireSyncPoint>
 PipeWire.NET.Media.PipeWireOutputFrame.BufferIndex : Int32
 PipeWire.NET.Media.PipeWireOutputFrame.Dispose()
 PipeWire.NET.Media.PipeWireOutputFrame.Pixels : Span<Byte>
 PipeWire.NET.Media.PipeWireOutputFrame.Publish()
+PipeWire.NET.Media.PipeWireOutputFrame.Publish(Boolean)
 PipeWire.NET.Media.PipeWireOutputFrame.Stride : Int32
 PipeWire.NET.Media.PipeWireRateController
 PipeWire.NET.Media.PipeWireRateController..ctor()
@@ -1332,6 +1334,15 @@ PipeWire.NET.Media.PipeWireStreamState.Paused = PipeWireStreamState
 PipeWire.NET.Media.PipeWireStreamState.Streaming = PipeWireStreamState
 PipeWire.NET.Media.PipeWireStreamState.Unconnected = PipeWireStreamState
 PipeWire.NET.Media.PipeWireStreamState.value__ = Int32
+PipeWire.NET.Media.PipeWireSyncPoint
+PipeWire.NET.Media.PipeWireSyncPoint..ctor(Int32, UInt64)
+PipeWire.NET.Media.PipeWireSyncPoint.Deconstruct(Int32&, UInt64&)
+PipeWire.NET.Media.PipeWireSyncPoint.Equals(Object)
+PipeWire.NET.Media.PipeWireSyncPoint.Equals(PipeWireSyncPoint)
+PipeWire.NET.Media.PipeWireSyncPoint.Fd : Int32
+PipeWire.NET.Media.PipeWireSyncPoint.GetHashCode()
+PipeWire.NET.Media.PipeWireSyncPoint.Point : UInt64
+PipeWire.NET.Media.PipeWireSyncPoint.ToString()
 PipeWire.NET.Media.PipeWireVideoCapture
 PipeWire.NET.Media.PipeWireVideoCapture+FrameReadyHandler
 PipeWire.NET.Media.PipeWireVideoCapture+FrameReadyHandler..ctor(Object, IntPtr)
@@ -1434,6 +1445,7 @@ PipeWire.NET.Media.PipeWireVideoOutput.Dispose()
 PipeWire.NET.Media.PipeWireVideoOutput.DisposeAsync()
 PipeWire.NET.Media.PipeWireVideoOutput.DrainAsync(CancellationToken)
 PipeWire.NET.Media.PipeWireVideoOutput.DriveAt(TimeSpan)
+PipeWire.NET.Media.PipeWireVideoOutput.ExplicitSyncAvailable : Boolean
 PipeWire.NET.Media.PipeWireVideoOutput.ExtraProperties : IReadOnlyDictionary<String, String>
 PipeWire.NET.Media.PipeWireVideoOutput.FillDmaBuf event
 PipeWire.NET.Media.PipeWireVideoOutput.FillDmaBufHandler

@@ -590,6 +590,12 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Whether this machine can create the DRM syncobj timelines explicit sync needs (a render node opens),
+    /// so <c>ConnectDmaBufSync</c> works without timelines of the application's own.
+    /// </summary>
+    public static bool ExplicitSyncAvailable => DrmSyncobj.IsAvailable;
+
     /// <summary>Explicit sync is DRM syncobj timelines, and those need a DRM device.</summary>
     /// <remarks>
     /// Checked before connecting: without one every buffer would be declined at allocation, after
@@ -1297,7 +1303,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
 
     /// <summary>
     /// Takes a free buffer for the application to write the next frame into on its own thread;
-    /// <see cref="PipeWireOutputFrame.Publish"/> queues it to the consumer. A shared buffer is the
+    /// <see cref="PipeWireOutputFrame.Publish()"/> queues it to the consumer. A shared buffer is the
     /// application's own DMA-BUF (<see cref="PipeWireOutputFrame.BufferIndex"/>), rendered into with no
     /// copy; a memory buffer is the daemon's, mapped (<see cref="PipeWireOutputFrame.Pixels"/>), written
     /// once. One frame is open at a time. Under explicit sync the consumer's release is waited for here.
@@ -1334,7 +1340,15 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 }
 
                 _openFrame = new OpenFrame(core, (nint)buf, opened, 0);
-                frame = new PipeWireOutputFrame(this, opened.Index, default, 0);
+                frame = new PipeWireOutputFrame(
+                    this,
+                    opened.Index,
+                    default,
+                    0,
+                    opened.SyncReady && opened.AcquireFd >= 0
+                        ? new PipeWireSyncPoint(opened.AcquireFd, opened.AcquirePoint)
+                        : null
+                );
                 return true;
             }
 
@@ -1350,8 +1364,9 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         }
     }
 
-    // Ends the open frame: queued to the consumer when published, otherwise returned unused.
-    internal unsafe void EndFrame(bool publish)
+    // Ends the open frame: queued to the consumer when published, otherwise returned unused. The
+    // acquire point is signalled here unless the application's GPU work signals it.
+    internal unsafe void EndFrame(bool publish, bool signalAcquire = true)
     {
         lock (_pushGate)
         {
@@ -1378,7 +1393,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 else if (publish)
                 {
                     DmaBufFrame opened = open.Frame;
-                    CloseDmaBufFrame(buf, in opened, publish: true);
+                    CloseDmaBufFrame(buf, in opened, publish: true, signalAcquire);
                 }
 
                 if (open.Core.QueueFromProducer(buf, publish) && publish)
@@ -1438,7 +1453,8 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         nint Sync,
         bool SyncReady,
         ulong AcquirePoint,
-        ulong ReleasePoint
+        ulong ReleasePoint,
+        int AcquireFd = -1
     );
 
     // Readies a buffer to be rendered into: its sizes cleared and, under explicit sync, the consumer's
@@ -1516,12 +1532,24 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             return false;
         }
 
-        frame = new DmaBufFrame(index, (nint)sync, syncReady, acquirePoint, releasePoint);
+        frame = new DmaBufFrame(
+            index,
+            (nint)sync,
+            syncReady,
+            acquirePoint,
+            releasePoint,
+            waitAcquireFd
+        );
         return true;
     }
 
     // Stamps a rendered buffer's sync points and, when it holds a frame, the sizes that publish it.
-    private unsafe void CloseDmaBufFrame(pw_buffer* buf, in DmaBufFrame frame, bool publish)
+    private unsafe void CloseDmaBufFrame(
+        pw_buffer* buf,
+        in DmaBufFrame frame,
+        bool publish,
+        bool signalAcquire = true
+    )
     {
         spa_buffer* sb = buf->buffer;
         int index = frame.Index;
@@ -1537,7 +1565,10 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             (*sync).flags = (uint)SpaMetaSyncTimelineFlags.UnscheduledRelease;
             (*sync).acquire_point = acquirePoint;
             (*sync).release_point = releasePoint;
-            SignalAcquire(index, acquirePoint);
+            if (signalAcquire)
+            {
+                SignalAcquire(index, acquirePoint);
+            }
         }
 
         if (!publish)

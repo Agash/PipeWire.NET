@@ -15,14 +15,23 @@ public readonly ref struct PipeWireOutputFrame : IDisposable
         PipeWireVideoOutput output,
         int bufferIndex,
         Span<byte> pixels,
-        int stride
+        int stride,
+        PipeWireSyncPoint? acquire = null
     )
     {
         _output = output;
         BufferIndex = bufferIndex;
         Pixels = pixels;
         Stride = stride;
+        Acquire = acquire;
     }
+
+    /// <summary>
+    /// Under explicit sync, the point on the buffer's acquire timeline that marks this frame ready for the
+    /// consumer; null otherwise. GPU work rendering the frame can signal it itself, and the frame is then
+    /// published with <c>Publish(signalAcquire: false)</c>, so no thread waits for the GPU.
+    /// </summary>
+    public PipeWireSyncPoint? Acquire { get; }
 
     /// <summary>
     /// For a shared buffer, the pool buffer to render into: the index
@@ -45,9 +54,17 @@ public readonly ref struct PipeWireOutputFrame : IDisposable
     /// Queues the buffer to the consumer as the next frame. Rendering has finished when this is called,
     /// or, under explicit sync with timelines the application supplied, signals their acquire point.
     /// </summary>
-    public void Publish() =>
+    public void Publish() => Publish(signalAcquire: true);
+
+    /// <summary>Queues the buffer to the consumer as the next frame.</summary>
+    /// <param name="signalAcquire">
+    /// Whether the library signals <see cref="Acquire"/> now, rendering having finished; false when the
+    /// application's GPU work signals it once the frame is rendered, and the consumer waits for that.
+    /// </param>
+    public void Publish(bool signalAcquire) =>
         (_output ?? throw new InvalidOperationException("The frame was not opened.")).EndFrame(
-            publish: true
+            publish: true,
+            signalAcquire
         );
 
     /// <summary>Ends the frame; unless it was published, the buffer goes back unused.</summary>
