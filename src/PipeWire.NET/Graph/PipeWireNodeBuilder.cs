@@ -59,6 +59,20 @@ public readonly struct PipeWireNodeBuilder
     public PipeWireNodeBuilder WithLinger() =>
         new(_registry, _description, _name, _options with { Linger = true });
 
+    /// <summary>
+    /// Asks the session manager not to restore what it stored for the node's
+    /// <see cref="Spa.SpaParamType.Props"/> (<c>state.restore-props = false</c>): volume, mute, channel
+    /// volumes and channel map. For a node whose properties the application sets itself.
+    /// </summary>
+    /// <remarks>
+    /// WirePlumber writes a new audio node's <c>Props</c> as it sees the node appear: what it stored for
+    /// that name, or unity volumes. The write runs in its own process with nothing to wait on and
+    /// lands whenever it does, so a value the application set first can be overwritten after it was
+    /// read back. Its own ALSA and Bluetooth nodes opt out the same way.
+    /// </remarks>
+    public PipeWireNodeBuilder WithoutRestoredProps() =>
+        WithProperty("state.restore-props", "false");
+
     /// <summary>Sets any creation property the daemon understands.</summary>
     /// <param name="key">The property name, such as <c>media.class</c> or <c>node.nick</c>.</param>
     /// <param name="value">Its value.</param>

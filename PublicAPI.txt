@@ -725,6 +725,7 @@ PipeWire.NET.Graph.PipeWireNodeBuilder.WithName(String)
 PipeWire.NET.Graph.PipeWireNodeBuilder.WithProperty(String, String)
 PipeWire.NET.Graph.PipeWireNodeBuilder.WithTarget(PipeWireNode)
 PipeWire.NET.Graph.PipeWireNodeBuilder.WithTarget(String)
+PipeWire.NET.Graph.PipeWireNodeBuilder.WithoutRestoredProps()
 PipeWire.NET.Graph.PipeWireNodeProvider
 PipeWire.NET.Graph.PipeWireNodeProvider+ProcessHandler
 PipeWire.NET.Graph.PipeWireNodeProvider+ProcessHandler..ctor(Object, IntPtr)

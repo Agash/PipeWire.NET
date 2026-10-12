@@ -34,6 +34,12 @@ PipeWireNode sink = await registry.CreateVirtualSinkAsync("My mix", cancellation
 await registry.WaitUntilAsync(g => g.GetPortsForNode(sink.NodeId).Length == 4, cancellationToken);
 ```
 
+A new audio node gets its `Props` from the session manager as WirePlumber notices it: the volume, mute
+and channel map it stored for that name, or unity volumes. That write happens in WirePlumber's own time,
+so values the application sets straight after creating the node can be overwritten.
+`WithoutRestoredProps()` asks it not to (`state.restore-props = false`), as WirePlumber does for its own
+ALSA and Bluetooth nodes.
+
 `CreateVirtualSource` is the same factory with `media.class` set to `Audio/Source`, which is how a
 virtual microphone is built. Both return a builder, so options chain before anything is created:
 
