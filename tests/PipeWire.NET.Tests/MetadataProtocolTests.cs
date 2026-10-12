@@ -201,23 +201,17 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
     /// Until the pong, <c>metadata_property</c> forwards events only to binders still in that state,
     /// so the replay does not reach consumers that already have it. It cannot tell the replay from a
     /// live change, though: a change the exporter sent before it read the <c>ADD_LISTENER</c> lands in
-    /// the same window and every established consumer loses it. A lost clear leaves a consumer
-    /// reporting entries the store no longer has, for good.
+    /// the same window and every established consumer loses it. On a stock daemon (1.6.9 and earlier;
+    /// <c>repro/module-metadata.patch</c> fixes it there) only the store can recover, and
+    /// <see cref="PipeWireMetadataProvider"/> does: a change no round trip proved delivered before a
+    /// bind is sent again once the bind is over.
     /// </para>
     /// <para>
     /// Made deterministic by holding the exporter's loop: a third client's bind reaches the daemon,
-    /// the exporter cannot answer it yet, and the clear is made in that window. In the suite it
-    /// happens by chance, when WirePlumber (which binds every exported store) is slow to bind one
-    /// until just when the test clears it, which is what made
-    /// <see cref="AStoreClearedByItsServer_EmptiesEveryBoundConsumer"/> fail under load. Fixed by
-    /// <c>repro/module-metadata.patch</c>, which the private verify sessions load;
-    /// on a stock daemon (1.6.8 and 1.6.9 alike) this fails every time.
+    /// the exporter cannot answer it yet, and the clear is made in that window.
     /// </para>
     /// </remarks>
     [TestMethod]
-    // Fails on a stock daemon by design: that is the bug it pins. Excluded from CI, whose
-    // sessions are stock; build/verify-linux.sh runs it against daemons carrying the patch.
-    [TestCategory("RequiresPatchedDaemon")]
     public async Task AChangeWhileAnotherClientBinds_ReachesTheConsumersAlreadyBound()
     {
         using var cts = new CancellationTokenSource(Budget);
@@ -315,7 +309,7 @@ public sealed class MetadataProtocolTests : PipeWireTestBase
                         consumer.Get("a"),
                         "a clear made while another client was binding never reached the consumer "
                             + "already bound: the daemon forwarded it only to the binder (module-metadata "
-                            + "metadata_property, fixed by repro/module-metadata.patch)"
+                            + "metadata_property), and the store did not send it again after the bind"
                     );
                 }
             }

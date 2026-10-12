@@ -99,6 +99,10 @@ Measured by scanning the binaries for `pw_core_export`, `pw_stream_new` and `pw_
 WirePlumber is the reference for the serving side, and it uses exactly the sequence above:
 `pw_impl_metadata_get_implementation`, `pw_impl_metadata_add_listener`, `pw_core_export`.
 
+`PipeWireMetadataProvider` exports a `pw_metadata` of its own making. Being the implementation is what
+lets it see each client bind the store and each bulk clear, which libpipewire's implementation handles
+internally, and resend changes the daemon's bind window drops on 1.6.9 and earlier.
+
 ## The threading lesson WirePlumber learned
 
 `wp_core_get_export_core` is **deprecated** in 0.5. Its NEWS says the export core was retired in

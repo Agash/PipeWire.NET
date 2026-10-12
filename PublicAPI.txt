@@ -640,7 +640,9 @@ PipeWire.NET.Graph.PipeWireMetadataEntry.ToString()
 PipeWire.NET.Graph.PipeWireMetadataEntry.Type : String
 PipeWire.NET.Graph.PipeWireMetadataEntry.Value : String
 PipeWire.NET.Graph.PipeWireMetadataProvider
+PipeWire.NET.Graph.PipeWireMetadataProvider.BindCount : Int32
 PipeWire.NET.Graph.PipeWireMetadataProvider.Clear()
+PipeWire.NET.Graph.PipeWireMetadataProvider.ClientBound event
 PipeWire.NET.Graph.PipeWireMetadataProvider.Create(PipeWireContext, String, Boolean)
 PipeWire.NET.Graph.PipeWireMetadataProvider.Dispose()
 PipeWire.NET.Graph.PipeWireMetadataProvider.DisposeAsync()

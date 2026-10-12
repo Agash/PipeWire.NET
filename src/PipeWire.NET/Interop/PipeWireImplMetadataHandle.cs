@@ -16,9 +16,6 @@ internal sealed unsafe class PipeWireImplMetadataHandle : SafeHandle
 {
     private readonly PipeWireLoopHandle _loop;
     private bool _loopReferenced;
-    private void* _events;
-    private spa_hook* _hook;
-    private GCHandle _self;
 
     internal PipeWireImplMetadataHandle(pw_impl_metadata* metadata, PipeWireLoopHandle loop)
         : base((IntPtr)metadata, ownsHandle: true)
@@ -33,16 +30,6 @@ internal sealed unsafe class PipeWireImplMetadataHandle : SafeHandle
     public override bool IsInvalid => handle == IntPtr.Zero;
 
     internal pw_impl_metadata* Metadata => (pw_impl_metadata*)handle;
-
-    /// <summary>
-    /// Hands the handle the listener memory, freed once the implementation has been destroyed.
-    /// </summary>
-    internal void OwnListener(void* events, spa_hook* hook, GCHandle self)
-    {
-        _events = events;
-        _hook = hook;
-        _self = self;
-    }
 
     // Set by deterministic disposal before the base runs. The finalizer must never block on the
     // loop mutex, so only a deterministic release destroys inline; an abandoned handle goes to
@@ -94,14 +81,6 @@ internal sealed unsafe class PipeWireImplMetadataHandle : SafeHandle
                 Native.pw_thread_loop_lock(loop);
                 try
                 {
-                    // Listener off first, then destroy. This is the order wireplumber's
-                    // WpImplMetadata uses, and it is the only reference implementation of serving
-                    // a store: spa_hook_remove then pw_impl_metadata_destroy. Destroying with the
-                    // hook still linked leaves the implementation emitting into it as it tears
-                    // down.
-                    if (_hook is not null)
-                        Native.spa_hook_remove(_hook);
-
                     Native.pw_impl_metadata_destroy(metadata);
                 }
                 finally
@@ -117,20 +96,6 @@ internal sealed unsafe class PipeWireImplMetadataHandle : SafeHandle
                 _loop.DangerousRelease();
                 _loopReferenced = false;
             }
-
-            // After the destroy, never before.
-            if (_hook is not null)
-            {
-                NativeMemory.Free(_hook);
-                _hook = null;
-            }
-            if (_events is not null)
-            {
-                NativeMemory.Free(_events);
-                _events = null;
-            }
-            if (_self.IsAllocated)
-                _self.Free();
         }
 
         return true;

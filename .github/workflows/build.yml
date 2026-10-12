@@ -146,7 +146,7 @@ jobs:
           PIPEWIRE_LOG: ${{ runner.temp }}/pw-native-nodaemon.log
         timeout-minutes: 10
         run: dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release
-             --filter "TestCategory=Integration&TestCategory!=RequiresDaemon&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon" --max-parallel-test-modules 1 --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output no-daemon.cobertura.xml
+             --filter "TestCategory=Integration&TestCategory!=RequiresDaemon&TestCategory!=PenTest&TestCategory!=KillsTheDaemon" --max-parallel-test-modules 1 --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output no-daemon.cobertura.xml
 
       - name: Name the test that hung
         if: failure()
@@ -170,7 +170,7 @@ jobs:
           source build/session.sh
           pwnet_session_start
           pwnet_session_run dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings --no-build -c Release \
-            --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon" --max-parallel-test-modules 1             --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output daemon.cobertura.xml
+            --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon" --max-parallel-test-modules 1             --coverage --coverage-settings coverage.settings.xml --coverage-output-format cobertura --coverage-output daemon.cobertura.xml
           exit $PWNET_LAST_RC
 
       - name: Session diagnostics
@@ -540,7 +540,7 @@ jobs:
         run: |
           source build/session.sh
           pwnet_session_start
-          pwnet_session_run dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings -c Release             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon&TestCategory!=RequiresPatchedDaemon"             --max-parallel-test-modules 1
+          pwnet_session_run dotnet test --solution PipeWire.NET.slnx --settings tests.runsettings -c Release             --filter "TestCategory=RequiresDaemon&TestCategory!=RequiresGpu&TestCategory!=RequiresGStreamer&TestCategory!=PenTest&TestCategory!=KillsTheDaemon"             --max-parallel-test-modules 1
 
           if [ $PWNET_LAST_RC -eq 0 ]; then
             echo "- result: passed" >> "$GITHUB_STEP_SUMMARY"

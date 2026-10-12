@@ -274,9 +274,8 @@ public sealed class MetadataProviderTests : PipeWireTestBase
             Assert.AreEqual("v", store.Get("k"));
             await WaitForProviderValueAsync(provider, "k", "v", cts.Token);
 
-            // Per-key removals travel as property events and land; the bulk clear below does
-            // not reach the implementation at all (the daemon answers it from its own state),
-            // so the two are asserted separately on purpose.
+            // Per-key removals travel as property events, and a bulk clear as the store's own
+            // clear method: the daemon passes both to the store that serves it.
             await store.SetAsync("j", "w", cancellationToken: cts.Token);
             await WaitForProviderValueAsync(provider, "j", "w", cts.Token);
             await store.SetAsync("j", null, cancellationToken: cts.Token);
@@ -285,6 +284,63 @@ public sealed class MetadataProviderTests : PipeWireTestBase
             await store.ClearAsync(cts.Token);
 
             Assert.IsNull(store.Get("k"), "the store still holds entries after a clear");
+            await WaitForProviderValueAsync(provider, "k", null, cts.Token);
+            Assert.IsEmpty(provider.Entries, "the serving store kept entries a client cleared");
+        }
+    }
+
+    /// <summary>
+    /// A client binding the store is reported once it has been sent what the store holds.
+    /// </summary>
+    [TestMethod]
+    public async Task AClientBindingTheStore_IsReportedOnceItHasTheContents()
+    {
+        using var cts = new CancellationTokenSource(Budget);
+
+        await using var ctx = new PipeWireContext(
+            "pwnet-provider-bound",
+            ConsoleTestLoggerFactory.Instance
+        );
+        await ctx.StartAsync(cts.Token);
+
+        string name = Unique();
+        using PipeWireMetadataProvider provider = PipeWireMetadataProvider.Create(ctx, name);
+        await provider.ReadyAsync(cts.Token);
+        provider.Set("held", "before the bind");
+        var bound = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        provider.ClientBound += _ => bound.TrySetResult();
+        int before = provider.BindCount;
+
+        await using var reader = new PipeWireContext(
+            "pwnet-provider-boundread",
+            ConsoleTestLoggerFactory.Instance
+        );
+        await reader.StartAsync(cts.Token);
+        await using var readerRegistry = new PipeWireRegistry(reader);
+        await readerRegistry.WaitForInitialEnumerationAsync(cts.Token);
+        PipeWireMetadataProxy? store = await readerRegistry.BindMetadataWhenPresentAsync(
+            name,
+            TimeSpan.FromSeconds(20),
+            cts.Token
+        );
+        if (store is null)
+            Assert.Inconclusive("the served store never appeared in the graph.");
+
+        await using (store)
+        {
+            await bound
+                .Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token)
+                .OrFail("the store was bound but never reported it");
+            Assert.IsGreaterThan(before, provider.BindCount);
+
+            _ = await store
+                .UntilEntry("held", v => v is not null)
+                .Within(TimeSpan.FromSeconds(5), cts.Token);
+            Assert.AreEqual(
+                "before the bind",
+                store.Get("held"),
+                "the bind was not sent the contents"
+            );
         }
     }
 

@@ -1,5 +1,5 @@
+using System.Buffers;
 using System.Collections.Concurrent;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -20,10 +20,11 @@ namespace PipeWire.NET.Graph;
 /// with state of its own wants a store of its own rather than a key prefix in the shared one.
 /// </para>
 /// <para>
-/// The implementation lives here, in this client's context. That is the only safe way to own a
-/// store: asking the daemon to create one through the <c>metadata</c> factory produces an object the
-/// daemon then expects this client to serve, and a client that does not leaves the daemon waiting
-/// on it, unresponsive to everyone.
+/// The store is implemented here: this class is the <c>pw_metadata</c> the daemon talks to, so every
+/// change, from this client or any other, and every client binding the store comes through it. That is
+/// also the only safe way to own a store: asking the daemon to create one through the <c>metadata</c>
+/// factory produces an object the daemon then expects this client to serve, and a client that does
+/// not leaves the daemon waiting on it, unresponsive to everyone.
 /// </para>
 /// <para>
 /// Exported by default, so other clients can bind it. The export type for Metadata comes from
@@ -31,10 +32,12 @@ namespace PipeWire.NET.Graph;
 /// <c>module.metadata</c> is turned off.
 /// </para>
 /// <para>
-/// Writes and per-key removals from other clients arrive here; a bulk clear does not. The daemon
-/// answers a clear from its own state without forwarding it to the implementation, so after one
-/// this cache still lists entries the session no longer has. Entries read here are what this
-/// process wrote or was told about, not a live view of the daemon's.
+/// <b>Changes reach every client, binding ones included.</b> The daemon's metadata module, from a
+/// client binding the store until this store has answered the ping that follows the bind, passes
+/// changes only to the client binding, and every client already bound misses them for good. The store
+/// works around it: a change is resent, as the store then holds it, unless a round trip proved the
+/// daemon had it before any bind, and changes made while a bind is in progress are held until it is
+/// over. The cost is one core round trip for each burst of changes.
 /// </para>
 /// <para>
 /// <b>Dispose it; do not let it fall out of scope.</b> The callbacks the daemon holds refer back
@@ -46,32 +49,53 @@ namespace PipeWire.NET.Graph;
 /// </para>
 /// </remarks>
 [SupportedOSPlatform("linux")]
-public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyncDisposable
+public sealed partial class PipeWireMetadataProvider : IDisposable, IAsyncDisposable
 {
+    // Changes encoded on the stack up to this size; larger ones rent.
+    private const int StackEncoding = 1024;
+
     private readonly PipeWireContext _ctx;
     private readonly ILogger _logger;
+    private readonly bool _export;
     private readonly ConcurrentDictionary<
         (uint Subject, string Key),
         PipeWireMetadataEntry
     > _entries = new();
 
-    private PipeWireImplMetadataHandle? _handle;
+    // The implementation, in unmanaged memory because the daemon's side keeps raw pointers into it:
+    // the interface the store is known by, its method table and its listeners.
+    private unsafe spa_interface* _interface;
+    private unsafe pw_metadata_methods* _methods;
+    private unsafe spa_hook_list* _hooks;
+    private GCHandle _self;
+
+    // An in-process store's global. Unused when exporting.
+    private PipeWireImplMetadataHandle? _impl;
 
     // The proxy pw_core_export hands back. Owned here: destroying it is what withdraws the store
     // from the daemon, and it has to go before the implementation it points at.
     private PipeWireProxyHandle? _exported;
 
-    /// <summary>Whether to push the store to the daemon rather than keeping it local.</summary>
-    private bool _export;
-    private void* _events;
-    private spa_hook* _hook;
-    private GCHandle _self;
+    // Whether every listener added from here on is a client binding the store. The ones added while
+    // the store is published are its own: the export's, or the in-process global's.
+    private bool _published;
+
+    // The bind-window workaround, all under the loop lock. A change is unconfirmed from when it is
+    // sent until a round trip started after it comes back with no bind seen in between; while any
+    // bind is in progress changes are held. Each entry is the change's place in sending order.
+    private readonly Dictionary<(uint Subject, string? Key), long> _unconfirmed = [];
+    private long _sent;
+    private long _bindEpoch;
+    private int _bindsInProgress;
+    private bool _confirming;
+    private int _binds;
     private volatile bool _disposed;
 
-    private PipeWireMetadataProvider(PipeWireContext ctx, string name, ILogger logger)
+    private PipeWireMetadataProvider(PipeWireContext ctx, string name, bool export, ILogger logger)
     {
         _ctx = ctx;
         Name = name;
+        _export = export;
         _logger = logger;
     }
 
@@ -79,7 +103,17 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
     public string Name { get; }
 
     /// <summary>Raised when anyone changes an entry, including this client.</summary>
+    /// <remarks>Handlers run on the PipeWire loop thread; one that throws is reported and does not stop the others.</remarks>
     public event Action<PipeWireMetadataProvider, PipeWireMetadataEntry>? EntryChanged;
+
+    /// <summary>
+    /// Raised when a client binds the store, once it has been sent everything the store holds.
+    /// </summary>
+    /// <remarks>Handlers run on the PipeWire loop thread; one that throws is reported and does not stop the others.</remarks>
+    public event Action<PipeWireMetadataProvider>? ClientBound;
+
+    /// <summary>How many times a client has bound the store.</summary>
+    public int BindCount => Volatile.Read(ref _binds);
 
     /// <summary>Every entry the store currently holds.</summary>
     /// <remarks>
@@ -146,11 +180,9 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
         var provider = new PipeWireMetadataProvider(
             ctx,
             name,
+            export,
             ctx.LoggerFactory.CreateLogger("PipeWire.NET.MetadataProvider")
-        )
-        {
-            _export = export,
-        };
+        );
         try
         {
             provider.Start();
@@ -163,120 +195,97 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
         }
     }
 
-    private void Start()
+    private unsafe void Start()
     {
-        ReadOnlySpan<byte> nameUtf8 = Encoding.UTF8.GetBytes(Name + '\0');
+        // Everything the daemon's side may call into has to be reachable from a raw pointer and
+        // outlive this call, so the native structures live in unmanaged memory.
+        _self = GCHandle.Alloc(this, GCHandleType.Weak);
+        _methods = (pw_metadata_methods*)
+            NativeMemory.AllocZeroed((nuint)sizeof(pw_metadata_methods));
+        _methods->version = NativeConstants.PW_VERSION_METADATA_METHODS;
+        _methods->add_listener = &OnAddListener;
+        _methods->set_property = &OnSetProperty;
+        _methods->clear = &OnClear;
+        _hooks = (spa_hook_list*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook_list));
+        SpaHookList.Init(_hooks);
+
+        // The pointer outlives the fixed block deliberately: a u8 literal is a span over static data
+        // in the assembly image, which never moves.
+        _interface = (spa_interface*)NativeMemory.AllocZeroed((nuint)sizeof(spa_interface));
+        fixed (byte* type = NativeConstants.PW_TYPE_INTERFACE_Metadata)
+            _interface->type = (sbyte*)type;
+        _interface->version = NativeConstants.PW_VERSION_METADATA;
+        _interface->cb.funcs = _methods;
+        _interface->cb.data = (void*)GCHandle.ToIntPtr(_self);
+
+        // The name is carried twice on purpose. The first argument names the implementation; the
+        // properties become the global's, and metadata.name there is how other clients find it.
+        Span<byte> scratch = stackalloc byte[256];
+        Span<spa_dict_item> items = stackalloc spa_dict_item[2];
+        var props = new SpaDictBuilder(scratch, items);
+        props.Add(NativeConstants.PW_KEY_METADATA_NAME, Name);
+        spa_dict dict = props.Build();
 
         using (_ctx.Lock())
         {
-            // The name is carried twice on purpose. The first argument names the implementation;
-            // the properties become the global's, and metadata.name there is how other clients find
-            // it. Registered without it, the store exists but nothing can look it up.
-            Span<byte> scratch = stackalloc byte[256];
-            Span<spa_dict_item> items = stackalloc spa_dict_item[2];
-            var props = new SpaDictBuilder(scratch, items);
-            props.Add(NativeConstants.PW_KEY_METADATA_NAME, Name);
-            spa_dict dict = props.Build();
-
-            pw_impl_metadata* impl;
-            fixed (byte* n = nameUtf8)
-                impl = Native.pw_context_create_metadata(
-                    _ctx.ContextHandle,
-                    (sbyte*)n,
-                    Native.pw_properties_new_dict(&dict),
-                    0
-                );
-
-            if (impl is null)
-                throw new PipeWireInteropException(
-                    "pw_context_create_metadata",
-                    -NativeLibc.ENOMEM
-                );
-
-            _handle = new PipeWireImplMetadataHandle(impl, _ctx.LoopOwner);
-
-            _events = NativeMemory.AllocZeroed((nuint)sizeof(pw_impl_metadata_events));
-            var table = (pw_impl_metadata_events*)_events;
-            table->version = NativeConstants.PW_VERSION_IMPL_METADATA_EVENTS;
-            table->property = &OnPropertyCallback;
-
-            _hook = (spa_hook*)NativeMemory.AllocZeroed((nuint)sizeof(spa_hook));
-            _self = GCHandle.Alloc(this, GCHandleType.Weak);
-
-            _handle.OwnListener(_events, _hook, _self);
-
-            Native.pw_impl_metadata_add_listener(
-                impl,
-                _hook,
-                table,
-                (void*)GCHandle.ToIntPtr(_self)
-            );
-
-            // Register publishes a global in this client's own context. Exporting is what makes it
-            // reach the daemon, and through it every other client.
-            if (!_export)
+            if (_export)
             {
-                int rc = Native.pw_impl_metadata_register(
-                    impl,
-                    Native.pw_properties_new_dict(&dict)
-                );
+                // The export marshals the daemon's requests to this interface and adds the one
+                // listener its changes go out through.
+                pw_proxy* exported;
+                fixed (byte* t = NativeConstants.PW_TYPE_INTERFACE_Metadata)
+                    exported = Native.pw_core_export(
+                        _ctx.CoreHandle,
+                        (sbyte*)t,
+                        &dict,
+                        _interface,
+                        0
+                    );
+
+                // A context whose configuration turned libpipewire-module-metadata off has no export
+                // type for Metadata, and says so rather than pretending: the store still works locally.
+                if (exported is null)
+                {
+                    LogNotExported(Name);
+                }
+                else
+                {
+                    _exported = new PipeWireProxyHandle(exported, _ctx.LoopOwner, _ctx.CoreOwner!);
+                    _ctx.ServedStores.TryAdd(this, 0);
+                    LogExported(Name);
+                }
+            }
+            else
+            {
+                // A global in this client's own context, served by this implementation in place of
+                // libpipewire's own.
+                ReadOnlySpan<byte> nameUtf8 = Encoding.UTF8.GetBytes(Name + '\0');
+                pw_impl_metadata* impl;
+                fixed (byte* n = nameUtf8)
+                    impl = Native.pw_context_create_metadata(
+                        _ctx.ContextHandle,
+                        (sbyte*)n,
+                        Native.pw_properties_new_dict(&dict),
+                        0
+                    );
+
+                if (impl is null)
+                    throw new PipeWireInteropException(
+                        "pw_context_create_metadata",
+                        -NativeLibc.ENOMEM
+                    );
+
+                _impl = new PipeWireImplMetadataHandle(impl, _ctx.LoopOwner);
+                int rc = Native.pw_impl_metadata_set_implementation(impl, (pw_metadata*)_interface);
+                if (rc < 0)
+                    throw new PipeWireInteropException("pw_impl_metadata_set_implementation", rc);
+
+                rc = Native.pw_impl_metadata_register(impl, Native.pw_properties_new_dict(&dict));
                 if (rc < 0)
                     throw new PipeWireInteropException("pw_impl_metadata_register", rc);
             }
 
-            // Register publishes the global in this client's own context; exporting is what pushes
-            // it to the daemon so every other client can bind it. The export type for Metadata is
-            // registered by libpipewire-module-metadata, which client.conf loads into a client
-            // context by default, so this ordinarily succeeds. A context whose configuration has
-            // turned that module off cannot export, and says so rather than pretending: the store
-            // still works locally, which is worth keeping, but nothing else will see it.
-            Span<byte> exportScratch = stackalloc byte[256];
-            Span<spa_dict_item> exportItems = stackalloc spa_dict_item[2];
-            var exportProps = new SpaDictBuilder(exportScratch, exportItems);
-            exportProps.Add(NativeConstants.PW_KEY_METADATA_NAME, Name);
-            spa_dict exportDict = exportProps.Build();
-
-            ReadOnlySpan<byte> typeUtf8 = Encoding.UTF8.GetBytes(
-                PipeWireKeys.PW_TYPE_INTERFACE_Metadata + '\0'
-            );
-
-            pw_proxy* exported = null;
-            if (_export)
-            {
-                // The implementation interface, not the pw_impl_metadata that owns it. The metadata
-                // module's export function takes its object as a pw_metadata and immediately casts
-                // it to spa_interface to read the callback table out of it, so handing it the impl
-                // pointer reads whatever happens to sit at that offset and takes the process down.
-                pw_metadata* implementation = Native.pw_impl_metadata_get_implementation(impl);
-
-                if (implementation is null)
-                    throw new PipeWireInteropException(
-                        "pw_impl_metadata_get_implementation",
-                        -NativeLibc.EINVAL
-                    );
-
-                fixed (byte* t = typeUtf8)
-                {
-                    exported = Native.pw_core_export(
-                        _ctx.CoreHandle,
-                        (sbyte*)t,
-                        &exportDict,
-                        implementation,
-                        0
-                    );
-                }
-            }
-
-            if (exported is not null)
-            {
-                _exported = new PipeWireProxyHandle(exported, _ctx.LoopOwner, _ctx.CoreOwner!);
-                _ctx.ServedStores.TryAdd(this, 0);
-                LogExported(Name);
-            }
-            else
-            {
-                LogNotExported(Name);
-            }
+            _published = true;
         }
 
         LogRegistered(Name);
@@ -314,7 +323,9 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
     public Task ReadyAsync(CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        return _export ? CoreSync.RoundTripAsync(_ctx, cancellationToken) : Task.CompletedTask;
+        return _exported is not null
+            ? CoreSync.RoundTripAsync(_ctx, cancellationToken)
+            : Task.CompletedTask;
     }
 
     /// <summary>
@@ -330,7 +341,6 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
     /// </param>
     /// <param name="subject">The object the entry is about; 0 is the session itself.</param>
     /// <exception cref="ObjectDisposedException">The store has been disposed.</exception>
-    /// <exception cref="PipeWireException">The write was refused.</exception>
     public void Set(
         string key,
         string? value,
@@ -339,161 +349,440 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
     )
     {
         ArgumentNullException.ThrowIfNull(key);
+
+        // Native strings end at the first NUL while the cache keys on the whole string, so an
+        // embedded NUL would file one entry here and another in the daemon and never reconcile.
         ThrowIfContainsNul(key, nameof(key));
         ThrowIfContainsNul(value, nameof(value));
         ThrowIfContainsNul(type, nameof(type));
-        SetProperty(subject, key, type, value);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // The store is this object, so the change is made here and announced before this returns.
+        using (_ctx.Lock())
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            Change(subject, key, type, value);
+        }
     }
 
-    /// <summary>Refuses embedded NUL bytes, which would file different entries natively and managed.</summary>
-    /// <exception cref="ArgumentException">A field contains an embedded NUL byte.</exception>
+    /// <summary>Removes every entry.</summary>
+    /// <remarks>
+    /// One announcement per subject the store holds, not one per entry, inside one hold of the loop
+    /// lock, so no reader observes the store half-cleared.
+    /// </remarks>
+    /// <exception cref="ObjectDisposedException">The store has been disposed.</exception>
+    public void Clear()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        using (_ctx.Lock())
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            ClearAll();
+        }
+    }
+
     private static void ThrowIfContainsNul(string? text, string paramName)
     {
         if (text is not null && text.Contains('\0'))
             throw new ArgumentException("metadata fields cannot contain NUL bytes.", paramName);
     }
 
-    private void SetProperty(uint subject, string? key, string? type, string? value)
+    // - The store, under the loop lock -
+    //
+    // The semantics are libpipewire's own implementation's (impl-metadata.c): a change is announced
+    // only when it changes something, a removal carries no type, a key-less change clears a subject
+    // and is announced once for it, and a clear does that for every subject.
+
+    private void Change(uint subject, string? key, string? type, string? value)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        // Native strings end at the first NUL while the managed cache keys on the whole string, so
-        // an embedded NUL would file one entry here and another in the daemon and never reconcile.
-        ThrowIfContainsNul(key, nameof(key));
-        ThrowIfContainsNul(type, nameof(type));
-        ThrowIfContainsNul(value, nameof(value));
-
-        ReadOnlySpan<byte> keyUtf8 = key is null ? default : Encoding.UTF8.GetBytes(key + '\0');
-        ReadOnlySpan<byte> typeUtf8 = type is null ? default : Encoding.UTF8.GetBytes(type + '\0');
-        ReadOnlySpan<byte> valueUtf8 = value is null
-            ? default
-            : Encoding.UTF8.GetBytes(value + '\0');
-
-        // No round-trip: the store is ours, so the write lands in this process and the callback
-        // that updates the cache runs before this returns.
-        using (_ctx.Lock())
+        if (key is null)
         {
-            if (_handle is null || _handle.IsInvalid)
-                throw new ObjectDisposedException(nameof(PipeWireMetadataProvider));
+            ClearSubject(subject);
+            return;
+        }
 
-            fixed (byte* k = keyUtf8)
-            fixed (byte* t = typeUtf8)
-            fixed (byte* v = valueUtf8)
+        bool exists = _entries.TryGetValue((subject, key), out PipeWireMetadataEntry? current);
+        PipeWireMetadataEntry entry;
+        if (value is null)
+        {
+            if (!exists)
+                return;
+            _entries.TryRemove((subject, key), out _);
+            entry = new PipeWireMetadataEntry(subject, key, null, null);
+        }
+        else
+        {
+            type ??= current?.Type;
+            if (exists && current!.Type == type && current.Value == value)
+                return;
+            entry = new PipeWireMetadataEntry(subject, key, type, value);
+            _entries[(subject, key)] = entry;
+        }
+
+        Raise(entry);
+        Announce(subject, key, entry.Type, entry.Value);
+    }
+
+    private void ClearSubject(uint subject)
+    {
+        bool removed = false;
+        foreach ((uint Subject, string Key) existing in _entries.Keys)
+        {
+            if (
+                existing.Subject == subject
+                && _entries.TryRemove(existing, out PipeWireMetadataEntry? gone)
+            )
             {
-                int rc = Native.pw_impl_metadata_set_property(
-                    _handle.Metadata,
-                    subject,
-                    key is null ? null : (sbyte*)k,
-                    type is null ? null : (sbyte*)t,
-                    value is null ? null : (sbyte*)v
-                );
-
-                if (rc < 0)
-                    throw new PipeWireInteropException("pw_impl_metadata_set_property", rc);
+                removed = true;
+                Raise(new PipeWireMetadataEntry(gone.Subject, gone.Key, gone.Type, null));
             }
+        }
+
+        if (removed)
+            Announce(subject, null, null, null);
+    }
+
+    private void ClearAll()
+    {
+        foreach (uint subject in _entries.Keys.Select(static e => e.Subject).Distinct().ToArray())
+            ClearSubject(subject);
+    }
+
+    // A change on its way to the listeners: through the daemon to every bound client when exported,
+    // held while a bind is in progress, and kept as unconfirmed until a round trip proves the daemon
+    // had it before any bind.
+    private unsafe void Announce(uint subject, string? key, string? type, string? value)
+    {
+        if (_exported is null)
+        {
+            Emit(_hooks, subject, key, type, value);
+            return;
+        }
+
+        _unconfirmed[(subject, key)] = ++_sent;
+        if (_bindsInProgress > 0)
+            return;
+
+        Emit(_hooks, subject, key, type, value);
+        Confirm();
+    }
+
+    // One round trip covers everything sent before it: if it comes back with no bind seen since it
+    // started, the daemon handled all of it before any bind opened its window, and it reached every
+    // client bound at the time.
+    private void Confirm()
+    {
+        if (_confirming || _disposed)
+            return;
+
+        _confirming = true;
+        long upTo = _sent;
+        long epoch = _bindEpoch;
+        _ = ConfirmAsync(upTo, epoch);
+    }
+
+    private async Task ConfirmAsync(long upTo, long epoch)
+    {
+        try
+        {
+            await CoreSync.RoundTripAsync(_ctx, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is PipeWireException or ObjectDisposedException)
+        {
+            // The connection or the context went away: nothing is waiting on confirmation any more.
+            LogRoundTripFailed(Name, ex);
+            return;
+        }
+
+        Confirmed(upTo, epoch);
+    }
+
+    private void Confirmed(long upTo, long epoch)
+    {
+        if (!_ctx.TryLock(out PipeWireContext.LoopLock scope))
+            return;
+
+        using (scope)
+        {
+            _confirming = false;
+            if (_disposed)
+                return;
+
+            // A bind since the round trip started may have swallowed any of it; that bind resends.
+            if (_bindEpoch == epoch)
+            {
+                foreach (KeyValuePair<(uint, string?), long> sent in _unconfirmed.ToArray())
+                {
+                    if (sent.Value <= upTo)
+                        _unconfirmed.Remove(sent.Key);
+                }
+            }
+
+            if (_bindsInProgress == 0 && _unconfirmed.Count > 0 && _sent > upTo)
+                Confirm();
         }
     }
 
-    /// <summary>Removes every entry.</summary>
-    /// <remarks>
-    /// One call per subject the store holds, not one per entry. A null key is how the metadata
-    /// implementation spells "clear this subject", and it empties the subject's storage and emits a
-    /// single notification inside one hold of the loop lock. Set per entry instead, the lock is
-    /// dropped between each, so a reader can observe the store half-cleared.
-    /// <para>
-    /// The subject list is snapshotted first because the entries are removed as the calls land. A
-    /// subject that appears after the snapshot is not cleared: it was written after the caller
-    /// asked, and clearing it would be this call reaching past the state it was given.
-    /// </para>
-    /// </remarks>
-    public void Clear()
+    // A client bound the store. The daemon pings this store straight after asking for the replay, and
+    // answers a round trip started now only after that ping, so when it comes back the pong has gone
+    // out ahead of anything sent from then on.
+    private void BeginBind()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        _bindEpoch++;
+        _bindsInProgress++;
+        _ = EndBindAsync();
+    }
 
-        foreach (uint subject in _entries.Keys.Select(static e => e.Subject).Distinct().ToArray())
-            SetProperty(subject, key: null, type: null, value: null);
+    private async Task EndBindAsync()
+    {
+        try
+        {
+            await CoreSync.RoundTripAsync(_ctx, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is PipeWireException or ObjectDisposedException)
+        {
+            LogRoundTripFailed(Name, ex);
+            return;
+        }
+
+        BindEnded();
+    }
+
+    private void BindEnded()
+    {
+        if (!_ctx.TryLock(out PipeWireContext.LoopLock scope))
+            return;
+
+        using (scope)
+        {
+            if (_disposed || --_bindsInProgress > 0)
+                return;
+
+            Resend();
+        }
+    }
+
+    // Everything not proven delivered before a bind, and everything held during one, goes out again as
+    // the store holds it now: a cleared subject as its clear and then whatever it holds since, an entry
+    // as its value or its removal.
+    private unsafe void Resend()
+    {
+        if (_unconfirmed.Count == 0)
+            return;
+
+        (uint Subject, string? Key)[] touched =
+        [
+            .. _unconfirmed.OrderBy(static p => p.Value).Select(static p => p.Key),
+        ];
+        foreach ((uint subject, string? key) in touched)
+        {
+            if (key is null)
+            {
+                Emit(_hooks, subject, null, null, null);
+                foreach (PipeWireMetadataEntry entry in _entries.Values)
+                {
+                    if (entry.Subject == subject)
+                        Emit(_hooks, subject, entry.Key, entry.Type, entry.Value);
+                }
+            }
+            else if (_entries.TryGetValue((subject, key), out PipeWireMetadataEntry? entry))
+            {
+                Emit(_hooks, subject, key, entry.Type, entry.Value);
+            }
+            else
+            {
+                Emit(_hooks, subject, key, null, null);
+            }
+
+            _unconfirmed[(subject, key)] = ++_sent;
+        }
+
+        Confirm();
+    }
+
+    // pw_metadata_emit_property: to every listener on the list, safe against one removing itself. The
+    // strings are encoded once, on the stack when they fit.
+    private static unsafe void Emit(
+        spa_hook_list* hooks,
+        uint subject,
+        string? key,
+        string? type,
+        string? value
+    )
+    {
+        if (hooks is null)
+            return;
+
+        int keyBytes = Utf8Length(key);
+        int typeBytes = Utf8Length(type);
+        int valueBytes = Utf8Length(value);
+        int total = keyBytes + typeBytes + valueBytes;
+        byte[]? rented = null;
+        Span<byte> buffer =
+            total <= StackEncoding
+                ? stackalloc byte[StackEncoding]
+                : (rented = ArrayPool<byte>.Shared.Rent(total));
+        try
+        {
+            Encode(key, buffer);
+            Encode(type, buffer[keyBytes..]);
+            Encode(value, buffer[(keyBytes + typeBytes)..]);
+            fixed (byte* text = buffer)
+            {
+                sbyte* k = key is null ? null : (sbyte*)text;
+                sbyte* t = type is null ? null : (sbyte*)(text + keyBytes);
+                sbyte* v = value is null ? null : (sbyte*)(text + keyBytes + typeBytes);
+                for (spa_list* l = hooks->list.next, next; l != &hooks->list; l = next)
+                {
+                    next = l->next;
+                    var hook = (spa_hook*)l;
+                    var events = (pw_metadata_events*)hook->cb.funcs;
+                    if (events is not null && events->property is not null)
+                        events->property(hook->cb.data, subject, k, t, v);
+                }
+            }
+        }
+        finally
+        {
+            if (rented is not null)
+                ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    private static int Utf8Length(string? text) =>
+        text is null ? 0 : Encoding.UTF8.GetByteCount(text) + 1;
+
+    private static void Encode(string? text, Span<byte> into)
+    {
+        if (text is null)
+            return;
+        int written = Encoding.UTF8.GetBytes(text, into);
+        into[written] = 0;
+    }
+
+    private void Raise(PipeWireMetadataEntry entry) =>
+        SafeCallback.Raise(EntryChanged, h => h(this, entry), ex => LogHandlerFaulted(Name, ex));
+
+    // - The method table -
+    //
+    // Static, because a function pointer into managed code cannot close over an instance; the
+    // instance arrives as the object argument, the cb.data the interface was made with. Called on
+    // the loop thread, with the loop lock held.
+
+    private static unsafe PipeWireMetadataProvider? From(void* data)
+    {
+        if (data is null)
+            return null;
+        try
+        {
+            return GCHandle.FromIntPtr((nint)data).Target as PipeWireMetadataProvider;
+        }
+        catch (InvalidOperationException)
+        {
+            // Deliberately not logged: a freed handle means the provider, and its logger, are gone.
+            return null;
+        }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static int OnPropertyCallback(
-        void* data,
+    private static unsafe int OnAddListener(
+        void* obj,
+        spa_hook* hook,
+        pw_metadata_events* events,
+        void* data
+    )
+    {
+        PipeWireMetadataProvider? self = From(obj);
+        if (self is null || self._disposed || hook is null || events is null)
+            return -NativeLibc.EINVAL;
+
+        try
+        {
+            // impl_add_listener: the new listener alone is sent everything the store holds, then the
+            // others are joined back.
+            spa_hook_list save;
+            SpaHookList.Isolate(self._hooks, &save, hook, events, data);
+            try
+            {
+                foreach (PipeWireMetadataEntry entry in self._entries.Values)
+                    Emit(self._hooks, entry.Subject, entry.Key, entry.Type, entry.Value);
+            }
+            finally
+            {
+                SpaHookList.Join(self._hooks, &save);
+            }
+
+            // The listeners the store adds itself while it is published come first; any after are a
+            // client binding it.
+            if (self._published)
+            {
+                Interlocked.Increment(ref self._binds);
+                if (self._exported is not null)
+                    self.BeginBind();
+                SafeCallback.Raise(
+                    self.ClientBound,
+                    h => h(self),
+                    ex => self.LogHandlerFaulted(self.Name, ex)
+                );
+            }
+
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            // A native callback frame: an escaping exception aborts the process.
+            self.LogDispatchFailed(ex);
+            return -NativeLibc.EIO;
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe int OnSetProperty(
+        void* obj,
         uint subject,
         sbyte* key,
         sbyte* type,
         sbyte* value
     )
     {
-        if (data is null)
+        PipeWireMetadataProvider? self = From(obj);
+        if (self is null || self._disposed)
             return 0;
-
-        PipeWireMetadataProvider self;
-        try
-        {
-            // A freed handle throws out of the lookup, and this is a native frame.
-            if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireMetadataProvider found)
-                return 0;
-            self = found;
-        }
-        catch (Exception)
-        {
-            // Deliberately not logged: a freed handle means the provider, and its logger, are gone.
-            return 0;
-        }
 
         try
         {
-            string? k = DaemonText.String(key);
-            string? t = DaemonText.String(type);
-            string? v = DaemonText.String(value);
-
-            self.Apply(subject, k, t, v);
+            self.Change(
+                subject,
+                DaemonText.String(key),
+                DaemonText.String(type),
+                DaemonText.String(value)
+            );
         }
         catch (Exception ex)
         {
-            // A native callback frame: an escaping exception aborts the process.
             self.LogDispatchFailed(ex);
         }
 
-        // Non-zero would tell the daemon to reject the change.
         return 0;
     }
 
-    private void Apply(uint subject, string? key, string? type, string? value)
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe int OnClear(void* obj)
     {
-        // A null key means every entry for the subject is gone, which is how a bulk removal arrives.
-        if (key is null)
+        PipeWireMetadataProvider? self = From(obj);
+        if (self is null || self._disposed)
+            return 0;
+
+        try
         {
-            // SPA_ID_INVALID means every subject, not a subject numbered 0xFFFFFFFF. Comparing it
-            // to a stored subject matches nothing, so a store-wide clear would drop no entries at
-            // all and the cache would keep reporting values the server no longer has.
-            bool everySubject = subject == NativeConstants.SPA_ID_INVALID;
-
-            foreach ((uint Subject, string Key) existing in _entries.Keys)
-            {
-                if (!everySubject && existing.Subject != subject)
-                    continue;
-                if (_entries.TryRemove(existing, out PipeWireMetadataEntry? removed))
-                    Raise(
-                        new PipeWireMetadataEntry(removed.Subject, removed.Key, removed.Type, null)
-                    );
-            }
-
-            return;
+            self.ClearAll();
+        }
+        catch (Exception ex)
+        {
+            self.LogDispatchFailed(ex);
         }
 
-        var entry = new PipeWireMetadataEntry(subject, key, type, value);
-
-        if (value is null)
-            _entries.TryRemove((subject, key), out _);
-        else
-            _entries[(subject, key)] = entry;
-
-        Raise(entry);
-    }
-
-    private void Raise(PipeWireMetadataEntry entry)
-    {
-        SafeCallback.Raise(EntryChanged, h => h(this, entry), ex => LogHandlerFaulted(Name, ex));
+        return 0;
     }
 
     /// <inheritdoc/>
@@ -512,18 +801,51 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
             return;
         _disposed = true;
 
-        // The listener's memory goes with the handle, freed after the implementation is destroyed.
-        // Before the implementation: the exported proxy points at it, and withdrawing the store
-        // from the daemon has to happen while the thing being withdrawn still exists.
+        // The listeners first: withdrawing the export and destroying the in-process global each
+        // unlink the hook they hold on this implementation, which has to exist while they do.
         _ctx.ServedStores.TryRemove(this, out _);
         _exported?.Dispose();
         _exported = null;
+        _impl?.Dispose();
+        _impl = null;
 
-        _handle?.Dispose();
-        _handle = null;
-        _hook = null;
-        _events = null;
+        // Under the loop lock, so no callback is running into the memory as it goes. A context
+        // already gone has no loop left to call in from.
+        if (_ctx.TryLock(out PipeWireContext.LoopLock scope))
+        {
+            using (scope)
+                FreeNative();
+        }
+        else
+        {
+            FreeNative();
+        }
+
         _entries.Clear();
+    }
+
+    private unsafe void FreeNative()
+    {
+        if (_interface is not null)
+        {
+            NativeMemory.Free(_interface);
+            _interface = null;
+        }
+
+        if (_hooks is not null)
+        {
+            NativeMemory.Free(_hooks);
+            _hooks = null;
+        }
+
+        if (_methods is not null)
+        {
+            NativeMemory.Free(_methods);
+            _methods = null;
+        }
+
+        if (_self.IsAllocated)
+            _self.Free();
     }
 
     [LoggerMessage(
@@ -559,7 +881,14 @@ public sealed unsafe partial class PipeWireMetadataProvider : IDisposable, IAsyn
     [LoggerMessage(
         EventId = 1444,
         Level = LogLevel.Error,
-        Message = "an EntryChanged handler for store {Name} threw"
+        Message = "a handler for metadata store {Name} threw"
     )]
     private partial void LogHandlerFaulted(string name, Exception ex);
+
+    [LoggerMessage(
+        EventId = 1445,
+        Level = LogLevel.Debug,
+        Message = "metadata store {Name} could not confirm its changes reached the daemon; the connection is gone"
+    )]
+    private partial void LogRoundTripFailed(string name, Exception ex);
 }
