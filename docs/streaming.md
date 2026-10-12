@@ -137,9 +137,17 @@ and a *release* point it signals when finished.
 `StampSyncPoints` sets the pair for a frame you are about to publish. On the consuming side a frame
 carries `SyncTimeline` when the producer negotiated one.
 
-Needs a kernel and driver with DRM syncobj timeline support, and `libdrm`. A peer that does not
-negotiate explicit sync still streams - the buffers are then implicitly synchronised, which is the
-older behaviour and is what you get with plain `ConnectDmaBuf`.
+Needs a kernel and driver with DRM syncobj timeline support, and `libdrm`
+(`PipeWireVideoOutput.ExplicitSyncAvailable` says whether this machine has them). A consumer that does
+not negotiate explicit sync still streams: the output offers a plain pool next to the synchronised one,
+as upstream's `video-src-sync` does, and frames into it go out finished.
+
+Nothing has to wait on the CPU for the GPU. A producer pushing frames (`TryBeginFrame`) reads the
+frame's acquire point from `frame.Acquire`, has its GPU work signal it, and publishes with
+`Publish(signalAcquire: false)`; the consumer's GPU waits for it. A consumer sets
+`WaitAcquireOnGpu` before connecting and gets frames as they arrive, with `SyncTimeline.AcquireFd` and
+`AcquirePoint` naming what its GPU waits for; it holds the frame (`HoldCurrentFrame`) until that work
+has run, and letting it go signals the release point.
 
 ## Renegotiating against a GStreamer producer
 
