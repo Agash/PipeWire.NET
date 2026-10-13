@@ -333,6 +333,35 @@ jobs:
           if-no-files-found: warn
           path: "**/*.cobertura.xml"
 
+  sdk10_build:
+    name: net10.0 with the .NET 10 SDK
+    # The other legs compile both target frameworks with the .NET 11 SDK, whose compiler accepts code
+    # the .NET 10 SDK's does not (CS8978 on ?. over a pointer member, #21). A consumer on .NET 10 builds
+    # the net10.0 target with its own SDK, so this leg does too, on the oldest supported feature band.
+    runs-on: ubuntu-26.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.1xx
+
+      - name: Pin the .NET 10 SDK
+        run: dotnet new globaljson --sdk-version "$(dotnet --list-sdks | awk '/^10\.0\.1/ {v=$1} END {print v}')" --roll-forward disable --force
+
+      - name: Build the libraries for net10.0
+        run: |
+          dotnet --version
+          for project in src/PipeWire.NET/PipeWire.NET.csproj src/PipeWire.NET.Media/PipeWire.NET.Media.csproj; do
+            dotnet build "$project" -c Release -p:TargetFrameworks=net10.0
+          done
+
   aot_arm64:
     name: Native AOT and ABI on arm64
     # The reason to run arm64 at all is that the parts most likely to differ are the parts nothing
@@ -572,7 +601,7 @@ jobs:
 
   publish_nuget:
     name: Publish NuGet Packages
-    needs: [build_and_test]
+    needs: [build_and_test, sdk10_build]
     # Publishing runs only when a GitHub release is published, matching the other Agash packages.
     # Requires a NuGet.org trusted-publishing policy for this package.
     #

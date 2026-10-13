@@ -524,9 +524,7 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
 
         using (_ctx.Lock())
         {
-            // `port?.PortData` would be ideal, but `?.` over a pointer-typed member
-            // (CS8978, "'void*' cannot be made nullable") needs a newer compiler than
-            // the .NET 10 SDK ships; this form compiles on both SDK 10 and 11.
+            // Not `port?.PortData`: the .NET 10.0.1xx compiler rejects ?. over a pointer (CS8978).
             int res = Native.pw_filter_update_properties(
                 _handle.Filter,
                 port is null ? null : port.PortData,
