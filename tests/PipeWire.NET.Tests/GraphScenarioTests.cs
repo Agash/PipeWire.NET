@@ -312,7 +312,7 @@ public sealed class GraphScenarioTests : PipeWireTestBase
     // ------------------------------------------------------------- routing setup
 
     /// <summary>
-    /// The StreamWeaver shape: a routing setup built by one process, still standing after that
+    /// The streaming-application shape: a routing setup built by one process, still standing after that
     /// process exits, and then taken down deliberately by the next one. This is the whole reason
     /// <c>object.linger</c> exists, and it is the case a stream-shaped API gets wrong.
     /// </summary>

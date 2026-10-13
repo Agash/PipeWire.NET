@@ -9,7 +9,7 @@ namespace PipeWire.NET.Tests;
 /// <summary>
 /// Real-world capture tests: a GStreamer pipeline publishes a genuine PipeWire source
 /// (SMPTE video bars, audio test tone) and our capture API consumes it - exercising the
-/// actual consumer path StreamWeaver uses (capturing a producer it does not control),
+/// actual consumer path of a streaming application (capturing a producer it does not control),
 /// across multiple pixel formats, registry discovery, and A/V together.
 /// </summary>
 [TestClass]

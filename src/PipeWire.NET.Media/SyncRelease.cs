@@ -5,7 +5,7 @@ namespace PipeWire.NET.Media;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Explicit sync separates two things a buffer used to carry together: the buffer goes back to the
+/// Explicit sync separates two things that a buffer otherwise carries together: the buffer goes back to the
 /// producer at the end of the cycle as always, but its contents stay the consumer's until the release
 /// point is signalled, and the producer waits for that before writing into it again. So a consumer
 /// that keeps a frame past its cycle - a GPU consumer that imports the DMA-BUF and submits later -

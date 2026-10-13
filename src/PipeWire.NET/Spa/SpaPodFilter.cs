@@ -8,11 +8,8 @@ namespace PipeWire.NET.Spa;
 /// <para>
 /// A serving implementation that only needs to decide whether to offer a parameter asks this; one
 /// that has to answer with the narrowed parameter uses <see cref="SpaPodProjection"/>. Both are the
-/// same computation. This class used to carry its own copy of the matching rules, which drifted from
-/// the projection's - the projection had come to prefer the candidate's values where upstream prefers
-/// the filter's, and to accept flags against an enumeration where upstream refuses - and two notions
-/// of one rule is how a node ends up offering a parameter it then cannot narrow. So a match is now
-/// defined as "the projection produced something", and there is nothing left here to drift.
+/// same computation. A match is defined as "the projection produced something", so the two cannot
+/// disagree: separate matching rules would let a node offer a parameter that it then cannot narrow.
 /// </para>
 /// </remarks>
 internal static class SpaPodFilter

@@ -202,12 +202,14 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
     private static unsafe void OnInfo(void* data, pw_link_info* info)
     {
         // An exception escaping a reverse P/Invoke aborts the process, so nothing below may throw.
+        PipeWireLinkProxy? owner = null;
         try
         {
             if (data is null || info is null)
                 return;
             if (GCHandle.FromIntPtr((nint)data).Target is not PipeWireLinkProxy self)
                 return;
+            owner = self;
             if (self._disposed)
                 return;
 
@@ -237,13 +239,7 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
         {
             // Reached only if the marshalling above fails, which would mean the daemon sent
             // something the struct does not describe.
-            try
-            {
-                Console.Error.WriteLine($"PipeWire.NET link info callback faulted: {ex}");
-            }
-            catch (IOException)
-            { /* Deliberately not logged: nothing left that could report it. */
-            }
+            owner?.LogInfoCallbackFaulted(ex);
         }
     }
 
@@ -279,4 +275,11 @@ public sealed partial class PipeWireLinkProxy : IDisposable, IAsyncDisposable
         Message = "a link state handler threw"
     )]
     private partial void LogHandlerFaulted(Exception exception);
+
+    [LoggerMessage(
+        EventId = 1242,
+        Level = LogLevel.Error,
+        Message = "the link info callback faulted"
+    )]
+    private partial void LogInfoCallbackFaulted(Exception exception);
 }

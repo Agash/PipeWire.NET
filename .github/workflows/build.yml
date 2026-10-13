@@ -576,10 +576,9 @@ jobs:
     # Publishing runs only when a GitHub release is published, matching the other Agash packages.
     # Requires a NuGet.org trusted-publishing policy for this package.
     #
-    # A manual dispatch may publish too, but only from main or a version tag. It used to publish
-    # from whatever ref it was dispatched on, so dispatching the workflow to check CI on a feature
-    # branch pushed that branch's build to nuget.org - and nuget.org has no delete, only unlist.
-    # Running the workflow and releasing a package are different intentions; the ref is what
+    # A manual dispatch may publish too, but only from main or a version tag. Publishing from
+    # any other ref would push a feature branch's build to nuget.org, which has no delete, only
+    # unlist. Running the workflow and releasing a package are different intentions; the ref is what
     # separates them.
     if: >-
       (github.event_name == 'release' && github.event.action == 'published')

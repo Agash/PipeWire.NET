@@ -7,8 +7,7 @@
 // alongside generated declarations (e.g. `Native.pw_stream_new`).
 //
 // Contents: what cannot be generated. The PW_VERSION_* interface versions and the PW_ID_* /
-// SPA_ID_INVALID sentinels used to be copied here; they are generated now (NativeConstants), and the
-// copy held one version name upstream never had.
+// SPA_ID_INVALID sentinels are generated (NativeConstants), so they are not repeated here.
 //   - SPA interface VTBL dispatch helpers (pw_core_get_registry,
 //     pw_registry_add_listener) - these are C macros, not exported symbols.
 //

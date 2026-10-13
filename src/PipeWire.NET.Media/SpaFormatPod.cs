@@ -763,7 +763,9 @@ internal static class SpaFormatPod
                         chromaSite = (VideoChromaSite)ReadId(ref value);
                 }
                 catch (InvalidOperationException)
-                { /* malformed property - skip */
+                {
+                    // Deliberately not logged: this parser is a static helper with no logger, and a
+                    // malformed property leaves the previously known value in place for that field.
                 }
             }
         }
@@ -822,7 +824,9 @@ internal static class SpaFormatPod
                         ch = value.TryUnwrapChoice(out var i) ? i.ReadInt() : value.ReadInt();
                 }
                 catch (InvalidOperationException)
-                { /* malformed property - skip */
+                {
+                    // Deliberately not logged: this parser is a static helper with no logger, and a
+                    // malformed property leaves the previously known value in place for that field.
                 }
             }
         }

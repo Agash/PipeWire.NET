@@ -7,7 +7,7 @@ using PipeWire.NET.Media;
 namespace PipeWire.NET.Tests;
 
 /// <summary>
-/// End-to-end DMA-BUF zero-copy round-trip that depends on neither GStreamer nor any StreamWeaver/VAAPI
+/// End-to-end DMA-BUF zero-copy round-trip that depends on neither GStreamer nor any VAAPI
 /// code: a <see cref="PipeWireVideoOutput"/> dmabuf producer is backed by a real dmabuf allocated through
 /// libgbm on the render node, and a <see cref="PipeWireVideoCapture"/> consumer connects with the matching
 /// DRM modifier and must receive frames whose <see cref="PipeWireBufferType"/> is <c>DmaBuf</c> with a valid

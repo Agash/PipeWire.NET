@@ -1175,7 +1175,7 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     /// <summary>Waits for a frame's acquire point, on a syncobj or on upstream's eventfd stand-in.</summary>
     /// <remarks>
     /// A descriptor that is neither fails the wait rather than being read as an eventfd; see
-    /// <see cref="SyncTimeline"/> for how that used to pass frames through unsynchronised.
+    /// <see cref="SyncTimeline"/> for why reading it as an eventfd would pass frames through unsynchronised.
     /// </remarks>
     private static SyncWait WaitAcquire(int acquireFd, ulong point) =>
         SyncTimeline.Wait(acquireFd, point, AcquireTimeout);

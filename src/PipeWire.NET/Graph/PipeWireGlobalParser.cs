@@ -385,10 +385,10 @@ internal static unsafe class PipeWireGlobalParser
             if (!DaemonText.Bytes(item->key).SequenceEqual(keyUtf8))
                 continue;
 
-            // A null value is the property not being there. spa_dict_item allows it, and every
-            // caller would turn the empty span it used to produce back into null anyway - so the
-            // three states the daemon can express (absent, present and null, present and empty)
-            // collapse to two here, and only the genuinely empty one reads as an empty string.
+            // A null value is the property not being there. spa_dict_item allows it, and callers
+            // want null rather than an empty span for it, so the three states the daemon can express
+            // (absent, present and null, present and empty) collapse to two here, and only the
+            // genuinely empty one reads as an empty string.
             if (item->value is null)
                 return false;
 

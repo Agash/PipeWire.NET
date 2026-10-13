@@ -80,6 +80,8 @@ internal sealed unsafe class BoundProxy : IDisposable
         }
         catch (ObjectDisposedException)
         {
+            // Deliberately not logged: a proxy that is already disposed is the expected outcome of
+            // racing a teardown, and the caller treats false as "nothing to call".
             return false;
         }
 

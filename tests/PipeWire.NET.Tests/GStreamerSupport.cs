@@ -8,7 +8,7 @@ namespace PipeWire.NET.Tests;
 /// <summary>
 /// Launches real PipeWire source nodes via <c>gst-launch-1.0 ... ! pipewiresink</c> so the
 /// capture API can be tested against an external producer with real content (SMPTE bars,
-/// test tones) - the actual StreamWeaver use case, not our own output looped back.
+/// test tones) - the consumer use case of capturing a producer the application does not control, not our own output looped back.
 /// </summary>
 [SupportedOSPlatform("linux")]
 internal sealed class GstTestSource : IAsyncDisposable

@@ -812,6 +812,8 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
         }
         catch (ObjectDisposedException)
         {
+            // Deliberately not logged: a loop that is already disposed is the expected outcome of
+            // racing a shutdown, and the caller treats false as "no loop to use".
             return false;
         }
 
@@ -892,6 +894,8 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
             }
             catch (ObjectDisposedException)
             {
+                // Deliberately not logged: a disposed loop has no thread, so the answer is simply
+                // that the caller is not on it.
                 return false;
             }
             finally
