@@ -17,6 +17,8 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <EnablePackageValidation>true</EnablePackageValidation>
+    <!-- The public overloads differ in their leading parameters, so optional trailing parameters never bind ambiguously. -->
+    <NoWarn>$(NoWarn);RS0026</NoWarn>
     <!-- Baseline the public surface against the last release so a break has to be declared in
          CompatibilitySuppressions.xml rather than shipping unnoticed. -->
     <PackageValidationBaselineVersion>0.2.3-alpha</PackageValidationBaselineVersion>
@@ -28,6 +30,10 @@
   <ItemGroup>
     <PackageReference Include="DotNet.ReproducibleBuilds" PrivateAssets="all" />
     <PackageReference Include="MinVer" PrivateAssets="all" />
+    <!-- Every change to the public surface shows in PublicAPI.Unshipped.txt, so it is reviewed. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 

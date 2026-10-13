@@ -1,0 +1,657 @@
+const PipeWire.NET.Media.DrmFormat.Invalid = 0 -> uint
+const PipeWire.NET.Media.DrmFormatModifier.Invalid = 72057594037927935 -> ulong
+const PipeWire.NET.Media.DrmFormatModifier.Linear = 0 -> ulong
+const PipeWire.NET.Media.PipeWireAudioCapture.AnyNode = 4294967295 -> uint
+const PipeWire.NET.Media.PipeWireAudioOutput.AnyNode = 4294967295 -> uint
+const PipeWire.NET.Media.PipeWireRateController.MaxBandwidth = 0.128 -> double
+const PipeWire.NET.Media.PipeWireRateController.MinBandwidth = 0.016 -> double
+const PipeWire.NET.Media.PipeWireVideoCapture.AnyNode = 4294967295 -> uint
+const PipeWire.NET.Media.PipeWireVideoOutput.AnyNode = 4294967295 -> uint
+override PipeWire.NET.Media.BorrowedVideoPlane.GetHashCode() -> int
+override PipeWire.NET.Media.DmaBufDeviceOffer.GetHashCode() -> int
+override PipeWire.NET.Media.DmaBufFormatModifiers.GetHashCode() -> int
+override PipeWire.NET.Media.DrmDevice.GetHashCode() -> int
+override PipeWire.NET.Media.DrmDevice.ToString() -> string!
+override PipeWire.NET.Media.OwnedAudioFrame.Equals(object? obj) -> bool
+override PipeWire.NET.Media.OwnedAudioFrame.GetHashCode() -> int
+override PipeWire.NET.Media.OwnedAudioFrame.ToString() -> string!
+override PipeWire.NET.Media.OwnedVideoFrame.Equals(object? obj) -> bool
+override PipeWire.NET.Media.OwnedVideoFrame.GetHashCode() -> int
+override PipeWire.NET.Media.OwnedVideoFrame.ToString() -> string!
+override PipeWire.NET.Media.PipeWireStreamControl.Equals(object? obj) -> bool
+override PipeWire.NET.Media.PipeWireStreamControl.GetHashCode() -> int
+override PipeWire.NET.Media.PipeWireStreamControl.ToString() -> string!
+override PipeWire.NET.Media.PipeWireSyncPoint.GetHashCode() -> int
+override PipeWire.NET.Media.PulledVideoPlane.Equals(object? obj) -> bool
+override PipeWire.NET.Media.PulledVideoPlane.GetHashCode() -> int
+override PipeWire.NET.Media.PulledVideoPlane.ToString() -> string!
+override PipeWire.NET.Media.VideoColorInfo.GetHashCode() -> int
+override PipeWire.NET.Media.VideoPlane.GetHashCode() -> int
+override PipeWire.NET.Media.VideoRegion.GetHashCode() -> int
+override PipeWire.NET.Media.VideoSyncTimeline.GetHashCode() -> int
+PipeWire.NET.Media.AudioFrame
+PipeWire.NET.Media.AudioFrame.AudioFrame() -> void
+PipeWire.NET.Media.AudioFrame.AudioFrame(System.ReadOnlySpan<byte> samples, int sampleRate, int channels, PipeWire.NET.Media.AudioSampleFormat format, ulong sequenceNumber, long presentationTimestampNs = -1, long graphTimeNs = -1, long streamPositionNs = -1, long delayNs = 0, long queuedTimeNs = -1) -> void
+PipeWire.NET.Media.AudioFrame.Channels.get -> int
+PipeWire.NET.Media.AudioFrame.Clone() -> PipeWire.NET.Media.OwnedAudioFrame!
+PipeWire.NET.Media.AudioFrame.DelayNs.get -> long
+PipeWire.NET.Media.AudioFrame.Format.get -> PipeWire.NET.Media.AudioSampleFormat
+PipeWire.NET.Media.AudioFrame.FrameCount.get -> int
+PipeWire.NET.Media.AudioFrame.GraphTimeNs.get -> long?
+PipeWire.NET.Media.AudioFrame.PresentationTimestampNs.get -> long?
+PipeWire.NET.Media.AudioFrame.QueuedTimeNs.get -> long?
+PipeWire.NET.Media.AudioFrame.SampleRate.get -> int
+PipeWire.NET.Media.AudioFrame.Samples.get -> System.ReadOnlySpan<byte>
+PipeWire.NET.Media.AudioFrame.SequenceNumber.get -> ulong
+PipeWire.NET.Media.AudioFrame.StreamPositionNs.get -> long?
+PipeWire.NET.Media.AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.F32Le = 0 -> PipeWire.NET.Media.AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.F64Le = 6 -> PipeWire.NET.Media.AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.S16Le = 1 -> PipeWire.NET.Media.AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.S24Le = 2 -> PipeWire.NET.Media.AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.S24_32Le = 5 -> PipeWire.NET.Media.AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.S32Le = 3 -> PipeWire.NET.Media.AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.U8 = 4 -> PipeWire.NET.Media.AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormat.Unknown = 7 -> PipeWire.NET.Media.AudioSampleFormat
+PipeWire.NET.Media.AudioSampleFormatExtensions
+PipeWire.NET.Media.AudioSampleFormatExtensions.extension(PipeWire.NET.Media.AudioSampleFormat)
+PipeWire.NET.Media.AudioSampleFormatExtensions.extension(PipeWire.NET.Media.AudioSampleFormat).BytesPerSample() -> int
+PipeWire.NET.Media.BorrowedVideoFrame
+PipeWire.NET.Media.BorrowedVideoFrame.BorrowedVideoFrame() -> void
+PipeWire.NET.Media.BorrowedVideoFrame.Crop.get -> PipeWire.NET.Media.VideoRegion?
+PipeWire.NET.Media.BorrowedVideoFrame.DelayNs.get -> long
+PipeWire.NET.Media.BorrowedVideoFrame.DrmFourcc.get -> uint
+PipeWire.NET.Media.BorrowedVideoFrame.Format.get -> PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.BorrowedVideoFrame.GraphTimeNs.get -> long?
+PipeWire.NET.Media.BorrowedVideoFrame.Height.get -> int
+PipeWire.NET.Media.BorrowedVideoFrame.IsFdBacked.get -> bool
+PipeWire.NET.Media.BorrowedVideoFrame.Modifier.get -> ulong
+PipeWire.NET.Media.BorrowedVideoFrame.PlaneCount.get -> int
+PipeWire.NET.Media.BorrowedVideoFrame.PresentationTimestampNs.get -> long?
+PipeWire.NET.Media.BorrowedVideoFrame.QueuedTimeNs.get -> long?
+PipeWire.NET.Media.BorrowedVideoFrame.SequenceNumber.get -> ulong
+PipeWire.NET.Media.BorrowedVideoFrame.StreamPositionNs.get -> long?
+PipeWire.NET.Media.BorrowedVideoFrame.Stride.get -> int
+PipeWire.NET.Media.BorrowedVideoFrame.this[int index].get -> PipeWire.NET.Media.BorrowedVideoPlane
+PipeWire.NET.Media.BorrowedVideoFrame.Transform.get -> PipeWire.NET.Spa.SpaMetaVideotransformValue
+PipeWire.NET.Media.BorrowedVideoFrame.Width.get -> int
+PipeWire.NET.Media.BorrowedVideoPlane
+PipeWire.NET.Media.BorrowedVideoPlane.BorrowedVideoPlane() -> void
+PipeWire.NET.Media.BorrowedVideoPlane.BorrowedVideoPlane(long Fd, uint Offset, uint Stride, uint Size) -> void
+PipeWire.NET.Media.BorrowedVideoPlane.Deconstruct(out long Fd, out uint Offset, out uint Stride, out uint Size) -> void
+PipeWire.NET.Media.BorrowedVideoPlane.Equals(PipeWire.NET.Media.BorrowedVideoPlane other) -> bool
+PipeWire.NET.Media.BorrowedVideoPlane.Fd.get -> long
+PipeWire.NET.Media.BorrowedVideoPlane.Fd.init -> void
+PipeWire.NET.Media.BorrowedVideoPlane.Offset.get -> uint
+PipeWire.NET.Media.BorrowedVideoPlane.Offset.init -> void
+PipeWire.NET.Media.BorrowedVideoPlane.Size.get -> uint
+PipeWire.NET.Media.BorrowedVideoPlane.Size.init -> void
+PipeWire.NET.Media.BorrowedVideoPlane.Stride.get -> uint
+PipeWire.NET.Media.BorrowedVideoPlane.Stride.init -> void
+PipeWire.NET.Media.DmaBufDeviceOffer
+PipeWire.NET.Media.DmaBufDeviceOffer.Deconstruct(out PipeWire.NET.Media.DrmDevice Device, out System.Collections.Immutable.ImmutableArray<PipeWire.NET.Media.DmaBufFormatModifiers> Formats) -> void
+PipeWire.NET.Media.DmaBufDeviceOffer.Device.get -> PipeWire.NET.Media.DrmDevice
+PipeWire.NET.Media.DmaBufDeviceOffer.Device.init -> void
+PipeWire.NET.Media.DmaBufDeviceOffer.DmaBufDeviceOffer() -> void
+PipeWire.NET.Media.DmaBufDeviceOffer.DmaBufDeviceOffer(PipeWire.NET.Media.DrmDevice device, PipeWire.NET.Media.PixelFormat format, System.Collections.Immutable.ImmutableArray<long> modifiers) -> void
+PipeWire.NET.Media.DmaBufDeviceOffer.DmaBufDeviceOffer(PipeWire.NET.Media.DrmDevice Device, System.Collections.Immutable.ImmutableArray<PipeWire.NET.Media.DmaBufFormatModifiers> Formats) -> void
+PipeWire.NET.Media.DmaBufDeviceOffer.Equals(PipeWire.NET.Media.DmaBufDeviceOffer other) -> bool
+PipeWire.NET.Media.DmaBufDeviceOffer.Formats.get -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Media.DmaBufFormatModifiers>
+PipeWire.NET.Media.DmaBufDeviceOffer.Formats.init -> void
+PipeWire.NET.Media.DmaBufDeviceOffer.ModifiersFor(PipeWire.NET.Media.PixelFormat format) -> System.Collections.Immutable.ImmutableArray<long>
+PipeWire.NET.Media.DmaBufFormatModifiers
+PipeWire.NET.Media.DmaBufFormatModifiers.Deconstruct(out PipeWire.NET.Media.PixelFormat Format, out System.Collections.Immutable.ImmutableArray<long> Modifiers) -> void
+PipeWire.NET.Media.DmaBufFormatModifiers.DmaBufFormatModifiers() -> void
+PipeWire.NET.Media.DmaBufFormatModifiers.DmaBufFormatModifiers(PipeWire.NET.Media.PixelFormat Format, System.Collections.Immutable.ImmutableArray<long> Modifiers) -> void
+PipeWire.NET.Media.DmaBufFormatModifiers.Equals(PipeWire.NET.Media.DmaBufFormatModifiers other) -> bool
+PipeWire.NET.Media.DmaBufFormatModifiers.Format.get -> PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.DmaBufFormatModifiers.Format.init -> void
+PipeWire.NET.Media.DmaBufFormatModifiers.Modifiers.get -> System.Collections.Immutable.ImmutableArray<long>
+PipeWire.NET.Media.DmaBufFormatModifiers.Modifiers.init -> void
+PipeWire.NET.Media.DrmDevice
+PipeWire.NET.Media.DrmDevice.DrmDevice() -> void
+PipeWire.NET.Media.DrmDevice.DrmDevice(ulong id, string? renderNodePath = null) -> void
+PipeWire.NET.Media.DrmDevice.Equals(PipeWire.NET.Media.DrmDevice other) -> bool
+PipeWire.NET.Media.DrmDevice.Id.get -> ulong
+PipeWire.NET.Media.DrmDevice.Major.get -> uint
+PipeWire.NET.Media.DrmDevice.Minor.get -> uint
+PipeWire.NET.Media.DrmDevice.RenderNodePath.get -> string?
+PipeWire.NET.Media.DrmFormat
+PipeWire.NET.Media.DrmFormatModifier
+PipeWire.NET.Media.FrameRetention
+PipeWire.NET.Media.FrameRetention.Borrowed = 2 -> PipeWire.NET.Media.FrameRetention
+PipeWire.NET.Media.FrameRetention.None = 0 -> PipeWire.NET.Media.FrameRetention
+PipeWire.NET.Media.FrameRetention.Owned = 1 -> PipeWire.NET.Media.FrameRetention
+PipeWire.NET.Media.OwnedAudioFrame
+PipeWire.NET.Media.OwnedAudioFrame.<Clone>$() -> PipeWire.NET.Media.OwnedAudioFrame!
+PipeWire.NET.Media.OwnedAudioFrame.Channels.get -> int
+PipeWire.NET.Media.OwnedAudioFrame.Channels.init -> void
+PipeWire.NET.Media.OwnedAudioFrame.Deconstruct(out System.Collections.Immutable.ImmutableArray<byte> Samples, out int SampleRate, out int Channels, out PipeWire.NET.Media.AudioSampleFormat Format, out ulong SequenceNumber, out long? PresentationTimestampNs, out long? QueuedTimeNs, out long? GraphTimeNs, out long? StreamPositionNs, out long DelayNs) -> void
+PipeWire.NET.Media.OwnedAudioFrame.DelayNs.get -> long
+PipeWire.NET.Media.OwnedAudioFrame.DelayNs.init -> void
+PipeWire.NET.Media.OwnedAudioFrame.Equals(PipeWire.NET.Media.OwnedAudioFrame? other) -> bool
+PipeWire.NET.Media.OwnedAudioFrame.Format.get -> PipeWire.NET.Media.AudioSampleFormat
+PipeWire.NET.Media.OwnedAudioFrame.Format.init -> void
+PipeWire.NET.Media.OwnedAudioFrame.GraphTimeNs.get -> long?
+PipeWire.NET.Media.OwnedAudioFrame.GraphTimeNs.init -> void
+PipeWire.NET.Media.OwnedAudioFrame.OwnedAudioFrame(System.Collections.Immutable.ImmutableArray<byte> Samples, int SampleRate, int Channels, PipeWire.NET.Media.AudioSampleFormat Format, ulong SequenceNumber, long? PresentationTimestampNs, long? QueuedTimeNs, long? GraphTimeNs, long? StreamPositionNs, long DelayNs) -> void
+PipeWire.NET.Media.OwnedAudioFrame.PresentationTimestampNs.get -> long?
+PipeWire.NET.Media.OwnedAudioFrame.PresentationTimestampNs.init -> void
+PipeWire.NET.Media.OwnedAudioFrame.QueuedTimeNs.get -> long?
+PipeWire.NET.Media.OwnedAudioFrame.QueuedTimeNs.init -> void
+PipeWire.NET.Media.OwnedAudioFrame.SampleRate.get -> int
+PipeWire.NET.Media.OwnedAudioFrame.SampleRate.init -> void
+PipeWire.NET.Media.OwnedAudioFrame.Samples.get -> System.Collections.Immutable.ImmutableArray<byte>
+PipeWire.NET.Media.OwnedAudioFrame.Samples.init -> void
+PipeWire.NET.Media.OwnedAudioFrame.SequenceNumber.get -> ulong
+PipeWire.NET.Media.OwnedAudioFrame.SequenceNumber.init -> void
+PipeWire.NET.Media.OwnedAudioFrame.StreamPositionNs.get -> long?
+PipeWire.NET.Media.OwnedAudioFrame.StreamPositionNs.init -> void
+PipeWire.NET.Media.OwnedVideoFrame
+PipeWire.NET.Media.OwnedVideoFrame.<Clone>$() -> PipeWire.NET.Media.OwnedVideoFrame!
+PipeWire.NET.Media.OwnedVideoFrame.Color.get -> PipeWire.NET.Media.VideoColorInfo
+PipeWire.NET.Media.OwnedVideoFrame.Color.init -> void
+PipeWire.NET.Media.OwnedVideoFrame.Deconstruct(out System.Collections.Immutable.ImmutableArray<byte> Pixels, out int Stride, out int Width, out int Height, out PipeWire.NET.Media.PixelFormat Format, out ulong SequenceNumber, out PipeWire.NET.Media.VideoColorInfo Color, out long? PresentationTimestampNs, out long? QueuedTimeNs, out long? GraphTimeNs, out long? StreamPositionNs, out long DelayNs) -> void
+PipeWire.NET.Media.OwnedVideoFrame.DelayNs.get -> long
+PipeWire.NET.Media.OwnedVideoFrame.DelayNs.init -> void
+PipeWire.NET.Media.OwnedVideoFrame.Equals(PipeWire.NET.Media.OwnedVideoFrame? other) -> bool
+PipeWire.NET.Media.OwnedVideoFrame.Format.get -> PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.OwnedVideoFrame.Format.init -> void
+PipeWire.NET.Media.OwnedVideoFrame.GraphTimeNs.get -> long?
+PipeWire.NET.Media.OwnedVideoFrame.GraphTimeNs.init -> void
+PipeWire.NET.Media.OwnedVideoFrame.Height.get -> int
+PipeWire.NET.Media.OwnedVideoFrame.Height.init -> void
+PipeWire.NET.Media.OwnedVideoFrame.OwnedVideoFrame(System.Collections.Immutable.ImmutableArray<byte> Pixels, int Stride, int Width, int Height, PipeWire.NET.Media.PixelFormat Format, ulong SequenceNumber, PipeWire.NET.Media.VideoColorInfo Color, long? PresentationTimestampNs, long? QueuedTimeNs, long? GraphTimeNs, long? StreamPositionNs, long DelayNs) -> void
+PipeWire.NET.Media.OwnedVideoFrame.Pixels.get -> System.Collections.Immutable.ImmutableArray<byte>
+PipeWire.NET.Media.OwnedVideoFrame.Pixels.init -> void
+PipeWire.NET.Media.OwnedVideoFrame.PresentationTimestampNs.get -> long?
+PipeWire.NET.Media.OwnedVideoFrame.PresentationTimestampNs.init -> void
+PipeWire.NET.Media.OwnedVideoFrame.QueuedTimeNs.get -> long?
+PipeWire.NET.Media.OwnedVideoFrame.QueuedTimeNs.init -> void
+PipeWire.NET.Media.OwnedVideoFrame.SequenceNumber.get -> ulong
+PipeWire.NET.Media.OwnedVideoFrame.SequenceNumber.init -> void
+PipeWire.NET.Media.OwnedVideoFrame.StreamPositionNs.get -> long?
+PipeWire.NET.Media.OwnedVideoFrame.StreamPositionNs.init -> void
+PipeWire.NET.Media.OwnedVideoFrame.Stride.get -> int
+PipeWire.NET.Media.OwnedVideoFrame.Stride.init -> void
+PipeWire.NET.Media.OwnedVideoFrame.Width.get -> int
+PipeWire.NET.Media.OwnedVideoFrame.Width.init -> void
+PipeWire.NET.Media.PipeWireAudioCapture
+PipeWire.NET.Media.PipeWireAudioCapture.AnnounceLatency(PipeWire.NET.Graph.PipeWireLatency! latency, PipeWire.NET.Graph.PipeWireProcessLatency? processLatency = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireAudioCapture.CommandReceived -> System.Action<PipeWire.NET.Spa.SpaNodeCommand>?
+PipeWire.NET.Media.PipeWireAudioCapture.Connect(PipeWire.NET.Graph.PipeWireNode! source, int sampleRate = 48000, int channels = 2, PipeWire.NET.Media.AudioSampleFormat format = PipeWire.NET.Media.AudioSampleFormat.F32Le, bool stayWithTheSource = false, bool pullMode = false, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireAudioCapture.Connect(uint targetNodeId = 4294967295, int sampleRate = 48000, int channels = 2, PipeWire.NET.Media.AudioSampleFormat format = PipeWire.NET.Media.AudioSampleFormat.F32Le, string? targetObjectName = null, bool stayWithTheSource = false, bool pullMode = false, bool autoConnect = true, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireAudioCapture.Controls.get -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Media.PipeWireStreamControl!>
+PipeWire.NET.Media.PipeWireAudioCapture.Dispose() -> void
+PipeWire.NET.Media.PipeWireAudioCapture.DisposeAsync() -> System.Threading.Tasks.ValueTask
+PipeWire.NET.Media.PipeWireAudioCapture.ExtraProperties.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+PipeWire.NET.Media.PipeWireAudioCapture.ExtraProperties.set -> void
+PipeWire.NET.Media.PipeWireAudioCapture.FrameReady -> PipeWire.NET.Media.PipeWireAudioCapture.FrameReadyHandler?
+PipeWire.NET.Media.PipeWireAudioCapture.FrameReadyHandler
+PipeWire.NET.Media.PipeWireAudioCapture.GetControl(uint id) -> PipeWire.NET.Media.PipeWireStreamControl?
+PipeWire.NET.Media.PipeWireAudioCapture.GraphClock.get -> PipeWire.NET.Graph.PipeWireGraphClock?
+PipeWire.NET.Media.PipeWireAudioCapture.IsDriving.get -> bool
+PipeWire.NET.Media.PipeWireAudioCapture.IsLazy.get -> bool
+PipeWire.NET.Media.PipeWireAudioCapture.LastProcessError.get -> System.Exception?
+PipeWire.NET.Media.PipeWireAudioCapture.NodeId.get -> uint?
+PipeWire.NET.Media.PipeWireAudioCapture.PipeWireAudioCapture(PipeWire.NET.PipeWireContext! context, string! name = "PipeWire.NET.AudioCapture") -> void
+PipeWire.NET.Media.PipeWireAudioCapture.ProcessErrorCount.get -> long
+PipeWire.NET.Media.PipeWireAudioCapture.Queue.get -> PipeWire.NET.Graph.PipeWireStreamQueue?
+PipeWire.NET.Media.PipeWireAudioCapture.RateMatch.get -> PipeWire.NET.Graph.PipeWireRateMatch?
+PipeWire.NET.Media.PipeWireAudioCapture.SetControl(uint id, System.ReadOnlySpan<float> values, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireAudioCapture.SetError(int result, string! message, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireAudioCapture.SetRate(double rate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireAudioCapture.SkipCurrentFrame() -> void
+PipeWire.NET.Media.PipeWireAudioCapture.StateChanged -> PipeWire.NET.Media.PipeWireAudioCapture.StateChangedHandler?
+PipeWire.NET.Media.PipeWireAudioCapture.StateChangedHandler
+PipeWire.NET.Media.PipeWireAudioCapture.Time.get -> PipeWire.NET.Graph.PipeWireStreamTime?
+PipeWire.NET.Media.PipeWireAudioCapture.TriggerProcess() -> void
+PipeWire.NET.Media.PipeWireAudioCapture.TriggerProcessAndWaitAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+PipeWire.NET.Media.PipeWireAudioCapture.UpdateProperties(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! properties) -> int
+PipeWire.NET.Media.PipeWireAudioCapture.WaitForNodeIdAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<uint>!
+PipeWire.NET.Media.PipeWireAudioCapture.WaitForStreamingAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+PipeWire.NET.Media.PipeWireAudioOutput
+PipeWire.NET.Media.PipeWireAudioOutput.AnnounceLatency(PipeWire.NET.Graph.PipeWireLatency! latency, PipeWire.NET.Graph.PipeWireProcessLatency? processLatency = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireAudioOutput.CommandReceived -> System.Action<PipeWire.NET.Spa.SpaNodeCommand>?
+PipeWire.NET.Media.PipeWireAudioOutput.Connect(PipeWire.NET.Graph.PipeWireNode! target, bool autoConnect = true, bool driver = false, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireAudioOutput.Connect(uint targetNodeId = 4294967295, string? targetObjectName = null, bool autoConnect = true, bool driver = false, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireAudioOutput.Controls.get -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Media.PipeWireStreamControl!>
+PipeWire.NET.Media.PipeWireAudioOutput.Dispose() -> void
+PipeWire.NET.Media.PipeWireAudioOutput.DisposeAsync() -> System.Threading.Tasks.ValueTask
+PipeWire.NET.Media.PipeWireAudioOutput.DrainAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+PipeWire.NET.Media.PipeWireAudioOutput.DriveAt(System.TimeSpan interval) -> bool
+PipeWire.NET.Media.PipeWireAudioOutput.ExtraProperties.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+PipeWire.NET.Media.PipeWireAudioOutput.ExtraProperties.set -> void
+PipeWire.NET.Media.PipeWireAudioOutput.FillSamples -> PipeWire.NET.Media.PipeWireAudioOutput.FillSamplesHandler?
+PipeWire.NET.Media.PipeWireAudioOutput.FillSamplesHandler
+PipeWire.NET.Media.PipeWireAudioOutput.GetControl(uint id) -> PipeWire.NET.Media.PipeWireStreamControl?
+PipeWire.NET.Media.PipeWireAudioOutput.GraphClock.get -> PipeWire.NET.Graph.PipeWireGraphClock?
+PipeWire.NET.Media.PipeWireAudioOutput.IsDriving.get -> bool
+PipeWire.NET.Media.PipeWireAudioOutput.IsLazy.get -> bool
+PipeWire.NET.Media.PipeWireAudioOutput.LastProcessError.get -> System.Exception?
+PipeWire.NET.Media.PipeWireAudioOutput.NextPresentationTimestampNs.get -> long?
+PipeWire.NET.Media.PipeWireAudioOutput.NextPresentationTimestampNs.set -> void
+PipeWire.NET.Media.PipeWireAudioOutput.NodeId.get -> uint?
+PipeWire.NET.Media.PipeWireAudioOutput.PipeWireAudioOutput(PipeWire.NET.PipeWireContext! context, string! nodeName, int sampleRate = 48000, int channels = 2, PipeWire.NET.Media.AudioSampleFormat format = PipeWire.NET.Media.AudioSampleFormat.F32Le) -> void
+PipeWire.NET.Media.PipeWireAudioOutput.PlaybackLatency.get -> System.TimeSpan?
+PipeWire.NET.Media.PipeWireAudioOutput.ProcessErrorCount.get -> long
+PipeWire.NET.Media.PipeWireAudioOutput.Queue.get -> PipeWire.NET.Graph.PipeWireStreamQueue?
+PipeWire.NET.Media.PipeWireAudioOutput.RateMatch.get -> PipeWire.NET.Graph.PipeWireRateMatch?
+PipeWire.NET.Media.PipeWireAudioOutput.SetControl(uint id, System.ReadOnlySpan<float> values, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireAudioOutput.SetError(int result, string! message, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireAudioOutput.SetRate(double rate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireAudioOutput.StateChanged -> PipeWire.NET.Media.PipeWireAudioOutput.StateChangedHandler?
+PipeWire.NET.Media.PipeWireAudioOutput.StateChangedHandler
+PipeWire.NET.Media.PipeWireAudioOutput.Time.get -> PipeWire.NET.Graph.PipeWireStreamTime?
+PipeWire.NET.Media.PipeWireAudioOutput.TriggerProcess() -> void
+PipeWire.NET.Media.PipeWireAudioOutput.TriggerProcessAndWaitAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+PipeWire.NET.Media.PipeWireAudioOutput.UpdateProperties(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! properties) -> int
+PipeWire.NET.Media.PipeWireAudioOutput.WaitForNodeIdAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<uint>!
+PipeWire.NET.Media.PipeWireAudioOutput.WaitForStreamingAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+PipeWire.NET.Media.PipeWireBufferType
+PipeWire.NET.Media.PipeWireBufferType.DmaBuf = 3 -> PipeWire.NET.Media.PipeWireBufferType
+PipeWire.NET.Media.PipeWireBufferType.MemFd = 2 -> PipeWire.NET.Media.PipeWireBufferType
+PipeWire.NET.Media.PipeWireBufferType.MemPtr = 1 -> PipeWire.NET.Media.PipeWireBufferType
+PipeWire.NET.Media.PipeWireBufferType.Unknown = 0 -> PipeWire.NET.Media.PipeWireBufferType
+PipeWire.NET.Media.PipeWireFrameHold
+PipeWire.NET.Media.PipeWireFrameHold.Dispose() -> void
+PipeWire.NET.Media.PipeWireOutputFrame
+PipeWire.NET.Media.PipeWireOutputFrame.Acquire.get -> PipeWire.NET.Media.PipeWireSyncPoint?
+PipeWire.NET.Media.PipeWireOutputFrame.BufferIndex.get -> int
+PipeWire.NET.Media.PipeWireOutputFrame.Dispose() -> void
+PipeWire.NET.Media.PipeWireOutputFrame.PipeWireOutputFrame() -> void
+PipeWire.NET.Media.PipeWireOutputFrame.Pixels.get -> System.Span<byte>
+PipeWire.NET.Media.PipeWireOutputFrame.Publish() -> void
+PipeWire.NET.Media.PipeWireOutputFrame.Publish(bool signalAcquire) -> void
+PipeWire.NET.Media.PipeWireOutputFrame.Stride.get -> int
+PipeWire.NET.Media.PipeWireRateController
+PipeWire.NET.Media.PipeWireRateController.Bandwidth.get -> double
+PipeWire.NET.Media.PipeWireRateController.PipeWireRateController() -> void
+PipeWire.NET.Media.PipeWireRateController.Reset() -> void
+PipeWire.NET.Media.PipeWireRateController.SetBandwidth(double bandwidth, int period, int rate) -> void
+PipeWire.NET.Media.PipeWireRateController.Update(double error) -> double
+PipeWire.NET.Media.PipeWireStreamControl
+PipeWire.NET.Media.PipeWireStreamControl.<Clone>$() -> PipeWire.NET.Media.PipeWireStreamControl!
+PipeWire.NET.Media.PipeWireStreamControl.Deconstruct(out uint Id, out string! Name, out float Default, out float Minimum, out float Maximum, out System.Collections.Immutable.ImmutableArray<float> Values, out uint MaximumValues) -> void
+PipeWire.NET.Media.PipeWireStreamControl.Default.get -> float
+PipeWire.NET.Media.PipeWireStreamControl.Default.init -> void
+PipeWire.NET.Media.PipeWireStreamControl.Equals(PipeWire.NET.Media.PipeWireStreamControl? other) -> bool
+PipeWire.NET.Media.PipeWireStreamControl.Id.get -> uint
+PipeWire.NET.Media.PipeWireStreamControl.Id.init -> void
+PipeWire.NET.Media.PipeWireStreamControl.Maximum.get -> float
+PipeWire.NET.Media.PipeWireStreamControl.Maximum.init -> void
+PipeWire.NET.Media.PipeWireStreamControl.MaximumValues.get -> uint
+PipeWire.NET.Media.PipeWireStreamControl.MaximumValues.init -> void
+PipeWire.NET.Media.PipeWireStreamControl.Minimum.get -> float
+PipeWire.NET.Media.PipeWireStreamControl.Minimum.init -> void
+PipeWire.NET.Media.PipeWireStreamControl.Name.get -> string!
+PipeWire.NET.Media.PipeWireStreamControl.Name.init -> void
+PipeWire.NET.Media.PipeWireStreamControl.PipeWireStreamControl(uint Id, string! Name, float Default, float Minimum, float Maximum, System.Collections.Immutable.ImmutableArray<float> Values, uint MaximumValues) -> void
+PipeWire.NET.Media.PipeWireStreamControl.Values.get -> System.Collections.Immutable.ImmutableArray<float>
+PipeWire.NET.Media.PipeWireStreamControl.Values.init -> void
+PipeWire.NET.Media.PipeWireSyncPoint
+PipeWire.NET.Media.PipeWireSyncPoint.Deconstruct(out int Fd, out ulong Point) -> void
+PipeWire.NET.Media.PipeWireSyncPoint.Equals(PipeWire.NET.Media.PipeWireSyncPoint other) -> bool
+PipeWire.NET.Media.PipeWireSyncPoint.Fd.get -> int
+PipeWire.NET.Media.PipeWireSyncPoint.Fd.init -> void
+PipeWire.NET.Media.PipeWireSyncPoint.PipeWireSyncPoint() -> void
+PipeWire.NET.Media.PipeWireSyncPoint.PipeWireSyncPoint(int Fd, ulong Point) -> void
+PipeWire.NET.Media.PipeWireSyncPoint.Point.get -> ulong
+PipeWire.NET.Media.PipeWireSyncPoint.Point.init -> void
+PipeWire.NET.Media.PipeWireVideoCapture
+PipeWire.NET.Media.PipeWireVideoCapture.AnnounceLatency(PipeWire.NET.Graph.PipeWireLatency! latency, PipeWire.NET.Graph.PipeWireProcessLatency? processLatency = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoCapture.CommandReceived -> System.Action<PipeWire.NET.Spa.SpaNodeCommand>?
+PipeWire.NET.Media.PipeWireVideoCapture.Connect(PipeWire.NET.Graph.PipeWireNode! source, System.ReadOnlySpan<PipeWire.NET.Media.PixelFormat> preferredFormats = default(System.ReadOnlySpan<PipeWire.NET.Media.PixelFormat>), System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoCapture.Connect(uint targetNodeId = 4294967295, System.ReadOnlySpan<PipeWire.NET.Media.PixelFormat> preferredFormats = default(System.ReadOnlySpan<PipeWire.NET.Media.PixelFormat>), string? targetObjectName = null, System.ReadOnlySpan<long> modifiers = default(System.ReadOnlySpan<long>), bool stayWithTheSource = false, bool pullMode = false, int preferredWidth = 1920, int preferredHeight = 1080, int preferredFrameRate = 30, bool requestExplicitSync = false, System.ReadOnlySpan<PipeWire.NET.Media.DmaBufDeviceOffer> deviceOffers = default(System.ReadOnlySpan<PipeWire.NET.Media.DmaBufDeviceOffer>), bool autoConnect = true, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoCapture.Controls.get -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Media.PipeWireStreamControl!>
+PipeWire.NET.Media.PipeWireVideoCapture.Dispose() -> void
+PipeWire.NET.Media.PipeWireVideoCapture.DisposeAsync() -> System.Threading.Tasks.ValueTask
+PipeWire.NET.Media.PipeWireVideoCapture.ExtraProperties.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+PipeWire.NET.Media.PipeWireVideoCapture.ExtraProperties.set -> void
+PipeWire.NET.Media.PipeWireVideoCapture.FrameReady -> PipeWire.NET.Media.PipeWireVideoCapture.FrameReadyHandler?
+PipeWire.NET.Media.PipeWireVideoCapture.FrameReadyHandler
+PipeWire.NET.Media.PipeWireVideoCapture.GetControl(uint id) -> PipeWire.NET.Media.PipeWireStreamControl?
+PipeWire.NET.Media.PipeWireVideoCapture.GraphClock.get -> PipeWire.NET.Graph.PipeWireGraphClock?
+PipeWire.NET.Media.PipeWireVideoCapture.HoldCurrentFrame() -> PipeWire.NET.Media.PipeWireFrameHold!
+PipeWire.NET.Media.PipeWireVideoCapture.IsDriving.get -> bool
+PipeWire.NET.Media.PipeWireVideoCapture.IsLazy.get -> bool
+PipeWire.NET.Media.PipeWireVideoCapture.LastProcessError.get -> System.Exception?
+PipeWire.NET.Media.PipeWireVideoCapture.NegotiatedDevice.get -> PipeWire.NET.Media.DrmDevice?
+PipeWire.NET.Media.PipeWireVideoCapture.NegotiatedModifier.get -> ulong
+PipeWire.NET.Media.PipeWireVideoCapture.NodeId.get -> uint?
+PipeWire.NET.Media.PipeWireVideoCapture.PipeWireVideoCapture(PipeWire.NET.PipeWireContext! context, string! name = "PipeWire.NET.VideoCapture") -> void
+PipeWire.NET.Media.PipeWireVideoCapture.ProcessErrorCount.get -> long
+PipeWire.NET.Media.PipeWireVideoCapture.Queue.get -> PipeWire.NET.Graph.PipeWireStreamQueue?
+PipeWire.NET.Media.PipeWireVideoCapture.RateMatch.get -> PipeWire.NET.Graph.PipeWireRateMatch?
+PipeWire.NET.Media.PipeWireVideoCapture.ReleaseBorrowedFrame() -> void
+PipeWire.NET.Media.PipeWireVideoCapture.RequestFormat(System.ReadOnlySpan<PipeWire.NET.Media.PixelFormat> formats, int width, int height, int frameRate = 30) -> bool
+PipeWire.NET.Media.PipeWireVideoCapture.Retention.get -> PipeWire.NET.Media.FrameRetention
+PipeWire.NET.Media.PipeWireVideoCapture.Retention.set -> void
+PipeWire.NET.Media.PipeWireVideoCapture.SetControl(uint id, System.ReadOnlySpan<float> values, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoCapture.SetError(int result, string! message, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoCapture.SetRate(double rate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoCapture.SkipCurrentFrame() -> void
+PipeWire.NET.Media.PipeWireVideoCapture.StateChanged -> PipeWire.NET.Media.PipeWireVideoCapture.StateChangedHandler?
+PipeWire.NET.Media.PipeWireVideoCapture.StateChangedHandler
+PipeWire.NET.Media.PipeWireVideoCapture.Time.get -> PipeWire.NET.Graph.PipeWireStreamTime?
+PipeWire.NET.Media.PipeWireVideoCapture.TriggerProcess() -> void
+PipeWire.NET.Media.PipeWireVideoCapture.TriggerProcessAndWaitAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+PipeWire.NET.Media.PipeWireVideoCapture.TryGetBorrowedFrame(out PipeWire.NET.Media.BorrowedVideoFrame frame) -> bool
+PipeWire.NET.Media.PipeWireVideoCapture.TryGetFrame(out PipeWire.NET.Media.PulledVideoFrame? frame) -> bool
+PipeWire.NET.Media.PipeWireVideoCapture.UpdateProperties(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! properties) -> int
+PipeWire.NET.Media.PipeWireVideoCapture.WaitAcquireOnGpu.get -> bool
+PipeWire.NET.Media.PipeWireVideoCapture.WaitAcquireOnGpu.set -> void
+PipeWire.NET.Media.PipeWireVideoCapture.WaitForNodeIdAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<uint>!
+PipeWire.NET.Media.PipeWireVideoCapture.WaitForStreamingAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+PipeWire.NET.Media.PipeWireVideoOutput
+PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBuf -> PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBufHandler?
+PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBufHandler
+PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBufSync -> PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBufSyncHandler?
+PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBufSyncHandler
+PipeWire.NET.Media.PipeWireVideoOutput.AnnounceLatency(PipeWire.NET.Graph.PipeWireLatency! latency, PipeWire.NET.Graph.PipeWireProcessLatency? processLatency = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoOutput.CommandReceived -> System.Action<PipeWire.NET.Spa.SpaNodeCommand>?
+PipeWire.NET.Media.PipeWireVideoOutput.Connect(PipeWire.NET.Graph.PipeWireNode! target, bool autoConnect = true, bool driver = false, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoOutput.Connect(uint targetNodeId = 4294967295, string? targetObjectName = null, bool autoConnect = true, bool driver = false, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoOutput.ConnectDmaBuf(System.ReadOnlySpan<long> modifiers, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoOutput.ConnectDmaBuf(System.ReadOnlySpan<PipeWire.NET.Media.DmaBufDeviceOffer> offers, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoOutput.ConnectDmaBufSync(System.ReadOnlySpan<long> modifiers, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoOutput.ConnectDmaBufSync(System.ReadOnlySpan<PipeWire.NET.Media.DmaBufDeviceOffer> offers, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoOutput.Controls.get -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Media.PipeWireStreamControl!>
+PipeWire.NET.Media.PipeWireVideoOutput.Dispose() -> void
+PipeWire.NET.Media.PipeWireVideoOutput.DisposeAsync() -> System.Threading.Tasks.ValueTask
+PipeWire.NET.Media.PipeWireVideoOutput.DrainAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+PipeWire.NET.Media.PipeWireVideoOutput.DriveAt(System.TimeSpan interval) -> bool
+PipeWire.NET.Media.PipeWireVideoOutput.ExtraProperties.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+PipeWire.NET.Media.PipeWireVideoOutput.ExtraProperties.set -> void
+PipeWire.NET.Media.PipeWireVideoOutput.FillDmaBuf -> PipeWire.NET.Media.PipeWireVideoOutput.FillDmaBufHandler?
+PipeWire.NET.Media.PipeWireVideoOutput.FillDmaBufHandler
+PipeWire.NET.Media.PipeWireVideoOutput.FillFrame -> PipeWire.NET.Media.PipeWireVideoOutput.FillFrameHandler?
+PipeWire.NET.Media.PipeWireVideoOutput.FillFrameHandler
+PipeWire.NET.Media.PipeWireVideoOutput.GetControl(uint id) -> PipeWire.NET.Media.PipeWireStreamControl?
+PipeWire.NET.Media.PipeWireVideoOutput.GraphClock.get -> PipeWire.NET.Graph.PipeWireGraphClock?
+PipeWire.NET.Media.PipeWireVideoOutput.HostMemoryFallback.get -> bool
+PipeWire.NET.Media.PipeWireVideoOutput.HostMemoryFallback.set -> void
+PipeWire.NET.Media.PipeWireVideoOutput.IsDriving.get -> bool
+PipeWire.NET.Media.PipeWireVideoOutput.IsLazy.get -> bool
+PipeWire.NET.Media.PipeWireVideoOutput.IsPushing.get -> bool
+PipeWire.NET.Media.PipeWireVideoOutput.LastProcessError.get -> System.Exception?
+PipeWire.NET.Media.PipeWireVideoOutput.NegotiatedDevice.get -> PipeWire.NET.Media.DrmDevice?
+PipeWire.NET.Media.PipeWireVideoOutput.NextPresentationTimestampNs.get -> long?
+PipeWire.NET.Media.PipeWireVideoOutput.NextPresentationTimestampNs.set -> void
+PipeWire.NET.Media.PipeWireVideoOutput.NodeId.get -> uint?
+PipeWire.NET.Media.PipeWireVideoOutput.PipeWireVideoOutput(PipeWire.NET.PipeWireContext! context, string! nodeName, int width, int height, PipeWire.NET.Media.PixelFormat format = PipeWire.NET.Media.PixelFormat.Bgra, int frameRate = 30, PipeWire.NET.Media.VideoColorInfo color = default(PipeWire.NET.Media.VideoColorInfo)) -> void
+PipeWire.NET.Media.PipeWireVideoOutput.ProcessErrorCount.get -> long
+PipeWire.NET.Media.PipeWireVideoOutput.PushFrames.get -> bool
+PipeWire.NET.Media.PipeWireVideoOutput.PushFrames.set -> void
+PipeWire.NET.Media.PipeWireVideoOutput.Queue.get -> PipeWire.NET.Graph.PipeWireStreamQueue?
+PipeWire.NET.Media.PipeWireVideoOutput.RateMatch.get -> PipeWire.NET.Graph.PipeWireRateMatch?
+PipeWire.NET.Media.PipeWireVideoOutput.ReleaseDmaBuf -> PipeWire.NET.Media.PipeWireVideoOutput.ReleaseDmaBufHandler?
+PipeWire.NET.Media.PipeWireVideoOutput.ReleaseDmaBufHandler
+PipeWire.NET.Media.PipeWireVideoOutput.RequestFormat(System.ReadOnlySpan<PipeWire.NET.Media.PixelFormat> formats, int width, int height, int frameRate = 30, bool fixedSize = false) -> bool
+PipeWire.NET.Media.PipeWireVideoOutput.SetControl(uint id, System.ReadOnlySpan<float> values, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoOutput.SetError(int result, string! message, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoOutput.SetRate(double rate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+PipeWire.NET.Media.PipeWireVideoOutput.SharesBuffers.get -> bool
+PipeWire.NET.Media.PipeWireVideoOutput.StampSyncPoints(int bufferIndex, ulong acquirePoint, ulong releasePoint) -> void
+PipeWire.NET.Media.PipeWireVideoOutput.StateChanged -> PipeWire.NET.Media.PipeWireVideoOutput.StateChangedHandler?
+PipeWire.NET.Media.PipeWireVideoOutput.StateChangedHandler
+PipeWire.NET.Media.PipeWireVideoOutput.Time.get -> PipeWire.NET.Graph.PipeWireStreamTime?
+PipeWire.NET.Media.PipeWireVideoOutput.TriggerProcess() -> void
+PipeWire.NET.Media.PipeWireVideoOutput.TriggerProcessAndWaitAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+PipeWire.NET.Media.PipeWireVideoOutput.TryBeginFrame(out PipeWire.NET.Media.PipeWireOutputFrame frame) -> bool
+PipeWire.NET.Media.PipeWireVideoOutput.UpdateProperties(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! properties) -> int
+PipeWire.NET.Media.PipeWireVideoOutput.WaitForNodeIdAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<uint>!
+PipeWire.NET.Media.PipeWireVideoOutput.WaitForStreamingAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.PixelFormat.Bgra = 1 -> PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.PixelFormat.Bgrx = 6 -> PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.PixelFormat.Nv12 = 3 -> PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.PixelFormat.Rgba = 0 -> PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.PixelFormat.Rgbx = 5 -> PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.PixelFormat.Unknown = 1000 -> PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.PixelFormat.Yuv420 = 2 -> PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.PixelFormat.Yuyv = 4 -> PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.PulledVideoFrame
+PipeWire.NET.Media.PulledVideoFrame.BufferType.get -> PipeWire.NET.Media.PipeWireBufferType
+PipeWire.NET.Media.PulledVideoFrame.Color.get -> PipeWire.NET.Media.VideoColorInfo
+PipeWire.NET.Media.PulledVideoFrame.Crop.get -> PipeWire.NET.Media.VideoRegion?
+PipeWire.NET.Media.PulledVideoFrame.DelayNs.get -> long
+PipeWire.NET.Media.PulledVideoFrame.Dispose() -> void
+PipeWire.NET.Media.PulledVideoFrame.DrmFourcc.get -> uint
+PipeWire.NET.Media.PulledVideoFrame.Format.get -> PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.PulledVideoFrame.GraphTimeNs.get -> long?
+PipeWire.NET.Media.PulledVideoFrame.Height.get -> int
+PipeWire.NET.Media.PulledVideoFrame.IsFdBacked.get -> bool
+PipeWire.NET.Media.PulledVideoFrame.Modifier.get -> ulong
+PipeWire.NET.Media.PulledVideoFrame.Pixels.get -> System.Collections.Immutable.ImmutableArray<byte>
+PipeWire.NET.Media.PulledVideoFrame.Planes.get -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Media.PulledVideoPlane!>
+PipeWire.NET.Media.PulledVideoFrame.PresentationTimestampNs.get -> long?
+PipeWire.NET.Media.PulledVideoFrame.QueuedTimeNs.get -> long?
+PipeWire.NET.Media.PulledVideoFrame.SequenceNumber.get -> ulong
+PipeWire.NET.Media.PulledVideoFrame.StreamPositionNs.get -> long?
+PipeWire.NET.Media.PulledVideoFrame.Stride.get -> int
+PipeWire.NET.Media.PulledVideoFrame.Transform.get -> PipeWire.NET.Spa.SpaMetaVideotransformValue
+PipeWire.NET.Media.PulledVideoFrame.Width.get -> int
+PipeWire.NET.Media.PulledVideoPlane
+PipeWire.NET.Media.PulledVideoPlane.<Clone>$() -> PipeWire.NET.Media.PulledVideoPlane!
+PipeWire.NET.Media.PulledVideoPlane.Deconstruct(out PipeWire.NET.SafeDescriptorHandle! Descriptor, out uint Offset, out int Stride, out uint Size) -> void
+PipeWire.NET.Media.PulledVideoPlane.Descriptor.get -> PipeWire.NET.SafeDescriptorHandle!
+PipeWire.NET.Media.PulledVideoPlane.Descriptor.init -> void
+PipeWire.NET.Media.PulledVideoPlane.Equals(PipeWire.NET.Media.PulledVideoPlane? other) -> bool
+PipeWire.NET.Media.PulledVideoPlane.Offset.get -> uint
+PipeWire.NET.Media.PulledVideoPlane.Offset.init -> void
+PipeWire.NET.Media.PulledVideoPlane.PulledVideoPlane(PipeWire.NET.SafeDescriptorHandle! Descriptor, uint Offset, int Stride, uint Size) -> void
+PipeWire.NET.Media.PulledVideoPlane.Size.get -> uint
+PipeWire.NET.Media.PulledVideoPlane.Size.init -> void
+PipeWire.NET.Media.PulledVideoPlane.Stride.get -> int
+PipeWire.NET.Media.PulledVideoPlane.Stride.init -> void
+PipeWire.NET.Media.StreamCategory
+PipeWire.NET.Media.StreamCategory.Capture = 0 -> PipeWire.NET.Media.StreamCategory
+PipeWire.NET.Media.StreamCategory.Playback = 1 -> PipeWire.NET.Media.StreamCategory
+PipeWire.NET.Media.StreamMediaType
+PipeWire.NET.Media.StreamMediaType.Audio = 1 -> PipeWire.NET.Media.StreamMediaType
+PipeWire.NET.Media.StreamMediaType.Video = 0 -> PipeWire.NET.Media.StreamMediaType
+PipeWire.NET.Media.StreamProperties
+PipeWire.NET.Media.StreamProperties.StreamProperties(PipeWire.NET.Media.StreamMediaType mediaType, PipeWire.NET.Media.StreamCategory category) -> void
+PipeWire.NET.Media.StreamProperties.Values.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+PipeWire.NET.Media.StreamProperties.With(string! key, string! value) -> PipeWire.NET.Media.StreamProperties!
+PipeWire.NET.Media.StreamProperties.WithNodeDescription(string! description) -> PipeWire.NET.Media.StreamProperties!
+PipeWire.NET.Media.StreamProperties.WithNodeName(string! nodeName) -> PipeWire.NET.Media.StreamProperties!
+PipeWire.NET.Media.StreamProperties.WithRole(string! role) -> PipeWire.NET.Media.StreamProperties!
+PipeWire.NET.Media.StreamProperties.WithTargetObject(string! targetObject) -> PipeWire.NET.Media.StreamProperties!
+PipeWire.NET.Media.VideoChromaSite
+PipeWire.NET.Media.VideoChromaSite.AltLine = 8 -> PipeWire.NET.Media.VideoChromaSite
+PipeWire.NET.Media.VideoChromaSite.Cosited = PipeWire.NET.Media.VideoChromaSite.HCosited | PipeWire.NET.Media.VideoChromaSite.VCosited -> PipeWire.NET.Media.VideoChromaSite
+PipeWire.NET.Media.VideoChromaSite.HCosited = 2 -> PipeWire.NET.Media.VideoChromaSite
+PipeWire.NET.Media.VideoChromaSite.None = 1 -> PipeWire.NET.Media.VideoChromaSite
+PipeWire.NET.Media.VideoChromaSite.Unknown = 0 -> PipeWire.NET.Media.VideoChromaSite
+PipeWire.NET.Media.VideoChromaSite.VCosited = 4 -> PipeWire.NET.Media.VideoChromaSite
+PipeWire.NET.Media.VideoColorInfo
+PipeWire.NET.Media.VideoColorInfo.ChromaSite.get -> PipeWire.NET.Media.VideoChromaSite
+PipeWire.NET.Media.VideoColorInfo.ChromaSite.init -> void
+PipeWire.NET.Media.VideoColorInfo.Deconstruct(out PipeWire.NET.Media.VideoColorRange Range, out PipeWire.NET.Media.VideoColorMatrix Matrix, out PipeWire.NET.Media.VideoTransferFunction Transfer, out PipeWire.NET.Media.VideoColorPrimaries Primaries, out PipeWire.NET.Media.VideoChromaSite ChromaSite) -> void
+PipeWire.NET.Media.VideoColorInfo.Equals(PipeWire.NET.Media.VideoColorInfo other) -> bool
+PipeWire.NET.Media.VideoColorInfo.Matrix.get -> PipeWire.NET.Media.VideoColorMatrix
+PipeWire.NET.Media.VideoColorInfo.Matrix.init -> void
+PipeWire.NET.Media.VideoColorInfo.Primaries.get -> PipeWire.NET.Media.VideoColorPrimaries
+PipeWire.NET.Media.VideoColorInfo.Primaries.init -> void
+PipeWire.NET.Media.VideoColorInfo.Range.get -> PipeWire.NET.Media.VideoColorRange
+PipeWire.NET.Media.VideoColorInfo.Range.init -> void
+PipeWire.NET.Media.VideoColorInfo.Transfer.get -> PipeWire.NET.Media.VideoTransferFunction
+PipeWire.NET.Media.VideoColorInfo.Transfer.init -> void
+PipeWire.NET.Media.VideoColorInfo.VideoColorInfo() -> void
+PipeWire.NET.Media.VideoColorInfo.VideoColorInfo(PipeWire.NET.Media.VideoColorRange Range, PipeWire.NET.Media.VideoColorMatrix Matrix, PipeWire.NET.Media.VideoTransferFunction Transfer, PipeWire.NET.Media.VideoColorPrimaries Primaries, PipeWire.NET.Media.VideoChromaSite ChromaSite = PipeWire.NET.Media.VideoChromaSite.Unknown) -> void
+PipeWire.NET.Media.VideoColorMatrix
+PipeWire.NET.Media.VideoColorMatrix.Bt2020 = 4 -> PipeWire.NET.Media.VideoColorMatrix
+PipeWire.NET.Media.VideoColorMatrix.Bt601 = 3 -> PipeWire.NET.Media.VideoColorMatrix
+PipeWire.NET.Media.VideoColorMatrix.Bt709 = 2 -> PipeWire.NET.Media.VideoColorMatrix
+PipeWire.NET.Media.VideoColorMatrix.Rgb = 1 -> PipeWire.NET.Media.VideoColorMatrix
+PipeWire.NET.Media.VideoColorMatrix.Unknown = 0 -> PipeWire.NET.Media.VideoColorMatrix
+PipeWire.NET.Media.VideoColorPrimaries
+PipeWire.NET.Media.VideoColorPrimaries.Bt2020 = 2 -> PipeWire.NET.Media.VideoColorPrimaries
+PipeWire.NET.Media.VideoColorPrimaries.Bt601 = 3 -> PipeWire.NET.Media.VideoColorPrimaries
+PipeWire.NET.Media.VideoColorPrimaries.Bt709 = 1 -> PipeWire.NET.Media.VideoColorPrimaries
+PipeWire.NET.Media.VideoColorPrimaries.Unknown = 0 -> PipeWire.NET.Media.VideoColorPrimaries
+PipeWire.NET.Media.VideoColorRange
+PipeWire.NET.Media.VideoColorRange.Full_0_255 = 1 -> PipeWire.NET.Media.VideoColorRange
+PipeWire.NET.Media.VideoColorRange.Limited_16_235 = 2 -> PipeWire.NET.Media.VideoColorRange
+PipeWire.NET.Media.VideoColorRange.Unknown = 0 -> PipeWire.NET.Media.VideoColorRange
+PipeWire.NET.Media.VideoCursor
+PipeWire.NET.Media.VideoCursor.Format.get -> PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.VideoCursor.Height.get -> uint
+PipeWire.NET.Media.VideoCursor.HotspotX.get -> int
+PipeWire.NET.Media.VideoCursor.HotspotY.get -> int
+PipeWire.NET.Media.VideoCursor.Id.get -> uint
+PipeWire.NET.Media.VideoCursor.Pixels.get -> System.ReadOnlySpan<byte>
+PipeWire.NET.Media.VideoCursor.Stride.get -> int
+PipeWire.NET.Media.VideoCursor.VideoCursor() -> void
+PipeWire.NET.Media.VideoCursor.Width.get -> uint
+PipeWire.NET.Media.VideoCursor.X.get -> int
+PipeWire.NET.Media.VideoCursor.Y.get -> int
+PipeWire.NET.Media.VideoFrame
+PipeWire.NET.Media.VideoFrame.BufferType.get -> PipeWire.NET.Media.PipeWireBufferType
+PipeWire.NET.Media.VideoFrame.Clone() -> PipeWire.NET.Media.OwnedVideoFrame!
+PipeWire.NET.Media.VideoFrame.Color.get -> PipeWire.NET.Media.VideoColorInfo
+PipeWire.NET.Media.VideoFrame.Crop.get -> PipeWire.NET.Media.VideoRegion?
+PipeWire.NET.Media.VideoFrame.Cursor.get -> PipeWire.NET.Media.VideoCursor
+PipeWire.NET.Media.VideoFrame.Damage.get -> System.ReadOnlySpan<PipeWire.NET.Media.VideoRegion>
+PipeWire.NET.Media.VideoFrame.DelayNs.get -> long
+PipeWire.NET.Media.VideoFrame.DrmFourcc.get -> uint
+PipeWire.NET.Media.VideoFrame.DuplicateFd() -> PipeWire.NET.SafeDescriptorHandle!
+PipeWire.NET.Media.VideoFrame.Fd.get -> long
+PipeWire.NET.Media.VideoFrame.Format.get -> PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.VideoFrame.GetHostPlane(int plane) -> System.ReadOnlySpan<byte>
+PipeWire.NET.Media.VideoFrame.GetHostStride(int plane) -> int
+PipeWire.NET.Media.VideoFrame.GraphTimeNs.get -> long?
+PipeWire.NET.Media.VideoFrame.HasCursor.get -> bool
+PipeWire.NET.Media.VideoFrame.Height.get -> int
+PipeWire.NET.Media.VideoFrame.HostPlaneCount.get -> int
+PipeWire.NET.Media.VideoFrame.IsFdBacked.get -> bool
+PipeWire.NET.Media.VideoFrame.MapOffset.get -> uint
+PipeWire.NET.Media.VideoFrame.Modifier.get -> ulong
+PipeWire.NET.Media.VideoFrame.Pixels.get -> System.ReadOnlySpan<byte>
+PipeWire.NET.Media.VideoFrame.Planes.get -> System.ReadOnlySpan<PipeWire.NET.Media.VideoPlane>
+PipeWire.NET.Media.VideoFrame.PresentationTimestampNs.get -> long?
+PipeWire.NET.Media.VideoFrame.QueuedTimeNs.get -> long?
+PipeWire.NET.Media.VideoFrame.SequenceNumber.get -> ulong
+PipeWire.NET.Media.VideoFrame.StreamPositionNs.get -> long?
+PipeWire.NET.Media.VideoFrame.Stride.get -> int
+PipeWire.NET.Media.VideoFrame.SyncTimeline.get -> PipeWire.NET.Media.VideoSyncTimeline?
+PipeWire.NET.Media.VideoFrame.Transform.get -> PipeWire.NET.Spa.SpaMetaVideotransformValue
+PipeWire.NET.Media.VideoFrame.VideoFrame() -> void
+PipeWire.NET.Media.VideoFrame.VideoFrame(System.ReadOnlySpan<byte> pixels, int stride, int width, int height, PipeWire.NET.Media.PixelFormat format, ulong sequenceNumber, PipeWire.NET.Media.PipeWireBufferType bufferType = PipeWire.NET.Media.PipeWireBufferType.MemPtr, long fd = -1, uint mapOffset = 0, long presentationTimestampNs = -1, PipeWire.NET.Media.VideoColorInfo color = default(PipeWire.NET.Media.VideoColorInfo), long graphTimeNs = -1, long streamPositionNs = -1, long delayNs = 0, ulong modifier = 72057594037927935, System.ReadOnlySpan<PipeWire.NET.Media.VideoPlane> planes = default(System.ReadOnlySpan<PipeWire.NET.Media.VideoPlane>), PipeWire.NET.Media.VideoSyncTimeline? syncTimeline = null, PipeWire.NET.Media.VideoRegion? crop = null, PipeWire.NET.Spa.SpaMetaVideotransformValue transform = PipeWire.NET.Spa.SpaMetaVideotransformValue.None, System.ReadOnlySpan<PipeWire.NET.Media.VideoRegion> damage = default(System.ReadOnlySpan<PipeWire.NET.Media.VideoRegion>), PipeWire.NET.Media.VideoCursor cursor = default(PipeWire.NET.Media.VideoCursor), bool hasCursor = false, long queuedTimeNs = -1, System.ReadOnlySpan<byte> plane1 = default(System.ReadOnlySpan<byte>), int plane1Stride = 0, System.ReadOnlySpan<byte> plane2 = default(System.ReadOnlySpan<byte>), int plane2Stride = 0) -> void
+PipeWire.NET.Media.VideoFrame.Width.get -> int
+PipeWire.NET.Media.VideoPlane
+PipeWire.NET.Media.VideoPlane.Deconstruct(out long Fd, out uint Offset, out int Stride, out uint Size) -> void
+PipeWire.NET.Media.VideoPlane.DuplicateFd() -> PipeWire.NET.SafeDescriptorHandle!
+PipeWire.NET.Media.VideoPlane.Equals(PipeWire.NET.Media.VideoPlane other) -> bool
+PipeWire.NET.Media.VideoPlane.Fd.get -> long
+PipeWire.NET.Media.VideoPlane.Fd.init -> void
+PipeWire.NET.Media.VideoPlane.Offset.get -> uint
+PipeWire.NET.Media.VideoPlane.Offset.init -> void
+PipeWire.NET.Media.VideoPlane.Size.get -> uint
+PipeWire.NET.Media.VideoPlane.Size.init -> void
+PipeWire.NET.Media.VideoPlane.Stride.get -> int
+PipeWire.NET.Media.VideoPlane.Stride.init -> void
+PipeWire.NET.Media.VideoPlane.VideoPlane() -> void
+PipeWire.NET.Media.VideoPlane.VideoPlane(long Fd, uint Offset, int Stride, uint Size) -> void
+PipeWire.NET.Media.VideoRegion
+PipeWire.NET.Media.VideoRegion.Deconstruct(out int X, out int Y, out uint Width, out uint Height) -> void
+PipeWire.NET.Media.VideoRegion.Equals(PipeWire.NET.Media.VideoRegion other) -> bool
+PipeWire.NET.Media.VideoRegion.Height.get -> uint
+PipeWire.NET.Media.VideoRegion.Height.init -> void
+PipeWire.NET.Media.VideoRegion.VideoRegion() -> void
+PipeWire.NET.Media.VideoRegion.VideoRegion(int X, int Y, uint Width, uint Height) -> void
+PipeWire.NET.Media.VideoRegion.Width.get -> uint
+PipeWire.NET.Media.VideoRegion.Width.init -> void
+PipeWire.NET.Media.VideoRegion.X.get -> int
+PipeWire.NET.Media.VideoRegion.X.init -> void
+PipeWire.NET.Media.VideoRegion.Y.get -> int
+PipeWire.NET.Media.VideoRegion.Y.init -> void
+PipeWire.NET.Media.VideoSyncTimeline
+PipeWire.NET.Media.VideoSyncTimeline.AcquireFd.get -> int
+PipeWire.NET.Media.VideoSyncTimeline.AcquireFd.init -> void
+PipeWire.NET.Media.VideoSyncTimeline.AcquirePoint.get -> ulong
+PipeWire.NET.Media.VideoSyncTimeline.AcquirePoint.init -> void
+PipeWire.NET.Media.VideoSyncTimeline.Deconstruct(out PipeWire.NET.Spa.SpaMetaSyncTimelineFlags Flags, out ulong AcquirePoint, out ulong ReleasePoint, out int AcquireFd) -> void
+PipeWire.NET.Media.VideoSyncTimeline.Equals(PipeWire.NET.Media.VideoSyncTimeline other) -> bool
+PipeWire.NET.Media.VideoSyncTimeline.Flags.get -> PipeWire.NET.Spa.SpaMetaSyncTimelineFlags
+PipeWire.NET.Media.VideoSyncTimeline.Flags.init -> void
+PipeWire.NET.Media.VideoSyncTimeline.ReleaseIsUnscheduled.get -> bool
+PipeWire.NET.Media.VideoSyncTimeline.ReleasePoint.get -> ulong
+PipeWire.NET.Media.VideoSyncTimeline.ReleasePoint.init -> void
+PipeWire.NET.Media.VideoSyncTimeline.VideoSyncTimeline() -> void
+PipeWire.NET.Media.VideoSyncTimeline.VideoSyncTimeline(PipeWire.NET.Spa.SpaMetaSyncTimelineFlags Flags, ulong AcquirePoint, ulong ReleasePoint, int AcquireFd = -1) -> void
+PipeWire.NET.Media.VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Bt2020_12 = 4 -> PipeWire.NET.Media.VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Bt601 = 5 -> PipeWire.NET.Media.VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Bt709 = 2 -> PipeWire.NET.Media.VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Gamma22 = 1 -> PipeWire.NET.Media.VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Hlg = 7 -> PipeWire.NET.Media.VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Linear = 8 -> PipeWire.NET.Media.VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Pq = 6 -> PipeWire.NET.Media.VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Srgb = 3 -> PipeWire.NET.Media.VideoTransferFunction
+PipeWire.NET.Media.VideoTransferFunction.Unknown = 0 -> PipeWire.NET.Media.VideoTransferFunction
+static PipeWire.NET.Media.AudioSampleFormatExtensions.BytesPerSample(this PipeWire.NET.Media.AudioSampleFormat fmt) -> int
+static PipeWire.NET.Media.BorrowedVideoPlane.operator !=(PipeWire.NET.Media.BorrowedVideoPlane left, PipeWire.NET.Media.BorrowedVideoPlane right) -> bool
+static PipeWire.NET.Media.BorrowedVideoPlane.operator ==(PipeWire.NET.Media.BorrowedVideoPlane left, PipeWire.NET.Media.BorrowedVideoPlane right) -> bool
+static PipeWire.NET.Media.DmaBufDeviceOffer.operator !=(PipeWire.NET.Media.DmaBufDeviceOffer left, PipeWire.NET.Media.DmaBufDeviceOffer right) -> bool
+static PipeWire.NET.Media.DmaBufDeviceOffer.operator ==(PipeWire.NET.Media.DmaBufDeviceOffer left, PipeWire.NET.Media.DmaBufDeviceOffer right) -> bool
+static PipeWire.NET.Media.DmaBufFormatModifiers.operator !=(PipeWire.NET.Media.DmaBufFormatModifiers left, PipeWire.NET.Media.DmaBufFormatModifiers right) -> bool
+static PipeWire.NET.Media.DmaBufFormatModifiers.operator ==(PipeWire.NET.Media.DmaBufFormatModifiers left, PipeWire.NET.Media.DmaBufFormatModifiers right) -> bool
+static PipeWire.NET.Media.DrmDevice.EnumerateRenderNodes() -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Media.DrmDevice>
+static PipeWire.NET.Media.DrmDevice.FromNumbers(uint major, uint minor) -> PipeWire.NET.Media.DrmDevice
+static PipeWire.NET.Media.DrmDevice.FromRenderNode(string! path) -> PipeWire.NET.Media.DrmDevice
+static PipeWire.NET.Media.DrmDevice.operator !=(PipeWire.NET.Media.DrmDevice left, PipeWire.NET.Media.DrmDevice right) -> bool
+static PipeWire.NET.Media.DrmDevice.operator ==(PipeWire.NET.Media.DrmDevice left, PipeWire.NET.Media.DrmDevice right) -> bool
+static PipeWire.NET.Media.DrmFormat.FromPixelFormat(PipeWire.NET.Media.PixelFormat format) -> uint
+static PipeWire.NET.Media.DrmFormat.FromVideoFormat(PipeWire.NET.Spa.SpaVideoFormat format) -> uint
+static PipeWire.NET.Media.OwnedAudioFrame.operator !=(PipeWire.NET.Media.OwnedAudioFrame? left, PipeWire.NET.Media.OwnedAudioFrame? right) -> bool
+static PipeWire.NET.Media.OwnedAudioFrame.operator ==(PipeWire.NET.Media.OwnedAudioFrame? left, PipeWire.NET.Media.OwnedAudioFrame? right) -> bool
+static PipeWire.NET.Media.OwnedVideoFrame.operator !=(PipeWire.NET.Media.OwnedVideoFrame? left, PipeWire.NET.Media.OwnedVideoFrame? right) -> bool
+static PipeWire.NET.Media.OwnedVideoFrame.operator ==(PipeWire.NET.Media.OwnedVideoFrame? left, PipeWire.NET.Media.OwnedVideoFrame? right) -> bool
+static PipeWire.NET.Media.PipeWireStreamControl.operator !=(PipeWire.NET.Media.PipeWireStreamControl? left, PipeWire.NET.Media.PipeWireStreamControl? right) -> bool
+static PipeWire.NET.Media.PipeWireStreamControl.operator ==(PipeWire.NET.Media.PipeWireStreamControl? left, PipeWire.NET.Media.PipeWireStreamControl? right) -> bool
+static PipeWire.NET.Media.PipeWireSyncPoint.operator !=(PipeWire.NET.Media.PipeWireSyncPoint left, PipeWire.NET.Media.PipeWireSyncPoint right) -> bool
+static PipeWire.NET.Media.PipeWireSyncPoint.operator ==(PipeWire.NET.Media.PipeWireSyncPoint left, PipeWire.NET.Media.PipeWireSyncPoint right) -> bool
+static PipeWire.NET.Media.PipeWireVideoOutput.ExplicitSyncAvailable.get -> bool
+static PipeWire.NET.Media.PulledVideoPlane.operator !=(PipeWire.NET.Media.PulledVideoPlane? left, PipeWire.NET.Media.PulledVideoPlane? right) -> bool
+static PipeWire.NET.Media.PulledVideoPlane.operator ==(PipeWire.NET.Media.PulledVideoPlane? left, PipeWire.NET.Media.PulledVideoPlane? right) -> bool
+static PipeWire.NET.Media.VideoColorInfo.operator !=(PipeWire.NET.Media.VideoColorInfo left, PipeWire.NET.Media.VideoColorInfo right) -> bool
+static PipeWire.NET.Media.VideoColorInfo.operator ==(PipeWire.NET.Media.VideoColorInfo left, PipeWire.NET.Media.VideoColorInfo right) -> bool
+static PipeWire.NET.Media.VideoColorInfo.Unknown.get -> PipeWire.NET.Media.VideoColorInfo
+static PipeWire.NET.Media.VideoPlane.operator !=(PipeWire.NET.Media.VideoPlane left, PipeWire.NET.Media.VideoPlane right) -> bool
+static PipeWire.NET.Media.VideoPlane.operator ==(PipeWire.NET.Media.VideoPlane left, PipeWire.NET.Media.VideoPlane right) -> bool
+static PipeWire.NET.Media.VideoRegion.operator !=(PipeWire.NET.Media.VideoRegion left, PipeWire.NET.Media.VideoRegion right) -> bool
+static PipeWire.NET.Media.VideoRegion.operator ==(PipeWire.NET.Media.VideoRegion left, PipeWire.NET.Media.VideoRegion right) -> bool
+static PipeWire.NET.Media.VideoSyncTimeline.operator !=(PipeWire.NET.Media.VideoSyncTimeline left, PipeWire.NET.Media.VideoSyncTimeline right) -> bool
+static PipeWire.NET.Media.VideoSyncTimeline.operator ==(PipeWire.NET.Media.VideoSyncTimeline left, PipeWire.NET.Media.VideoSyncTimeline right) -> bool
+virtual PipeWire.NET.Media.PipeWireAudioCapture.FrameReadyHandler.Invoke(PipeWire.NET.Media.PipeWireAudioCapture! sender, PipeWire.NET.Media.AudioFrame frame) -> void
+virtual PipeWire.NET.Media.PipeWireAudioCapture.StateChangedHandler.Invoke(PipeWire.NET.Media.PipeWireAudioCapture! sender, PipeWire.NET.Media.PipeWireStreamState oldState, PipeWire.NET.Media.PipeWireStreamState newState) -> void
+virtual PipeWire.NET.Media.PipeWireAudioOutput.FillSamplesHandler.Invoke(PipeWire.NET.Media.PipeWireAudioOutput! sender, System.Span<byte> samples, int sampleRate, int channels, PipeWire.NET.Media.AudioSampleFormat format) -> int
+virtual PipeWire.NET.Media.PipeWireAudioOutput.StateChangedHandler.Invoke(PipeWire.NET.Media.PipeWireAudioOutput! sender, PipeWire.NET.Media.PipeWireStreamState oldState, PipeWire.NET.Media.PipeWireStreamState newState) -> void
+virtual PipeWire.NET.Media.PipeWireVideoCapture.FrameReadyHandler.Invoke(PipeWire.NET.Media.PipeWireVideoCapture! sender, PipeWire.NET.Media.VideoFrame frame) -> void
+virtual PipeWire.NET.Media.PipeWireVideoCapture.StateChangedHandler.Invoke(PipeWire.NET.Media.PipeWireVideoCapture! sender, PipeWire.NET.Media.PipeWireStreamState oldState, PipeWire.NET.Media.PipeWireStreamState newState) -> void
+virtual PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBufHandler.Invoke(PipeWire.NET.Media.PipeWireVideoOutput! sender, int bufferIndex, int width, int height, ulong modifier, PipeWire.NET.Media.DrmDevice? device, System.Span<PipeWire.NET.Media.VideoPlane> planes) -> int
+virtual PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBufSyncHandler.Invoke(PipeWire.NET.Media.PipeWireVideoOutput! sender, int bufferIndex, int width, int height, ulong modifier, PipeWire.NET.Media.DrmDevice? device, System.Span<PipeWire.NET.Media.VideoPlane> planes, out long acquireFd, out long releaseFd) -> int
+virtual PipeWire.NET.Media.PipeWireVideoOutput.FillDmaBufHandler.Invoke(PipeWire.NET.Media.PipeWireVideoOutput! sender, int bufferIndex) -> bool
+virtual PipeWire.NET.Media.PipeWireVideoOutput.FillFrameHandler.Invoke(PipeWire.NET.Media.PipeWireVideoOutput! sender, System.Span<byte> pixels, int stride, int width, int height, PipeWire.NET.Media.PixelFormat format) -> bool
+virtual PipeWire.NET.Media.PipeWireVideoOutput.ReleaseDmaBufHandler.Invoke(PipeWire.NET.Media.PipeWireVideoOutput! sender, int bufferIndex) -> void
+virtual PipeWire.NET.Media.PipeWireVideoOutput.StateChangedHandler.Invoke(PipeWire.NET.Media.PipeWireVideoOutput! sender, PipeWire.NET.Media.PipeWireStreamState oldState, PipeWire.NET.Media.PipeWireStreamState newState) -> void
+~override PipeWire.NET.Media.BorrowedVideoPlane.Equals(object obj) -> bool
+~override PipeWire.NET.Media.BorrowedVideoPlane.ToString() -> string
+~override PipeWire.NET.Media.DmaBufDeviceOffer.Equals(object obj) -> bool
+~override PipeWire.NET.Media.DmaBufDeviceOffer.ToString() -> string
+~override PipeWire.NET.Media.DmaBufFormatModifiers.Equals(object obj) -> bool
+~override PipeWire.NET.Media.DmaBufFormatModifiers.ToString() -> string
+~override PipeWire.NET.Media.DrmDevice.Equals(object obj) -> bool
+~override PipeWire.NET.Media.PipeWireSyncPoint.Equals(object obj) -> bool
+~override PipeWire.NET.Media.PipeWireSyncPoint.ToString() -> string
+~override PipeWire.NET.Media.VideoColorInfo.Equals(object obj) -> bool
+~override PipeWire.NET.Media.VideoColorInfo.ToString() -> string
+~override PipeWire.NET.Media.VideoPlane.Equals(object obj) -> bool
+~override PipeWire.NET.Media.VideoPlane.ToString() -> string
+~override PipeWire.NET.Media.VideoRegion.Equals(object obj) -> bool
+~override PipeWire.NET.Media.VideoRegion.ToString() -> string
+~override PipeWire.NET.Media.VideoSyncTimeline.Equals(object obj) -> bool
+~override PipeWire.NET.Media.VideoSyncTimeline.ToString() -> string

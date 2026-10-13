@@ -18,6 +18,7 @@
       Condition="'$(TargetFramework)' != 'net11.0'"
     />
     <PackageVersion Include="MinVer" Version="8.0.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" />
     <PackageVersion Include="MSTest.TestFramework" Version="4.4.1" />
     <PackageVersion Include="MSTest.TestAdapter" Version="4.4.1" />
     <PackageVersion Include="Microsoft.Testing.Platform.MSBuild" Version="2.4.1" />

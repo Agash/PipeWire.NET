@@ -731,6 +731,8 @@ if len(seen) < 100:
 
 header = io.open(header_path, encoding='utf-8').read().rstrip('\n')
 lines = [header, '']
+lines.append('#nullable enable')
+lines.append('')
 lines.append('namespace PipeWire.NET.Graph;')
 lines.append('')
 lines.append('/// <summary>')
