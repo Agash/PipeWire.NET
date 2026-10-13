@@ -74,7 +74,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
             return ragged;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         await reg.WaitUntilAsync(g => g.Nodes.Any(n => n.NodeName == nodeName), cts.Token);
         Assert.IsNotNull(output.NodeId, "a connected output must expose its node id");
@@ -95,7 +95,15 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
                 Interlocked.Increment(ref ragged);
         };
 
-        capture.Connect((await output.WaitForNodeIdAsync(cts.Token)), Rate, Channels, Format);
+        capture.Connect(
+            PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)),
+            new()
+            {
+                SampleRate = Rate,
+                Channels = Channels,
+                Format = Format,
+            }
+        );
 
         await received
             .AtLeast(5)
@@ -150,7 +158,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
 
             // autoConnect: false keeps the session manager from routing this to the default sink,
             // which on a developer's machine is their speakers. The consumer targets it by id.
-            output.Connect(autoConnect: false);
+            output.Connect(options: new() { AutoConnect = false });
 
             await reg.WaitUntilAsync(g => g.Nodes.Any(n => n.NodeName == nodeName), cts.Token);
             Assert.IsNotNull(output.NodeId, "a connected output must expose its node id");
@@ -190,7 +198,15 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
                     Interlocked.Increment(ref allZero);
             };
 
-            capture.Connect((await output.WaitForNodeIdAsync(cts.Token)), rate, channels, format);
+            capture.Connect(
+                PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)),
+                new()
+                {
+                    SampleRate = rate,
+                    Channels = channels,
+                    Format = format,
+                }
+            );
 
             await received
                 .AtLeast(5)
@@ -231,7 +247,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
                 s.Clear();
                 return s.Length;
             };
-            output.Connect(autoConnect: false);
+            output.Connect(options: new() { AutoConnect = false });
 
             PipeWireGraphSnapshot graph = await reg.WaitUntilAsync(
                 g =>
@@ -293,7 +309,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
                 asked.Increment();
                 return 0;
             };
-            output.Connect(autoConnect: false);
+            output.Connect(options: new() { AutoConnect = false });
 
             await reg.WaitUntilAsync(
                 g => g.Nodes.Any(n => n.NodeName == "pwnet_art_silent"),
@@ -303,7 +319,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
             var received = 0;
             await using var capture = new PipeWireAudioCapture(ctx, "pwnet-art-silent-sink");
             capture.FrameReady += (_, _) => Interlocked.Increment(ref received);
-            capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
+            capture.Connect(PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)));
 
             await asked
                 .AtLeast(5)
@@ -339,7 +355,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
                 asked.Increment();
                 throw new InvalidOperationException("hostile fill handler");
             };
-            output.Connect(autoConnect: false);
+            output.Connect(options: new() { AutoConnect = false });
 
             await reg.WaitUntilAsync(
                 g => g.Nodes.Any(n => n.NodeName == "pwnet_art_throw"),
@@ -350,7 +366,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
             // would pass without exercising anything. A consumer pulling from it is what makes the
             // throwing callback actually run.
             await using var capture = new PipeWireAudioCapture(ctx, "pwnet-art-throw-sink");
-            capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
+            capture.Connect(PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)));
 
             await asked
                 .AtLeast(5)
@@ -400,7 +416,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
                 s.Clear();
                 return s.Length;
             };
-            output.Connect(autoConnect: false);
+            output.Connect(options: new() { AutoConnect = false });
 
             Assert.ThrowsExactly<InvalidOperationException>(
                 () => output.Connect(),
@@ -459,7 +475,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
         {
             await using var output = new PipeWireAudioOutput(ctx, "pwnet_clock_out");
             output.FillSamples += (_, _, _, _, _) => 0;
-            output.Connect(autoConnect: false);
+            output.Connect(options: new() { AutoConnect = false });
 
             await reg.WaitUntilAsync(
                 g => g.Nodes.Any(n => n.NodeName == "pwnet_clock_out"),
@@ -467,7 +483,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
             );
 
             await using var capture = new PipeWireAudioCapture(ctx, "pwnet-clock-in");
-            capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
+            capture.Connect(PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)));
 
             // The area arrives with the first cycle, not with the connect: read once a frame has.
             _ = await capture.NextFrame().Within(TimeSpan.FromSeconds(5), cts.Token);
@@ -517,7 +533,7 @@ public sealed class AudioRoundTripTests : PipeWireTestBase
                 samples.Clear();
                 return samples.Length;
             };
-            output.Connect(autoConnect: false);
+            output.Connect(options: new() { AutoConnect = false });
 
             await reg.WaitUntilAsync(
                 g => g.Nodes.Any(n => n.NodeName == "pwnet_art_seterror"),

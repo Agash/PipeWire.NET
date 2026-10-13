@@ -207,13 +207,16 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
                     ]),
                 (capture, node) =>
                     capture.Connect(
-                        node,
-                        [PixelFormat.Bgra],
-                        deviceOffers:
-                        [
-                            new DmaBufDeviceOffer(Phantom(251), PixelFormat.Bgra, [Linear]),
-                            new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear]),
-                        ]
+                        PipeWireTarget.Id(node),
+                        new()
+                        {
+                            PreferredFormats = [PixelFormat.Bgra],
+                            DeviceOffers =
+                            [
+                                new DmaBufDeviceOffer(Phantom(251), PixelFormat.Bgra, [Linear]),
+                                new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear]),
+                            ],
+                        }
                     )
             );
 
@@ -252,7 +255,11 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
                 gbm,
                 output =>
                     output.ConnectDmaBuf([new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear])]),
-                (capture, node) => capture.Connect(node, [PixelFormat.Bgra], modifiers: [Linear])
+                (capture, node) =>
+                    capture.Connect(
+                        PipeWireTarget.Id(node),
+                        new() { PreferredFormats = [PixelFormat.Bgra], Modifiers = [Linear] }
+                    )
             );
 
             Assert.IsTrue(
@@ -287,12 +294,18 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
             Outcome o = await StreamAsync(
                 "pwnet-devid-oldsrc",
                 gbm,
-                output => output.ConnectDmaBuf([Linear]),
+                output => output.ConnectDmaBufWithoutDevice([Linear]),
                 (capture, node) =>
                     capture.Connect(
-                        node,
-                        [PixelFormat.Bgra],
-                        deviceOffers: [new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear])]
+                        PipeWireTarget.Id(node),
+                        new()
+                        {
+                            PreferredFormats = [PixelFormat.Bgra],
+                            DeviceOffers =
+                            [
+                                new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear]),
+                            ],
+                        }
                     )
             );
 
@@ -321,15 +334,22 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
                 "pwnet-devid-sync",
                 gbm,
                 output =>
-                    output.ConnectDmaBufSync([
-                        new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear]),
-                    ]),
+                    output.ConnectDmaBuf(
+                        [new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear])],
+                        explicitSync: true
+                    ),
                 (capture, node) =>
                     capture.Connect(
-                        node,
-                        [PixelFormat.Bgra],
-                        deviceOffers: [new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear])],
-                        requestExplicitSync: true
+                        PipeWireTarget.Id(node),
+                        new()
+                        {
+                            PreferredFormats = [PixelFormat.Bgra],
+                            DeviceOffers =
+                            [
+                                new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear]),
+                            ],
+                            RequestExplicitSync = true,
+                        }
                     ),
                 explicitSync: true
             );
@@ -372,12 +392,15 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
                     output.ConnectDmaBuf([new DmaBufDeviceOffer(real, PixelFormat.Bgra, [Linear])]),
                 (capture, node) =>
                     capture.Connect(
-                        node,
-                        [PixelFormat.Bgra],
-                        deviceOffers:
-                        [
-                            new DmaBufDeviceOffer(Phantom(252), PixelFormat.Bgra, [Linear]),
-                        ]
+                        PipeWireTarget.Id(node),
+                        new()
+                        {
+                            PreferredFormats = [PixelFormat.Bgra],
+                            DeviceOffers =
+                            [
+                                new DmaBufDeviceOffer(Phantom(252), PixelFormat.Bgra, [Linear]),
+                            ],
+                        }
                     ),
                 wantFrames: 1,
                 budget: TimeSpan.FromSeconds(4)

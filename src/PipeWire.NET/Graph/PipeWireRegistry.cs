@@ -1085,23 +1085,6 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         return CreateLink(output, input);
     }
 
-    /// <summary>Links two ports named by id and returns the link once the graph reports it.</summary>
-    /// <param name="outputPortId">The port data leaves from.</param>
-    /// <param name="inputPortId">The port data arrives at.</param>
-    /// <param name="cancellationToken">
-    /// Abandons the wait. The request is already on its way, so cancelling does not recall it: the
-    /// daemon can still create the link after this throws.
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// An id is not a port in the current graph, or a port faces the wrong way.
-    /// </exception>
-    /// <exception cref="PipeWireException">The daemon refused the request.</exception>
-    public Task<PipeWireLink> CreateLinkAsync(
-        uint outputPortId,
-        uint inputPortId,
-        CancellationToken cancellationToken = default
-    ) => CreateLink(outputPortId, inputPortId).ExecuteAsync(cancellationToken);
-
     internal async Task<PipeWireLink> ExecuteLinkCreationAsync(
         PipeWirePort output,
         PipeWirePort input,
@@ -1139,17 +1122,6 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
             throw;
         }
     }
-
-    /// <summary>
-    /// Removes a link. Works for links this client created and for links owned by anyone else,
-    /// which is the common case for a patchbay.
-    /// </summary>
-    /// <exception cref="PipeWireException">
-    /// The daemon refused, usually for want of execute permission on the global. Check
-    /// <see cref="PipeWireException.IsPermissionDenied"/> rather than the message.
-    /// </exception>
-    public Task RemoveLinkAsync(uint linkId, CancellationToken cancellationToken = default) =>
-        DestroyGlobalAsync(linkId, cancellationToken);
 
     /// <summary>
     /// Asks the daemon to destroy any global by id: a node, a link, or anything else the registry
@@ -1279,11 +1251,16 @@ public sealed partial class PipeWireRegistry : IDisposable, IAsyncDisposable
         }
     }
 
-    /// <inheritdoc cref="RemoveLinkAsync(uint, CancellationToken)"/>
+    /// <summary>
+    /// Asks the daemon to destroy a link, as <see cref="DestroyGlobalAsync"/> does for any global.
+    /// </summary>
+    /// <param name="link">The link.</param>
+    /// <param name="cancellationToken">Cancels waiting for the daemon.</param>
+    /// <returns>A task that completes once the daemon removed the link.</returns>
     public Task RemoveLinkAsync(PipeWireLink link, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(link);
-        return RemoveLinkAsync(link.LinkId, cancellationToken);
+        return DestroyGlobalAsync(link.LinkId, cancellationToken);
     }
 
     private unsafe Task<(uint Id, PipeWireProxyHandle Proxy)> CreateObjectAsync(

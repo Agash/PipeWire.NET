@@ -395,7 +395,7 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
             cancellationToken: cts.Token
         );
 
-        output.Connect(sink.NodeId);
+        output.Connect(PipeWireTarget.Id(sink.NodeId));
 
         uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
         await output.WaitForStreamingAsync(cts.Token);
@@ -431,7 +431,7 @@ public sealed class LifetimeInvariantTests : PipeWireTestBase
         };
         // The same explicit target as the first stream: this one is proving the context still
         // works, not that the session manager can find somewhere to route to.
-        next.Connect(sink.NodeId);
+        next.Connect(PipeWireTarget.Id(sink.NodeId));
         await next.WaitForStreamingAsync(cts.Token);
 
         await next.DisposeAsync();

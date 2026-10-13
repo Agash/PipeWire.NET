@@ -690,7 +690,7 @@ public sealed class NativeLibraryResolutionTests : PipeWireTestBase
             Interlocked.Increment(ref produced);
             return samples.Length;
         };
-        output.Connect(targetObjectName: sink.NodeName, autoConnect: false);
+        output.Connect(PipeWireTarget.Named(sink.NodeName!), new() { AutoConnect = false });
 
         // AudioFrame is a ref struct and can't be a TResult - capture scalar facts.
         var captured = new TaskCompletionSource<(int Rate, int Channels)>(
@@ -700,10 +700,13 @@ public sealed class NativeLibraryResolutionTests : PipeWireTestBase
         capture.FrameReady += (_, frame) =>
             captured.TrySetResult((frame.SampleRate, frame.Channels));
         capture.Connect(
-            sampleRate: rate,
-            channels: channels,
-            format: AudioSampleFormat.F32Le,
-            targetObjectName: "PipeWire.NET.Test.Source"
+            PipeWireTarget.Named("PipeWire.NET.Test.Source"),
+            new()
+            {
+                SampleRate = rate,
+                Channels = channels,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
 
         (int Rate, int Channels) got = await captured.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -768,7 +771,7 @@ public sealed class NativeLibraryResolutionTests : PipeWireTestBase
             Interlocked.Increment(ref produced);
             return true;
         };
-        output.Connect(targetObjectName: sink.NodeName, autoConnect: false);
+        output.Connect(PipeWireTarget.Named(sink.NodeName!), new() { AutoConnect = false });
 
         // Copy enough captured bytes out of the ref-struct frame to verify content.
         var captured = new TaskCompletionSource<(
@@ -790,8 +793,8 @@ public sealed class NativeLibraryResolutionTests : PipeWireTestBase
             );
         };
         capture.Connect(
-            preferredFormats: stackalloc[] { PixelFormat.Bgra },
-            targetObjectName: "PipeWire.NET.Test.VideoSource"
+            PipeWireTarget.Named("PipeWire.NET.Test.VideoSource"),
+            new() { PreferredFormats = [PixelFormat.Bgra] }
         );
 
         var got = await captured.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -881,8 +884,8 @@ public sealed class NativeLibraryResolutionTests : PipeWireTestBase
             captured.TrySetResult(frame.Pixels[..4].ToArray());
         };
         capture.Connect(
-            preferredFormats: stackalloc[] { PixelFormat.Bgra },
-            targetObjectName: "PipeWire.NET.Test.AlphaSource"
+            PipeWireTarget.Named("PipeWire.NET.Test.AlphaSource"),
+            new() { PreferredFormats = [PixelFormat.Bgra] }
         );
 
         byte[] firstPixel = await captured.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -939,10 +942,13 @@ public sealed class NativeLibraryResolutionTests : PipeWireTestBase
         await using var capture = new PipeWireAudioCapture(ctx, "PipeWire.NET.Test.SuicidalSink");
         capture.FrameReady += (_, _) => flowed.TrySetResult();
         capture.Connect(
-            sampleRate: rate,
-            channels: channels,
-            format: AudioSampleFormat.F32Le,
-            targetObjectName: "PipeWire.NET.Test.Suicidal"
+            PipeWireTarget.Named("PipeWire.NET.Test.Suicidal"),
+            new()
+            {
+                SampleRate = rate,
+                Channels = channels,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
 
         await refused.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -981,10 +987,13 @@ public sealed class NativeLibraryResolutionTests : PipeWireTestBase
         await using var capture = new PipeWireAudioCapture(ctx, "PipeWire.NET.Test.StateThrowSink");
         capture.FrameReady += (_, _) => flowed.TrySetResult();
         capture.Connect(
-            sampleRate: rate,
-            channels: channels,
-            format: AudioSampleFormat.F32Le,
-            targetObjectName: "PipeWire.NET.Test.StateThrow"
+            PipeWireTarget.Named("PipeWire.NET.Test.StateThrow"),
+            new()
+            {
+                SampleRate = rate,
+                Channels = channels,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
 
         await flowed.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -1016,12 +1025,11 @@ public sealed class StreamGuardTests : PipeWireTestBase
             capture.WaitForStreamingAsync(cts.Token)
         );
         Assert.ThrowsExactly<ArgumentException>(() => capture.SetControl(0, []));
-        Assert.ThrowsExactly<ArgumentNullException>(() => capture.Connect(null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
+            capture.Connect(PipeWireTarget.Node(null!))
+        );
         Assert.ThrowsExactly<ArgumentException>(() =>
-            capture.Connect(
-                modifiers: new long[] { 1 },
-                preferredFormats: ReadOnlySpan<PixelFormat>.Empty
-            )
+            capture.Connect(options: new() { Modifiers = [1] })
         );
 
         // The source overload forwards to the id overload once the null check passes. It starts
@@ -1057,9 +1065,18 @@ public sealed class StreamGuardTests : PipeWireTestBase
             capture.WaitForStreamingAsync(cts.Token)
         );
         Assert.ThrowsExactly<ArgumentException>(() => capture.SetControl(0, []));
-        Assert.ThrowsExactly<ArgumentNullException>(() => capture.Connect(null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
+            capture.Connect(PipeWireTarget.Node(null!))
+        );
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
-            capture.Connect(sampleRate: 0, channels: 2, format: AudioSampleFormat.F32Le)
+            capture.Connect(
+                options: new()
+                {
+                    SampleRate = 0,
+                    Channels = 2,
+                    Format = AudioSampleFormat.F32Le,
+                }
+            )
         );
 
         await using var registry = new PipeWireRegistry(ctx);

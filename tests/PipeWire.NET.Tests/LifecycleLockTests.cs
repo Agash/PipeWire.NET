@@ -152,7 +152,7 @@ public sealed class LifecycleLockTests : PipeWireTestBase
             channels: 2,
             format: PipeWire.NET.Media.AudioSampleFormat.F32Le
         );
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
         abandoned.Add(new WeakReference(output));
 
         PipeWireFilter filter = PipeWireFilter.Create(ctx, "pwnet_abandoned_filter");

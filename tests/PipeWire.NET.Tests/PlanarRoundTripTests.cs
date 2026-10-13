@@ -64,7 +64,7 @@ public sealed class PlanarRoundTripTests : PipeWireTestBase
 
             return true;
         };
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
         uint node = await output.WaitForNodeIdAsync(cts.Token);
 
         TaskCompletionSource<(
@@ -93,7 +93,15 @@ public sealed class PlanarRoundTripTests : PipeWireTestBase
 
             seen.TrySetResult((frame.HostPlaneCount, samples, frame.Clone(), frame.Color));
         };
-        capture.Connect(node, [format], preferredWidth: Width, preferredHeight: Height);
+        capture.Connect(
+            PipeWireTarget.Id(node),
+            new()
+            {
+                PreferredFormats = [format],
+                PreferredWidth = Width,
+                PreferredHeight = Height,
+            }
+        );
 
         (int planes, byte[] samples, OwnedVideoFrame copy, VideoColorInfo color) =
             await seen.Task.WaitAsync(cts.Token);

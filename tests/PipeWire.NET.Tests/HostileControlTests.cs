@@ -64,7 +64,7 @@ public sealed class HostileControlTests : PipeWireTestBase
                 // value, with an empty answer, or with an exception - and never hang.
                 Task<ImmutableArray<SpaObject>> reading = control.EnumerateParametersAsync(
                     SpaParamType.Props,
-                    cts.Token
+                    cancellationToken: cts.Token
                 );
                 Task destroying = registry.DestroyGlobalAsync(node.NodeId, cts.Token);
 
@@ -161,7 +161,10 @@ public sealed class HostileControlTests : PipeWireTestBase
 
                 try
                 {
-                    await control.EnumerateParametersAsync(SpaParamType.Props, attempt.Token);
+                    await control.EnumerateParametersAsync(
+                        SpaParamType.Props,
+                        cancellationToken: attempt.Token
+                    );
                 }
                 catch (OperationCanceledException) { }
             }
@@ -202,15 +205,15 @@ public sealed class HostileControlTests : PipeWireTestBase
             {
                 Task<ImmutableArray<SpaObject>> props = control.EnumerateParametersAsync(
                     SpaParamType.Props,
-                    cts.Token
+                    cancellationToken: cts.Token
                 );
                 Task<ImmutableArray<SpaObject>> propInfo = control.EnumerateParametersAsync(
                     SpaParamType.PropInfo,
-                    cts.Token
+                    cancellationToken: cts.Token
                 );
                 Task<ImmutableArray<SpaObject>> formats = control.EnumerateParametersAsync(
                     SpaParamType.EnumFormat,
-                    cts.Token
+                    cancellationToken: cts.Token
                 );
 
                 await Task.WhenAll(props, propInfo, formats);
@@ -320,13 +323,13 @@ public sealed class HostileControlTests : PipeWireTestBase
                 await control.SetVolumeAsync(-1f, cts.Token)
             );
             Assert.ThrowsExactly<ArgumentException>(() =>
-                control.SetChannelVolumesAsync([], cts.Token)
+                control.SetChannelVolumesAsync([], cancellationToken: cts.Token)
             );
             Assert.ThrowsExactly<ArgumentException>(() =>
-                control.SetChannelVolumesAsync([0.5f, -0.5f], cts.Token)
+                control.SetChannelVolumesAsync([0.5f, -0.5f], cancellationToken: cts.Token)
             );
             Assert.ThrowsExactly<ArgumentException>(() =>
-                control.SetChannelVolumesAsync([float.NaN], cts.Token)
+                control.SetChannelVolumesAsync([float.NaN], cancellationToken: cts.Token)
             );
 
             // And what it cannot prove is wrong, it sends: the daemon decides. Infinity is a real
@@ -371,7 +374,7 @@ public sealed class HostileControlTests : PipeWireTestBase
 
             await using PipeWireNodeProxy control = registry.BindNode(node.NodeId);
 
-            await control.SetChannelVolumesAsync([0.3f, 0.7f], cts.Token);
+            await control.SetChannelVolumesAsync([0.3f, 0.7f], cancellationToken: cts.Token);
             ImmutableArray<float> before = await control.GetChannelVolumesAsync(cts.Token);
             Assert.AreEqual(2, before.Length);
 
@@ -384,7 +387,10 @@ public sealed class HostileControlTests : PipeWireTestBase
             // count that does not match into that many copies of the average. Which of the two a
             // fresh node is in is the session manager's timing, so both are the contract and
             // anything else is not.
-            await control.SetChannelVolumesAsync([.. Enumerable.Repeat(0.1f, 8)], cts.Token);
+            await control.SetChannelVolumesAsync(
+                [.. Enumerable.Repeat(0.1f, 8)],
+                cancellationToken: cts.Token
+            );
             ImmutableArray<float> mismatched = await control.GetChannelVolumesAsync(cts.Token);
             bool storedAsGiven =
                 mismatched.Length == 8 && mismatched.All(v => Math.Abs(v - 0.1f) < 0.001f);
@@ -407,7 +413,7 @@ public sealed class HostileControlTests : PipeWireTestBase
             // one. Corruption, the subject here, is a matching write that never takes; the history of
             // every read is in the message.
             var history = new List<string>();
-            await control.SetChannelVolumesAsync([0.3f, 0.7f], cts.Token);
+            await control.SetChannelVolumesAsync([0.3f, 0.7f], cancellationToken: cts.Token);
             ImmutableArray<float> after = await control.SettleAsync(
                 SpaParamType.Props,
                 ct => control.GetChannelVolumesAsync(ct),

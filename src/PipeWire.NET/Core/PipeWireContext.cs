@@ -490,7 +490,7 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     /// startable state.
     /// </para>
     /// </remarks>
-    public Task StartAsync(SafeHandle fd, CancellationToken cancellationToken = default)
+    public Task StartOnFdAsync(SafeHandle fd, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
@@ -507,7 +507,7 @@ public sealed partial class PipeWireContext : IDisposable, IAsyncDisposable
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Low-level counterpart of <see cref="StartAsync(SafeHandle, CancellationToken)"/> for
+    /// Low-level counterpart of <see cref="StartOnFdAsync"/> for
     /// callers that hold the descriptor itself and manage its lifetime explicitly. Ownership
     /// transfers on success: from a successful connect on, PipeWire owns the descriptor and
     /// closes it when the connection is torn down. On a failed start the descriptor is left

@@ -97,70 +97,25 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
         );
     }
 
-    /// <summary>Any node - let the session manager choose where this stream is routed.</summary>
-    public const uint AnyNode = NativeConstants.PW_ID_ANY;
-
-    /// <summary>Connects, playing into a node you already hold.</summary>
-    /// <param name="target">The sink to play into, from a graph snapshot.</param>
-    /// <param name="autoConnect">Let the session manager route this stream.</param>
-    /// <param name="driver">
-    /// Take the driver role, so cycles happen when this stream asks for them. The daemon still
-    /// decides: <see cref="IsDriving"/> says whether it did.
-    /// </param>
-    /// <param name="cancellationToken">Abandons the wait for the loop lock.</param>
-    /// <remarks>
-    /// The same as the id overload, for a caller holding the node rather than its id - which is
-    /// what a graph snapshot hands out. Both captures have had this shape all along.
-    /// </remarks>
-    /// <exception cref="ArgumentNullException"><paramref name="target"/> is <see langword="null"/>.</exception>
-    public void Connect(
-        PipeWireNode target,
-        bool autoConnect = true,
-        bool driver = false,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(target);
-        Connect(
-            target.NodeId,
-            autoConnect: autoConnect,
-            driver: driver,
-            cancellationToken: cancellationToken
-        );
-    }
 
     /// <summary>Starts publishing.</summary>
-    /// <param name="targetNodeId">
-    /// The node to route into, or <see cref="AnyNode"/> to let the session manager decide.
-    /// </param>
-    /// <param name="targetObjectName">
-    /// Optional <c>target.object</c> - bind to a specific node by name or serial regardless of
-    /// the session manager's default-device routing.
-    /// </param>
-    /// <param name="autoConnect">
-    /// When true the session manager routes this stream automatically, which for a playback stream
-    /// means the current default sink, that is the speakers. Pass <see langword="false"/> to publish
-    /// the node and leave it unrouted, so a caller can link it deliberately. A test or a transport
-    /// usually wants that; a media player does not.
-    /// </param>
-    /// <param name="driver">
-    /// Ask to be the graph's driver (<c>PW_STREAM_FLAG_DRIVER</c>), so cycles happen when this stream
-    /// triggers them rather than on another node's clock - upstream's video-src and audio-src connect
-    /// this way to pace their own output. Pair with <see cref="DriveAt"/>. The daemon still decides:
-    /// <see cref="IsDriving"/> says whether it did. Without it the stream is only ever a follower.
-    /// </param>
+    /// <param name="target">The sink to play into; the session manager's pick by default.</param>
+    /// <param name="options">How to connect; <see cref="StreamOutputOptions.Default"/> when null.</param>
     /// <param name="cancellationToken">
     /// Abandons the wait for the loop lock. The connect request itself is issued
     /// synchronously once that is held, so there is nothing to recall after it.
     /// </param>
     public unsafe void Connect(
-        uint targetNodeId = AnyNode,
-        string? targetObjectName = null,
-        bool autoConnect = true,
-        bool driver = false,
+        PipeWireTarget target = default,
+        StreamOutputOptions? options = null,
         CancellationToken cancellationToken = default
     )
     {
+        uint targetNodeId = target.NativeId;
+        string? targetObjectName = target.ObjectName;
+        StreamOutputOptions o = options ?? StreamOutputOptions.Default;
+        bool autoConnect = o.AutoConnect;
+        bool driver = o.Driver;
         if (_core is not null)
             throw new InvalidOperationException("Already connected.");
 

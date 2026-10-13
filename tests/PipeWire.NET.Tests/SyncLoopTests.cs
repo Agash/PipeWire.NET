@@ -79,10 +79,10 @@ public sealed class SyncLoopTests
         await ctx.StartAsync(cts.Token);
 
         await using PipeWireAudioOutput output = SilentOutput(ctx, nodeName);
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         await using var capture = new PipeWireAudioCapture(ctx, $"{nodeName}-sink");
-        capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
+        capture.Connect(PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
         output.AnnounceLatency(
@@ -178,12 +178,12 @@ public sealed class SyncLoopTests
             return samples.Length;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         var receivedSamples = new Tally();
         await using var capture = new PipeWireAudioCapture(ctx, $"{nodeName}-sink");
         capture.FrameReady += (_, f) => receivedSamples.Add(f.Samples.Length / 4);
-        capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
+        capture.Connect(PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
         // The area is set up with the link, before the first cycle delivers anything.
@@ -254,15 +254,18 @@ public sealed class SyncLoopTests
             samples.Clear();
             return samples.Length;
         };
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         await using var capture = new PipeWireAudioCapture(ctx, $"{nodeName}-sink");
         capture.FrameReady += (_, f) => Interlocked.Add(ref framesHanded, f.FrameCount);
         capture.Connect(
-            (await output.WaitForNodeIdAsync(ct)),
-            sampleRate: offRate,
-            channels: Channels,
-            format: AudioSampleFormat.F32Le
+            PipeWireTarget.Id(await output.WaitForNodeIdAsync(ct)),
+            new()
+            {
+                SampleRate = offRate,
+                Channels = Channels,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
 
         await capture.WaitForStreamingAsync(ct);
@@ -382,10 +385,10 @@ public sealed class SyncLoopTests
         await ctx.StartAsync(cts.Token);
 
         await using PipeWireAudioOutput output = SilentOutput(ctx, nodeName);
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         await using var capture = new PipeWireAudioCapture(ctx, $"{nodeName}-sink");
-        capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
+        capture.Connect(PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
         uint nodeId = (await output.WaitForNodeIdAsync(cts.Token));
@@ -459,7 +462,7 @@ public sealed class SyncLoopTests
             return samples.Length;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         float highestSeen = 0;
         await using var capture = new PipeWireAudioCapture(ctx, $"{nodeName}-sink");
@@ -480,10 +483,13 @@ public sealed class SyncLoopTests
         };
 
         capture.Connect(
-            (await output.WaitForNodeIdAsync(cts.Token)),
-            sampleRate: Rate,
-            channels: 1,
-            format: AudioSampleFormat.F32Le
+            PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)),
+            new()
+            {
+                SampleRate = Rate,
+                Channels = 1,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
 
         await capture.WaitForStreamingAsync(cts.Token);

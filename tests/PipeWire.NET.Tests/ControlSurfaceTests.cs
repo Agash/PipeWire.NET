@@ -259,7 +259,12 @@ public sealed class ControlSurfaceTests : PipeWireTestBase
             // must describe the same state.
             Task<ImmutableArray<SpaObject>>[] reads = Enumerable
                 .Range(0, 8)
-                .Select(_ => control.EnumerateParametersAsync(SpaParamType.Props, cts.Token))
+                .Select(_ =>
+                    control.EnumerateParametersAsync(
+                        SpaParamType.Props,
+                        cancellationToken: cts.Token
+                    )
+                )
                 .ToArray();
             ImmutableArray<SpaObject>[] results = await Task.WhenAll(reads);
             foreach (ImmutableArray<SpaObject> result in results)

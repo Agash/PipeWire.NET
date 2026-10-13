@@ -90,7 +90,7 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
 
         output.FillDmaBuf += (_, _) => true;
         output.StateChanged += (_, _, s) => streaming = s == PipeWireStreamState.Streaming;
-        output.ConnectDmaBuf([modifier]);
+        output.ConnectDmaBufWithoutDevice([modifier]);
 
         uint nodeId = await output
             .WaitForNodeIdAsync()
@@ -105,7 +105,10 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
                 dmaBufFrames.Increment();
         };
 
-        capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
+        capture.Connect(
+            PipeWireTarget.Id(nodeId),
+            new() { PreferredFormats = [PixelFormat.Bgra], Modifiers = [modifier] }
+        );
 
         // Not driven from here. This node is not the graph's driver, and pw_stream_trigger_process
         // on a node that is not one reaches the real driver as RequestProcess, which an audio
@@ -438,7 +441,7 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
             };
 
             output.FillDmaBuf += (_, _) => true;
-            output.ConnectDmaBuf([modifier]);
+            output.ConnectDmaBufWithoutDevice([modifier]);
 
             uint nodeId = await output.WaitForNodeIdAsync();
 
@@ -456,7 +459,10 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
                             dmaBufFrames.Increment();
                     };
 
-                    capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
+                    capture.Connect(
+                        PipeWireTarget.Id(nodeId),
+                        new() { PreferredFormats = [PixelFormat.Bgra], Modifiers = [modifier] }
+                    );
 
                     _ = await dmaBufFrames
                         .AtLeast(10)
@@ -606,7 +612,7 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
             };
 
             output.FillDmaBuf += (_, _) => true;
-            output.ConnectDmaBuf([modifier]);
+            output.ConnectDmaBufWithoutDevice([modifier]);
 
             uint nodeId = await output
                 .WaitForNodeIdAsync()
@@ -615,7 +621,10 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
 
             await using var capture = new PipeWireVideoCapture(ctx, $"pwnet-badalloc-sink-{mode}");
             capture.FrameReady += (_, _) => Interlocked.Increment(ref framesSeen);
-            capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
+            capture.Connect(
+                PipeWireTarget.Id(nodeId),
+                new() { PreferredFormats = [PixelFormat.Bgra], Modifiers = [modifier] }
+            );
 
             // An absence is asserted below: nothing may be published, which only a window shows.
             await Task.Delay(TimeSpan.FromSeconds(3));

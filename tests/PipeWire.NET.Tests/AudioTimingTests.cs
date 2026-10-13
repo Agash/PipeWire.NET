@@ -57,7 +57,7 @@ public sealed class AudioTimingTests : PipeWireTestBase
             samples.Clear();
             return samples.Length;
         };
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         await reg.WaitUntilAsync(g => g.Nodes.Any(n => n.NodeName == nodeName), cts.Token);
 
@@ -87,7 +87,7 @@ public sealed class AudioTimingTests : PipeWireTestBase
             }
         };
 
-        capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
+        capture.Connect(PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
         _ = await stamps.Reaching(8).Within(TimeSpan.FromMilliseconds(3000), cts.Token);
@@ -156,7 +156,7 @@ public sealed class AudioTimingTests : PipeWireTestBase
             samples.Clear();
             return samples.Length;
         };
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         await reg.WaitUntilAsync(g => g.Nodes.Any(n => n.NodeName == nodeName), cts.Token);
 
@@ -164,7 +164,7 @@ public sealed class AudioTimingTests : PipeWireTestBase
             ctx,
             $"pwnet-audioq-sink-{Environment.ProcessId}"
         );
-        capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
+        capture.Connect(PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
         // A few cycles through, so the queue has been filled and reported.
@@ -210,13 +210,13 @@ public sealed class AudioTimingTests : PipeWireTestBase
             samples.Clear();
             return samples.Length;
         };
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         await using var capture = new PipeWireAudioCapture(
             ctx,
             $"pwnet-audiolat-sink-{Environment.ProcessId}"
         );
-        capture.Connect(await output.WaitForNodeIdAsync(cts.Token));
+        capture.Connect(PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
         // The clock and queue fill in over the first cycles; poll for them rather than guess.

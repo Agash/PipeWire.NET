@@ -248,7 +248,10 @@ public sealed class CoreSyncContractTests : PipeWireTestBase
                 // out of band on the error stream, carrying the request's own sequence number -
                 // which is the only thing tying the failure to the caller waiting on it.
                 await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(async () =>
-                    await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token)
+                    await control.EnumerateParametersAsync(
+                        SpaParamType.EnumProfile,
+                        cancellationToken: cts.Token
+                    )
                 );
 
                 // An error must fault only the request it belongs to. A read of a parameter the

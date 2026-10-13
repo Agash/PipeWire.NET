@@ -51,7 +51,7 @@ public sealed class HostMemoryFallbackTests : PipeWireTestBase
                 pixels.Slice(y * stride, w * 4).Fill((byte)(0x20 + (y % 7)));
             return true;
         };
-        output.ConnectDmaBuf([(long)DrmFormatModifier.Linear]);
+        output.ConnectDmaBufWithoutDevice([(long)DrmFormatModifier.Linear]);
         uint node = await output.WaitForNodeIdAsync(cts.Token);
 
         TaskCompletionSource<(byte First, byte Last, PipeWireBufferType Type)> seen = new(
@@ -68,7 +68,15 @@ public sealed class HostMemoryFallbackTests : PipeWireTestBase
                     (frame.Pixels[0], frame.Pixels[(Height - 1) * frame.Stride], frame.BufferType)
                 );
         };
-        capture.Connect(node, [PixelFormat.Bgra], preferredWidth: Width, preferredHeight: Height);
+        capture.Connect(
+            PipeWireTarget.Id(node),
+            new()
+            {
+                PreferredFormats = [PixelFormat.Bgra],
+                PreferredWidth = Width,
+                PreferredHeight = Height,
+            }
+        );
 
         (byte first, byte last, PipeWireBufferType type) = await seen.Task.WaitAsync(cts.Token);
         Assert.AreEqual((byte)0x20, first);

@@ -1,506 +1,3 @@
-abstract PipeWire.NET.Spa.SpaValue.<Clone>$() -> PipeWire.NET.Spa.SpaValue!
-abstract PipeWire.NET.Spa.SpaValue.Type.get -> PipeWire.NET.Spa.SpaType
-const PipeWire.NET.Graph.PipeWireClientProxy.AnyObject = 4294967295 -> uint
-const PipeWire.NET.Graph.PipeWireKeys.MODULE_ARGS = "module.args" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.MODULE_FILENAME = "module.filename" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_ACCESS = "pipewire.access" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_ICON = "application.icon" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_ICON_NAME = "application.icon-name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_ID = "application.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_LANGUAGE = "application.language" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_NAME = "application.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_PROCESS_BINARY = "application.process.binary" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_PROCESS_HOST = "application.process.host" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_PROCESS_ID = "application.process.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_PROCESS_MACHINE_ID = "application.process.machine-id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_PROCESS_SESSION_ID = "application.process.session-id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_PROCESS_USER = "application.process.user" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_VERSION = "application.version" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_AUDIO_ALLOWED_RATES = "audio.allowed-rates" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_AUDIO_CHANNEL = "audio.channel" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_AUDIO_CHANNELS = "audio.channels" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_AUDIO_FORMAT = "audio.format" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_AUDIO_RATE = "audio.rate" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CLIENT_ACCESS = "pipewire.client.access" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CLIENT_API = "client.api" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CLIENT_ID = "client.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CLIENT_NAME = "client.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CONFIG_NAME = "config.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CONFIG_OVERRIDE_NAME = "config.override.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CONFIG_OVERRIDE_PREFIX = "config.override.prefix" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CONFIG_PREFIX = "config.prefix" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CONTEXT_PROFILE_MODULES = "context.profile.modules" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CORE_DAEMON = "core.daemon" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CORE_ID = "core.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CORE_MONITORS = "core.monitors" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CORE_NAME = "core.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CORE_VERSION = "core.version" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CPU_CORES = "cpu.cores" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CPU_MAX_ALIGN = "cpu.max-align" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_API = "device.api" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_BUS = "device.bus" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_BUS_PATH = "device.bus-path" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_CACHE_PARAMS = "device.cache-params" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_CLASS = "device.class" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_DESCRIPTION = "device.description" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_FORM_FACTOR = "device.form-factor" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_ICON = "device.icon" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_ICON_NAME = "device.icon-name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_ID = "device.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_INTENDED_ROLES = "device.intended-roles" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_NAME = "device.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_NICK = "device.nick" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_PLUGGED = "device.plugged" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_PRODUCT_ID = "device.product.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_PRODUCT_NAME = "device.product.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_SERIAL = "device.serial" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_STRING = "device.string" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_SUBSYSTEM = "device.subsystem" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_SYSFS_PATH = "device.sysfs.path" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_VENDOR_ID = "device.vendor.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_VENDOR_NAME = "device.vendor.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_FACTORY_ID = "factory.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_FACTORY_NAME = "factory.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_FACTORY_TYPE_NAME = "factory.type.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_FACTORY_TYPE_VERSION = "factory.type.version" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_FACTORY_USAGE = "factory.usage" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_FORMAT_DSP = "format.dsp" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_HOST_NAME = "context.host-name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LIBRARY_NAME_DBUS = "library.name.dbus" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LIBRARY_NAME_LOOP = "library.name.loop" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LIBRARY_NAME_SYSTEM = "library.name.system" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_ASYNC = "link.async" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_FEEDBACK = "link.feedback" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_ID = "link.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_INPUT_NODE = "link.input.node" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_INPUT_PORT = "link.input.port" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_OUTPUT_NODE = "link.output.node" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_OUTPUT_PORT = "link.output.port" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_PASSIVE = "link.passive" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LOOP_CANCEL = "loop.cancel" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LOOP_CLASS = "loop.class" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LOOP_NAME = "loop.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LOOP_RT_PRIO = "loop.rt-prio" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_ALBUM = "media.album" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_ARTIST = "media.artist" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_CATEGORY = "media.category" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_CLASS = "media.class" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_COMMENT = "media.comment" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_COPYRIGHT = "media.copyright" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_DATE = "media.date" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_FILENAME = "media.filename" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_FORMAT = "media.format" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_ICON = "media.icon" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_ICON_NAME = "media.icon-name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_LANGUAGE = "media.language" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_NAME = "media.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_ROLE = "media.role" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_SOFTWARE = "media.software" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_TITLE = "media.title" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_TYPE = "media.type" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_METADATA_NAME = "metadata.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_METADATA_VALUES = "metadata.values" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MODULE_AUTHOR = "module.author" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MODULE_DEPRECATED = "module.deprecated" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MODULE_DESCRIPTION = "module.description" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MODULE_ID = "module.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MODULE_NAME = "module.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MODULE_USAGE = "module.usage" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MODULE_VERSION = "module.version" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_ALWAYS_PROCESS = "node.always-process" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_ASYNC = "node.async" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_AUTOCONNECT = "node.autoconnect" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_CACHE_PARAMS = "node.cache-params" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_CHANNELNAMES = "node.channel-names" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_DESCRIPTION = "node.description" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_DEVICE_PORT_NAME_PREFIX = "node.device-port-name-prefix" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_DONT_RECONNECT = "node.dont-reconnect" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_DRIVER = "node.driver" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_DRIVER_ID = "node.driver-id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_EXCLUSIVE = "node.exclusive" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_FORCE_QUANTUM = "node.force-quantum" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_FORCE_RATE = "node.force-rate" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_GROUP = "node.group" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_ID = "node.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_LATENCY = "node.latency" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_LINK_GROUP = "node.link-group" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_LOCK_QUANTUM = "node.lock-quantum" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_LOCK_RATE = "node.lock-rate" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_LOOP_CLASS = "node.loop.class" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_LOOP_NAME = "node.loop.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_MAX_LATENCY = "node.max-latency" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_NAME = "node.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_NETWORK = "node.network" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_NICK = "node.nick" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_PASSIVE = "node.passive" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_PAUSE_ON_IDLE = "node.pause-on-idle" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_PHYSICAL = "node.physical" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_PLUGGED = "node.plugged" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_RATE = "node.rate" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_RELIABLE = "node.reliable" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_SESSION = "node.session" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_STREAM = "node.stream" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_SUPPORTS_LAZY = "node.supports-lazy" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_SUPPORTS_REQUEST = "node.supports-request" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_SUSPEND_ON_IDLE = "node.suspend-on-idle" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_SYNC = "node.sync" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_SYNC_GROUP = "node.sync-group" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_TERMINAL = "node.terminal" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_TRANSPORT = "node.transport" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_TRANSPORT_SYNC = "node.transport.sync" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_TRIGGER = "node.trigger" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_VIRTUAL = "node.virtual" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_WANT_DRIVER = "node.want-driver" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_OBJECT_EXPORT = "object.export" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_OBJECT_ID = "object.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_OBJECT_LINGER = "object.linger" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_OBJECT_PATH = "object.path" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_OBJECT_REGISTER = "object.register" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_OBJECT_SERIAL = "object.serial" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_ALIAS = "port.alias" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_CACHE_PARAMS = "port.cache-params" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_CONTROL = "port.control" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_DIRECTION = "port.direction" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_EXCLUSIVE = "port.exclusive" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_EXTRA = "port.extra" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_GROUP = "port.group" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_ID = "port.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_IGNORE_LATENCY = "port.ignore-latency" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_MONITOR = "port.monitor" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_NAME = "port.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_PASSIVE = "port.passive" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_PHYSICAL = "port.physical" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_RELIABLE = "port.reliable" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_TERMINAL = "port.terminal" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PRIORITY_DRIVER = "priority.driver" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PRIORITY_SESSION = "priority.session" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PROFILER_NAME = "profiler.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PROTOCOL = "pipewire.protocol" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_REMOTE_INTENTION = "remote.intention" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_REMOTE_NAME = "remote.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_APP_ID = "pipewire.sec.app-id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_ENGINE = "pipewire.sec.engine" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_GID = "pipewire.sec.gid" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_INSTANCE_ID = "pipewire.sec.instance-id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_LABEL = "pipewire.sec.label" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_PID = "pipewire.sec.pid" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_SOCKET = "pipewire.sec.socket" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_UID = "pipewire.sec.uid" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_STREAM_CAPTURE_SINK = "stream.capture.sink" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_STREAM_DONT_REMIX = "stream.dont-remix" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_STREAM_IS_LIVE = "stream.is-live" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_STREAM_LATENCY_MAX = "stream.latency.max" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_STREAM_LATENCY_MIN = "stream.latency.min" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_STREAM_MONITOR = "stream.monitor" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_TARGET_OBJECT = "target.object" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_USER_NAME = "context.user-name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_VIDEO_FORMAT = "video.format" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_VIDEO_RATE = "video.framerate" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_VIDEO_SIZE = "video.size" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_WINDOW_X11_DISPLAY = "window.x11.display" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Client = "PipeWire:Interface:Client" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Core = "PipeWire:Interface:Core" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Device = "PipeWire:Interface:Device" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Factory = "PipeWire:Interface:Factory" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Link = "PipeWire:Interface:Link" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Metadata = "PipeWire:Interface:Metadata" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Module = "PipeWire:Interface:Module" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Node = "PipeWire:Interface:Node" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Port = "PipeWire:Interface:Port" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Profiler = "PipeWire:Interface:Profiler" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Registry = "PipeWire:Interface:Registry" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_SecurityContext = "PipeWire:Interface:SecurityContext" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA = "api.alsa" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_BIND_CTLS = "api.alsa.bind-ctls" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_CARD = "api.alsa.card" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_CARD_COMPONENTS = "api.alsa.card.components" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_CARD_DRIVER = "api.alsa.card.driver" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_CARD_ID = "api.alsa.card.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_CARD_LONGNAME = "api.alsa.card.longname" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_CARD_MIXERNAME = "api.alsa.card.mixername" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_CARD_NAME = "api.alsa.card.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_DISABLE_LONGNAME = "api.alsa.disable-longname" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_IGNORE_DB = "api.alsa.ignore-dB" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_OPEN_UCM = "api.alsa.open.ucm" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PATH = "api.alsa.path" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_CARD = "api.alsa.pcm.card" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_CLASS = "api.alsa.pcm.class" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_DEVICE = "api.alsa.pcm.device" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_ID = "api.alsa.pcm.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_NAME = "api.alsa.pcm.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_STREAM = "api.alsa.pcm.stream" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_SUBCLASS = "api.alsa.pcm.subclass" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_SUBDEVICE = "api.alsa.pcm.subdevice" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_SUBNAME = "api.alsa.pcm.subname" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_SYNC_ID = "api.alsa.pcm.sync-id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_SPLIT_ENABLE = "api.alsa.split-enable" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_SPLIT_HW_POSITION = "api.alsa.split.hw-position" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_SPLIT_PARENT = "api.alsa.split.parent" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_SPLIT_POSITION = "api.alsa.split.position" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_USE_UCM = "api.alsa.use-ucm" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5 = "api.bluez5" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_ADDRESS = "api.bluez5.address" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_CLASS = "api.bluez5.class" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_CODEC = "api.bluez5.codec" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_CONNECTION = "api.bluez5.connection" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_DEVICE = "api.bluez5.device" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_ICON = "api.bluez5.icon" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_PATH = "api.bluez5.path" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_PROFILE = "api.bluez5.profile" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_ROLE = "api.bluez5.role" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_TRANSPORT = "api.bluez5.transport" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_GLIB_MAINLOOP = "api.glib.mainloop" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_JACK = "api.jack" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_JACK_CLIENT = "api.jack.client" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_JACK_SERVER = "api.jack.server" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_LIBCAMERA = "api.libcamera" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_LIBCAMERA_LOCATION = "api.libcamera.location" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_LIBCAMERA_PATH = "api.libcamera.path" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_LIBCAMERA_ROTATION = "api.libcamera.rotation" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_UDEV = "api.udev" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_UDEV_MATCH = "api.udev.match" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2 = "api.v4l2" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2_CAP_BUS_INFO = "api.v4l2.cap.bus_info" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2_CAP_CAPABILITIES = "api.v4l2.cap.capabilities" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2_CAP_CARD = "api.v4l2.cap.card" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2_CAP_DEVICE_CAPS = "api.v4l2.cap.device-caps" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2_CAP_DRIVER = "api.v4l2.cap.driver" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2_CAP_VERSION = "api.v4l2.cap.version" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2_PATH = "api.v4l2.path" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_AUDIO_ALLOWED_RATES = "audio.allowed-rates" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_AUDIO_CHANNEL = "audio.channel" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_AUDIO_CHANNELS = "audio.channels" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_AUDIO_FORMAT = "audio.format" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_AUDIO_LAYOUT = "audio.layout" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_AUDIO_POSITION = "audio.position" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_AUDIO_RATE = "audio.rate" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_ALIAS = "device.alias" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_API = "device.api" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_BUS = "device.bus" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_BUS_ID = "device.bus-id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_BUS_PATH = "device.bus-path" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_CAPABILITIES = "device.capabilities" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_CLASS = "device.class" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_DESCRIPTION = "device.description" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_DEVIDS = "device.devids" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_ENUM_API = "device.enum.api" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_FORM_FACTOR = "device.form-factor" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_ICON = "device.icon" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_ICON_NAME = "device.icon-name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_NAME = "device.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_NICK = "device.nick" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_PLUGGED_USEC = "device.plugged.usec" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_PRODUCT_ID = "device.product.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_PRODUCT_NAME = "device.product.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_PROFILE = "device.profile" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_PROFILE_SET = "device.profile-set" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_SERIAL = "device.serial" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_STRING = "device.string" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_SUBSYSTEM = "device.subsystem" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_SYSFS_PATH = "device.sysfs.path" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_VENDOR_ID = "device.vendor.id" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_VENDOR_NAME = "device.vendor.name" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_MEDIA_CLASS = "media.class" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_MEDIA_ROLE = "media.role" -> string!
-const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_OBJECT_PATH = "object.path" -> string!
-const PipeWire.NET.Graph.PipeWireMetadataProxy.SubjectCore = 0 -> uint
-const PipeWire.NET.PipeWireDiagnostics.Name = "PipeWire.NET" -> string!
-const PipeWire.NET.Spa.SpaPod.MaxDepth = 32 -> int
-override PipeWire.NET.Graph.PipeWireClient.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWireClient.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireClient.ToString() -> string!
-override PipeWire.NET.Graph.PipeWireCore.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWireCore.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireCore.ToString() -> string!
-override PipeWire.NET.Graph.PipeWireDevice.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWireDevice.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireDevice.ToString() -> string!
-override PipeWire.NET.Graph.PipeWireFactory.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWireFactory.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireFactory.ToString() -> string!
-override PipeWire.NET.Graph.PipeWireGraphClock.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireLatency.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWireLatency.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireLatency.ToString() -> string!
-override PipeWire.NET.Graph.PipeWireLink.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWireLink.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireLink.ToString() -> string!
-override PipeWire.NET.Graph.PipeWireMetadata.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWireMetadata.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireMetadata.ToString() -> string!
-override PipeWire.NET.Graph.PipeWireMetadataEntry.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWireMetadataEntry.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireMetadataEntry.ToString() -> string!
-override PipeWire.NET.Graph.PipeWireModule.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWireModule.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireModule.ToString() -> string!
-override PipeWire.NET.Graph.PipeWireNode.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWireNode.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireNode.ToString() -> string!
-override PipeWire.NET.Graph.PipeWireObjectPermission.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireParameterInfo.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWirePort.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWirePort.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWirePort.ToString() -> string!
-override PipeWire.NET.Graph.PipeWirePortConfig.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWirePortConfig.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWirePortConfig.ToString() -> string!
-override PipeWire.NET.Graph.PipeWireProcessLatency.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWireProcessLatency.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireProcessLatency.ToString() -> string!
-override PipeWire.NET.Graph.PipeWireProfiler.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWireProfiler.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireProfiler.ToString() -> string!
-override PipeWire.NET.Graph.PipeWireRateMatch.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireSecurityContext.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWireSecurityContext.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireSecurityContext.ToString() -> string!
-override PipeWire.NET.Graph.PipeWireStreamQueue.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireStreamTime.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireTag.Equals(object? obj) -> bool
-override PipeWire.NET.Graph.PipeWireTag.GetHashCode() -> int
-override PipeWire.NET.Graph.PipeWireTag.ToString() -> string!
-override PipeWire.NET.Graph.PipeWireVideoCycle.GetHashCode() -> int
-override PipeWire.NET.SafeDescriptorHandle.IsInvalid.get -> bool
-override PipeWire.NET.Spa.SpaArray.<Clone>$() -> PipeWire.NET.Spa.SpaArray!
-override PipeWire.NET.Spa.SpaArray.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaArray.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaArray.ToString() -> string!
-override PipeWire.NET.Spa.SpaArray.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaBitmap.<Clone>$() -> PipeWire.NET.Spa.SpaBitmap!
-override PipeWire.NET.Spa.SpaBitmap.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaBitmap.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaBitmap.ToString() -> string!
-override PipeWire.NET.Spa.SpaBitmap.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaBool.<Clone>$() -> PipeWire.NET.Spa.SpaBool!
-override PipeWire.NET.Spa.SpaBool.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaBool.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaBool.ToString() -> string!
-override PipeWire.NET.Spa.SpaBool.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaBytes.<Clone>$() -> PipeWire.NET.Spa.SpaBytes!
-override PipeWire.NET.Spa.SpaBytes.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaBytes.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaBytes.ToString() -> string!
-override PipeWire.NET.Spa.SpaBytes.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaChoice.<Clone>$() -> PipeWire.NET.Spa.SpaChoice!
-override PipeWire.NET.Spa.SpaChoice.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaChoice.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaChoice.ToString() -> string!
-override PipeWire.NET.Spa.SpaChoice.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaControl.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaControl.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaControl.ToString() -> string!
-override PipeWire.NET.Spa.SpaDouble.<Clone>$() -> PipeWire.NET.Spa.SpaDouble!
-override PipeWire.NET.Spa.SpaDouble.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaDouble.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaDouble.ToString() -> string!
-override PipeWire.NET.Spa.SpaDouble.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaFd.<Clone>$() -> PipeWire.NET.Spa.SpaFd!
-override PipeWire.NET.Spa.SpaFd.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaFd.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaFd.ToString() -> string!
-override PipeWire.NET.Spa.SpaFd.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaFloat.<Clone>$() -> PipeWire.NET.Spa.SpaFloat!
-override PipeWire.NET.Spa.SpaFloat.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaFloat.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaFloat.ToString() -> string!
-override PipeWire.NET.Spa.SpaFloat.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaFraction.<Clone>$() -> PipeWire.NET.Spa.SpaFraction!
-override PipeWire.NET.Spa.SpaFraction.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaFraction.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaFraction.ToString() -> string!
-override PipeWire.NET.Spa.SpaFraction.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaId.<Clone>$() -> PipeWire.NET.Spa.SpaId!
-override PipeWire.NET.Spa.SpaId.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaId.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaId.ToString() -> string!
-override PipeWire.NET.Spa.SpaId.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaIdValue.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaIdValue.ToString() -> string!
-override PipeWire.NET.Spa.SpaInt.<Clone>$() -> PipeWire.NET.Spa.SpaInt!
-override PipeWire.NET.Spa.SpaInt.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaInt.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaInt.ToString() -> string!
-override PipeWire.NET.Spa.SpaInt.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaKey.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaKey.ToString() -> string!
-override PipeWire.NET.Spa.SpaLong.<Clone>$() -> PipeWire.NET.Spa.SpaLong!
-override PipeWire.NET.Spa.SpaLong.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaLong.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaLong.ToString() -> string!
-override PipeWire.NET.Spa.SpaLong.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaNestedPod.<Clone>$() -> PipeWire.NET.Spa.SpaNestedPod!
-override PipeWire.NET.Spa.SpaNestedPod.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaNestedPod.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaNestedPod.ToString() -> string!
-override PipeWire.NET.Spa.SpaNestedPod.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaNone.<Clone>$() -> PipeWire.NET.Spa.SpaNone!
-override PipeWire.NET.Spa.SpaNone.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaNone.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaNone.ToString() -> string!
-override PipeWire.NET.Spa.SpaNone.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaObject.<Clone>$() -> PipeWire.NET.Spa.SpaObject!
-override PipeWire.NET.Spa.SpaObject.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaObject.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaObject.ToString() -> string!
-override PipeWire.NET.Spa.SpaObject.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaPodProperty.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaPodProperty.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaPodProperty.ToString() -> string!
-override PipeWire.NET.Spa.SpaPointer.<Clone>$() -> PipeWire.NET.Spa.SpaPointer!
-override PipeWire.NET.Spa.SpaPointer.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaPointer.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaPointer.ToString() -> string!
-override PipeWire.NET.Spa.SpaPointer.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaRectangle.<Clone>$() -> PipeWire.NET.Spa.SpaRectangle!
-override PipeWire.NET.Spa.SpaRectangle.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaRectangle.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaRectangle.ToString() -> string!
-override PipeWire.NET.Spa.SpaRectangle.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaSequence.<Clone>$() -> PipeWire.NET.Spa.SpaSequence!
-override PipeWire.NET.Spa.SpaSequence.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaSequence.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaSequence.ToString() -> string!
-override PipeWire.NET.Spa.SpaSequence.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaString.<Clone>$() -> PipeWire.NET.Spa.SpaString!
-override PipeWire.NET.Spa.SpaString.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaString.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaString.ToString() -> string!
-override PipeWire.NET.Spa.SpaString.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaStruct.<Clone>$() -> PipeWire.NET.Spa.SpaStruct!
-override PipeWire.NET.Spa.SpaStruct.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaStruct.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaStruct.ToString() -> string!
-override PipeWire.NET.Spa.SpaStruct.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaUnknown.<Clone>$() -> PipeWire.NET.Spa.SpaUnknown!
-override PipeWire.NET.Spa.SpaUnknown.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaUnknown.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaUnknown.ToString() -> string!
-override PipeWire.NET.Spa.SpaUnknown.Type.get -> PipeWire.NET.Spa.SpaType
-override PipeWire.NET.Spa.SpaValue.Equals(object? obj) -> bool
-override PipeWire.NET.Spa.SpaValue.GetHashCode() -> int
-override PipeWire.NET.Spa.SpaValue.ToString() -> string!
-override sealed PipeWire.NET.Spa.SpaArray.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaBitmap.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaBool.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaBytes.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaChoice.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaDouble.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaFd.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaFloat.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaFraction.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaId.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaInt.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaLong.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaNestedPod.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaNone.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaObject.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaPointer.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaRectangle.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaSequence.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaString.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaStruct.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
-override sealed PipeWire.NET.Spa.SpaUnknown.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
 PipeWire.NET.Graph.IPipeWireObject
 PipeWire.NET.Graph.IPipeWireObject.Id.get -> uint
 PipeWire.NET.Graph.IPipeWireObject.InterfaceVersion.get -> uint
@@ -908,10 +405,10 @@ PipeWire.NET.Graph.PipeWireNodeBuilder.WithDontReconnect() -> PipeWire.NET.Graph
 PipeWire.NET.Graph.PipeWireNodeBuilder.WithLinger() -> PipeWire.NET.Graph.PipeWireNodeBuilder
 PipeWire.NET.Graph.PipeWireNodeBuilder.WithMediaClass(string! mediaClass) -> PipeWire.NET.Graph.PipeWireNodeBuilder
 PipeWire.NET.Graph.PipeWireNodeBuilder.WithName(string! name) -> PipeWire.NET.Graph.PipeWireNodeBuilder
-PipeWire.NET.Graph.PipeWireNodeBuilder.WithoutRestoredProps() -> PipeWire.NET.Graph.PipeWireNodeBuilder
 PipeWire.NET.Graph.PipeWireNodeBuilder.WithProperty(string! key, string! value) -> PipeWire.NET.Graph.PipeWireNodeBuilder
 PipeWire.NET.Graph.PipeWireNodeBuilder.WithTarget(PipeWire.NET.Graph.PipeWireNode! node) -> PipeWire.NET.Graph.PipeWireNodeBuilder
 PipeWire.NET.Graph.PipeWireNodeBuilder.WithTarget(string! nameOrSerial) -> PipeWire.NET.Graph.PipeWireNodeBuilder
+PipeWire.NET.Graph.PipeWireNodeBuilder.WithoutRestoredProps() -> PipeWire.NET.Graph.PipeWireNodeBuilder
 PipeWire.NET.Graph.PipeWireNodeProvider
 PipeWire.NET.Graph.PipeWireNodeProvider.BufferCount.get -> int
 PipeWire.NET.Graph.PipeWireNodeProvider.Dispose() -> void
@@ -938,8 +435,7 @@ PipeWire.NET.Graph.PipeWireNodeProxy.GetPortConfigAsync(System.Threading.Cancell
 PipeWire.NET.Graph.PipeWireNodeProxy.GetProcessLatencyAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<PipeWire.NET.Graph.PipeWireProcessLatency?>!
 PipeWire.NET.Graph.PipeWireNodeProxy.GetTagsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Immutable.ImmutableArray<PipeWire.NET.Graph.PipeWireTag!>>!
 PipeWire.NET.Graph.PipeWireNodeProxy.GetVolumeAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<float?>!
-PipeWire.NET.Graph.PipeWireNodeProxy.SetChannelVolumesAsync(System.ReadOnlySpan<float> volumes, bool matchChannelMap, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
-PipeWire.NET.Graph.PipeWireNodeProxy.SetChannelVolumesAsync(System.ReadOnlySpan<float> volumes, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+PipeWire.NET.Graph.PipeWireNodeProxy.SetChannelVolumesAsync(System.ReadOnlySpan<float> volumes, bool matchChannelMap = false, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 PipeWire.NET.Graph.PipeWireNodeProxy.SetLatencyOffsetAsync(long nanoseconds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 PipeWire.NET.Graph.PipeWireNodeProxy.SetMutedAsync(bool muted, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 PipeWire.NET.Graph.PipeWireNodeProxy.SetPortConfigAsync(PipeWire.NET.Graph.PipeWirePortConfig! config, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
@@ -989,8 +485,7 @@ PipeWire.NET.Graph.PipeWireParameterObject.CanRead(PipeWire.NET.Spa.SpaParamType
 PipeWire.NET.Graph.PipeWireParameterObject.CanWrite(PipeWire.NET.Spa.SpaParamType parameter) -> bool
 PipeWire.NET.Graph.PipeWireParameterObject.Dispose() -> void
 PipeWire.NET.Graph.PipeWireParameterObject.DisposeAsync() -> System.Threading.Tasks.ValueTask
-PipeWire.NET.Graph.PipeWireParameterObject.EnumerateParametersAsync(PipeWire.NET.Spa.SpaParamType parameter, PipeWire.NET.Spa.SpaObject! filter, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Immutable.ImmutableArray<PipeWire.NET.Spa.SpaObject!>>!
-PipeWire.NET.Graph.PipeWireParameterObject.EnumerateParametersAsync(PipeWire.NET.Spa.SpaParamType parameter, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Immutable.ImmutableArray<PipeWire.NET.Spa.SpaObject!>>!
+PipeWire.NET.Graph.PipeWireParameterObject.EnumerateParametersAsync(PipeWire.NET.Spa.SpaParamType parameter, PipeWire.NET.Spa.SpaObject? filter = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Immutable.ImmutableArray<PipeWire.NET.Spa.SpaObject!>>!
 PipeWire.NET.Graph.PipeWireParameterObject.GetParameterAsync(PipeWire.NET.Spa.SpaParamType parameter, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<PipeWire.NET.Spa.SpaObject?>!
 PipeWire.NET.Graph.PipeWireParameterObject.Id.get -> uint
 PipeWire.NET.Graph.PipeWireParameterObject.InfoChanged -> System.Action<PipeWire.NET.Graph.PipeWireParameterObject!>?
@@ -1000,8 +495,8 @@ PipeWire.NET.Graph.PipeWireParameterObject.Parameters.get -> System.Collections.
 PipeWire.NET.Graph.PipeWireParameterObject.ReadyAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 PipeWire.NET.Graph.PipeWireParameterObject.Removed -> System.Action?
 PipeWire.NET.Graph.PipeWireParameterObject.SetParameterAsync(PipeWire.NET.Spa.SpaParamType parameter, PipeWire.NET.Spa.SpaObject! value, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
-PipeWire.NET.Graph.PipeWireParameterObject.SubscribedParameters.get -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Spa.SpaParamType>
 PipeWire.NET.Graph.PipeWireParameterObject.SubscribeParameters(params System.ReadOnlySpan<PipeWire.NET.Spa.SpaParamType> parameters) -> void
+PipeWire.NET.Graph.PipeWireParameterObject.SubscribedParameters.get -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Spa.SpaParamType>
 PipeWire.NET.Graph.PipeWireParameterObject.UnsubscribeParameters() -> void
 PipeWire.NET.Graph.PipeWirePermissions
 PipeWire.NET.Graph.PipeWirePermissions.All = PipeWire.NET.Graph.PipeWirePermissions.Metadata | PipeWire.NET.Graph.PipeWirePermissions.ReadWriteExecute -> PipeWire.NET.Graph.PipeWirePermissions
@@ -1099,9 +594,9 @@ PipeWire.NET.Graph.PipeWireProperties.Count.get -> int
 PipeWire.NET.Graph.PipeWireProperties.GetEnumerator() -> System.Collections.Generic.IEnumerator<System.Collections.Generic.KeyValuePair<string!, string!>>!
 PipeWire.NET.Graph.PipeWireProperties.GetValueOrDefault(string! key) -> string?
 PipeWire.NET.Graph.PipeWireProperties.Keys.get -> System.Collections.Generic.IEnumerable<string!>!
-PipeWire.NET.Graph.PipeWireProperties.this[string! key].get -> string!
 PipeWire.NET.Graph.PipeWireProperties.TryGetValue(string! key, out string! value) -> bool
 PipeWire.NET.Graph.PipeWireProperties.Values.get -> System.Collections.Generic.IEnumerable<string!>!
+PipeWire.NET.Graph.PipeWireProperties.this[string! key].get -> string!
 PipeWire.NET.Graph.PipeWireRateMatch
 PipeWire.NET.Graph.PipeWireRateMatch.Deconstruct(out uint Delay, out uint Size, out double Rate, out uint Flags) -> void
 PipeWire.NET.Graph.PipeWireRateMatch.Delay.get -> uint
@@ -1128,7 +623,6 @@ PipeWire.NET.Graph.PipeWireRegistry.BindSecurityContext(uint securityContextId) 
 PipeWire.NET.Graph.PipeWireRegistry.CreateLink(PipeWire.NET.Graph.PipeWirePort! output, PipeWire.NET.Graph.PipeWirePort! input) -> PipeWire.NET.Graph.PipeWireLinkBuilder
 PipeWire.NET.Graph.PipeWireRegistry.CreateLink(uint outputPortId, uint inputPortId) -> PipeWire.NET.Graph.PipeWireLinkBuilder
 PipeWire.NET.Graph.PipeWireRegistry.CreateLinkAsync(PipeWire.NET.Graph.PipeWirePort! output, PipeWire.NET.Graph.PipeWirePort! input, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<PipeWire.NET.Graph.PipeWireLink!>!
-PipeWire.NET.Graph.PipeWireRegistry.CreateLinkAsync(uint outputPortId, uint inputPortId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<PipeWire.NET.Graph.PipeWireLink!>!
 PipeWire.NET.Graph.PipeWireRegistry.CreateVirtualSink(string! description, string? name = null) -> PipeWire.NET.Graph.PipeWireNodeBuilder
 PipeWire.NET.Graph.PipeWireRegistry.CreateVirtualSinkAsync(string! description, string? name = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<PipeWire.NET.Graph.PipeWireNode!>!
 PipeWire.NET.Graph.PipeWireRegistry.CreateVirtualSource(string! description, string? name = null) -> PipeWire.NET.Graph.PipeWireNodeBuilder
@@ -1150,7 +644,6 @@ PipeWire.NET.Graph.PipeWireRegistry.PortAdded -> System.Action<PipeWire.NET.Grap
 PipeWire.NET.Graph.PipeWireRegistry.PortRemoved -> System.Action<uint>?
 PipeWire.NET.Graph.PipeWireRegistry.ReadModuleDetailsAsync(uint moduleId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<PipeWire.NET.Graph.PipeWireModule!>!
 PipeWire.NET.Graph.PipeWireRegistry.RemoveLinkAsync(PipeWire.NET.Graph.PipeWireLink! link, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
-PipeWire.NET.Graph.PipeWireRegistry.RemoveLinkAsync(uint linkId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 PipeWire.NET.Graph.PipeWireRegistry.WaitForAsync<T>(System.Func<PipeWire.NET.Graph.PipeWireGraphSnapshot!, T?>! find, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T!>!
 PipeWire.NET.Graph.PipeWireRegistry.WaitForInitialEnumerationAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 PipeWire.NET.Graph.PipeWireRegistry.WaitUntilAsync(System.Func<PipeWire.NET.Graph.PipeWireGraphSnapshot!, bool>! condition, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<PipeWire.NET.Graph.PipeWireGraphSnapshot!>!
@@ -1282,8 +775,8 @@ PipeWire.NET.PipeWireContext.LoopLock.LoopLock() -> void
 PipeWire.NET.PipeWireContext.PipeWireContext(string! name = "PipeWire.NET", Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null) -> void
 PipeWire.NET.PipeWireContext.RunInProcess.get -> bool
 PipeWire.NET.PipeWireContext.RunInProcess.set -> void
-PipeWire.NET.PipeWireContext.StartAsync(System.Runtime.InteropServices.SafeHandle! fd, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 PipeWire.NET.PipeWireContext.StartAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+PipeWire.NET.PipeWireContext.StartOnFdAsync(System.Runtime.InteropServices.SafeHandle! fd, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 PipeWire.NET.PipeWireContext.TryLock(out PipeWire.NET.PipeWireContext.LoopLock scope) -> bool
 PipeWire.NET.PipeWireContext.UpdateProperties(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! properties) -> int
 PipeWire.NET.PipeWireDiagnostics
@@ -1945,6 +1438,14 @@ PipeWire.NET.Spa.SpaPeerParam
 PipeWire.NET.Spa.SpaPeerParam.End = 4294967294 -> PipeWire.NET.Spa.SpaPeerParam
 PipeWire.NET.Spa.SpaPeerParam.Start = 0 -> PipeWire.NET.Spa.SpaPeerParam
 PipeWire.NET.Spa.SpaPod
+PipeWire.NET.Spa.SpaPodPropFlags
+PipeWire.NET.Spa.SpaPodPropFlags.DontFixate = 16 -> PipeWire.NET.Spa.SpaPodPropFlags
+PipeWire.NET.Spa.SpaPodPropFlags.Drop = 32 -> PipeWire.NET.Spa.SpaPodPropFlags
+PipeWire.NET.Spa.SpaPodPropFlags.Hardware = 2 -> PipeWire.NET.Spa.SpaPodPropFlags
+PipeWire.NET.Spa.SpaPodPropFlags.HintDict = 4 -> PipeWire.NET.Spa.SpaPodPropFlags
+PipeWire.NET.Spa.SpaPodPropFlags.Mandatory = 8 -> PipeWire.NET.Spa.SpaPodPropFlags
+PipeWire.NET.Spa.SpaPodPropFlags.None = 0 -> PipeWire.NET.Spa.SpaPodPropFlags
+PipeWire.NET.Spa.SpaPodPropFlags.Readonly = 1 -> PipeWire.NET.Spa.SpaPodPropFlags
 PipeWire.NET.Spa.SpaPodProperty
 PipeWire.NET.Spa.SpaPodProperty.<Clone>$() -> PipeWire.NET.Spa.SpaPodProperty!
 PipeWire.NET.Spa.SpaPodProperty.Deconstruct(out PipeWire.NET.Spa.SpaKey Key, out PipeWire.NET.Spa.SpaPodPropFlags Flags, out PipeWire.NET.Spa.SpaValue! Value) -> void
@@ -1956,14 +1457,6 @@ PipeWire.NET.Spa.SpaPodProperty.Key.init -> void
 PipeWire.NET.Spa.SpaPodProperty.SpaPodProperty(PipeWire.NET.Spa.SpaKey Key, PipeWire.NET.Spa.SpaPodPropFlags Flags, PipeWire.NET.Spa.SpaValue! Value) -> void
 PipeWire.NET.Spa.SpaPodProperty.Value.get -> PipeWire.NET.Spa.SpaValue!
 PipeWire.NET.Spa.SpaPodProperty.Value.init -> void
-PipeWire.NET.Spa.SpaPodPropFlags
-PipeWire.NET.Spa.SpaPodPropFlags.DontFixate = 16 -> PipeWire.NET.Spa.SpaPodPropFlags
-PipeWire.NET.Spa.SpaPodPropFlags.Drop = 32 -> PipeWire.NET.Spa.SpaPodPropFlags
-PipeWire.NET.Spa.SpaPodPropFlags.Hardware = 2 -> PipeWire.NET.Spa.SpaPodPropFlags
-PipeWire.NET.Spa.SpaPodPropFlags.HintDict = 4 -> PipeWire.NET.Spa.SpaPodPropFlags
-PipeWire.NET.Spa.SpaPodPropFlags.Mandatory = 8 -> PipeWire.NET.Spa.SpaPodPropFlags
-PipeWire.NET.Spa.SpaPodPropFlags.None = 0 -> PipeWire.NET.Spa.SpaPodPropFlags
-PipeWire.NET.Spa.SpaPodPropFlags.Readonly = 1 -> PipeWire.NET.Spa.SpaPodPropFlags
 PipeWire.NET.Spa.SpaPointer
 PipeWire.NET.Spa.SpaPointer.Address.get -> ulong
 PipeWire.NET.Spa.SpaPointer.Address.init -> void
@@ -2014,8 +1507,8 @@ PipeWire.NET.Spa.SpaProp.Mute = 65540 -> PipeWire.NET.Spa.SpaProp
 PipeWire.NET.Spa.SpaProp.Params = 524289 -> PipeWire.NET.Spa.SpaProp
 PipeWire.NET.Spa.SpaProp.PatternType = 65541 -> PipeWire.NET.Spa.SpaProp
 PipeWire.NET.Spa.SpaProp.PeriodEvent = 266 -> PipeWire.NET.Spa.SpaProp
-PipeWire.NET.Spa.SpaProp.Periods = 264 -> PipeWire.NET.Spa.SpaProp
 PipeWire.NET.Spa.SpaProp.PeriodSize = 265 -> PipeWire.NET.Spa.SpaProp
+PipeWire.NET.Spa.SpaProp.Periods = 264 -> PipeWire.NET.Spa.SpaProp
 PipeWire.NET.Spa.SpaProp.Quality = 269 -> PipeWire.NET.Spa.SpaProp
 PipeWire.NET.Spa.SpaProp.Rate = 268 -> PipeWire.NET.Spa.SpaProp
 PipeWire.NET.Spa.SpaProp.Saturation = 131075 -> PipeWire.NET.Spa.SpaProp
@@ -2314,6 +1807,509 @@ PipeWire.NET.Spa.SpaVideoTransferFunction.Smpte2084 = 14 -> PipeWire.NET.Spa.Spa
 PipeWire.NET.Spa.SpaVideoTransferFunction.Smpte240M = 6 -> PipeWire.NET.Spa.SpaVideoTransferFunction
 PipeWire.NET.Spa.SpaVideoTransferFunction.Srgb = 7 -> PipeWire.NET.Spa.SpaVideoTransferFunction
 PipeWire.NET.Spa.SpaVideoTransferFunction.Unknown = 0 -> PipeWire.NET.Spa.SpaVideoTransferFunction
+abstract PipeWire.NET.Spa.SpaValue.<Clone>$() -> PipeWire.NET.Spa.SpaValue!
+abstract PipeWire.NET.Spa.SpaValue.Type.get -> PipeWire.NET.Spa.SpaType
+const PipeWire.NET.Graph.PipeWireClientProxy.AnyObject = 4294967295 -> uint
+const PipeWire.NET.Graph.PipeWireKeys.MODULE_ARGS = "module.args" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.MODULE_FILENAME = "module.filename" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_ACCESS = "pipewire.access" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_ICON = "application.icon" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_ICON_NAME = "application.icon-name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_ID = "application.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_LANGUAGE = "application.language" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_NAME = "application.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_PROCESS_BINARY = "application.process.binary" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_PROCESS_HOST = "application.process.host" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_PROCESS_ID = "application.process.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_PROCESS_MACHINE_ID = "application.process.machine-id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_PROCESS_SESSION_ID = "application.process.session-id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_PROCESS_USER = "application.process.user" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_APP_VERSION = "application.version" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_AUDIO_ALLOWED_RATES = "audio.allowed-rates" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_AUDIO_CHANNEL = "audio.channel" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_AUDIO_CHANNELS = "audio.channels" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_AUDIO_FORMAT = "audio.format" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_AUDIO_RATE = "audio.rate" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CLIENT_ACCESS = "pipewire.client.access" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CLIENT_API = "client.api" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CLIENT_ID = "client.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CLIENT_NAME = "client.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CONFIG_NAME = "config.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CONFIG_OVERRIDE_NAME = "config.override.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CONFIG_OVERRIDE_PREFIX = "config.override.prefix" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CONFIG_PREFIX = "config.prefix" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CONTEXT_PROFILE_MODULES = "context.profile.modules" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CORE_DAEMON = "core.daemon" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CORE_ID = "core.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CORE_MONITORS = "core.monitors" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CORE_NAME = "core.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CORE_VERSION = "core.version" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CPU_CORES = "cpu.cores" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_CPU_MAX_ALIGN = "cpu.max-align" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_API = "device.api" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_BUS = "device.bus" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_BUS_PATH = "device.bus-path" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_CACHE_PARAMS = "device.cache-params" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_CLASS = "device.class" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_DESCRIPTION = "device.description" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_FORM_FACTOR = "device.form-factor" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_ICON = "device.icon" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_ICON_NAME = "device.icon-name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_ID = "device.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_INTENDED_ROLES = "device.intended-roles" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_NAME = "device.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_NICK = "device.nick" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_PLUGGED = "device.plugged" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_PRODUCT_ID = "device.product.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_PRODUCT_NAME = "device.product.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_SERIAL = "device.serial" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_STRING = "device.string" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_SUBSYSTEM = "device.subsystem" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_SYSFS_PATH = "device.sysfs.path" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_VENDOR_ID = "device.vendor.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_DEVICE_VENDOR_NAME = "device.vendor.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_FACTORY_ID = "factory.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_FACTORY_NAME = "factory.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_FACTORY_TYPE_NAME = "factory.type.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_FACTORY_TYPE_VERSION = "factory.type.version" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_FACTORY_USAGE = "factory.usage" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_FORMAT_DSP = "format.dsp" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_HOST_NAME = "context.host-name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LIBRARY_NAME_DBUS = "library.name.dbus" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LIBRARY_NAME_LOOP = "library.name.loop" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LIBRARY_NAME_SYSTEM = "library.name.system" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_ASYNC = "link.async" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_FEEDBACK = "link.feedback" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_ID = "link.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_INPUT_NODE = "link.input.node" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_INPUT_PORT = "link.input.port" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_OUTPUT_NODE = "link.output.node" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_OUTPUT_PORT = "link.output.port" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LINK_PASSIVE = "link.passive" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LOOP_CANCEL = "loop.cancel" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LOOP_CLASS = "loop.class" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LOOP_NAME = "loop.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_LOOP_RT_PRIO = "loop.rt-prio" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_ALBUM = "media.album" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_ARTIST = "media.artist" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_CATEGORY = "media.category" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_CLASS = "media.class" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_COMMENT = "media.comment" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_COPYRIGHT = "media.copyright" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_DATE = "media.date" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_FILENAME = "media.filename" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_FORMAT = "media.format" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_ICON = "media.icon" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_ICON_NAME = "media.icon-name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_LANGUAGE = "media.language" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_NAME = "media.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_ROLE = "media.role" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_SOFTWARE = "media.software" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_TITLE = "media.title" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MEDIA_TYPE = "media.type" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_METADATA_NAME = "metadata.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_METADATA_VALUES = "metadata.values" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MODULE_AUTHOR = "module.author" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MODULE_DEPRECATED = "module.deprecated" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MODULE_DESCRIPTION = "module.description" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MODULE_ID = "module.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MODULE_NAME = "module.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MODULE_USAGE = "module.usage" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_MODULE_VERSION = "module.version" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_ALWAYS_PROCESS = "node.always-process" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_ASYNC = "node.async" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_AUTOCONNECT = "node.autoconnect" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_CACHE_PARAMS = "node.cache-params" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_CHANNELNAMES = "node.channel-names" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_DESCRIPTION = "node.description" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_DEVICE_PORT_NAME_PREFIX = "node.device-port-name-prefix" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_DONT_RECONNECT = "node.dont-reconnect" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_DRIVER = "node.driver" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_DRIVER_ID = "node.driver-id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_EXCLUSIVE = "node.exclusive" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_FORCE_QUANTUM = "node.force-quantum" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_FORCE_RATE = "node.force-rate" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_GROUP = "node.group" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_ID = "node.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_LATENCY = "node.latency" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_LINK_GROUP = "node.link-group" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_LOCK_QUANTUM = "node.lock-quantum" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_LOCK_RATE = "node.lock-rate" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_LOOP_CLASS = "node.loop.class" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_LOOP_NAME = "node.loop.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_MAX_LATENCY = "node.max-latency" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_NAME = "node.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_NETWORK = "node.network" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_NICK = "node.nick" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_PASSIVE = "node.passive" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_PAUSE_ON_IDLE = "node.pause-on-idle" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_PHYSICAL = "node.physical" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_PLUGGED = "node.plugged" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_RATE = "node.rate" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_RELIABLE = "node.reliable" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_SESSION = "node.session" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_STREAM = "node.stream" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_SUPPORTS_LAZY = "node.supports-lazy" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_SUPPORTS_REQUEST = "node.supports-request" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_SUSPEND_ON_IDLE = "node.suspend-on-idle" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_SYNC = "node.sync" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_SYNC_GROUP = "node.sync-group" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_TERMINAL = "node.terminal" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_TRANSPORT = "node.transport" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_TRANSPORT_SYNC = "node.transport.sync" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_TRIGGER = "node.trigger" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_VIRTUAL = "node.virtual" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_NODE_WANT_DRIVER = "node.want-driver" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_OBJECT_EXPORT = "object.export" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_OBJECT_ID = "object.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_OBJECT_LINGER = "object.linger" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_OBJECT_PATH = "object.path" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_OBJECT_REGISTER = "object.register" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_OBJECT_SERIAL = "object.serial" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_ALIAS = "port.alias" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_CACHE_PARAMS = "port.cache-params" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_CONTROL = "port.control" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_DIRECTION = "port.direction" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_EXCLUSIVE = "port.exclusive" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_EXTRA = "port.extra" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_GROUP = "port.group" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_ID = "port.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_IGNORE_LATENCY = "port.ignore-latency" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_MONITOR = "port.monitor" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_NAME = "port.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_PASSIVE = "port.passive" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_PHYSICAL = "port.physical" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_RELIABLE = "port.reliable" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PORT_TERMINAL = "port.terminal" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PRIORITY_DRIVER = "priority.driver" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PRIORITY_SESSION = "priority.session" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PROFILER_NAME = "profiler.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_PROTOCOL = "pipewire.protocol" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_REMOTE_INTENTION = "remote.intention" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_REMOTE_NAME = "remote.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_APP_ID = "pipewire.sec.app-id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_ENGINE = "pipewire.sec.engine" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_GID = "pipewire.sec.gid" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_INSTANCE_ID = "pipewire.sec.instance-id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_LABEL = "pipewire.sec.label" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_PID = "pipewire.sec.pid" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_SOCKET = "pipewire.sec.socket" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_SEC_UID = "pipewire.sec.uid" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_STREAM_CAPTURE_SINK = "stream.capture.sink" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_STREAM_DONT_REMIX = "stream.dont-remix" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_STREAM_IS_LIVE = "stream.is-live" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_STREAM_LATENCY_MAX = "stream.latency.max" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_STREAM_LATENCY_MIN = "stream.latency.min" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_STREAM_MONITOR = "stream.monitor" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_TARGET_OBJECT = "target.object" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_USER_NAME = "context.user-name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_VIDEO_FORMAT = "video.format" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_VIDEO_RATE = "video.framerate" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_VIDEO_SIZE = "video.size" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_KEY_WINDOW_X11_DISPLAY = "window.x11.display" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Client = "PipeWire:Interface:Client" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Core = "PipeWire:Interface:Core" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Device = "PipeWire:Interface:Device" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Factory = "PipeWire:Interface:Factory" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Link = "PipeWire:Interface:Link" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Metadata = "PipeWire:Interface:Metadata" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Module = "PipeWire:Interface:Module" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Node = "PipeWire:Interface:Node" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Port = "PipeWire:Interface:Port" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Profiler = "PipeWire:Interface:Profiler" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_Registry = "PipeWire:Interface:Registry" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.PW_TYPE_INTERFACE_SecurityContext = "PipeWire:Interface:SecurityContext" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA = "api.alsa" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_BIND_CTLS = "api.alsa.bind-ctls" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_CARD = "api.alsa.card" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_CARD_COMPONENTS = "api.alsa.card.components" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_CARD_DRIVER = "api.alsa.card.driver" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_CARD_ID = "api.alsa.card.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_CARD_LONGNAME = "api.alsa.card.longname" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_CARD_MIXERNAME = "api.alsa.card.mixername" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_CARD_NAME = "api.alsa.card.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_DISABLE_LONGNAME = "api.alsa.disable-longname" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_IGNORE_DB = "api.alsa.ignore-dB" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_OPEN_UCM = "api.alsa.open.ucm" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PATH = "api.alsa.path" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_CARD = "api.alsa.pcm.card" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_CLASS = "api.alsa.pcm.class" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_DEVICE = "api.alsa.pcm.device" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_ID = "api.alsa.pcm.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_NAME = "api.alsa.pcm.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_STREAM = "api.alsa.pcm.stream" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_SUBCLASS = "api.alsa.pcm.subclass" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_SUBDEVICE = "api.alsa.pcm.subdevice" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_SUBNAME = "api.alsa.pcm.subname" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_PCM_SYNC_ID = "api.alsa.pcm.sync-id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_SPLIT_ENABLE = "api.alsa.split-enable" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_SPLIT_HW_POSITION = "api.alsa.split.hw-position" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_SPLIT_PARENT = "api.alsa.split.parent" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_SPLIT_POSITION = "api.alsa.split.position" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_ALSA_USE_UCM = "api.alsa.use-ucm" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5 = "api.bluez5" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_ADDRESS = "api.bluez5.address" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_CLASS = "api.bluez5.class" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_CODEC = "api.bluez5.codec" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_CONNECTION = "api.bluez5.connection" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_DEVICE = "api.bluez5.device" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_ICON = "api.bluez5.icon" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_PATH = "api.bluez5.path" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_PROFILE = "api.bluez5.profile" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_ROLE = "api.bluez5.role" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_BLUEZ5_TRANSPORT = "api.bluez5.transport" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_GLIB_MAINLOOP = "api.glib.mainloop" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_JACK = "api.jack" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_JACK_CLIENT = "api.jack.client" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_JACK_SERVER = "api.jack.server" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_LIBCAMERA = "api.libcamera" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_LIBCAMERA_LOCATION = "api.libcamera.location" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_LIBCAMERA_PATH = "api.libcamera.path" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_LIBCAMERA_ROTATION = "api.libcamera.rotation" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_UDEV = "api.udev" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_UDEV_MATCH = "api.udev.match" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2 = "api.v4l2" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2_CAP_BUS_INFO = "api.v4l2.cap.bus_info" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2_CAP_CAPABILITIES = "api.v4l2.cap.capabilities" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2_CAP_CARD = "api.v4l2.cap.card" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2_CAP_DEVICE_CAPS = "api.v4l2.cap.device-caps" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2_CAP_DRIVER = "api.v4l2.cap.driver" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2_CAP_VERSION = "api.v4l2.cap.version" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_API_V4L2_PATH = "api.v4l2.path" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_AUDIO_ALLOWED_RATES = "audio.allowed-rates" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_AUDIO_CHANNEL = "audio.channel" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_AUDIO_CHANNELS = "audio.channels" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_AUDIO_FORMAT = "audio.format" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_AUDIO_LAYOUT = "audio.layout" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_AUDIO_POSITION = "audio.position" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_AUDIO_RATE = "audio.rate" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_ALIAS = "device.alias" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_API = "device.api" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_BUS = "device.bus" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_BUS_ID = "device.bus-id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_BUS_PATH = "device.bus-path" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_CAPABILITIES = "device.capabilities" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_CLASS = "device.class" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_DESCRIPTION = "device.description" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_DEVIDS = "device.devids" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_ENUM_API = "device.enum.api" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_FORM_FACTOR = "device.form-factor" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_ICON = "device.icon" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_ICON_NAME = "device.icon-name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_NAME = "device.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_NICK = "device.nick" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_PLUGGED_USEC = "device.plugged.usec" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_PRODUCT_ID = "device.product.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_PRODUCT_NAME = "device.product.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_PROFILE = "device.profile" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_PROFILE_SET = "device.profile-set" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_SERIAL = "device.serial" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_STRING = "device.string" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_SUBSYSTEM = "device.subsystem" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_SYSFS_PATH = "device.sysfs.path" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_VENDOR_ID = "device.vendor.id" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_DEVICE_VENDOR_NAME = "device.vendor.name" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_MEDIA_CLASS = "media.class" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_MEDIA_ROLE = "media.role" -> string!
+const PipeWire.NET.Graph.PipeWireKeys.SPA_KEY_OBJECT_PATH = "object.path" -> string!
+const PipeWire.NET.Graph.PipeWireMetadataProxy.SubjectCore = 0 -> uint
+const PipeWire.NET.PipeWireDiagnostics.Name = "PipeWire.NET" -> string!
+const PipeWire.NET.Spa.SpaPod.MaxDepth = 32 -> int
+override PipeWire.NET.Graph.PipeWireClient.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWireClient.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireClient.ToString() -> string!
+override PipeWire.NET.Graph.PipeWireCore.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWireCore.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireCore.ToString() -> string!
+override PipeWire.NET.Graph.PipeWireDevice.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWireDevice.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireDevice.ToString() -> string!
+override PipeWire.NET.Graph.PipeWireFactory.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWireFactory.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireFactory.ToString() -> string!
+override PipeWire.NET.Graph.PipeWireGraphClock.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireLatency.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWireLatency.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireLatency.ToString() -> string!
+override PipeWire.NET.Graph.PipeWireLink.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWireLink.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireLink.ToString() -> string!
+override PipeWire.NET.Graph.PipeWireMetadata.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWireMetadata.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireMetadata.ToString() -> string!
+override PipeWire.NET.Graph.PipeWireMetadataEntry.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWireMetadataEntry.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireMetadataEntry.ToString() -> string!
+override PipeWire.NET.Graph.PipeWireModule.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWireModule.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireModule.ToString() -> string!
+override PipeWire.NET.Graph.PipeWireNode.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWireNode.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireNode.ToString() -> string!
+override PipeWire.NET.Graph.PipeWireObjectPermission.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireParameterInfo.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWirePort.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWirePort.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWirePort.ToString() -> string!
+override PipeWire.NET.Graph.PipeWirePortConfig.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWirePortConfig.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWirePortConfig.ToString() -> string!
+override PipeWire.NET.Graph.PipeWireProcessLatency.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWireProcessLatency.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireProcessLatency.ToString() -> string!
+override PipeWire.NET.Graph.PipeWireProfiler.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWireProfiler.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireProfiler.ToString() -> string!
+override PipeWire.NET.Graph.PipeWireRateMatch.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireSecurityContext.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWireSecurityContext.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireSecurityContext.ToString() -> string!
+override PipeWire.NET.Graph.PipeWireStreamQueue.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireStreamTime.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireTag.Equals(object? obj) -> bool
+override PipeWire.NET.Graph.PipeWireTag.GetHashCode() -> int
+override PipeWire.NET.Graph.PipeWireTag.ToString() -> string!
+override PipeWire.NET.Graph.PipeWireVideoCycle.GetHashCode() -> int
+override PipeWire.NET.SafeDescriptorHandle.IsInvalid.get -> bool
+override PipeWire.NET.Spa.SpaArray.<Clone>$() -> PipeWire.NET.Spa.SpaArray!
+override PipeWire.NET.Spa.SpaArray.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaArray.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaArray.ToString() -> string!
+override PipeWire.NET.Spa.SpaArray.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaBitmap.<Clone>$() -> PipeWire.NET.Spa.SpaBitmap!
+override PipeWire.NET.Spa.SpaBitmap.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaBitmap.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaBitmap.ToString() -> string!
+override PipeWire.NET.Spa.SpaBitmap.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaBool.<Clone>$() -> PipeWire.NET.Spa.SpaBool!
+override PipeWire.NET.Spa.SpaBool.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaBool.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaBool.ToString() -> string!
+override PipeWire.NET.Spa.SpaBool.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaBytes.<Clone>$() -> PipeWire.NET.Spa.SpaBytes!
+override PipeWire.NET.Spa.SpaBytes.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaBytes.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaBytes.ToString() -> string!
+override PipeWire.NET.Spa.SpaBytes.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaChoice.<Clone>$() -> PipeWire.NET.Spa.SpaChoice!
+override PipeWire.NET.Spa.SpaChoice.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaChoice.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaChoice.ToString() -> string!
+override PipeWire.NET.Spa.SpaChoice.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaControl.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaControl.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaControl.ToString() -> string!
+override PipeWire.NET.Spa.SpaDouble.<Clone>$() -> PipeWire.NET.Spa.SpaDouble!
+override PipeWire.NET.Spa.SpaDouble.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaDouble.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaDouble.ToString() -> string!
+override PipeWire.NET.Spa.SpaDouble.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaFd.<Clone>$() -> PipeWire.NET.Spa.SpaFd!
+override PipeWire.NET.Spa.SpaFd.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaFd.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaFd.ToString() -> string!
+override PipeWire.NET.Spa.SpaFd.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaFloat.<Clone>$() -> PipeWire.NET.Spa.SpaFloat!
+override PipeWire.NET.Spa.SpaFloat.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaFloat.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaFloat.ToString() -> string!
+override PipeWire.NET.Spa.SpaFloat.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaFraction.<Clone>$() -> PipeWire.NET.Spa.SpaFraction!
+override PipeWire.NET.Spa.SpaFraction.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaFraction.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaFraction.ToString() -> string!
+override PipeWire.NET.Spa.SpaFraction.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaId.<Clone>$() -> PipeWire.NET.Spa.SpaId!
+override PipeWire.NET.Spa.SpaId.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaId.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaId.ToString() -> string!
+override PipeWire.NET.Spa.SpaId.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaIdValue.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaIdValue.ToString() -> string!
+override PipeWire.NET.Spa.SpaInt.<Clone>$() -> PipeWire.NET.Spa.SpaInt!
+override PipeWire.NET.Spa.SpaInt.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaInt.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaInt.ToString() -> string!
+override PipeWire.NET.Spa.SpaInt.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaKey.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaKey.ToString() -> string!
+override PipeWire.NET.Spa.SpaLong.<Clone>$() -> PipeWire.NET.Spa.SpaLong!
+override PipeWire.NET.Spa.SpaLong.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaLong.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaLong.ToString() -> string!
+override PipeWire.NET.Spa.SpaLong.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaNestedPod.<Clone>$() -> PipeWire.NET.Spa.SpaNestedPod!
+override PipeWire.NET.Spa.SpaNestedPod.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaNestedPod.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaNestedPod.ToString() -> string!
+override PipeWire.NET.Spa.SpaNestedPod.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaNone.<Clone>$() -> PipeWire.NET.Spa.SpaNone!
+override PipeWire.NET.Spa.SpaNone.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaNone.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaNone.ToString() -> string!
+override PipeWire.NET.Spa.SpaNone.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaObject.<Clone>$() -> PipeWire.NET.Spa.SpaObject!
+override PipeWire.NET.Spa.SpaObject.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaObject.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaObject.ToString() -> string!
+override PipeWire.NET.Spa.SpaObject.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaPodProperty.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaPodProperty.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaPodProperty.ToString() -> string!
+override PipeWire.NET.Spa.SpaPointer.<Clone>$() -> PipeWire.NET.Spa.SpaPointer!
+override PipeWire.NET.Spa.SpaPointer.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaPointer.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaPointer.ToString() -> string!
+override PipeWire.NET.Spa.SpaPointer.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaRectangle.<Clone>$() -> PipeWire.NET.Spa.SpaRectangle!
+override PipeWire.NET.Spa.SpaRectangle.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaRectangle.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaRectangle.ToString() -> string!
+override PipeWire.NET.Spa.SpaRectangle.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaSequence.<Clone>$() -> PipeWire.NET.Spa.SpaSequence!
+override PipeWire.NET.Spa.SpaSequence.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaSequence.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaSequence.ToString() -> string!
+override PipeWire.NET.Spa.SpaSequence.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaString.<Clone>$() -> PipeWire.NET.Spa.SpaString!
+override PipeWire.NET.Spa.SpaString.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaString.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaString.ToString() -> string!
+override PipeWire.NET.Spa.SpaString.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaStruct.<Clone>$() -> PipeWire.NET.Spa.SpaStruct!
+override PipeWire.NET.Spa.SpaStruct.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaStruct.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaStruct.ToString() -> string!
+override PipeWire.NET.Spa.SpaStruct.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaUnknown.<Clone>$() -> PipeWire.NET.Spa.SpaUnknown!
+override PipeWire.NET.Spa.SpaUnknown.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaUnknown.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaUnknown.ToString() -> string!
+override PipeWire.NET.Spa.SpaUnknown.Type.get -> PipeWire.NET.Spa.SpaType
+override PipeWire.NET.Spa.SpaValue.Equals(object? obj) -> bool
+override PipeWire.NET.Spa.SpaValue.GetHashCode() -> int
+override PipeWire.NET.Spa.SpaValue.ToString() -> string!
+override sealed PipeWire.NET.Spa.SpaArray.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaBitmap.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaBool.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaBytes.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaChoice.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaDouble.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaFd.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaFloat.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaFraction.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaId.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaInt.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaLong.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaNestedPod.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaNone.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaObject.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaPointer.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaRectangle.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaSequence.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaString.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaStruct.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
+override sealed PipeWire.NET.Spa.SpaUnknown.Equals(PipeWire.NET.Spa.SpaValue? other) -> bool
 static PipeWire.NET.Graph.PipeWireClient.operator !=(PipeWire.NET.Graph.PipeWireClient? left, PipeWire.NET.Graph.PipeWireClient? right) -> bool
 static PipeWire.NET.Graph.PipeWireClient.operator ==(PipeWire.NET.Graph.PipeWireClient? left, PipeWire.NET.Graph.PipeWireClient? right) -> bool
 static PipeWire.NET.Graph.PipeWireCore.operator !=(PipeWire.NET.Graph.PipeWireCore? left, PipeWire.NET.Graph.PipeWireCore? right) -> bool
@@ -2336,11 +2332,11 @@ static PipeWire.NET.Graph.PipeWireGraphExtensions.GetEndpoints(this PipeWire.NET
 static PipeWire.NET.Graph.PipeWireGraphExtensions.GetNodeForPort(this PipeWire.NET.Graph.PipeWireGraphSnapshot! graph, PipeWire.NET.Graph.PipeWirePort! port) -> PipeWire.NET.Graph.PipeWireNode?
 static PipeWire.NET.Graph.PipeWireGraphExtensions.GetPortsForNode(this PipeWire.NET.Graph.PipeWireGraphSnapshot! graph, uint nodeId, PipeWire.NET.Graph.PipeWirePortDirection direction) -> System.Collections.Generic.IEnumerable<PipeWire.NET.Graph.PipeWirePort!>!
 static PipeWire.NET.Graph.PipeWireGraphExtensions.GetVideoSources(this PipeWire.NET.Graph.PipeWireGraphSnapshot! graph) -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Graph.PipeWireNode!>
+static PipeWire.NET.Graph.PipeWireGraphExtensions.IsStillIn(this PipeWire.NET.Graph.IPipeWireObject! held, PipeWire.NET.Graph.PipeWireGraphSnapshot! graph) -> bool
 static PipeWire.NET.Graph.PipeWireGraphExtensions.get_CanInvokeMethods(PipeWire.NET.Graph.IPipeWireObject! obj) -> bool
 static PipeWire.NET.Graph.PipeWireGraphExtensions.get_IsDataInput(PipeWire.NET.Graph.PipeWirePort! port) -> bool
 static PipeWire.NET.Graph.PipeWireGraphExtensions.get_IsDataOutput(PipeWire.NET.Graph.PipeWirePort! port) -> bool
 static PipeWire.NET.Graph.PipeWireGraphExtensions.get_IsNotify(PipeWire.NET.Graph.PipeWirePort! port) -> bool
-static PipeWire.NET.Graph.PipeWireGraphExtensions.IsStillIn(this PipeWire.NET.Graph.IPipeWireObject! held, PipeWire.NET.Graph.PipeWireGraphSnapshot! graph) -> bool
 static PipeWire.NET.Graph.PipeWireGraphSnapshot.Empty.get -> PipeWire.NET.Graph.PipeWireGraphSnapshot!
 static PipeWire.NET.Graph.PipeWireLatency.From(PipeWire.NET.Spa.SpaObject? param) -> PipeWire.NET.Graph.PipeWireLatency?
 static PipeWire.NET.Graph.PipeWireLatency.operator !=(PipeWire.NET.Graph.PipeWireLatency? left, PipeWire.NET.Graph.PipeWireLatency? right) -> bool

@@ -108,8 +108,8 @@ public sealed class AvSyncTests
             return samples.Length;
         };
 
-        video.Connect(autoConnect: false);
-        audio.Connect(autoConnect: false);
+        video.Connect(options: new() { AutoConnect = false });
+        audio.Connect(options: new() { AutoConnect = false });
 
         uint videoNode = await video.WaitForNodeIdAsync(ct);
         uint audioNode = await audio.WaitForNodeIdAsync(ct);
@@ -127,7 +127,7 @@ public sealed class AvSyncTests
                     v.Add((pts, rx, f.DelayNs, f.GraphTimeNs ?? -1));
             }
         };
-        vCap.Connect(videoNode, stackalloc[] { PixelFormat.Bgra });
+        vCap.Connect(PipeWireTarget.Id(videoNode), new() { PreferredFormats = [PixelFormat.Bgra] });
 
         await using var aCap = new PipeWireAudioCapture(ctx, $"{name}-a-sink");
         aCap.FrameReady += (_, f) =>
@@ -139,7 +139,15 @@ public sealed class AvSyncTests
                     a.Add((pts, rx, f.DelayNs, f.GraphTimeNs ?? -1));
             }
         };
-        aCap.Connect(audioNode, sampleRate: Rate, channels: 2, format: AudioSampleFormat.F32Le);
+        aCap.Connect(
+            PipeWireTarget.Id(audioNode),
+            new()
+            {
+                SampleRate = Rate,
+                Channels = 2,
+                Format = AudioSampleFormat.F32Le,
+            }
+        );
 
         await video.WaitForStreamingAsync(ct);
         video.DriveAt(TimeSpan.FromSeconds(1.0 / FrameRate));
@@ -492,7 +500,10 @@ public sealed class AvSyncTests
                         v.Add((pts, rx));
                 }
             };
-            vCap.Connect(videoNode, stackalloc[] { PixelFormat.Bgrx });
+            vCap.Connect(
+                PipeWireTarget.Id(videoNode),
+                new() { PreferredFormats = [PixelFormat.Bgrx] }
+            );
 
             await using var aCap = new PipeWireAudioCapture(ctx, $"{name}-a-sink");
             aCap.FrameReady += (_, f) =>
@@ -504,7 +515,15 @@ public sealed class AvSyncTests
                         a.Add((pts, rx));
                 }
             };
-            aCap.Connect(audioNode, sampleRate: Rate, channels: 2, format: AudioSampleFormat.F32Le);
+            aCap.Connect(
+                PipeWireTarget.Id(audioNode),
+                new()
+                {
+                    SampleRate = Rate,
+                    Channels = 2,
+                    Format = AudioSampleFormat.F32Le,
+                }
+            );
 
             _ = await Waits.Within(
                 until =>

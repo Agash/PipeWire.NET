@@ -54,7 +54,7 @@ public sealed class SurfaceParityTests : PipeWireTestBase
             samples.Clear();
             return samples.Length;
         };
-        audio.Connect(sink);
+        audio.Connect(PipeWireTarget.Node(sink));
 
         await using var video = new PipeWireVideoOutput(ctx, "pwnet_parity_video_out", 64, 64);
         video.FillFrame += (_, pixels, _, _, _, _) =>
@@ -62,7 +62,7 @@ public sealed class SurfaceParityTests : PipeWireTestBase
             pixels.Clear();
             return true;
         };
-        video.Connect(sink, autoConnect: false);
+        video.Connect(PipeWireTarget.Node(sink), new() { AutoConnect = false });
 
         // Reaching a node id at all is what proves the overload routed the connect rather than
         // silently doing nothing.
@@ -115,13 +115,13 @@ public sealed class SurfaceParityTests : PipeWireTestBase
             samples.Clear();
             return samples.Length;
         };
-        audioOut.Connect(autoConnect: false);
+        audioOut.Connect(options: new() { AutoConnect = false });
 
         await using var audioIn = new PipeWireAudioCapture(ctx, "pwnet_parity_trig_ai");
-        audioIn.Connect(autoConnect: false);
+        audioIn.Connect(options: new() { AutoConnect = false });
 
         await using var videoIn = new PipeWireVideoCapture(ctx, "pwnet_parity_trig_vi");
-        videoIn.Connect(autoConnect: false);
+        videoIn.Connect(options: new() { AutoConnect = false });
 
         // A follower is not refused the request; it reaches the daemon and does nothing, which is
         // upstream's behaviour rather than an error.
@@ -185,7 +185,7 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         await device.DisposeAsync();
 
         var capture = new PipeWireVideoCapture(ctx, "pwnet_parity_capture");
-        capture.Connect(autoConnect: false);
+        capture.Connect(options: new() { AutoConnect = false });
         capture.Dispose();
         capture.Dispose();
     }
@@ -419,7 +419,7 @@ public sealed class SurfaceParityTests : PipeWireTestBase
         var retag = new Dictionary<string, string> { ["media.name"] = "retagged" };
 
         var audioIn = new PipeWireAudioCapture(ctx, "pwnet_conn_ai");
-        audioIn.Connect(autoConnect: false);
+        audioIn.Connect(options: new() { AutoConnect = false });
 
         var audioOut = new PipeWireAudioOutput(ctx, "pwnet_conn_ao");
         audioOut.FillSamples += (_, samples, _, _, _) =>
@@ -427,10 +427,10 @@ public sealed class SurfaceParityTests : PipeWireTestBase
             samples.Clear();
             return samples.Length;
         };
-        audioOut.Connect(autoConnect: false);
+        audioOut.Connect(options: new() { AutoConnect = false });
 
         var videoIn = new PipeWireVideoCapture(ctx, "pwnet_conn_vi");
-        videoIn.Connect(autoConnect: false);
+        videoIn.Connect(options: new() { AutoConnect = false });
 
         var videoOut = new PipeWireVideoOutput(ctx, "pwnet_conn_vo", 64, 64);
         videoOut.FillFrame += (_, pixels, _, _, _, _) =>
@@ -438,7 +438,7 @@ public sealed class SurfaceParityTests : PipeWireTestBase
             pixels.Clear();
             return true;
         };
-        videoOut.Connect(autoConnect: false);
+        videoOut.Connect(options: new() { AutoConnect = false });
 
         foreach (
             Func<CancellationToken, Task<uint>> wait in new Func<CancellationToken, Task<uint>>[]

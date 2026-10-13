@@ -18,7 +18,6 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <EnablePackageValidation>true</EnablePackageValidation>
     <!-- The public overloads differ in their leading parameters, so optional trailing parameters never bind ambiguously. -->
-    <NoWarn>$(NoWarn);RS0026</NoWarn>
     <!-- Baseline the public surface against the last release so a break has to be declared in
          CompatibilitySuppressions.xml rather than shipping unnoticed. -->
     <PackageValidationBaselineVersion>0.2.3-alpha</PackageValidationBaselineVersion>

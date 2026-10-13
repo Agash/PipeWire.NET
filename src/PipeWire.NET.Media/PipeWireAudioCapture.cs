@@ -35,8 +35,6 @@ namespace PipeWire.NET.Media;
 [SupportedOSPlatform("linux")]
 public sealed partial class PipeWireAudioCapture : IAsyncDisposable
 {
-    /// <summary>Wildcard node id - let PipeWire auto-select a source.</summary>
-    public const uint AnyNode = NativeConstants.PW_ID_ANY;
 
     /// <summary>Handles an audio frame on the loop thread. Do not cache the frame.</summary>
     public delegate void FrameReadyHandler(PipeWireAudioCapture sender, AudioFrame frame);
@@ -71,87 +69,28 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
         _logger = context.LoggerFactory.CreateLogger($"PipeWire.NET.{name}");
     }
 
-    /// <summary>Connects to a discovered source.</summary>
-    /// <param name="source">The node to capture from.</param>
-    /// <param name="sampleRate">Preferred sample rate (Hz).</param>
-    /// <param name="channels">Preferred channel count.</param>
-    /// <param name="format">Preferred sample format.</param>
-    /// <param name="stayWithTheSource">
-    /// <see langword="true"/> to end the stream when its source goes away, rather than letting the
-    /// daemon attach it to another one.
-    /// </param>
-    /// <param name="pullMode">
-    /// Take the driver role, so cycles happen when this stream asks for them rather than when the
-    /// graph schedules them. Pair with <see cref="TriggerProcess"/>, and with
-    /// <see cref="CommandReceived"/> to answer <see cref="SpaNodeCommand.RequestProcess"/>. This is
-    /// how upstream's pull example consumes: a driver on an input stream pulls.
-    /// </param>
-    /// <exception cref="ArgumentNullException"><paramref name="source"/> is <see langword="null"/>.</exception>
-    /// <param name="cancellationToken">
-    /// Abandons the wait for the loop lock. The connect request itself is issued
-    /// synchronously once that is held, so there is nothing to recall after it.
-    /// </param>
-    public void Connect(
-        PipeWireNode source,
-        int sampleRate = 48000,
-        int channels = 2,
-        AudioSampleFormat format = AudioSampleFormat.F32Le,
-        bool stayWithTheSource = false,
-        bool pullMode = false,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(source);
-        Connect(
-            source.NodeId,
-            sampleRate,
-            channels,
-            format,
-            stayWithTheSource: stayWithTheSource,
-            cancellationToken: cancellationToken
-        );
-    }
-
     /// <summary>Connects to an audio source.</summary>
-    /// <param name="targetNodeId">Source node id, or <see cref="AnyNode"/>.</param>
-    /// <param name="sampleRate">Preferred sample rate (Hz).</param>
-    /// <param name="channels">Preferred channel count.</param>
-    /// <param name="format">Preferred sample format.</param>
-    /// <param name="targetObjectName">
-    /// Optional <c>target.object</c> - bind to a specific node by name/serial regardless of
-    /// the session manager's default-device routing.
-    /// </param>
-    /// <param name="stayWithTheSource">
-    /// <see langword="true"/> to end the stream when its source goes away, rather than letting the
-    /// daemon attach it to another one.
-    /// </param>
-    /// <param name="pullMode">
-    /// Take the driver role, so cycles happen when this stream asks for them rather than when the
-    /// graph schedules them. Pair with <see cref="TriggerProcess"/>, and with
-    /// <see cref="CommandReceived"/> to answer <see cref="SpaNodeCommand.RequestProcess"/>.
-    /// </param>
-    /// <param name="autoConnect">
-    /// When true the session manager routes this stream. Pass <see langword="false"/> to publish
-    /// the node unlinked and link it deliberately (<see cref="Graph.PipeWireRegistry.CreateLinkAsync(Graph.PipeWirePort, Graph.PipeWirePort, CancellationToken)"/>),
-    /// out of the session manager's policy entirely: nothing moves it to another source when a
-    /// linked one goes, and nothing links it to a default. What a patchbay or a router wants.
-    /// </param>
+    /// <param name="target">The source to capture; the session manager's pick by default.</param>
+    /// <param name="options">How to connect; <see cref="AudioCaptureOptions.Default"/> when null.</param>
     /// <param name="cancellationToken">
     /// Abandons the wait for the loop lock. The connect request itself is issued
     /// synchronously once that is held, so there is nothing to recall after it.
     /// </param>
     public unsafe void Connect(
-        uint targetNodeId = AnyNode,
-        int sampleRate = 48000,
-        int channels = 2,
-        AudioSampleFormat format = AudioSampleFormat.F32Le,
-        string? targetObjectName = null,
-        bool stayWithTheSource = false,
-        bool pullMode = false,
-        bool autoConnect = true,
+        PipeWireTarget target = default,
+        AudioCaptureOptions? options = null,
         CancellationToken cancellationToken = default
     )
     {
+        uint targetNodeId = target.NativeId;
+        string? targetObjectName = target.ObjectName;
+        AudioCaptureOptions o = options ?? AudioCaptureOptions.Default;
+        int sampleRate = o.SampleRate;
+        int channels = o.Channels;
+        AudioSampleFormat format = o.Format;
+        bool stayWithTheSource = o.StayWithTheSource;
+        bool pullMode = o.PullMode;
+        bool autoConnect = o.AutoConnect;
         if (_core is not null)
             throw new InvalidOperationException("Already connected.");
         Volatile.Write(

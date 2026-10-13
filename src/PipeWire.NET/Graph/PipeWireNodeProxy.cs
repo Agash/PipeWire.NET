@@ -130,7 +130,7 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     /// <remarks>
     /// This is the node's master <c>volume</c> property. Session managers and desktop mixers read
     /// <c>channelVolumes</c> instead, so a change made here is correct but will not show up in
-    /// wpctl or pavucontrol. Use <see cref="SetChannelVolumesAsync(ReadOnlySpan{float}, CancellationToken)"/> for the volume a user sees.
+    /// wpctl or pavucontrol. Use <see cref="SetChannelVolumesAsync"/> for the volume a user sees.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="volume"/> is negative or not a number.
@@ -157,28 +157,9 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
         );
     }
 
-    /// <summary>Sets the node's per-channel volumes.</summary>
-    /// <param name="volumes">One linear amplitude per channel, in the node's channel order.</param>
-    /// <param name="cancellationToken">
-    /// Abandons the wait. The request is already on its way, so cancelling does not recall
-    /// it: the daemon can still apply the change after this throws.
-    /// </param>
-    /// <remarks>
-    /// <para>
-    /// The count must match the node's channel map, and nothing enforces that. PipeWire stores the
-    /// array verbatim at whatever length it is given: send eight volumes to a stereo node and it
-    /// reports eight from then on, while its channel map still says two. Nothing errors, and the
-    /// volumes are silently out of step with the channels they are supposed to control.
-    /// </para>
-    /// <para>
-    /// <see cref="GetChannelMapAsync"/> is the authority on how many there should be - the map is
-    /// the node's own description of its channels, and it does not follow a bad write.
-    /// </para>
-    /// </remarks>
-    /// <exception cref="ArgumentException"><paramref name="volumes"/> is empty or holds a negative value.</exception>
-    public Task SetChannelVolumesAsync(
+    private Task SetVolumesCoreAsync(
         ReadOnlySpan<float> volumes,
-        CancellationToken cancellationToken = default
+        CancellationToken cancellationToken
     )
     {
         if (volumes.IsEmpty)
@@ -234,14 +215,14 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     /// </param>
     public Task SetChannelVolumesAsync(
         ReadOnlySpan<float> volumes,
-        bool matchChannelMap,
+        bool matchChannelMap = false,
         CancellationToken cancellationToken = default
     )
     {
-        float[] copy = volumes.ToArray();
-        return matchChannelMap
-            ? SetCheckedAsync(copy, cancellationToken)
-            : SetChannelVolumesAsync(copy, cancellationToken);
+        if (!matchChannelMap)
+            return SetVolumesCoreAsync(volumes, cancellationToken);
+
+        return SetCheckedAsync(volumes.ToArray(), cancellationToken);
     }
 
     private async Task SetCheckedAsync(float[] volumes, CancellationToken cancellationToken)
@@ -260,7 +241,7 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
             );
         }
 
-        await SetChannelVolumesAsync(volumes, cancellationToken).ConfigureAwait(false);
+        await SetVolumesCoreAsync(volumes, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -268,7 +249,7 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     /// </summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
     /// <remarks>
-    /// The authority on how many entries <see cref="SetChannelVolumesAsync(ReadOnlySpan{float}, CancellationToken)"/> should be given.
+    /// The authority on how many entries <see cref="SetChannelVolumesAsync"/> should be given.
     /// Unlike the volume array, this reflects the node rather than the last thing written to it.
     /// </remarks>
     public async Task<ImmutableArray<SpaAudioChannel>> GetChannelMapAsync(
@@ -343,7 +324,7 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     /// <param name="cancellationToken">Abandons the wait.</param>
     public Task<ImmutableArray<SpaObject>> EnumerateFormatsAsync(
         CancellationToken cancellationToken = default
-    ) => EnumerateParametersAsync(SpaParamType.EnumFormat, cancellationToken);
+    ) => EnumerateParametersAsync(SpaParamType.EnumFormat, cancellationToken: cancellationToken);
 
     /// <summary>
     /// Describes every property this node supports: its key, its type and the values it accepts.
@@ -355,7 +336,7 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     /// </remarks>
     public Task<ImmutableArray<SpaObject>> EnumeratePropertyInfoAsync(
         CancellationToken cancellationToken = default
-    ) => EnumerateParametersAsync(SpaParamType.PropInfo, cancellationToken);
+    ) => EnumerateParametersAsync(SpaParamType.PropInfo, cancellationToken: cancellationToken);
 
     internal static ImmutableArray<float> ReadFloatArray(SpaObject? props, SpaProp key)
     {
@@ -452,7 +433,7 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     {
         ImmutableArray<SpaObject> raw = await EnumerateParametersAsync(
                 SpaParamType.EnumPortConfig,
-                cancellationToken
+                cancellationToken: cancellationToken
             )
             .ConfigureAwait(false);
 
@@ -542,7 +523,7 @@ public sealed partial class PipeWireNodeProxy : PipeWireParameterObject
     {
         ImmutableArray<SpaObject> raw = await EnumerateParametersAsync(
                 SpaParamType.Tag,
-                cancellationToken
+                cancellationToken: cancellationToken
             )
             .ConfigureAwait(false);
 

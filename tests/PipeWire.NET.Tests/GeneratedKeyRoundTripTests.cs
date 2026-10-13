@@ -73,7 +73,7 @@ public sealed class GeneratedKeyRoundTripTests
             return samples.Length;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         await using var reg = new PipeWireRegistry(ctx);
         await reg.WaitForInitialEnumerationAsync(cts.Token);
@@ -258,11 +258,11 @@ public sealed class GeneratedKeyRoundTripTests
             return samples.Length;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         await using var capture = new PipeWireAudioCapture(ctx, $"{nodeName}-sink");
 
-        capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
+        capture.Connect(PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
         _ = await readings.Reaching(6).Within(TimeSpan.FromSeconds(2), cts.Token);
@@ -332,11 +332,11 @@ public sealed class GeneratedKeyRoundTripTests
             return samples.Length;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         await using var capture = new PipeWireAudioCapture(ctx, $"{nodeName}-sink");
 
-        capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
+        capture.Connect(PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
         if (!output.DriveAt(TimeSpan.FromMilliseconds(20)))

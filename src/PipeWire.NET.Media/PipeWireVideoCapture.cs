@@ -38,8 +38,6 @@ namespace PipeWire.NET.Media;
 [SupportedOSPlatform("linux")]
 public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
 {
-    /// <summary>Wildcard node id - let PipeWire auto-select a source.</summary>
-    public const uint AnyNode = NativeConstants.PW_ID_ANY;
 
     /// <summary>Handles a frame on the loop thread. Do not cache the frame.</summary>
     public delegate void FrameReadyHandler(PipeWireVideoCapture sender, VideoFrame frame);
@@ -144,23 +142,6 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
         _logger = context.LoggerFactory.CreateLogger($"PipeWire.NET.{name}");
     }
 
-    /// <summary>Connects to a discovered source.</summary>
-    /// <param name="source">The node to capture from.</param>
-    /// <param name="preferredFormats">Preferred pixel formats in priority order.</param>
-    /// <param name="cancellationToken">
-    /// Abandons the wait for the loop lock. The connect request itself is issued
-    /// synchronously once that is held, so there is nothing to recall after it.
-    /// </param>
-    public void Connect(
-        PipeWireNode source,
-        ReadOnlySpan<PixelFormat> preferredFormats = default,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(source);
-        Connect(source.NodeId, preferredFormats, cancellationToken: cancellationToken);
-    }
-
     /// <summary>
     /// Whether the application waits for each explicit-sync frame's acquire point on its own GPU: frames
     /// are handed on as they arrive, before the producer's GPU has finished writing them, with
@@ -172,79 +153,37 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
     public bool WaitAcquireOnGpu { get; set; }
 
     /// <summary>Connects to a source by node id (default: auto-select).</summary>
-    /// <param name="targetNodeId">Source node id, or <see cref="AnyNode"/> to auto-select.</param>
-    /// <param name="preferredFormats">Preferred pixel formats in priority order.</param>
-    /// <param name="stayWithTheSource">
-    /// <see langword="true"/> to end the stream when its source goes away, rather than letting the
-    /// daemon attach it to another one.
-    /// </param>
-    /// <param name="pullMode">
-    /// Take the driver role, so cycles happen when this stream asks for them rather than when the
-    /// graph schedules them. Pair with <see cref="TriggerProcess"/>, and with
-    /// <see cref="CommandReceived"/> to answer <see cref="SpaNodeCommand.RequestProcess"/>. This is
-    /// how upstream's pull example consumes: a driver on an input stream pulls.
-    /// </param>
-    /// <param name="preferredWidth">Preferred width in pixels.</param>
-    /// <param name="preferredHeight">Preferred height in pixels.</param>
-    /// <param name="preferredFrameRate">Preferred frame rate in frames per second.</param>
     /// <remarks>
     /// The geometry is a preference, not a demand: the offer accepts a range around it, so a
     /// producer of another size still negotiates and the frames that arrive may not match what was
     /// asked for. Read <see cref="VideoFrame.Width"/> and <see cref="VideoFrame.Height"/> rather
     /// than assuming. The defaults are what a consumer that does not care should ask for.
     /// </remarks>
-    /// <param name="targetObjectName">
-    /// Optional <c>target.object</c> - bind to a specific node by name/serial regardless of
-    /// the session manager's default-device routing.
-    /// </param>
-    /// <param name="modifiers">
-    /// DRM format modifiers to offer for a zero-copy dmabuf negotiation (the consumer's
-    /// GPU-importable set). The first of <paramref name="preferredFormats"/> is the format offered with
-    /// them; every one of them is offered in host memory, for a producer that cannot share a buffer. The library auto-fixates to the producer's preferred modifier from this set.
-    /// </param>
-    /// <param name="requestExplicitSync">
-    /// Ask the producer for <c>SPA_META_SyncTimeline</c>, so frames carry acquire and release points
-    /// instead of relying on implicit fences. Only meaningful alongside
-    /// <paramref name="modifiers"/>, and only worth asking for if the consumer is going to wait on
-    /// <see cref="VideoFrame.SyncTimeline"/>: a producer that agrees to explicit sync stops
-    /// attaching implicit fences, so ignoring the points races the GPU still writing the frame.
-    /// </param>
-    /// <param name="deviceOffers">
-    /// The devices this consumer can import on, each with the modifiers it can import there, in
-    /// priority order - PipeWire's DMA-BUF device-ID negotiation, as upstream's video-play-fixate does
-    /// it. Instead of <paramref name="modifiers"/>, not with them. Each of
-    /// <paramref name="preferredFormats"/> a device offer names modifiers for is offered on that device,
-    /// in the preferred order; every one of them is offered in host memory. The stream connects inactive,
-    /// learns the producer's capabilities, offers one format per device the producer can work with and
-    /// pixel format, plus a host-memory fallback, and activates. <see cref="NegotiatedDevice"/> says which device was chosen; a producer
-    /// that does not negotiate is offered the first device's modifiers without a device.
-    /// </param>
-    /// <param name="autoConnect">
-    /// When true the session manager routes this stream. Pass <see langword="false"/> to publish
-    /// the node unlinked and link it deliberately (<see cref="Graph.PipeWireRegistry.CreateLinkAsync(Graph.PipeWirePort, Graph.PipeWirePort, CancellationToken)"/>),
-    /// out of the session manager's policy entirely: nothing moves it to another source when a
-    /// linked one goes, and nothing links it to a default. What a patchbay or a router wants.
-    /// </param>
+    /// <param name="target">The source to capture; the session manager's pick by default.</param>
+    /// <param name="options">How to connect; <see cref="VideoCaptureOptions.Default"/> when null.</param>
     /// <param name="cancellationToken">
     /// Abandons the wait for the loop lock. The connect request itself is issued
     /// synchronously once that is held, so there is nothing to recall after it.
     /// </param>
     public unsafe void Connect(
-        uint targetNodeId = AnyNode,
-        ReadOnlySpan<PixelFormat> preferredFormats = default,
-        string? targetObjectName = null,
-        ReadOnlySpan<long> modifiers = default,
-        bool stayWithTheSource = false,
-        bool pullMode = false,
-        int preferredWidth = 1920,
-        int preferredHeight = 1080,
-        int preferredFrameRate = 30,
-        bool requestExplicitSync = false,
-        ReadOnlySpan<DmaBufDeviceOffer> deviceOffers = default,
-        bool autoConnect = true,
+        PipeWireTarget target = default,
+        VideoCaptureOptions? options = null,
         CancellationToken cancellationToken = default
     )
     {
+        uint targetNodeId = target.NativeId;
+        string? targetObjectName = target.ObjectName;
+        VideoCaptureOptions o = options ?? VideoCaptureOptions.Default;
+        ReadOnlySpan<PixelFormat> preferredFormats = o.PreferredFormats.AsSpan();
+        ReadOnlySpan<long> modifiers = o.Modifiers.AsSpan();
+        ReadOnlySpan<DmaBufDeviceOffer> deviceOffers = o.DeviceOffers.AsSpan();
+        bool stayWithTheSource = o.StayWithTheSource;
+        bool pullMode = o.PullMode;
+        int preferredWidth = o.PreferredWidth;
+        int preferredHeight = o.PreferredHeight;
+        int preferredFrameRate = o.PreferredFrameRate;
+        bool requestExplicitSync = o.RequestExplicitSync;
+        bool autoConnect = o.AutoConnect;
         if (_core is not null)
             throw new InvalidOperationException("Already connected.");
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(preferredWidth);

@@ -65,7 +65,7 @@ public sealed class RegistryRefusalTests : PipeWireTestBase
 
         // A link needs two ports, and neither being real is refused before anything is sent.
         await Assert.ThrowsExactlyAsync<ArgumentException>(async () =>
-            await reg.CreateLinkAsync(Nothing, Nothing, cts.Token)
+            await reg.CreateLink(Nothing, Nothing).ExecuteAsync(cts.Token)
         );
 
         // By name rather than by id: absent is null, because asking for a store that is simply not

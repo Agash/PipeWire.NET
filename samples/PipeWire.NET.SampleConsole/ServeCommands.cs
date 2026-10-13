@@ -87,7 +87,7 @@ internal static class ServeCommands
 
             return framesInBuffer * channels * sizeof(float);
         };
-        tone.Connect(PipeWireAudioOutput.AnyNode, autoConnect: false);
+        tone.Connect(PipeWireTarget.Any, new() { AutoConnect = false });
 
         uint? toneId = await WaitForNodeIdAsync(tone, cancellationToken).ConfigureAwait(false);
         if (toneId is null)

@@ -107,7 +107,7 @@ public sealed class LocalV4l2Tests
             }
         };
 
-        capture.Connect(cam!.NodeId);
+        capture.Connect(PipeWireTarget.Id(cam!.NodeId));
         await capture.WaitForStreamingAsync(cts.Token);
         _ = await frames.AtLeast(10).Within(TimeSpan.FromSeconds(3), cts.Token);
 

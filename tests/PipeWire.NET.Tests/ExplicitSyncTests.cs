@@ -105,7 +105,7 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
                 return true;
             };
             output.StateChanged += (_, _, s) => streaming = s == PipeWireStreamState.Streaming;
-            output.ConnectDmaBufSync([modifier]);
+            output.ConnectDmaBufWithoutDevice([modifier], explicitSync: true);
 
             using var idCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             uint? nodeId = await output.WaitForNodeIdAsync(idCts.Token);
@@ -129,10 +129,13 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
                     enough.TrySetResult();
             };
             capture.Connect(
-                nodeId.Value,
-                [PixelFormat.Bgra],
-                modifiers: [modifier],
-                requestExplicitSync: consumerSyncs
+                PipeWireTarget.Id(nodeId.Value),
+                new()
+                {
+                    PreferredFormats = [PixelFormat.Bgra],
+                    Modifiers = [modifier],
+                    RequestExplicitSync = consumerSyncs,
+                }
             );
 
             // Not driven from here. This node is not the graph's driver, and pw_stream_trigger_process
@@ -277,7 +280,7 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
                 output.StampSyncPoints(index, (ulong)point, (ulong)point);
                 return true;
             };
-            output.ConnectDmaBufSync([modifier]);
+            output.ConnectDmaBufWithoutDevice([modifier], explicitSync: true);
             uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
             // Which buffer each delivery used, by the consumer's descriptor number for its dmabuf -
@@ -301,10 +304,13 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
                     cameBack.TrySetResult();
             };
             capture.Connect(
-                nodeId,
-                [PixelFormat.Bgra],
-                modifiers: [modifier],
-                requestExplicitSync: true
+                PipeWireTarget.Id(nodeId),
+                new()
+                {
+                    PreferredFormats = [PixelFormat.Bgra],
+                    Modifiers = [modifier],
+                    RequestExplicitSync = true,
+                }
             );
             await capture.WaitForStreamingAsync(cts.Token);
 
@@ -491,7 +497,7 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
                     return true;
                 };
 
-                output.ConnectDmaBufSync([modifier]);
+                output.ConnectDmaBufWithoutDevice([modifier], explicitSync: true);
                 uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
                 await using var capture = new PipeWireVideoCapture(
@@ -506,10 +512,13 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
                         arrivals.Add((timeline.AcquirePoint, DateTime.UtcNow.Ticks));
                 };
                 capture.Connect(
-                    nodeId,
-                    [PixelFormat.Bgra],
-                    modifiers: [modifier],
-                    requestExplicitSync: true
+                    PipeWireTarget.Id(nodeId),
+                    new()
+                    {
+                        PreferredFormats = [PixelFormat.Bgra],
+                        Modifiers = [modifier],
+                        RequestExplicitSync = true,
+                    }
                 );
                 await capture.WaitForStreamingAsync(cts.Token);
 

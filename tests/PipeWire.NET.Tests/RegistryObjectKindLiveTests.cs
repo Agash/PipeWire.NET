@@ -267,7 +267,7 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
                 $"pwnet_profiler_drive_{Environment.ProcessId}"
             );
             producer.FillSamples += (_, _, _, _, _) => 0;
-            producer.Connect(autoConnect: false);
+            producer.Connect(options: new() { AutoConnect = false });
 
             _ = await producer
                 .WaitForNodeIdAsync(cts.Token)
@@ -279,7 +279,7 @@ public sealed class RegistryObjectKindLiveTests : PipeWireTestBase
                 $"pwnet_profiler_sink_{Environment.ProcessId}"
             );
             consumer.FrameReady += (_, _) => { };
-            consumer.Connect((await producer.WaitForNodeIdAsync(cts.Token)));
+            consumer.Connect(PipeWireTarget.Id(await producer.WaitForNodeIdAsync(cts.Token)));
 
             // Shorter than the class budget, so running out of patience is reported as such rather
             // than arriving as the budget's own cancellation.

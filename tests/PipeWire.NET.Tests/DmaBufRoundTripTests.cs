@@ -78,7 +78,7 @@ public sealed class DmaBufRoundTripTests : PipeWireTestBase
             };
             output.FillDmaBuf += (_, _) => true;
             output.StateChanged += (_, _, s) => streaming = s == PipeWireStreamState.Streaming;
-            output.ConnectDmaBuf([modifier]);
+            output.ConnectDmaBufWithoutDevice([modifier]);
 
             uint nodeId = await output.WaitForNodeIdAsync().WaitAsync(TimeSpan.FromSeconds(10));
 
@@ -92,7 +92,10 @@ public sealed class DmaBufRoundTripTests : PipeWireTestBase
                     Interlocked.CompareExchange(ref firstFd, frame.Fd, -1);
                 }
             };
-            capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
+            capture.Connect(
+                PipeWireTarget.Id(nodeId),
+                new() { PreferredFormats = [PixelFormat.Bgra], Modifiers = [modifier] }
+            );
 
             // Not driven from here. This node is not the graph's driver, and pw_stream_trigger_process
             // on a node that is not one reaches the real driver as RequestProcess, which an audio

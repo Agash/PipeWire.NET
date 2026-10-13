@@ -484,11 +484,9 @@ public sealed class GraphCreationOptionsTests : PipeWireTestBase
                 cts.Token
             );
 
-            PipeWireLink link = await registry.CreateLinkAsync(
-                output.PortId,
-                input.PortId,
-                cts.Token
-            );
+            PipeWireLink link = await registry
+                .CreateLink(output.PortId, input.PortId)
+                .ExecuteAsync(cts.Token);
 
             Assert.AreEqual(output.PortId, link.OutputPortId);
             Assert.AreEqual(input.PortId, link.InputPortId);

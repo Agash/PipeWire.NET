@@ -165,7 +165,10 @@ public sealed class PenHarness : PipeWireTestBase
                     {
                         control = reg.BindNode(node.NodeId);
                         binds++;
-                        await control.EnumerateParametersAsync(SpaParamType.Props, ct);
+                        await control.EnumerateParametersAsync(
+                            SpaParamType.Props,
+                            cancellationToken: ct
+                        );
                         reads++;
                     }
                     catch (OperationCanceledException)

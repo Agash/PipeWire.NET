@@ -55,7 +55,7 @@ public sealed class StreamingSurfaceTests
         {
             await using var cap = new PipeWireVideoCapture(ctx, "pwnet-surface-owned-sink");
             cap.Retention = FrameRetention.Owned;
-            cap.Connect(src.NodeId);
+            cap.Connect(PipeWireTarget.Id(src.NodeId));
             await cap.WaitForStreamingAsync(cts.Token);
 
             _ = await cap.NextFrame().Within(TimeSpan.FromSeconds(5), cts.Token);
@@ -93,7 +93,7 @@ public sealed class StreamingSurfaceTests
         {
             await using var cap = new PipeWireVideoCapture(ctx, "pwnet-surface-borrow-sink");
             cap.Retention = FrameRetention.Borrowed;
-            cap.Connect(src.NodeId);
+            cap.Connect(PipeWireTarget.Id(src.NodeId));
             await cap.WaitForStreamingAsync(cts.Token);
 
             _ = await cap.NextFrame().Within(TimeSpan.FromSeconds(5), cts.Token);
@@ -130,7 +130,7 @@ public sealed class StreamingSurfaceTests
                         pts.Add(t);
                 }
             };
-            cap.Connect(src.NodeId);
+            cap.Connect(PipeWireTarget.Id(src.NodeId));
             await cap.WaitForStreamingAsync(cts.Token);
             _ = await pts.Reaching(8).Within(TimeSpan.FromSeconds(5), cts.Token);
 
@@ -173,7 +173,7 @@ public sealed class StreamingSurfaceTests
         await using (src)
         {
             await using var cap = new PipeWireVideoCapture(ctx, "pwnet-surface-props-sink");
-            cap.Connect(src.NodeId);
+            cap.Connect(PipeWireTarget.Id(src.NodeId));
             await cap.WaitForStreamingAsync(cts.Token);
 
             int changed = cap.UpdateProperties(
@@ -215,7 +215,7 @@ public sealed class StreamingSurfaceTests
                     s.SkipCurrentFrame();
             };
 
-            cap.Connect(src.NodeId);
+            cap.Connect(PipeWireTarget.Id(src.NodeId));
             await cap.WaitForStreamingAsync(cts.Token);
             _ = await seen.AtLeast(5).Within(TimeSpan.FromSeconds(5), cts.Token);
 
@@ -272,7 +272,7 @@ public sealed class StreamingSurfaceTests
                 _ = seen.Increment();
             };
 
-            cap.Connect(src.NodeId);
+            cap.Connect(PipeWireTarget.Id(src.NodeId));
             await cap.WaitForStreamingAsync(cts.Token);
             _ = await seen.AtLeast(21).Within(TimeSpan.FromSeconds(10), cts.Token);
 
@@ -309,7 +309,7 @@ public sealed class StreamingSurfaceTests
                 cap.FrameReady += (_, _) => frames.Increment();
                 cap.StateChanged += (_, _, state) => last = state;
 
-                cap.Connect(src.NodeId);
+                cap.Connect(PipeWireTarget.Id(src.NodeId));
                 await cap.WaitForStreamingAsync(cts.Token);
                 _ = await frames.AtLeast(1).Within(TimeSpan.FromSeconds(5), cts.Token);
 
@@ -383,7 +383,7 @@ public sealed class StreamingSurfaceTests
             return true;
         };
 
-        src.Connect(autoConnect: false);
+        src.Connect(options: new() { AutoConnect = false });
 
         uint nodeId = await src.WaitForNodeIdAsync(cts.Token);
 
@@ -402,7 +402,7 @@ public sealed class StreamingSurfaceTests
                 before.Increment();
         };
 
-        cap.Connect(nodeId, [PixelFormat.Bgra]);
+        cap.Connect(PipeWireTarget.Id(nodeId), new() { PreferredFormats = [PixelFormat.Bgra] });
         await cap.WaitForStreamingAsync(cts.Token);
         _ = await before.AtLeast(1).Within(TimeSpan.FromSeconds(5), cts.Token);
 
@@ -468,7 +468,7 @@ public sealed class StreamingSurfaceTests
                         failures.Add(wrong);
             };
 
-            cap.Connect(src.NodeId);
+            cap.Connect(PipeWireTarget.Id(src.NodeId));
             await cap.WaitForStreamingAsync(cts.Token);
             _ = await mapped.AtLeast(6).Within(TimeSpan.FromSeconds(10), cts.Token);
 
@@ -500,7 +500,7 @@ public sealed class StreamingSurfaceTests
             cap.CommandReceived += commands.Add;
             cap.FrameReady += (_, _) => Interlocked.Increment(ref frames);
 
-            cap.Connect(src.NodeId, pullMode: true);
+            cap.Connect(PipeWireTarget.Id(src.NodeId), new() { PullMode = true });
             await cap.WaitForStreamingAsync(cts.Token);
 
             // Pulled by hand, the way upstream's pull example does from a timer.

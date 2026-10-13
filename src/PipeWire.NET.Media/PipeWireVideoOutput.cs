@@ -11,10 +11,10 @@ namespace PipeWire.NET.Media;
 /// <list type="bullet">
 /// <item>Host memory (default): PipeWire pulls frames by invoking <see cref="FillFrame"/>; write your
 /// pixels into the supplied span.</item>
-/// <item>Zero-copy dmabuf: call <see cref="ConnectDmaBuf(ReadOnlySpan{long}, CancellationToken)"/> with the DRM modifiers your GPU can export.
+/// <item>Zero-copy dmabuf: call <see cref="ConnectDmaBufWithoutDevice"/> with the DRM modifiers your GPU can export.
 /// The library negotiates dmabuf buffers and asks you (via <see cref="AllocateDmaBuf"/>) to back each
 /// pool buffer with a dmabuf you own; you render into it and publish from <see cref="FillDmaBuf"/>. No
-/// pixel copy ever touches the CPU. <see cref="ConnectDmaBufSync(ReadOnlySpan{long}, CancellationToken)"/> adds explicit timeline
+/// pixel copy ever touches the CPU. <see cref="ConnectDmaBuf"/> with explicit sync adds explicit timeline
 /// synchronization on top of the same transport.</item>
 /// </list>
 /// </summary>
@@ -83,10 +83,10 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     /// When the frame counts as written depends on who orders access to the buffer:
     /// </para>
     /// <list type="bullet">
-    /// <item><description>Implicit sync (<see cref="ConnectDmaBuf(ReadOnlySpan{long}, CancellationToken)"/>): the kernel orders access through
+    /// <item><description>Implicit sync (<see cref="ConnectDmaBufWithoutDevice"/>): the kernel orders access through
     /// the fences attached to the DMA-BUF, so GPU work submitted here may still be running on return,
     /// as long as it was submitted against the buffer.</description></item>
-    /// <item><description>Explicit sync with library-owned timelines (<see cref="ConnectDmaBufSync(ReadOnlySpan{long}, CancellationToken)"/>,
+    /// <item><description>Explicit sync with library-owned timelines (<see cref="ConnectDmaBuf"/> with explicit sync,
     /// timelines left at -1): the library signals the acquire point from the CPU as soon as this
     /// returns, so the frame must be completely written by then. Wait for your GPU work before
     /// returning, or use your own timelines.</description></item>
@@ -100,7 +100,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
 
     /// <summary>
     /// Backs a pool buffer with an app-owned dmabuf plus explicit-sync timelines, for
-    /// <see cref="ConnectDmaBufSync(ReadOnlySpan{long}, CancellationToken)"/>. Like <see cref="AllocateDmaBufHandler"/>, plus the two
+    /// <see cref="ConnectDmaBuf"/> with explicit sync. Like <see cref="AllocateDmaBufHandler"/>, plus the two
     /// timeline descriptors: set <paramref name="acquireFd"/> and <paramref name="releaseFd"/> to
     /// the app's own DRM syncobj timeline descriptors, or leave either at -1 for a library-created one.
     /// </summary>
@@ -210,7 +210,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     private int _planeCount;
     private int _nextBufferIndex;
 
-    // Explicit-sync state. Armed by ConnectDmaBufSync; untouched otherwise, in which case the
+    // Explicit-sync state. Armed by a connect with explicit sync; untouched otherwise, in which case the
     // dmabuf path below behaves exactly as before.
     private bool _explicitSync;
     private ulong _syncSeq; // loop thread only: default points when the app stamps none
@@ -341,72 +341,25 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         _logger = context.LoggerFactory.CreateLogger($"PipeWire.NET.{nodeName}");
     }
 
-    /// <summary>Any node - let the session manager choose where this stream is routed.</summary>
-    public const uint AnyNode = NativeConstants.PW_ID_ANY;
-
-    /// <summary>Connects, publishing into a node you already hold.</summary>
-    /// <param name="target">The consumer to publish into, from a graph snapshot.</param>
-    /// <param name="autoConnect">Let the session manager route this stream.</param>
-    /// <param name="driver">
-    /// Take the driver role, so cycles happen when this stream asks for them. The daemon still
-    /// decides: <see cref="IsDriving"/> says whether it did.
-    /// </param>
-    /// <param name="cancellationToken">Abandons the wait for the loop lock.</param>
-    /// <remarks>
-    /// The same as the id overload, for a caller holding the node rather than its id - which is
-    /// what a graph snapshot hands out. Both captures have had this shape all along.
-    /// </remarks>
-    /// <exception cref="ArgumentNullException"><paramref name="target"/> is <see langword="null"/>.</exception>
-    public void Connect(
-        PipeWireNode target,
-        bool autoConnect = true,
-        bool driver = false,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(target);
-        Connect(
-            target.NodeId,
-            autoConnect: autoConnect,
-            driver: driver,
-            cancellationToken: cancellationToken
-        );
-    }
 
     /// <summary>Starts publishing host-memory frames and registers the node in the graph.</summary>
-    /// <param name="targetNodeId">
-    /// The node to route into, or <see cref="AnyNode"/> to let the session manager decide.
-    /// </param>
-    /// <param name="targetObjectName">
-    /// Optional <c>target.object</c> - bind to a specific node by name or serial regardless of
-    /// the session manager's default-device routing.
-    /// </param>
-    /// <param name="autoConnect">
-    /// When true the session manager routes this stream automatically. Pass
-    /// <see langword="false"/> with an explicit target to publish the node and link it
-    /// deliberately, independent of session-manager policy: a targeted link does not need a
-    /// default device to exist. A test or a transport usually wants that; a camera app does not.
-    /// </param>
-    /// <param name="driver">
-    /// Ask to be the graph's driver (<c>PW_STREAM_FLAG_DRIVER</c>), so cycles happen when this stream
-    /// triggers them rather than on another node's clock - upstream's video-src and audio-src connect
-    /// this way to pace their own output. Pair with <see cref="DriveAt"/> or
-    /// <see cref="TriggerProcess"/>. The daemon still decides: <see cref="IsDriving"/> says whether it
-    /// did. Without it the stream is only ever a follower, and a trigger just asks the real driver
-    /// for a cycle.
-    /// </param>
+    /// <param name="target">The node to route into; the session manager's pick by default.</param>
+    /// <param name="options">How to connect; <see cref="StreamOutputOptions.Default"/> when null.</param>
     /// <param name="cancellationToken">
     /// Abandons the wait for the loop lock. The connect request itself is issued
     /// synchronously once that is held, so there is nothing to recall after it.
     /// </param>
     public unsafe void Connect(
-        uint targetNodeId = AnyNode,
-        string? targetObjectName = null,
-        bool autoConnect = true,
-        bool driver = false,
+        PipeWireTarget target = default,
+        StreamOutputOptions? options = null,
         CancellationToken cancellationToken = default
     )
     {
+        uint targetNodeId = target.NativeId;
+        string? targetObjectName = target.ObjectName;
+        StreamOutputOptions o = options ?? StreamOutputOptions.Default;
+        bool autoConnect = o.AutoConnect;
+        bool driver = o.Driver;
         if (_core is not null)
             throw new InvalidOperationException("Already connected.");
 
@@ -517,82 +470,8 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
-    /// Starts publishing zero-copy dmabuf frames with explicit synchronization: every buffer
-    /// carries <c>SPA_META_SyncTimeline</c> points plus acquire and release timeline descriptors,
-    /// instead of relying on implicit fences.
-    /// </summary>
-    /// <param name="modifiers">
-    /// The DRM format modifiers this producer can export, in priority order.
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Abandons the wait for the loop lock. The connect request itself is issued
-    /// synchronously once that is held, so there is nothing to recall after it.
-    /// </param>
-    /// <remarks>
-    /// <para>
-    /// Wire <see cref="AllocateDmaBufSync"/> to provide per-buffer timelines, or leave it unset
-    /// and back buffers with <see cref="AllocateDmaBuf"/> while the library creates DRM syncobj
-    /// timelines for them. Either way stamp per-frame points with <see cref="StampSyncPoints"/>;
-    /// unstamped frames carry a running sequence instead. Who signals the acquire point, and so
-    /// when a frame must be finished, is set out on <see cref="FillDmaBufHandler"/>.
-    /// </para>
-    /// <para>
-    /// A consumer that agrees stops attaching implicit fences, so a peer ignoring the points
-    /// races the GPU. Use a dedicated context: the release wait blocks the loop thread when a
-    /// consumer promised to signal and has not yet, which stalls every stream on a shared one.
-    /// </para>
-    /// </remarks>
-    public void ConnectDmaBufSync(
-        ReadOnlySpan<long> modifiers,
-        CancellationToken cancellationToken = default
-    )
-    {
-        RequireSyncTimelines();
-
-        _explicitSync = true;
-        try
-        {
-            ConnectDmaBuf(modifiers, cancellationToken);
-        }
-        catch
-        {
-            _explicitSync = false;
-            throw;
-        }
-    }
-
-    /// <summary>
-    /// <see cref="ConnectDmaBufSync(ReadOnlySpan{long}, CancellationToken)"/>, negotiating which device
-    /// the buffers are allocated on.
-    /// </summary>
-    /// <param name="offers">The devices this producer can allocate on, each with its modifiers, in priority order.</param>
-    /// <param name="cancellationToken">Abandons the wait for the loop lock.</param>
-    /// <remarks>
-    /// Device negotiation as in <see cref="ConnectDmaBuf(ReadOnlySpan{DmaBufDeviceOffer}, CancellationToken)"/>;
-    /// explicit sync as in the modifier overload.
-    /// </remarks>
-    public void ConnectDmaBufSync(
-        ReadOnlySpan<DmaBufDeviceOffer> offers,
-        CancellationToken cancellationToken = default
-    )
-    {
-        RequireSyncTimelines();
-
-        _explicitSync = true;
-        try
-        {
-            ConnectDmaBuf(offers, cancellationToken);
-        }
-        catch
-        {
-            _explicitSync = false;
-            throw;
-        }
-    }
-
-    /// <summary>
     /// Whether this machine can create the DRM syncobj timelines explicit sync needs (a render node opens),
-    /// so <c>ConnectDmaBufSync</c> works without timelines of the application's own.
+    /// so explicit sync works without timelines of the application's own.
     /// </summary>
     public static bool ExplicitSyncAvailable => DrmSyncobj.IsAvailable;
 
@@ -606,7 +485,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         if (!DrmSyncobj.IsAvailable && AllocateDmaBufSync is null)
             throw new InvalidOperationException(
                 "explicit sync needs a DRM render node (/dev/dri/renderD*) to create syncobj timelines, "
-                    + "and none could be opened; supply timelines through AllocateDmaBufSync or use ConnectDmaBuf"
+                    + "and none could be opened; supply timelines through AllocateDmaBufSync or connect without explicit sync"
             );
     }
 
@@ -644,12 +523,18 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     /// <param name="modifiers">
     /// The DRM format modifiers this producer can export, in priority order.
     /// </param>
+    /// <param name="explicitSync">
+    /// Whether every buffer carries <c>SPA_META_SyncTimeline</c> points with acquire and release timeline
+    /// descriptors instead of relying on implicit fences; see the remarks on
+    /// <see cref="ConnectDmaBuf"/>.
+    /// </param>
     /// <param name="cancellationToken">
     /// Abandons the wait for the loop lock. The connect request itself is issued
     /// synchronously once that is held, so there is nothing to recall after it.
     /// </param>
-    public void ConnectDmaBuf(
+    public void ConnectDmaBufWithoutDevice(
         ReadOnlySpan<long> modifiers,
+        bool explicitSync = false,
         CancellationToken cancellationToken = default
     )
     {
@@ -659,7 +544,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 nameof(modifiers)
             );
 
-        ConnectDmaBufCore(modifiers, [], cancellationToken);
+        ConnectDmaBufCore(modifiers, [], explicitSync, cancellationToken);
     }
 
     /// <summary>
@@ -669,6 +554,11 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     /// <param name="offers">
     /// The devices this producer can allocate on, each with the modifiers it can export there, in
     /// priority order.
+    /// </param>
+    /// <param name="explicitSync">
+    /// Whether every buffer carries <c>SPA_META_SyncTimeline</c> points with acquire and release timeline
+    /// descriptors instead of relying on implicit fences; see the remarks on
+    /// <see cref="ConnectDmaBuf"/>.
     /// </param>
     /// <param name="cancellationToken">
     /// Abandons the wait for the loop lock. The connect request itself is issued
@@ -684,8 +574,23 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     /// </para>
     /// <para>
     /// A consumer that does not negotiate - every one that predates the protocol - is offered the first
-    /// device's modifiers without a device, and the stream behaves exactly as the modifier overload
+    /// device's modifiers without a device, and the stream behaves exactly as <see cref="ConnectDmaBufWithoutDevice"/>
     /// would; <see cref="NegotiatedDevice"/> stays null.
+    /// </para>
+    /// <para>
+    /// With <paramref name="explicitSync"/>, a consumer that agrees stops attaching implicit fences.
+    /// </para>
+    /// <para>
+    /// Wire <see cref="AllocateDmaBufSync"/> to provide per-buffer timelines, or leave it unset
+    /// and back buffers with <see cref="AllocateDmaBuf"/> while the library creates DRM syncobj
+    /// timelines for them. Either way stamp per-frame points with <see cref="StampSyncPoints"/>;
+    /// unstamped frames carry a running sequence instead. Who signals the acquire point, and so
+    /// when a frame must be finished, is set out on <see cref="FillDmaBufHandler"/>.
+    /// </para>
+    /// <para>
+    /// A consumer that agrees stops attaching implicit fences, so a peer ignoring the points
+    /// races the GPU. Use a dedicated context: the release wait blocks the loop thread when a
+    /// consumer promised to signal and has not yet, which stalls every stream on a shared one.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException">
@@ -693,6 +598,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     /// </exception>
     public void ConnectDmaBuf(
         ReadOnlySpan<DmaBufDeviceOffer> offers,
+        bool explicitSync = false,
         CancellationToken cancellationToken = default
     )
     {
@@ -704,10 +610,36 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 nameof(offers)
             );
 
-        ConnectDmaBufCore(modifiers.AsSpan(), offers, cancellationToken);
+        ConnectDmaBufCore(modifiers.AsSpan(), offers, explicitSync, cancellationToken);
     }
 
-    private unsafe void ConnectDmaBufCore(
+    private void ConnectDmaBufCore(
+        ReadOnlySpan<long> modifiers,
+        ReadOnlySpan<DmaBufDeviceOffer> offers,
+        bool explicitSync,
+        CancellationToken cancellationToken
+    )
+    {
+        if (!explicitSync)
+        {
+            ConnectDmaBufStream(modifiers, offers, cancellationToken);
+            return;
+        }
+
+        RequireSyncTimelines();
+        _explicitSync = true;
+        try
+        {
+            ConnectDmaBufStream(modifiers, offers, cancellationToken);
+        }
+        catch
+        {
+            _explicitSync = false;
+            throw;
+        }
+    }
+
+    private unsafe void ConnectDmaBufStream(
         ReadOnlySpan<long> modifiers,
         ReadOnlySpan<DmaBufDeviceOffer> offers,
         CancellationToken cancellationToken
@@ -905,7 +837,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     /// thread drives the cycle directly.
     /// </para>
     /// <para>
-    /// No-op before <see cref="Connect(uint, string?, bool, bool, CancellationToken)"/> or <see cref="ConnectDmaBuf(ReadOnlySpan{long}, CancellationToken)"/>, and after disposal.
+    /// No-op before <see cref="Connect"/> or <see cref="ConnectDmaBufWithoutDevice"/>, and after disposal.
     /// </para>
     /// </remarks>
     public void TriggerProcess() => _core?.TriggerProcess();

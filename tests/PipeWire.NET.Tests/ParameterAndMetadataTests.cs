@@ -113,7 +113,7 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
 
             // The node opted out of the session manager's restore, so the write is the only one; it is
             // read once the node reports it applied.
-            await control.SetChannelVolumesAsync([0.4f, 0.6f], cts.Token);
+            await control.SetChannelVolumesAsync([0.4f, 0.6f], cancellationToken: cts.Token);
             ImmutableArray<float> after = await control.SettleAsync(
                 SpaParamType.Props,
                 ct => control.GetChannelVolumesAsync(ct),
@@ -197,7 +197,10 @@ public sealed class ParameterAndMetadataTests : PipeWireTestBase
             );
 
             await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(async () =>
-                await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token)
+                await control.EnumerateParametersAsync(
+                    SpaParamType.EnumProfile,
+                    cancellationToken: cts.Token
+                )
             );
 
             await registry.DestroyGlobalAsync(node.NodeId, cts.Token);

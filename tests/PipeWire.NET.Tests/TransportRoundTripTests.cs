@@ -108,7 +108,7 @@ public sealed class TransportRoundTripTests
                 return true;
             };
 
-            originVideo.ConnectDmaBuf([modifier]);
+            originVideo.ConnectDmaBufWithoutDevice([modifier]);
             uint originVideoNode = await originVideo.WaitForNodeIdAsync(cts.Token);
 
             uint sample = 0;
@@ -128,7 +128,7 @@ public sealed class TransportRoundTripTests
                 return samples.Length;
             };
 
-            originAudio.Connect(autoConnect: false);
+            originAudio.Connect(options: new() { AutoConnect = false });
 
             // - The relay: takes both in and puts both back -
             long relayPts = 0;
@@ -141,7 +141,10 @@ public sealed class TransportRoundTripTests
                     Volatile.Write(ref relayPts, pts);
             };
 
-            relayVideoIn.Connect(originVideoNode, [PixelFormat.Bgra], modifiers: [modifier]);
+            relayVideoIn.Connect(
+                PipeWireTarget.Id(originVideoNode),
+                new() { PreferredFormats = [PixelFormat.Bgra], Modifiers = [modifier] }
+            );
 
             await using var relayAudioIn = new PipeWireAudioCapture(ctx, "pwnet-loop-a-relay-in");
             relayAudioIn.FrameReady += (_, f) =>
@@ -153,10 +156,13 @@ public sealed class TransportRoundTripTests
             };
 
             relayAudioIn.Connect(
-                (await originAudio.WaitForNodeIdAsync(cts.Token)),
-                sampleRate: Rate,
-                channels: 1,
-                format: AudioSampleFormat.F32Le
+                PipeWireTarget.Id(await originAudio.WaitForNodeIdAsync(cts.Token)),
+                new()
+                {
+                    SampleRate = Rate,
+                    Channels = 1,
+                    Format = AudioSampleFormat.F32Le,
+                }
             );
 
             await relayVideoIn.WaitForStreamingAsync(cts.Token);
@@ -194,7 +200,7 @@ public sealed class TransportRoundTripTests
                 return true;
             };
 
-            relayVideoOut.ConnectDmaBuf([modifier]);
+            relayVideoOut.ConnectDmaBufWithoutDevice([modifier]);
             uint relayVideoNode = await relayVideoOut.WaitForNodeIdAsync(cts.Token);
 
             await using var relayAudioOut = new PipeWireAudioOutput(
@@ -214,7 +220,7 @@ public sealed class TransportRoundTripTests
                 return samples.Length;
             };
 
-            relayAudioOut.Connect(autoConnect: false);
+            relayAudioOut.Connect(options: new() { AutoConnect = false });
 
             // - The far end -
             var offsets = new Collected<long>();
@@ -234,7 +240,10 @@ public sealed class TransportRoundTripTests
                 }
             };
 
-            finalVideo.Connect(relayVideoNode, [PixelFormat.Bgra], modifiers: [modifier]);
+            finalVideo.Connect(
+                PipeWireTarget.Id(relayVideoNode),
+                new() { PreferredFormats = [PixelFormat.Bgra], Modifiers = [modifier] }
+            );
 
             var audioOut = new List<float>();
             var audioHeard = new Tally();
@@ -255,10 +264,13 @@ public sealed class TransportRoundTripTests
             };
 
             finalAudio.Connect(
-                (await relayAudioOut.WaitForNodeIdAsync(cts.Token)),
-                sampleRate: Rate,
-                channels: 1,
-                format: AudioSampleFormat.F32Le
+                PipeWireTarget.Id(await relayAudioOut.WaitForNodeIdAsync(cts.Token)),
+                new()
+                {
+                    SampleRate = Rate,
+                    Channels = 1,
+                    Format = AudioSampleFormat.F32Le,
+                }
             );
 
             await finalVideo.WaitForStreamingAsync(cts.Token);

@@ -104,7 +104,7 @@ public sealed class ThreadAffinityTests : PipeWireTestBase
         );
         uint sinkPort = await PortOfAsync(reg, sink.NodeId, PipeWirePortDirection.In, cts.Token);
 
-        await reg.CreateLinkAsync(filterPort, sinkPort, cts.Token);
+        await reg.CreateLink(filterPort, sinkPort).ExecuteAsync(cts.Token);
 
         await processed.Task.WaitAsync(TimeSpan.FromSeconds(15), cts.Token);
         await loopThreadSeen.Task.WaitAsync(TimeSpan.FromSeconds(15), cts.Token);

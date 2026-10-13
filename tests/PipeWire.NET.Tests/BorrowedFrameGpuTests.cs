@@ -102,7 +102,7 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
             };
 
             output.FillDmaBuf += (_, _) => true;
-            output.ConnectDmaBuf([modifier]);
+            output.ConnectDmaBufWithoutDevice([modifier]);
 
             uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
@@ -118,7 +118,10 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
                     Interlocked.Increment(ref sawDmaBuf);
             };
 
-            capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
+            capture.Connect(
+                PipeWireTarget.Id(nodeId),
+                new() { PreferredFormats = [PixelFormat.Bgra], Modifiers = [modifier] }
+            );
 
             (bool got, BorrowedVideoFrame borrowed) = await capture.TakeFdBackedAsync(
                 TimeSpan.FromMilliseconds(6000),
@@ -223,7 +226,7 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
             };
 
             output.FillDmaBuf += (_, _) => true;
-            output.ConnectDmaBuf([modifier]);
+            output.ConnectDmaBufWithoutDevice([modifier]);
 
             uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
@@ -232,7 +235,10 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
                 Retention = FrameRetention.Borrowed,
             };
 
-            capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
+            capture.Connect(
+                PipeWireTarget.Id(nodeId),
+                new() { PreferredFormats = [PixelFormat.Bgra], Modifiers = [modifier] }
+            );
 
             (bool got, BorrowedVideoFrame first) = await capture.TakeFdBackedAsync(
                 TimeSpan.FromMilliseconds(6000),

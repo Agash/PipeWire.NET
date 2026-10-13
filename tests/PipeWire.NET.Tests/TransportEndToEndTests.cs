@@ -92,7 +92,7 @@ public sealed class TransportEndToEndTests
             return true;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
         uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
         var received = new Collected<long>();
@@ -108,7 +108,7 @@ public sealed class TransportEndToEndTests
             }
         };
 
-        capture.Connect(nodeId, [PixelFormat.Bgra]);
+        capture.Connect(PipeWireTarget.Id(nodeId), new() { PreferredFormats = [PixelFormat.Bgra] });
         await capture.WaitForStreamingAsync(cts.Token);
 
         _ = await received.Reaching(5).Within(TimeSpan.FromMilliseconds(4000), cts.Token);
@@ -204,7 +204,7 @@ public sealed class TransportEndToEndTests
             return true;
         };
 
-        video.Connect(autoConnect: false);
+        video.Connect(options: new() { AutoConnect = false });
         uint videoNode = await video.WaitForNodeIdAsync(cts.Token);
 
         // Audio published alongside, carrying a ramp so its own delivery can be verified.
@@ -225,7 +225,7 @@ public sealed class TransportEndToEndTests
             return samples.Length;
         };
 
-        audio.Connect(autoConnect: false);
+        audio.Connect(options: new() { AutoConnect = false });
 
         var offsets = new Collected<long>();
         long audioSamples = 0;
@@ -245,15 +245,21 @@ public sealed class TransportEndToEndTests
             }
         };
 
-        videoSink.Connect(videoNode, [PixelFormat.Bgra]);
+        videoSink.Connect(
+            PipeWireTarget.Id(videoNode),
+            new() { PreferredFormats = [PixelFormat.Bgra] }
+        );
 
         await using var audioSink = new PipeWireAudioCapture(ctx, "pwnet-avpublish-a-sink");
         audioSink.FrameReady += (_, f) => Interlocked.Add(ref audioSamples, f.Samples.Length / 4);
         audioSink.Connect(
-            (await audio.WaitForNodeIdAsync(cts.Token)),
-            sampleRate: Rate,
-            channels: 1,
-            format: AudioSampleFormat.F32Le
+            PipeWireTarget.Id(await audio.WaitForNodeIdAsync(cts.Token)),
+            new()
+            {
+                SampleRate = Rate,
+                Channels = 1,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
 
         await videoSink.WaitForStreamingAsync(cts.Token);
@@ -382,7 +388,7 @@ public sealed class TransportEndToEndTests
                     return true;
                 };
 
-                output.ConnectDmaBuf([modifier]);
+                output.ConnectDmaBufWithoutDevice([modifier]);
 
                 uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
@@ -405,7 +411,10 @@ public sealed class TransportEndToEndTests
                     }
                 };
 
-                capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
+                capture.Connect(
+                    PipeWireTarget.Id(nodeId),
+                    new() { PreferredFormats = [PixelFormat.Bgra], Modifiers = [modifier] }
+                );
 
                 BorrowedVideoFrame borrowed = default;
                 var got = false;
@@ -509,7 +518,7 @@ public sealed class TransportEndToEndTests
             return true;
         };
 
-        video.Connect(autoConnect: false);
+        video.Connect(options: new() { AutoConnect = false });
         uint videoNode = await video.WaitForNodeIdAsync(cts.Token);
 
         uint n = 0;
@@ -529,7 +538,7 @@ public sealed class TransportEndToEndTests
             return samples.Length;
         };
 
-        audio.Connect(autoConnect: false);
+        audio.Connect(options: new() { AutoConnect = false });
 
         long audioClock = 0;
         await using var audioSink = new PipeWireAudioCapture(ctx, "pwnet-avsession-a-sink");
@@ -540,10 +549,13 @@ public sealed class TransportEndToEndTests
         };
 
         audioSink.Connect(
-            (await audio.WaitForNodeIdAsync(cts.Token)),
-            sampleRate: Rate,
-            channels: 1,
-            format: AudioSampleFormat.F32Le
+            PipeWireTarget.Id(await audio.WaitForNodeIdAsync(cts.Token)),
+            new()
+            {
+                SampleRate = Rate,
+                Channels = 1,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
 
         await audioSink.WaitForStreamingAsync(cts.Token);
@@ -569,7 +581,10 @@ public sealed class TransportEndToEndTests
                 frames.Increment();
             };
 
-            videoSink.Connect(videoNode, [PixelFormat.Bgra]);
+            videoSink.Connect(
+                PipeWireTarget.Id(videoNode),
+                new() { PreferredFormats = [PixelFormat.Bgra] }
+            );
             await videoSink.WaitForStreamingAsync(cts.Token);
             _ = await frames.AtLeast(3).Within(TimeSpan.FromSeconds(5), cts.Token);
 

@@ -45,7 +45,7 @@ public sealed class HostileConditionsTests : PipeWireTestBase
             pixels.Fill(0x80);
             return true;
         };
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
         await output.WaitForNodeIdAsync(ct);
         return output;
     }
@@ -80,7 +80,10 @@ public sealed class HostileConditionsTests : PipeWireTestBase
 
         var capture = new PipeWireVideoCapture(ctx, "pwnet-hc-disposed-consumer");
         capture.Retention = FrameRetention.Owned;
-        capture.Connect((await source.WaitForNodeIdAsync(cts.Token)), [PixelFormat.Bgra]);
+        capture.Connect(
+            PipeWireTarget.Id(await source.WaitForNodeIdAsync(cts.Token)),
+            new() { PreferredFormats = [PixelFormat.Bgra] }
+        );
         await capture.DisposeAsync();
 
         // Reading state: all null or empty, none of them a throw and none of them a native call.
@@ -136,7 +139,10 @@ public sealed class HostileConditionsTests : PipeWireTestBase
 
         var delivered = new Tally();
         capture.FrameReady += (_, _) => delivered.Increment();
-        capture.Connect((await source.WaitForNodeIdAsync(cts.Token)), [PixelFormat.Bgra]);
+        capture.Connect(
+            PipeWireTarget.Id(await source.WaitForNodeIdAsync(cts.Token)),
+            new() { PreferredFormats = [PixelFormat.Bgra] }
+        );
         await capture.WaitForStreamingAsync(cts.Token);
 
         _ = await delivered.AtLeast(5).Within(TimeSpan.FromMilliseconds(3000), cts.Token);
@@ -384,7 +390,10 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         // sitting in Connecting forever, which is what a consumer would see as a silent hang.
         try
         {
-            capture.Connect(999_999, [PixelFormat.Bgra]);
+            capture.Connect(
+                PipeWireTarget.Id(999_999),
+                new() { PreferredFormats = [PixelFormat.Bgra] }
+            );
         }
         catch (Exception e) when (e is InvalidOperationException or PipeWireException)
         {
@@ -432,7 +441,7 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         await using var capture = new PipeWireAudioCapture(ctx, "pwnet-hc-gone-consumer");
         try
         {
-            capture.Connect(staleId);
+            capture.Connect(PipeWireTarget.Id(staleId));
             await Task.Delay(1500, cts.Token); // must not hang, whatever it decides
         }
         catch (Exception e) when (e is InvalidOperationException or PipeWireException) { }

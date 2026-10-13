@@ -134,7 +134,7 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
             return true;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
@@ -165,7 +165,7 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
             verified.Increment();
         };
 
-        capture.Connect(nodeId, [PixelFormat.Bgra]);
+        capture.Connect(PipeWireTarget.Id(nodeId), new() { PreferredFormats = [PixelFormat.Bgra] });
         await capture.WaitForStreamingAsync(cts.Token);
         _ = await verified.AtLeast(6).Within(TimeSpan.FromSeconds(5), cts.Token);
 
@@ -230,7 +230,7 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
             };
 
             output.FillDmaBuf += (_, _) => true;
-            output.ConnectDmaBuf([modifier]);
+            output.ConnectDmaBufWithoutDevice([modifier]);
 
             uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
@@ -239,7 +239,10 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
                 Retention = FrameRetention.Borrowed,
             };
 
-            capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
+            capture.Connect(
+                PipeWireTarget.Id(nodeId),
+                new() { PreferredFormats = [PixelFormat.Bgra], Modifiers = [modifier] }
+            );
 
             (bool got, BorrowedVideoFrame frame) = await capture.TakeFdBackedAsync(
                 TimeSpan.FromMilliseconds(6000),
@@ -324,7 +327,7 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
             return samples.Length;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         var got = new List<float>();
         var heard = new Tally();
@@ -360,10 +363,13 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
         };
 
         capture.Connect(
-            (await output.WaitForNodeIdAsync(cts.Token)),
-            sampleRate: rate,
-            channels: channels,
-            format: AudioSampleFormat.F32Le
+            PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)),
+            new()
+            {
+                SampleRate = rate,
+                Channels = channels,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
 
         await capture.WaitForStreamingAsync(cts.Token);

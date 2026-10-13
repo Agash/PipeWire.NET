@@ -20,7 +20,7 @@ namespace PipeWire.NET.Graph;
 /// <para>
 /// Enumerating is a request/answer exchange, not a return value: the daemon replies with one
 /// <c>param</c> event per value and never says it has finished, so the end is found by round-tripping
-/// the core afterwards. That is what <see cref="EnumerateParametersAsync(SpaParamType, CancellationToken)"/> hides.
+/// the core afterwards. That is what <see cref="EnumerateParametersAsync"/> hides.
 /// </para>
 /// <para>
 /// Writing is asynchronous and unacknowledged. A parameter the object does not support is dropped
@@ -197,32 +197,6 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     private protected abstract unsafe int SubscribeParamsNative(void* proxy, uint* ids, uint count);
 
     /// <summary>
-    /// Reads every value of one parameter.
-    /// </summary>
-    /// <param name="parameter">Which parameter to read, such as <see cref="SpaParamType.Props"/>.</param>
-    /// <param name="cancellationToken">Abandons the wait; the request itself cannot be recalled.</param>
-    /// <returns>
-    /// The values, in the order the daemon sent them. Empty when the object lists the parameter
-    /// but has no value for it now.
-    /// </returns>
-    /// <exception cref="ObjectDisposedException">The binding has been disposed.</exception>
-    /// <exception cref="PipeWireRequestRefusedException">
-    /// The object does not have the parameter at all: upstream's objects answer <c>enum_params</c>
-    /// for an id they do not support with <c>-ENOENT</c>, and that is passed on rather than read as
-    /// "no values", so a caller asking for the wrong parameter finds out.
-    /// </exception>
-    public async Task<ImmutableArray<SpaObject>> EnumerateParametersAsync(
-        SpaParamType parameter,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        return await EnumerateFilteredAsync(parameter, 0, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
     /// Reads every value of one parameter that matches a filter object.
     /// </summary>
     /// <param name="parameter">Which parameter to read, such as <see cref="SpaParamType.Profile"/>.</param>
@@ -246,13 +220,14 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
     /// <exception cref="ObjectDisposedException">The binding has been disposed.</exception>
     public Task<ImmutableArray<SpaObject>> EnumerateParametersAsync(
         SpaParamType parameter,
-        SpaObject filter,
+        SpaObject? filter = null,
         CancellationToken cancellationToken = default
     )
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        ArgumentNullException.ThrowIfNull(filter);
         cancellationToken.ThrowIfCancellationRequested();
+        if (filter is null)
+            return EnumerateFilteredAsync(parameter, 0, cancellationToken);
 
         // Serialized once and pinned for the synchronous issue below. The native call reads the
         // filter while issuing the request and never afterwards, and the issue runs synchronously
@@ -351,7 +326,7 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
         CancellationToken cancellationToken = default
     )
     {
-        ImmutableArray<SpaObject> all = await EnumerateParametersAsync(parameter, cancellationToken)
+        ImmutableArray<SpaObject> all = await EnumerateParametersAsync(parameter, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         return all.IsDefaultOrEmpty ? null : all[0];
     }

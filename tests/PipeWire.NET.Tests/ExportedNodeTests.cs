@@ -198,10 +198,13 @@ public sealed class ExportedNodeTests
             .OrFail("the exported node never registered an output port to route to");
 
         capture.Connect(
-            exported.NodeId,
-            sampleRate: Rate,
-            channels: Channels,
-            format: AudioSampleFormat.F32Le
+            PipeWireTarget.Id(exported.NodeId),
+            new()
+            {
+                SampleRate = Rate,
+                Channels = Channels,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
         await capture.WaitForStreamingAsync(cts.Token);
 
@@ -325,10 +328,13 @@ public sealed class ExportedNodeTests
         };
 
         capture.Connect(
-            exported.NodeId,
-            sampleRate: Rate,
-            channels: Channels,
-            format: AudioSampleFormat.F32Le
+            PipeWireTarget.Id(exported.NodeId),
+            new()
+            {
+                SampleRate = Rate,
+                Channels = Channels,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
 
         await capture.WaitForStreamingAsync(cts.Token);
@@ -507,7 +513,7 @@ public sealed class ExportedNodeTests
             return samples.Length;
         };
 
-        output.Connect(exported.NodeId);
+        output.Connect(PipeWireTarget.Id(exported.NodeId));
 
         _ = await consumed.Reaching(1001).Within(TimeSpan.FromSeconds(6), cts.Token);
 
@@ -648,10 +654,13 @@ public sealed class ExportedNodeTests
 
         await using var capture = new PipeWireAudioCapture(ctx, $"{name}-sink");
         capture.Connect(
-            exported.NodeId,
-            sampleRate: Rate,
-            channels: Channels,
-            format: AudioSampleFormat.F32Le
+            PipeWireTarget.Id(exported.NodeId),
+            new()
+            {
+                SampleRate = Rate,
+                Channels = Channels,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
 
         await capture.WaitForStreamingAsync(cts.Token);
@@ -1066,10 +1075,13 @@ public sealed class ExportedNodeTests
         };
 
         capture.Connect(
-            target,
-            sampleRate: Rate,
-            channels: Channels,
-            format: AudioSampleFormat.F32Le
+            PipeWireTarget.Id(target),
+            new()
+            {
+                SampleRate = Rate,
+                Channels = Channels,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
         await capture.WaitForStreamingAsync(ct);
         return capture;
@@ -1157,7 +1169,7 @@ public sealed class ExportedNodeTests
 
         // Something has to pull, or the node is never scheduled and no callbacks are installed.
         await using var capture = new PipeWireAudioCapture(ctx, name + "-sink");
-        capture.Connect(await WaitForNodeIdAsync(reg, name, cts.Token));
+        capture.Connect(PipeWireTarget.Id(await WaitForNodeIdAsync(reg, name, cts.Token)));
         _ = await reported.AtLeast(3).Within(TimeSpan.FromSeconds(5), cts.Token);
 
         Assert.IsTrue(reported.Value > 0, "the exported node was never driven");
@@ -1260,10 +1272,13 @@ public sealed class ExportedNodeTests
         };
 
         capture.Connect(
-            exported.NodeId,
-            sampleRate: Rate,
-            channels: Channels,
-            format: AudioSampleFormat.F32Le
+            PipeWireTarget.Id(exported.NodeId),
+            new()
+            {
+                SampleRate = Rate,
+                Channels = Channels,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
         await capture.WaitForStreamingAsync(cts.Token);
 

@@ -105,14 +105,17 @@ public sealed class TransportLifetimeTests : PipeWireTestBase
 
                 output.ReleaseDmaBuf += (_, index) => released.Enqueue(index);
                 output.FillDmaBuf += (_, _) => true;
-                output.ConnectDmaBuf([modifier]);
+                output.ConnectDmaBufWithoutDevice([modifier]);
 
                 uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
                 await using var capture = new PipeWireVideoCapture(ctx, "pwnet-release-sink");
                 var frames = new Tally();
                 capture.FrameReady += (_, _) => frames.Increment();
-                capture.Connect(nodeId, [PixelFormat.Bgra], modifiers: [modifier]);
+                capture.Connect(
+                    PipeWireTarget.Id(nodeId),
+                    new() { PreferredFormats = [PixelFormat.Bgra], Modifiers = [modifier] }
+                );
 
                 // Streamed until the pool has turned over a few times.
                 _ = await frames.AtLeast(20).Within(TimeSpan.FromSeconds(3), cts.Token);
@@ -204,7 +207,7 @@ public sealed class TransportLifetimeTests : PipeWireTestBase
 
         // A self-paced sender asks to drive, as upstream's video-src does; a follower's triggers
         // never report completion, whatever the caller waits for.
-        output.Connect(autoConnect: false, driver: true);
+        output.Connect(options: new() { AutoConnect = false, Driver = true });
 
         uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
@@ -238,7 +241,7 @@ public sealed class TransportLifetimeTests : PipeWireTestBase
             }
         };
 
-        capture.Connect(nodeId, [PixelFormat.Bgra]);
+        capture.Connect(PipeWireTarget.Id(nodeId), new() { PreferredFormats = [PixelFormat.Bgra] });
         await capture.WaitForStreamingAsync(cts.Token);
 
         // The driver role is assigned with no event to wait on, and a self-paced driver has no

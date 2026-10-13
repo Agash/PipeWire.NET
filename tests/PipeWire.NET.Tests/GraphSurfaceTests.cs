@@ -184,7 +184,7 @@ public sealed class GraphSurfaceTests
             return samples.Length;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
         await WaitForNodeAsync(reg, $"{name}-src", cts.Token);
 
         PipeWireNode sink = await reg.CreateVirtualSink($"{name}-sink", "Audio/Sink")
@@ -326,10 +326,10 @@ public sealed class GraphSurfaceTests
             return samples.Length;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         await using var capture = new PipeWireAudioCapture(ctx, $"{nodeName}-sink");
-        capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
+        capture.Connect(PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
         PipeWireGraphClock? clock = await running.Task.Within(TimeSpan.FromSeconds(5), cts.Token)
@@ -424,7 +424,7 @@ public sealed class GraphSurfaceTests
             return true;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         uint? nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
@@ -462,7 +462,10 @@ public sealed class GraphSurfaceTests
             verified.Increment();
         };
 
-        capture.Connect(nodeId!.Value, [PixelFormat.Bgra]);
+        capture.Connect(
+            PipeWireTarget.Id(nodeId!.Value),
+            new() { PreferredFormats = [PixelFormat.Bgra] }
+        );
         await capture.WaitForStreamingAsync(cts.Token);
         _ = await verified.AtLeast(6).Within(TimeSpan.FromSeconds(5), cts.Token);
 

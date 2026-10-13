@@ -89,7 +89,7 @@ public sealed partial class PipeWirePortProxy : PipeWireParameterObject
     /// </remarks>
     public Task<ImmutableArray<SpaObject>> EnumerateFormatsAsync(
         CancellationToken cancellationToken = default
-    ) => EnumerateParametersAsync(SpaParamType.Format, cancellationToken);
+    ) => EnumerateParametersAsync(SpaParamType.Format, cancellationToken: cancellationToken);
 
     /// <summary>Every format this port is willing to accept.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
@@ -100,7 +100,7 @@ public sealed partial class PipeWirePortProxy : PipeWireParameterObject
     /// </remarks>
     public Task<ImmutableArray<SpaObject>> EnumerateSupportedFormatsAsync(
         CancellationToken cancellationToken = default
-    ) => EnumerateParametersAsync(SpaParamType.EnumFormat, cancellationToken);
+    ) => EnumerateParametersAsync(SpaParamType.EnumFormat, cancellationToken: cancellationToken);
 
     /// <summary>The latency the graph has settled on for this port, in both directions.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
@@ -110,7 +110,7 @@ public sealed partial class PipeWirePortProxy : PipeWireParameterObject
     /// </remarks>
     public Task<ImmutableArray<SpaObject>> EnumerateLatencyAsync(
         CancellationToken cancellationToken = default
-    ) => EnumerateParametersAsync(SpaParamType.Latency, cancellationToken);
+    ) => EnumerateParametersAsync(SpaParamType.Latency, cancellationToken: cancellationToken);
 
     /// <summary>The settled latency of this port, read as a typed value per direction.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
@@ -145,7 +145,7 @@ public sealed partial class PipeWirePortProxy : PipeWireParameterObject
     {
         ImmutableArray<SpaObject> raw = await EnumerateParametersAsync(
                 SpaParamType.Tag,
-                cancellationToken
+                cancellationToken: cancellationToken
             )
             .ConfigureAwait(false);
 

@@ -82,7 +82,7 @@ public sealed partial class PipeWireDeviceProxy : PipeWireParameterObject
     /// <param name="cancellationToken">Abandons the wait.</param>
     public Task<ImmutableArray<SpaObject>> EnumerateProfilesAsync(
         CancellationToken cancellationToken = default
-    ) => EnumerateParametersAsync(SpaParamType.EnumProfile, cancellationToken);
+    ) => EnumerateParametersAsync(SpaParamType.EnumProfile, cancellationToken: cancellationToken);
 
     /// <summary>The profile the device is currently using, or <see langword="null"/> if it has none.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
@@ -137,13 +137,13 @@ public sealed partial class PipeWireDeviceProxy : PipeWireParameterObject
     /// <param name="cancellationToken">Abandons the wait.</param>
     public Task<ImmutableArray<SpaObject>> EnumerateRoutesAsync(
         CancellationToken cancellationToken = default
-    ) => EnumerateParametersAsync(SpaParamType.EnumRoute, cancellationToken);
+    ) => EnumerateParametersAsync(SpaParamType.EnumRoute, cancellationToken: cancellationToken);
 
     /// <summary>The routes currently in use, one per direction the profile provides.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>
     public Task<ImmutableArray<SpaObject>> GetActiveRoutesAsync(
         CancellationToken cancellationToken = default
-    ) => EnumerateParametersAsync(SpaParamType.Route, cancellationToken);
+    ) => EnumerateParametersAsync(SpaParamType.Route, cancellationToken: cancellationToken);
 
     /// <summary>
     /// Selects a route for one of the device's ports.

@@ -83,10 +83,18 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         await using var audioIn = new PipeWireAudioCapture(ctx, "pwnet_guard_cai");
         await using var videoIn = new PipeWireVideoCapture(ctx, "pwnet_guard_cvi");
 
-        Assert.ThrowsExactly<ArgumentNullException>(() => audioOut.Connect((PipeWireNode)null!));
-        Assert.ThrowsExactly<ArgumentNullException>(() => videoOut.Connect((PipeWireNode)null!));
-        Assert.ThrowsExactly<ArgumentNullException>(() => audioIn.Connect((PipeWireNode)null!));
-        Assert.ThrowsExactly<ArgumentNullException>(() => videoIn.Connect((PipeWireNode)null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
+            audioOut.Connect(PipeWireTarget.Node((PipeWireNode)null!))
+        );
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
+            videoOut.Connect(PipeWireTarget.Node((PipeWireNode)null!))
+        );
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
+            audioIn.Connect(PipeWireTarget.Node((PipeWireNode)null!))
+        );
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
+            videoIn.Connect(PipeWireTarget.Node((PipeWireNode)null!))
+        );
     }
 
     /// <summary>Retagging a connection refuses null and does nothing with an empty set.</summary>
@@ -408,7 +416,7 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         await using var output = new PipeWireVideoOutput(ctx, "pwnet_guard_dmabuf", 64, 64);
 
         Assert.ThrowsExactly<ArgumentException>(
-            () => output.ConnectDmaBuf(ReadOnlySpan<long>.Empty),
+            () => output.ConnectDmaBufWithoutDevice(ReadOnlySpan<long>.Empty),
             "a dmabuf connect with no modifiers was allowed to negotiate"
         );
 
@@ -425,21 +433,21 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
         if (DrmSyncobj.IsAvailable)
         {
             Assert.ThrowsExactly<ArgumentException>(() =>
-                output.ConnectDmaBufSync(ReadOnlySpan<long>.Empty)
+                output.ConnectDmaBufWithoutDevice(ReadOnlySpan<long>.Empty, explicitSync: true)
             );
 
             Assert.ThrowsExactly<ArgumentException>(() =>
-                output.ConnectDmaBufSync(ReadOnlySpan<DmaBufDeviceOffer>.Empty)
+                output.ConnectDmaBuf(ReadOnlySpan<DmaBufDeviceOffer>.Empty, explicitSync: true)
             );
         }
         else
         {
             Assert.ThrowsExactly<InvalidOperationException>(() =>
-                output.ConnectDmaBufSync(ReadOnlySpan<long>.Empty)
+                output.ConnectDmaBufWithoutDevice(ReadOnlySpan<long>.Empty, explicitSync: true)
             );
 
             Assert.ThrowsExactly<InvalidOperationException>(() =>
-                output.ConnectDmaBufSync(ReadOnlySpan<DmaBufDeviceOffer>.Empty)
+                output.ConnectDmaBuf(ReadOnlySpan<DmaBufDeviceOffer>.Empty, explicitSync: true)
             );
         }
 
@@ -470,10 +478,14 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
             pixels.Clear();
             return true;
         };
-        videoOut.Connect(autoConnect: false);
+        videoOut.Connect(options: new() { AutoConnect = false });
 
-        Assert.ThrowsExactly<InvalidOperationException>(() => videoOut.Connect(autoConnect: false));
-        Assert.ThrowsExactly<InvalidOperationException>(() => videoOut.ConnectDmaBuf([0L]));
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            videoOut.Connect(options: new() { AutoConnect = false })
+        );
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            videoOut.ConnectDmaBufWithoutDevice([0L])
+        );
 
         await using var audioOut = new PipeWireAudioOutput(ctx, "pwnet_guard_twice_ao");
         audioOut.FillSamples += (_, samples, _, _, _) =>
@@ -481,19 +493,25 @@ public sealed class SurfaceGuardTests : PipeWireTestBase
             samples.Clear();
             return samples.Length;
         };
-        audioOut.Connect(autoConnect: false);
+        audioOut.Connect(options: new() { AutoConnect = false });
 
-        Assert.ThrowsExactly<InvalidOperationException>(() => audioOut.Connect(autoConnect: false));
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            audioOut.Connect(options: new() { AutoConnect = false })
+        );
 
         await using var audioIn = new PipeWireAudioCapture(ctx, "pwnet_guard_twice_ai");
-        audioIn.Connect(autoConnect: false);
+        audioIn.Connect(options: new() { AutoConnect = false });
 
-        Assert.ThrowsExactly<InvalidOperationException>(() => audioIn.Connect(autoConnect: false));
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            audioIn.Connect(options: new() { AutoConnect = false })
+        );
 
         await using var videoIn = new PipeWireVideoCapture(ctx, "pwnet_guard_twice_vi");
-        videoIn.Connect(autoConnect: false);
+        videoIn.Connect(options: new() { AutoConnect = false });
 
-        Assert.ThrowsExactly<InvalidOperationException>(() => videoIn.Connect(autoConnect: false));
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            videoIn.Connect(options: new() { AutoConnect = false })
+        );
     }
 
     /// <summary>A DSP port hands back nothing rather than a span past the end of its buffer.</summary>

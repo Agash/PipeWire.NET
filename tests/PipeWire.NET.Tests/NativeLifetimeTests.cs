@@ -435,7 +435,7 @@ public sealed class NativeLifetimeTests : PipeWireTestBase
             s.Clear();
             return s.Length;
         };
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
         _ = await output.WaitForNodeIdAsync(cts.Token);
 
         await ctx.DisposeAsync();

@@ -59,7 +59,7 @@ public sealed class SandboxInteropTests : PipeWireTestBase
             "pwnet-sandboxed",
             ConsoleTestLoggerFactory.Instance
         );
-        await context.StartAsync(socket.SafeHandle, cts.Token);
+        await context.StartOnFdAsync(socket.SafeHandle, cts.Token);
 
         await using var registry = new PipeWireRegistry(context);
         await registry.WaitForInitialEnumerationAsync(cts.Token);

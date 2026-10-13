@@ -214,7 +214,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
 
         ImmutableArray<SpaObject> profiles = await control.EnumerateParametersAsync(
             SpaParamType.EnumProfile,
-            cts.Token
+            cancellationToken: cts.Token
         );
 
         Assert.HasCount(2, profiles, "the device did not answer with the profiles it was given");
@@ -307,7 +307,7 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         // there rather than by the provider again - same answer, different path.
         ImmutableArray<SpaObject> all = await control.EnumerateParametersAsync(
             SpaParamType.EnumProfile,
-            cts.Token
+            cancellationToken: cts.Token
         );
         Assert.HasCount(2, all);
 
@@ -500,7 +500,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
 
         Assert.HasCount(
             2,
-            await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token)
+            await control.EnumerateParametersAsync(
+                SpaParamType.EnumProfile,
+                cancellationToken: cts.Token
+            )
         );
 
         ImmutableArray<SpaObject> three = [.. Profiles(), Profiles()[0]];
@@ -515,7 +518,12 @@ public sealed class DeviceProviderTests : PipeWireTestBase
         int answered = await control.SettleAsync(
             SpaParamType.EnumProfile,
             async ct =>
-                (await control.EnumerateParametersAsync(SpaParamType.EnumProfile, ct)).Length,
+                (
+                    await control.EnumerateParametersAsync(
+                        SpaParamType.EnumProfile,
+                        cancellationToken: ct
+                    )
+                ).Length,
             n => n == 3,
             TimeSpan.FromSeconds(4),
             cts.Token
@@ -623,7 +631,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
             {
                 try
                 {
-                    await control.EnumerateParametersAsync(SpaParamType.EnumProfile, stop.Token);
+                    await control.EnumerateParametersAsync(
+                        SpaParamType.EnumProfile,
+                        cancellationToken: stop.Token
+                    );
                 }
                 catch (OperationCanceledException) { }
                 catch (PipeWireException)
@@ -693,7 +704,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
 
         PipeWireException refused =
             await Assert.ThrowsExactlyAsync<PipeWireRequestRefusedException>(() =>
-                control.EnumerateParametersAsync(SpaParamType.EnumRoute, cts.Token)
+                control.EnumerateParametersAsync(
+                    SpaParamType.EnumRoute,
+                    cancellationToken: cts.Token
+                )
             );
         Assert.AreEqual(-2, refused.Result);
     }
@@ -815,7 +829,10 @@ public sealed class DeviceProviderTests : PipeWireTestBase
 
         Assert.HasCount(
             2,
-            await control.EnumerateParametersAsync(SpaParamType.EnumProfile, cts.Token),
+            await control.EnumerateParametersAsync(
+                SpaParamType.EnumProfile,
+                cancellationToken: cts.Token
+            ),
             "the binding stopped answering after a faulting handler"
         );
     }

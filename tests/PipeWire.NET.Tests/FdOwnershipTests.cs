@@ -10,7 +10,7 @@ using PipeWire.NET.Interop;
 namespace PipeWire.NET.Tests;
 
 /// <summary>
-/// fd ownership contract of <see cref="PipeWireContext.StartAsync(SafeHandle, CancellationToken)"/>.
+/// fd ownership contract of <see cref="PipeWireContext.StartOnFdAsync(SafeHandle, CancellationToken)"/>.
 ///
 /// The caller's handle is only BORROWED: the library duplicates the descriptor
 /// (FD_CLOEXEC, like PipeWire's own impl_steal_fd does) and hands the duplicate to
@@ -81,7 +81,9 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
     {
         await using PipeWireContext context = new("fd-ownership-test");
 
-        Assert.ThrowsExactly<ArgumentNullException>(() => context.StartAsync((SafeHandle)null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
+            context.StartOnFdAsync((SafeHandle)null!)
+        );
     }
 
     [TestMethod]
@@ -90,7 +92,7 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
         await using PipeWireContext context = new("fd-ownership-test");
         using SafeFileHandle invalid = new(new IntPtr(-1), ownsHandle: true);
 
-        Assert.ThrowsExactly<ArgumentException>(() => context.StartAsync(invalid));
+        Assert.ThrowsExactly<ArgumentException>(() => context.StartOnFdAsync(invalid));
     }
 
     /// <summary>
@@ -140,7 +142,7 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
         if (connected)
         {
             using var second = new CancellationTokenSource(ConnectBudget);
-            await context.StartAsync(stream.SafeFileHandle, second.Token);
+            await context.StartOnFdAsync(stream.SafeFileHandle, second.Token);
         }
     }
 
@@ -173,7 +175,7 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
 
         try
         {
-            await context.StartAsync(handle, bounded.Token);
+            await context.StartOnFdAsync(handle, bounded.Token);
             return true;
         }
         catch (PipeWireException)
@@ -255,7 +257,7 @@ public sealed partial class FdOwnershipTests : PipeWireTestBase
             "fd-ownership-test",
             ConsoleTestLoggerFactory.Instance
         );
-        await context.StartAsync(borrowed, cts.Token);
+        await context.StartOnFdAsync(borrowed, cts.Token);
 
         // The connection is live: the registry enumerated the graph over it.
         await using PipeWireRegistry registry = new(context);

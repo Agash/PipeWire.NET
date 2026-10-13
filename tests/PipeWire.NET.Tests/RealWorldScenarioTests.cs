@@ -150,7 +150,10 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
             for (int i = 0; i < sources.Count; i++)
             {
                 await using PipeWireNodeProxy channel = registry.BindNode(sources[i].NodeId);
-                await channel.SetChannelVolumesAsync([0.2f * (i + 1), 0.2f * (i + 1)], cts.Token);
+                await channel.SetChannelVolumesAsync(
+                    [0.2f * (i + 1), 0.2f * (i + 1)],
+                    cancellationToken: cts.Token
+                );
             }
 
             // Read every level back through fresh bindings, the way a UI redrawing itself would.
@@ -431,7 +434,7 @@ public sealed class RealWorldScenarioTests : PipeWireTestBase
 
             ImmutableArray<SpaObject> formats = await control.EnumerateParametersAsync(
                 SpaParamType.EnumFormat,
-                cts.Token
+                cancellationToken: cts.Token
             );
 
             Assert.IsTrue(formats.Length > 0, "the producer must offer at least one format");

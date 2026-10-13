@@ -17,7 +17,6 @@
          Set PackageValidationBaselineVersion once the first version is published. -->
     <EnablePackageValidation>true</EnablePackageValidation>
     <!-- The public overloads differ in their leading parameters, so optional trailing parameters never bind ambiguously. -->
-    <NoWarn>$(NoWarn);RS0026</NoWarn>
     <MinVerTagPrefix>v</MinVerTagPrefix>
     <IsPackable>true</IsPackable>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>

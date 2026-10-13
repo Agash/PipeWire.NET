@@ -60,7 +60,7 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
                 return;
             done.TrySetResult((frame.Width, frame.Height, frame.Format, distinct));
         };
-        cap.Connect(preferredFormats: stackalloc[] { PixelFormat.Bgra }, targetObjectName: node);
+        cap.Connect(PipeWireTarget.Named(node), new() { PreferredFormats = [PixelFormat.Bgra] });
 
         var got = await done.Task.WaitAsync(TimeSpan.FromSeconds(8));
         Assert.AreEqual(320, got.W);
@@ -102,7 +102,7 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
             if (frame.Pixels.Length > 0)
                 done.TrySetResult(frame.Format);
         };
-        cap.Connect(preferredFormats: stackalloc[] { expected }, targetObjectName: node);
+        cap.Connect(PipeWireTarget.Named(node), new() { PreferredFormats = [expected] });
 
         PixelFormat negotiated = await done.Task.WaitAsync(TimeSpan.FromSeconds(8));
         Assert.AreEqual(expected, negotiated);
@@ -141,11 +141,14 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
         };
 
         cap.Connect(
-            preferredFormats: stackalloc[] { PixelFormat.Bgra },
-            targetObjectName: node,
-            preferredWidth: 320,
-            preferredHeight: 240,
-            preferredFrameRate: 15
+            PipeWireTarget.Named(node),
+            new()
+            {
+                PreferredFormats = [PixelFormat.Bgra],
+                PreferredWidth = 320,
+                PreferredHeight = 240,
+                PreferredFrameRate = 15,
+            }
         );
 
         (int width, int height) = await done.Task.WaitAsync(TimeSpan.FromSeconds(8));
@@ -173,9 +176,15 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
         await using var ctx = new PipeWireContext("test", ConsoleTestLoggerFactory.Instance);
         await using var cap = new PipeWireVideoCapture(ctx, "geometry-refused");
 
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => cap.Connect(preferredWidth: 0));
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => cap.Connect(preferredHeight: -1));
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => cap.Connect(preferredFrameRate: 0));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            cap.Connect(options: new() { PreferredWidth = 0 })
+        );
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            cap.Connect(options: new() { PreferredHeight = -1 })
+        );
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            cap.Connect(options: new() { PreferredFrameRate = 0 })
+        );
     }
 
     [TestMethod]
@@ -218,9 +227,8 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
         try
         {
             cap.Connect(
-                preferredFormats: stackalloc[] { PixelFormat.Bgra },
-                targetObjectName: node,
-                stayWithTheSource: true
+                PipeWireTarget.Named(node),
+                new() { PreferredFormats = [PixelFormat.Bgra], StayWithTheSource = true }
             );
 
             await streamed.Task.WaitAsync(TimeSpan.FromSeconds(15));
@@ -302,8 +310,11 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
         );
 
         cap.Connect(
-            preferredFormats: stackalloc[] { PixelFormat.Bgra, PixelFormat.Yuv420 },
-            autoConnect: false,
+            options: new()
+            {
+                PreferredFormats = [PixelFormat.Bgra, PixelFormat.Yuv420],
+                AutoConnect = false,
+            },
             cancellationToken: cts.Token
         );
         uint capNode = await cap.WaitForNodeIdAsync(cts.Token);
@@ -438,10 +449,13 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
                 done.TrySetResult((frame.SampleRate, frame.Channels, true));
         };
         cap.Connect(
-            sampleRate: 48000,
-            channels: 2,
-            format: AudioSampleFormat.F32Le,
-            targetObjectName: node
+            PipeWireTarget.Named(node),
+            new()
+            {
+                SampleRate = 48000,
+                Channels = 2,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
 
         var got = await done.Task.WaitAsync(TimeSpan.FromSeconds(8));
@@ -488,7 +502,7 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
                 }
             }
         };
-        cap.Connect(preferredFormats: stackalloc[] { PixelFormat.Bgra }, targetObjectName: node);
+        cap.Connect(PipeWireTarget.Named(node), new() { PreferredFormats = [PixelFormat.Bgra] });
 
         await enough.Task.WaitAsync(TimeSpan.FromSeconds(10));
         long[] v;
@@ -550,10 +564,13 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
             }
         };
         cap.Connect(
-            sampleRate: 48000,
-            channels: 2,
-            format: AudioSampleFormat.F32Le,
-            targetObjectName: node
+            PipeWireTarget.Named(node),
+            new()
+            {
+                SampleRate = 48000,
+                Channels = 2,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
 
         await done.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -618,7 +635,7 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
                     vClk.Add(t);
             }
         };
-        vCap.Connect(preferredFormats: stackalloc[] { PixelFormat.Bgra }, targetObjectName: vNode);
+        vCap.Connect(PipeWireTarget.Named(vNode), new() { PreferredFormats = [PixelFormat.Bgra] });
 
         await using var aCap = new PipeWireAudioCapture(ctx, "gst-av-audio-sink");
         aCap.FrameReady += (_, f) =>
@@ -638,10 +655,13 @@ public sealed class GStreamerIntegrationTests : PipeWireTestBase
             }
         };
         aCap.Connect(
-            sampleRate: 48000,
-            channels: 2,
-            format: AudioSampleFormat.F32Le,
-            targetObjectName: aNode
+            PipeWireTarget.Named(aNode),
+            new()
+            {
+                SampleRate = 48000,
+                Channels = 2,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
 
         // Until BOTH legs have stamped a few frames (not coupled to either's exact cadence): a live

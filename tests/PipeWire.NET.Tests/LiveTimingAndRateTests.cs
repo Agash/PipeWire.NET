@@ -60,10 +60,10 @@ public sealed class LiveTimingAndRateTests
             return samples.Length;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         var capture = new PipeWireAudioCapture(ctx, $"{name}-sink-{Environment.ProcessId}");
-        capture.Connect((await output.WaitForNodeIdAsync(ct)));
+        capture.Connect(PipeWireTarget.Id(await output.WaitForNodeIdAsync(ct)));
         await capture.WaitForStreamingAsync(ct);
 
         return (ctx, output, capture);
@@ -275,13 +275,13 @@ public sealed class LiveTimingAndRateTests
             return samples.Length;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         await using var capture = new PipeWireAudioCapture(
             ctx,
             $"pwnet-commands-sink-{Environment.ProcessId}"
         );
-        capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
+        capture.Connect(PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
         _ = await commanded.Task.Within(TimeSpan.FromSeconds(3), cts.Token);
@@ -336,7 +336,7 @@ public sealed class LiveTimingAndRateTests
             return samples.Length;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         await using var capture = new PipeWireAudioCapture(ctx, sinkName)
         {
@@ -347,7 +347,7 @@ public sealed class LiveTimingAndRateTests
             },
         };
 
-        capture.Connect((await output.WaitForNodeIdAsync(cts.Token)));
+        capture.Connect(PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)));
         await capture.WaitForStreamingAsync(cts.Token);
 
         await using var reg = new PipeWireRegistry(ctx);

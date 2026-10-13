@@ -73,13 +73,13 @@ public sealed class UpstreamExampleTests
             return true;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
         uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
         var received = new Tally();
         await using var capture = new PipeWireVideoCapture(ctx, "pwnet-srcreneg-sink");
         capture.FrameReady += (_, _) => received.Increment();
-        capture.Connect(nodeId, [PixelFormat.Bgra]);
+        capture.Connect(PipeWireTarget.Id(nodeId), new() { PreferredFormats = [PixelFormat.Bgra] });
         await capture.WaitForStreamingAsync(cts.Token);
 
         _ = await received.AtLeast(1).Within(TimeSpan.FromSeconds(5), cts.Token);
@@ -138,7 +138,7 @@ public sealed class UpstreamExampleTests
             return true;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
         uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
         var sizes = new Collected<(int W, int H)>();
@@ -152,7 +152,7 @@ public sealed class UpstreamExampleTests
             }
         };
 
-        capture.Connect(nodeId, [PixelFormat.Bgra]);
+        capture.Connect(PipeWireTarget.Id(nodeId), new() { PreferredFormats = [PixelFormat.Bgra] });
         await capture.WaitForStreamingAsync(cts.Token);
 
         PixelFormat[] formats = [PixelFormat.Bgra];
@@ -232,7 +232,7 @@ public sealed class UpstreamExampleTests
             return samples.Length;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
 
         var received = new Collected<float>();
         await using var capture = new PipeWireAudioCapture(ctx, $"{nodeName}-sink");
@@ -253,10 +253,13 @@ public sealed class UpstreamExampleTests
         };
 
         capture.Connect(
-            (await output.WaitForNodeIdAsync(cts.Token)),
-            sampleRate: rate,
-            channels: channels,
-            format: AudioSampleFormat.F32Le
+            PipeWireTarget.Id(await output.WaitForNodeIdAsync(cts.Token)),
+            new()
+            {
+                SampleRate = rate,
+                Channels = channels,
+                Format = AudioSampleFormat.F32Le,
+            }
         );
 
         await capture.WaitForStreamingAsync(cts.Token);
@@ -329,7 +332,7 @@ public sealed class UpstreamExampleTests
             return true;
         };
 
-        output.Connect(autoConnect: false);
+        output.Connect(options: new() { AutoConnect = false });
         uint nodeId = await output.WaitForNodeIdAsync(cts.Token);
 
         var sizes = new Collected<(int W, int H)>();
@@ -344,7 +347,15 @@ public sealed class UpstreamExampleTests
         };
 
         // A size the producer is not offering. The connect must still negotiate.
-        capture.Connect(nodeId, [PixelFormat.Bgra], preferredWidth: 640, preferredHeight: 360);
+        capture.Connect(
+            PipeWireTarget.Id(nodeId),
+            new()
+            {
+                PreferredFormats = [PixelFormat.Bgra],
+                PreferredWidth = 640,
+                PreferredHeight = 360,
+            }
+        );
 
         await capture.WaitForStreamingAsync(cts.Token);
         _ = await sizes.Reaching(16).Within(TimeSpan.FromSeconds(5), cts.Token);

@@ -72,7 +72,10 @@ public sealed partial class PushedFrameTests : PipeWireTestBase
                 Interlocked.Increment(ref pulled);
                 return true;
             };
-            output.ConnectDmaBuf([modifier], TestContext.CancellationToken);
+            output.ConnectDmaBufWithoutDevice(
+                [modifier],
+                cancellationToken: TestContext.CancellationToken
+            );
             uint node = await output.WaitForNodeIdAsync(TestContext.CancellationToken);
 
             ConcurrentQueue<uint> seen = new();
@@ -84,7 +87,10 @@ public sealed partial class PushedFrameTests : PipeWireTestBase
                     seen.Enqueue(FirstPixel(frame.Fd, buffers[0].Size));
                 }
             };
-            capture.Connect(node, [PixelFormat.Bgra], modifiers: [modifier]);
+            capture.Connect(
+                PipeWireTarget.Id(node),
+                new() { PreferredFormats = [PixelFormat.Bgra], Modifiers = [modifier] }
+            );
 
             uint pushed = 0;
             int skipped = 0;
@@ -160,8 +166,7 @@ public sealed partial class PushedFrameTests : PipeWireTestBase
             return true;
         };
         output.Connect(
-            autoConnect: false,
-            driver: true,
+            options: new() { AutoConnect = false, Driver = true },
             cancellationToken: TestContext.CancellationToken
         );
         uint node = await output.WaitForNodeIdAsync(TestContext.CancellationToken);
@@ -175,7 +180,7 @@ public sealed partial class PushedFrameTests : PipeWireTestBase
                 seen.Enqueue(MemoryMarshal.Read<uint>(frame.Pixels));
             }
         };
-        capture.Connect(node, [PixelFormat.Bgra]);
+        capture.Connect(PipeWireTarget.Id(node), new() { PreferredFormats = [PixelFormat.Bgra] });
 
         uint pushed = 0;
         using PeriodicTimer frames = new(TimeSpan.FromMilliseconds(20));

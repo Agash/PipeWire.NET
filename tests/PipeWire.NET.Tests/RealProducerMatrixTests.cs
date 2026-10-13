@@ -172,7 +172,15 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
 
         // These are preferences, not observations: PipeWire converts, so asking for the
         // producer's own shape is what proves the request is honoured end to end.
-        capture.Connect(src.NodeId, rate, channels, expected);
+        capture.Connect(
+            PipeWireTarget.Id(src.NodeId),
+            new()
+            {
+                SampleRate = rate,
+                Channels = channels,
+                Format = expected,
+            }
+        );
         await buffers.AtLeast(3).WaitAsync(TimeSpan.FromSeconds(20), cts.Token);
 
         Assert.IsTrue(buffers > 0, $"{gstFormat} {rate}Hz {channels}ch: no audio arrived");
@@ -231,7 +239,10 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
             );
             nodeId = src.NodeId;
 
-            capture.Connect(nodeId, [PixelFormat.Bgra]);
+            capture.Connect(
+                PipeWireTarget.Id(nodeId),
+                new() { PreferredFormats = [PixelFormat.Bgra] }
+            );
             await frames.AtLeast(3).WaitAsync(TimeSpan.FromSeconds(20), cts.Token);
         } // the producer is killed here
 
@@ -283,8 +294,14 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
         first.FrameReady += (_, _) => a.Increment();
         second.FrameReady += (_, _) => b.Increment();
 
-        first.Connect(src.NodeId, [PixelFormat.Bgra]);
-        second.Connect(src.NodeId, [PixelFormat.Bgra]);
+        first.Connect(
+            PipeWireTarget.Id(src.NodeId),
+            new() { PreferredFormats = [PixelFormat.Bgra] }
+        );
+        second.Connect(
+            PipeWireTarget.Id(src.NodeId),
+            new() { PreferredFormats = [PixelFormat.Bgra] }
+        );
 
         await Task.WhenAll(a.AtLeast(3), b.AtLeast(3))
             .WaitAsync(TimeSpan.FromSeconds(20), cts.Token);
@@ -320,7 +337,10 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
             throw new InvalidOperationException("hostile frame handler");
         };
 
-        capture.Connect(src.NodeId, [PixelFormat.Bgra]);
+        capture.Connect(
+            PipeWireTarget.Id(src.NodeId),
+            new() { PreferredFormats = [PixelFormat.Bgra] }
+        );
         await seen.AtLeast(5).WaitAsync(TimeSpan.FromSeconds(20), cts.Token);
 
         Assert.IsTrue(
@@ -361,7 +381,7 @@ public sealed class RealProducerMatrixTests : PipeWireTestBase
                 Interlocked.Increment(ref shortFrames);
         };
 
-        capture.Connect(nodeId, [want]);
+        capture.Connect(PipeWireTarget.Id(nodeId), new() { PreferredFormats = [want] });
         await frames.AtLeast(3).WaitAsync(TimeSpan.FromSeconds(20), ct);
         return (frames, shortFrames, negotiated, width, height);
     }
