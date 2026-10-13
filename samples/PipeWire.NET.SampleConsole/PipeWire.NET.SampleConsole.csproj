@@ -3,6 +3,9 @@
     <OutputType>Exe</OutputType>
     <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- A native executable ships no XML docs; this project's only feed IDE0005. The Compile-only AOT
+         publish (dotnet/sdk#54515) also never copies them into OutDir, where publish looks (MSB3030). -->
+    <PublishDocumentationFiles>false</PublishDocumentationFiles>
     <!-- The runtime pack is what a self-contained/AOT publish resolves, and the graph flags any
          10.0.10 or older. Pin the serviced patch so the sample does not carry a known advisory. -->
     <RuntimeFrameworkVersion Condition="'$(TargetFramework)' == 'net10.0'"
