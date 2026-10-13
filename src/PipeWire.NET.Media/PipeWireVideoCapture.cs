@@ -38,7 +38,6 @@ namespace PipeWire.NET.Media;
 [SupportedOSPlatform("linux")]
 public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
 {
-
     /// <summary>Handles a frame on the loop thread. Do not cache the frame.</summary>
     public delegate void FrameReadyHandler(PipeWireVideoCapture sender, VideoFrame frame);
 

@@ -97,7 +97,6 @@ public sealed class PipeWireAudioOutput : IDisposable, IAsyncDisposable
         );
     }
 
-
     /// <summary>Starts publishing.</summary>
     /// <param name="target">The sink to play into; the session manager's pick by default.</param>
     /// <param name="options">How to connect; <see cref="StreamOutputOptions.Default"/> when null.</param>

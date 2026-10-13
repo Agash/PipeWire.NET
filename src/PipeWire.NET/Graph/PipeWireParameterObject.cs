@@ -326,7 +326,10 @@ public abstract class PipeWireParameterObject : IDisposable, IAsyncDisposable
         CancellationToken cancellationToken = default
     )
     {
-        ImmutableArray<SpaObject> all = await EnumerateParametersAsync(parameter, cancellationToken: cancellationToken)
+        ImmutableArray<SpaObject> all = await EnumerateParametersAsync(
+                parameter,
+                cancellationToken: cancellationToken
+            )
             .ConfigureAwait(false);
         return all.IsDefaultOrEmpty ? null : all[0];
     }

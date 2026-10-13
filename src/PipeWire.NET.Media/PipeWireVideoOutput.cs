@@ -341,7 +341,6 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         _logger = context.LoggerFactory.CreateLogger($"PipeWire.NET.{nodeName}");
     }
 
-
     /// <summary>Starts publishing host-memory frames and registers the node in the graph.</summary>
     /// <param name="target">The node to route into; the session manager's pick by default.</param>
     /// <param name="options">How to connect; <see cref="StreamOutputOptions.Default"/> when null.</param>

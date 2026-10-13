@@ -35,7 +35,6 @@ namespace PipeWire.NET.Media;
 [SupportedOSPlatform("linux")]
 public sealed partial class PipeWireAudioCapture : IAsyncDisposable
 {
-
     /// <summary>Handles an audio frame on the loop thread. Do not cache the frame.</summary>
     public delegate void FrameReadyHandler(PipeWireAudioCapture sender, AudioFrame frame);
 

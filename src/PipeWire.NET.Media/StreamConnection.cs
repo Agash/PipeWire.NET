@@ -1,5 +1,5 @@
-using System.Runtime.Versioning;
 using System.Collections.Immutable;
+using System.Runtime.Versioning;
 using PipeWire.NET.Graph;
 
 namespace PipeWire.NET.Media;
