@@ -1061,13 +1061,17 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
 
     /// <inheritdoc/>
     /// <remarks>
-    /// Disposal here does no awaiting, so this and <see cref="DisposeAsync"/> do the same work.
+    /// Disposal here does no awaiting, so this and <see cref="Dispose"/> do the same work.
     /// Both exist so that a caller is not forced into one idiom by which type they happen to hold.
     /// </remarks>
-    public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     /// <inheritdoc/>
-    public ValueTask DisposeAsync()
+    public void Dispose()
     {
         // Library timelines first: the pool may go without remove_buffer for every buffer, in which
         // case nothing else would release them. App descriptors are borrowed and stay the app's.
@@ -1090,7 +1094,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 scope.Dispose();
         }
 
-        return _core?.DisposeAsync() ?? ValueTask.CompletedTask;
+        _core?.Dispose();
     }
 
     private unsafe void OnBuffer(

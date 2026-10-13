@@ -420,16 +420,20 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
 
     /// <inheritdoc/>
     /// <remarks>
-    /// Disposal here does no awaiting, so this and <see cref="DisposeAsync"/> do the same work.
+    /// Disposal here does no awaiting, so this and <see cref="Dispose"/> do the same work.
     /// Both exist so that a caller is not forced into one idiom by which type they happen to hold.
     /// </remarks>
-    public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
-
-    /// <inheritdoc/>
     public ValueTask DisposeAsync()
     {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
         if (_disposed)
-            return ValueTask.CompletedTask;
+            return;
         _disposed = true;
 
         using (_ctx.Lock())
@@ -459,7 +463,6 @@ public sealed unsafe partial class PipeWireNodeProvider : IDisposable, IAsyncDis
         }
 
         Cleanup();
-        return ValueTask.CompletedTask;
     }
 
     /// <summary>Destroys the adapter this node follows, which unhooks it from this node.</summary>

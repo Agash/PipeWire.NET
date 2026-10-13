@@ -1064,20 +1064,23 @@ public sealed partial class PipeWireFilter : IDisposable, IAsyncDisposable
 
     /// <inheritdoc/>
     /// <remarks>
-    /// Disposal here does no awaiting, so this and <see cref="DisposeAsync"/> do the same work.
+    /// Disposal here does no awaiting, so this and <see cref="Dispose"/> do the same work.
     /// Both exist so that a caller is not forced into one idiom by which type they happen to hold.
     /// </remarks>
-    public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
-
-    /// <inheritdoc/>
     public ValueTask DisposeAsync()
     {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
         if (_disposed)
-            return ValueTask.CompletedTask;
+            return;
         _disposed = true;
         Release();
         GC.SuppressFinalize(this);
-        return ValueTask.CompletedTask;
     }
 
     private unsafe void Release()
