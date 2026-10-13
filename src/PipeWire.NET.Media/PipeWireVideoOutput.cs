@@ -537,6 +537,10 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         CancellationToken cancellationToken = default
     )
     {
+        // Explicit sync is refused first on a host that cannot do it, before the offer is looked at.
+        if (explicitSync)
+            RequireSyncTimelines();
+
         if (modifiers.IsEmpty)
             throw new ArgumentException(
                 "At least one DRM modifier must be offered.",
@@ -601,6 +605,9 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         CancellationToken cancellationToken = default
     )
     {
+        if (explicitSync)
+            RequireSyncTimelines();
+
         DeviceIdNegotiation.Validate(offers, nameof(offers));
         ImmutableArray<long> modifiers = offers[0].ModifiersFor(_format);
         if (modifiers.IsEmpty)
@@ -625,7 +632,6 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             return;
         }
 
-        RequireSyncTimelines();
         _explicitSync = true;
         try
         {

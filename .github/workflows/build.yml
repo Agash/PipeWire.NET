@@ -352,8 +352,14 @@ jobs:
         with:
           dotnet-version: 10.0.1xx
 
+      # Written directly: any dotnet SDK command would first honour the repository's global.json, which
+      # asks for the .NET 11 SDK this job does not install.
       - name: Pin the .NET 10 SDK
-        run: dotnet new globaljson --sdk-version "$(dotnet --list-sdks | awk '/^10\.0\.1/ {v=$1} END {print v}')" --roll-forward disable --force
+        run: |
+          sdk=$(dotnet --list-sdks | awk '/^10\.0\.1/ {v=$1} END {print v}')
+          test -n "$sdk"
+          printf '{ "sdk": { "version": "%s", "rollForward": "disable" } }\n' "$sdk" > global.json
+          cat global.json
 
       - name: Build the libraries for net10.0
         run: |
