@@ -56,7 +56,7 @@ In order:
    are gone for good once the object is.
 
 **A capture connects to the wrong device.** With no target, you get the session manager's default.
-Pass a node id, or a `targetObjectName`, to pin it.
+Pass a `PipeWireTarget` (`PipeWireTarget.Id(nodeId)`, `PipeWireTarget.Node(node)` or `PipeWireTarget.Named(name)`) to pin it.
 
 ## Audio problems
 

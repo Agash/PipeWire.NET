@@ -44,7 +44,7 @@ output.FillFrame += (_, pixels, stride, width, height, _) =>
     return true;
 };
 
-output.Connect(driver: true);
+output.Connect(options: new() { Driver = true });
 
 output.TriggerProcess();                                     // fire and forget
 await output.TriggerProcessAndWaitAsync(cancellationToken);  // pace against completion
@@ -82,15 +82,15 @@ fewer), so hold the few frames in flight and let them go as soon as they are rea
 
 On publish, `FillFrame` and `FillSamples` give you a span over the daemon's buffer, so you write the frame once with no intermediate copy.
 
-For a fully GPU-resident publish, `PipeWireVideoOutput.ConnectDmaBuf(modifiers)` advertises a set of DRM format modifiers, negotiates one with the consumer, and backs the stream with DMA-BUF buffers you own. Allocate your GPU surfaces in the `AllocateDmaBuf` callback (export each once, e.g. via `vkGetMemoryFdKHR`) and write the chosen buffer in `FillDmaBuf`; `ReleaseDmaBuf` tears them down. The producer can self-pace with `TriggerProcess`.
+For a fully GPU-resident publish, `PipeWireVideoOutput.ConnectDmaBufWithoutDevice(modifiers)` advertises a set of DRM format modifiers, negotiates one with the consumer, and backs the stream with DMA-BUF buffers you own. Allocate your GPU surfaces in the `AllocateDmaBuf` callback (export each once, e.g. via `vkGetMemoryFdKHR`) and write the chosen buffer in `FillDmaBuf`; `ReleaseDmaBuf` tears them down. The producer can self-pace with `TriggerProcess`.
 
 Every stream type exposes `NodeId` once the daemon has assigned one, which is how a consumer targets
 a producer in the same process directly instead of going through the session manager.
 
-On a machine with more than one GPU, pass `DmaBufDeviceOffer`s to `ConnectDmaBuf` or to the capture's `Connect(deviceOffers:)` instead of bare modifiers. An offer is a `DrmDevice` and, per pixel format, the modifiers it can use (`DmaBufFormatModifiers`): modifiers are per format as well as per device, since a tiling layout a GPU imports as BGRA it may not import as NV12. `ModifiersFor` reads them back by format. Both ends then negotiate which device the buffers live on, as PipeWire's device-ID negotiation does; `NegotiatedDevice` reports the result and `AllocateDmaBuf` is handed it. A peer that does not negotiate still streams, with the device left undefined.
+On a machine with more than one GPU, pass `DmaBufDeviceOffer`s to `ConnectDmaBuf` or to the capture's `VideoCaptureOptions.DeviceOffers` instead of bare modifiers. An offer is a `DrmDevice` and, per pixel format, the modifiers it can use (`DmaBufFormatModifiers`): modifiers are per format as well as per device, since a tiling layout a GPU imports as BGRA it may not import as NV12. `ModifiersFor` reads them back by format. Both ends then negotiate which device the buffers live on, as PipeWire's device-ID negotiation does; `NegotiatedDevice` reports the result and `AllocateDmaBuf` is handed it. A peer that does not negotiate still streams, with the device left undefined.
 
 A consumer that cannot import a shared buffer at all (a CPU-only one) can still be served: set
-`HostMemoryFallback` before `ConnectDmaBuf`, and the output also offers host memory. When the consumer
+`HostMemoryFallback` before `ConnectDmaBuf` or `ConnectDmaBufWithoutDevice`, and the output also offers host memory. When the consumer
 settles on memory the stream backs its pool with memfd memory and fills frames through `FillFrame`;
 when it takes a shared buffer, `FillDmaBuf` fills it as before.
 
@@ -132,7 +132,7 @@ DMA-BUF says where the pixels are, not whether the GPU has finished writing them
 the answer: a DRM syncobj timeline carries an *acquire* point the consumer waits on before reading,
 and a *release* point it signals when finished.
 
-`ConnectDmaBufSync` is `ConnectDmaBuf` with that timeline attached. The allocation callback becomes
+Passing `explicitSync: true` to `ConnectDmaBuf` or `ConnectDmaBufWithoutDevice` attaches that timeline. The allocation callback becomes
 `AllocateDmaBufSync`, which also hands back the acquire and release points for the buffer, and
 `StampSyncPoints` sets the pair for a frame you are about to publish. On the consuming side a frame
 carries `SyncTimeline` when the producer negotiated one.

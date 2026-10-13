@@ -109,7 +109,7 @@ using Microsoft.Win32.SafeHandles;
 using var handle = new SafeFileHandle((IntPtr)rawFd, ownsHandle: true);
 
 await using var ctx = new PipeWireContext();
-await ctx.StartAsync(handle, cancellationToken);
+await ctx.StartOnFdAsync(handle, cancellationToken);
 ```
 
 ## Acting on one object
@@ -164,7 +164,7 @@ if (store is not null)
 PipeWireLink link = await registry.CreateLink(outputPortId, inputPortId)
     .ExecuteAsync(cancellationToken);
 
-await registry.RemoveLinkAsync(link.LinkId, cancellationToken);
+await registry.RemoveLinkAsync(link, cancellationToken);
 ```
 
 `WithPassive()` makes a link follow the graph without forcing the nodes active. Most applications
@@ -228,7 +228,7 @@ multi-GPU device negotiation.
 
 This library does not talk to Wayland. Screen capture goes through the
 `org.freedesktop.portal.ScreenCast` portal, which returns a node id after the user grants
-permission; pass it to `PipeWireVideoCapture.Connect(nodeId)` and it behaves like any other source.
+permission; pass it to `PipeWireVideoCapture.Connect(PipeWireTarget.Id(nodeId))` and it behaves like any other source.
 
 ## Serving
 
