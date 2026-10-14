@@ -9,7 +9,7 @@
          bump on main moved a single unconditional entry, which would put the preview back on net10. -->
     <PackageVersion
       Include="Microsoft.Extensions.Logging.Abstractions"
-      Version="11.0.0-rc.1.26425.128"
+      Version="11.0.0-rc.2.26504.105"
       Condition="'$(TargetFramework)' == 'net11.0'"
     />
     <PackageVersion
