@@ -49,6 +49,7 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
         "PipeWire.NET",
         "PipeWire.NET.Graph",
         "PipeWire.NET.Media",
+        "PipeWire.NET.Portal",
         "PipeWire.NET.Spa",
     ];
 
@@ -254,7 +255,15 @@ public sealed class DocumentationExampleTests : PipeWireTestBase
         );
 
         var paths = new List<string>();
-        foreach (string dll in new[] { "PipeWire.NET.dll", "PipeWire.NET.Media.dll" })
+        foreach (
+            string dll in new[]
+            {
+                "PipeWire.NET.dll",
+                "PipeWire.NET.Media.dll",
+                "PipeWire.NET.Portal.dll",
+                "Tmds.DBus.Protocol.dll",
+            }
+        )
         {
             string path = Path.Combine(AppContext.BaseDirectory, dll);
             Assert.IsTrue(
