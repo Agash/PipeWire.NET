@@ -11,6 +11,7 @@
     <Folder Name="/src/">
         <Project Path="src/PipeWire.NET/PipeWire.NET.csproj" />
         <Project Path="src/PipeWire.NET.Media/PipeWire.NET.Media.csproj" />
+        <Project Path="src/PipeWire.NET.Portal/PipeWire.NET.Portal.csproj" />
     </Folder>
     <Folder Name="/tests/">
         <Project Path="tests/PipeWire.NET.Tests/PipeWire.NET.Tests.csproj" />

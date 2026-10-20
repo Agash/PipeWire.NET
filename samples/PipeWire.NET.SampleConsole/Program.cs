@@ -54,6 +54,10 @@ internal static class Program
                     .ConfigureAwait(false),
                 "filter" => await ServeCommands.FilterAsync(rest, cts.Token).ConfigureAwait(false),
                 "serve" => await ServeCommands.ServeAsync(cts.Token).ConfigureAwait(false),
+                "portal" => await PortalCommands.PortalAsync(cts.Token).ConfigureAwait(false),
+                "screencast" => await PortalCommands
+                    .ScreenCastAsync(rest, cts.Token)
+                    .ConfigureAwait(false),
                 "help" or "--help" or "-h" => Usage(),
                 _ => Unknown(command),
             };
@@ -83,6 +87,12 @@ internal static class Program
         Console.WriteLine("  capture-video [--seconds N]  capture stats from the default source");
         Console.WriteLine("  filter [--seconds N]         tone -> gain node -> default sink");
         Console.WriteLine("  serve                        publish a virtual source until Ctrl+C");
+        Console.WriteLine(
+            "  portal                       what the desktop's ScreenCast and Camera portals offer"
+        );
+        Console.WriteLine(
+            "  screencast [--window]        share a monitor (or window) through the portal's dialog"
+        );
         Console.WriteLine("Targets are node ids or name fragments. Ctrl+C stops any command.");
         return Ok;
     }

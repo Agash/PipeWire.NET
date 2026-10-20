@@ -1,0 +1,92 @@
+#nullable enable
+PipeWire.NET.Portal.CameraPortal
+PipeWire.NET.Portal.CameraPortal.DisposeAsync() -> System.Threading.Tasks.ValueTask
+PipeWire.NET.Portal.CameraPortal.IsCameraPresent.get -> bool
+PipeWire.NET.Portal.CameraPortal.OpenCameraRemoteAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Runtime.InteropServices.SafeHandle!>!
+PipeWire.NET.Portal.CameraPortal.Version.get -> uint
+PipeWire.NET.Portal.PortalException
+PipeWire.NET.Portal.PortalException.PortalException() -> void
+PipeWire.NET.Portal.PortalException.PortalException(PipeWire.NET.Portal.PortalResponse response, string! message) -> void
+PipeWire.NET.Portal.PortalException.PortalException(string! message) -> void
+PipeWire.NET.Portal.PortalException.PortalException(string! message, System.Exception! innerException) -> void
+PipeWire.NET.Portal.PortalException.Response.get -> PipeWire.NET.Portal.PortalResponse
+PipeWire.NET.Portal.PortalResponse
+PipeWire.NET.Portal.PortalResponse.Cancelled = 1 -> PipeWire.NET.Portal.PortalResponse
+PipeWire.NET.Portal.PortalResponse.Failed = 2 -> PipeWire.NET.Portal.PortalResponse
+PipeWire.NET.Portal.PortalResponse.Success = 0 -> PipeWire.NET.Portal.PortalResponse
+PipeWire.NET.Portal.ScreenCastCursorModes
+PipeWire.NET.Portal.ScreenCastCursorModes.Embedded = 2 -> PipeWire.NET.Portal.ScreenCastCursorModes
+PipeWire.NET.Portal.ScreenCastCursorModes.Hidden = 1 -> PipeWire.NET.Portal.ScreenCastCursorModes
+PipeWire.NET.Portal.ScreenCastCursorModes.Metadata = 4 -> PipeWire.NET.Portal.ScreenCastCursorModes
+PipeWire.NET.Portal.ScreenCastCursorModes.None = 0 -> PipeWire.NET.Portal.ScreenCastCursorModes
+PipeWire.NET.Portal.ScreenCastPersistence
+PipeWire.NET.Portal.ScreenCastPersistence.None = 0 -> PipeWire.NET.Portal.ScreenCastPersistence
+PipeWire.NET.Portal.ScreenCastPersistence.UntilRevoked = 2 -> PipeWire.NET.Portal.ScreenCastPersistence
+PipeWire.NET.Portal.ScreenCastPersistence.WhileRunning = 1 -> PipeWire.NET.Portal.ScreenCastPersistence
+PipeWire.NET.Portal.ScreenCastPortal
+PipeWire.NET.Portal.ScreenCastPortal.AvailableCursorModes.get -> PipeWire.NET.Portal.ScreenCastCursorModes
+PipeWire.NET.Portal.ScreenCastPortal.AvailableSources.get -> PipeWire.NET.Portal.ScreenCastSources
+PipeWire.NET.Portal.ScreenCastPortal.DisposeAsync() -> System.Threading.Tasks.ValueTask
+PipeWire.NET.Portal.ScreenCastPortal.StartAsync(PipeWire.NET.Portal.ScreenCastRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<PipeWire.NET.Portal.ScreenCastSession!>!
+PipeWire.NET.Portal.ScreenCastPortal.Version.get -> uint
+PipeWire.NET.Portal.ScreenCastRequest
+PipeWire.NET.Portal.ScreenCastRequest.<Clone>$() -> PipeWire.NET.Portal.ScreenCastRequest!
+PipeWire.NET.Portal.ScreenCastRequest.CursorMode.get -> PipeWire.NET.Portal.ScreenCastCursorModes?
+PipeWire.NET.Portal.ScreenCastRequest.CursorMode.init -> void
+PipeWire.NET.Portal.ScreenCastRequest.Equals(PipeWire.NET.Portal.ScreenCastRequest? other) -> bool
+PipeWire.NET.Portal.ScreenCastRequest.Multiple.get -> bool
+PipeWire.NET.Portal.ScreenCastRequest.Multiple.init -> void
+PipeWire.NET.Portal.ScreenCastRequest.ParentWindow.get -> string!
+PipeWire.NET.Portal.ScreenCastRequest.ParentWindow.init -> void
+PipeWire.NET.Portal.ScreenCastRequest.Persistence.get -> PipeWire.NET.Portal.ScreenCastPersistence
+PipeWire.NET.Portal.ScreenCastRequest.Persistence.init -> void
+PipeWire.NET.Portal.ScreenCastRequest.RestoreToken.get -> string?
+PipeWire.NET.Portal.ScreenCastRequest.RestoreToken.init -> void
+PipeWire.NET.Portal.ScreenCastRequest.ScreenCastRequest() -> void
+PipeWire.NET.Portal.ScreenCastRequest.Sources.get -> PipeWire.NET.Portal.ScreenCastSources
+PipeWire.NET.Portal.ScreenCastRequest.Sources.init -> void
+PipeWire.NET.Portal.ScreenCastSession
+PipeWire.NET.Portal.ScreenCastSession.Closed.get -> System.Threading.Tasks.Task!
+PipeWire.NET.Portal.ScreenCastSession.DisposeAsync() -> System.Threading.Tasks.ValueTask
+PipeWire.NET.Portal.ScreenCastSession.Handle.get -> string!
+PipeWire.NET.Portal.ScreenCastSession.OpenPipeWireRemoteAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Runtime.InteropServices.SafeHandle!>!
+PipeWire.NET.Portal.ScreenCastSession.RestoreToken.get -> string?
+PipeWire.NET.Portal.ScreenCastSession.Streams.get -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Portal.ScreenCastStream>
+PipeWire.NET.Portal.ScreenCastSources
+PipeWire.NET.Portal.ScreenCastSources.Monitor = 1 -> PipeWire.NET.Portal.ScreenCastSources
+PipeWire.NET.Portal.ScreenCastSources.None = 0 -> PipeWire.NET.Portal.ScreenCastSources
+PipeWire.NET.Portal.ScreenCastSources.Virtual = 4 -> PipeWire.NET.Portal.ScreenCastSources
+PipeWire.NET.Portal.ScreenCastSources.Window = 2 -> PipeWire.NET.Portal.ScreenCastSources
+PipeWire.NET.Portal.ScreenCastStream
+PipeWire.NET.Portal.ScreenCastStream.Deconstruct(out uint NodeId) -> void
+PipeWire.NET.Portal.ScreenCastStream.Equals(PipeWire.NET.Portal.ScreenCastStream other) -> bool
+PipeWire.NET.Portal.ScreenCastStream.Id.get -> string?
+PipeWire.NET.Portal.ScreenCastStream.Id.init -> void
+PipeWire.NET.Portal.ScreenCastStream.MappingId.get -> string?
+PipeWire.NET.Portal.ScreenCastStream.MappingId.init -> void
+PipeWire.NET.Portal.ScreenCastStream.NodeId.get -> uint
+PipeWire.NET.Portal.ScreenCastStream.NodeId.init -> void
+PipeWire.NET.Portal.ScreenCastStream.Position.get -> System.Drawing.Point?
+PipeWire.NET.Portal.ScreenCastStream.Position.init -> void
+PipeWire.NET.Portal.ScreenCastStream.ScreenCastStream() -> void
+PipeWire.NET.Portal.ScreenCastStream.ScreenCastStream(uint NodeId) -> void
+PipeWire.NET.Portal.ScreenCastStream.Serial.get -> ulong?
+PipeWire.NET.Portal.ScreenCastStream.Serial.init -> void
+PipeWire.NET.Portal.ScreenCastStream.Size.get -> System.Drawing.Size?
+PipeWire.NET.Portal.ScreenCastStream.Size.init -> void
+PipeWire.NET.Portal.ScreenCastStream.Source.get -> PipeWire.NET.Portal.ScreenCastSources
+PipeWire.NET.Portal.ScreenCastStream.Source.init -> void
+override PipeWire.NET.Portal.ScreenCastRequest.Equals(object? obj) -> bool
+override PipeWire.NET.Portal.ScreenCastRequest.GetHashCode() -> int
+override PipeWire.NET.Portal.ScreenCastRequest.ToString() -> string!
+override PipeWire.NET.Portal.ScreenCastStream.GetHashCode() -> int
+static PipeWire.NET.Portal.CameraPortal.ConnectAsync(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<PipeWire.NET.Portal.CameraPortal!>!
+static PipeWire.NET.Portal.CameraPortal.CreateAsync(Tmds.DBus.Protocol.DBusConnection! connection, Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<PipeWire.NET.Portal.CameraPortal!>!
+static PipeWire.NET.Portal.ScreenCastPortal.ConnectAsync(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<PipeWire.NET.Portal.ScreenCastPortal!>!
+static PipeWire.NET.Portal.ScreenCastPortal.CreateAsync(Tmds.DBus.Protocol.DBusConnection! connection, Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<PipeWire.NET.Portal.ScreenCastPortal!>!
+static PipeWire.NET.Portal.ScreenCastRequest.operator !=(PipeWire.NET.Portal.ScreenCastRequest? left, PipeWire.NET.Portal.ScreenCastRequest? right) -> bool
+static PipeWire.NET.Portal.ScreenCastRequest.operator ==(PipeWire.NET.Portal.ScreenCastRequest? left, PipeWire.NET.Portal.ScreenCastRequest? right) -> bool
+static PipeWire.NET.Portal.ScreenCastStream.operator !=(PipeWire.NET.Portal.ScreenCastStream left, PipeWire.NET.Portal.ScreenCastStream right) -> bool
+static PipeWire.NET.Portal.ScreenCastStream.operator ==(PipeWire.NET.Portal.ScreenCastStream left, PipeWire.NET.Portal.ScreenCastStream right) -> bool
+~override PipeWire.NET.Portal.ScreenCastStream.Equals(object obj) -> bool
+~override PipeWire.NET.Portal.ScreenCastStream.ToString() -> string

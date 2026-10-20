@@ -16,6 +16,7 @@ video, run DSP inside the graph, or publish virtual devices of your own.
 ```sh
 dotnet add package PipeWire.NET          # graph, control, serving, SPA pods
 dotnet add package PipeWire.NET.Media    # audio and video streams
+dotnet add package PipeWire.NET.Portal   # ScreenCast and Camera portals (Wayland, Flatpak)
 ```
 
 ## Hello, graph
@@ -100,17 +101,20 @@ A sandboxed client may not see the daemon socket. xdg-desktop-portal's ScreenCas
 user granted. The handle is borrowed: the library duplicates it close-on-exec, as PipeWire does
 itself, and yours stays open.
 
-`StartAsync` takes a `SafeHandle`, so wrap the descriptor the reply carries:
+`PipeWire.NET.Portal` runs the portal's flows over D-Bus and hands back that descriptor:
 
 ```csharp
-using Microsoft.Win32.SafeHandles;
-
-// rawFd: the descriptor from the OpenPipeWireRemote reply's UnixFdList
-using var handle = new SafeFileHandle((IntPtr)rawFd, ownsHandle: true);
+await using ScreenCastPortal portal = await ScreenCastPortal.ConnectAsync();
+await using ScreenCastSession session = await portal.StartAsync(new() { Sources = ScreenCastSources.Monitor });
+using SafeHandle remote = await session.OpenPipeWireRemoteAsync();
 
 await using var ctx = new PipeWireContext();
-await ctx.StartOnFdAsync(handle, cancellationToken);
+await ctx.StartOnFdAsync(remote, cancellationToken);
+// session.Streams[0].NodeId is the node to capture
 ```
+
+`CameraPortal.OpenCameraRemoteAsync` does the same for cameras. A descriptor from elsewhere goes in
+as any `SafeHandle`.
 
 ## Acting on one object
 
@@ -228,7 +232,9 @@ multi-GPU device negotiation.
 
 This library does not talk to Wayland. Screen capture goes through the
 `org.freedesktop.portal.ScreenCast` portal, which returns a node id after the user grants
-permission; pass it to `PipeWireVideoCapture.Connect(PipeWireTarget.Id(nodeId))` and it behaves like any other source.
+permission ([Connecting over a portal fd](#connecting-over-a-portal-fd)); pass it to
+`PipeWireVideoCapture.Connect(PipeWireTarget.Id(nodeId))` and it behaves like any other source.
+`ScreenCastRequest.Persistence` and `RestoreToken` share the same sources again without asking.
 
 ## Serving
 
@@ -267,6 +273,8 @@ dotnet run --project samples/PipeWire.NET.SampleConsole -- capture-audio --secon
 dotnet run --project samples/PipeWire.NET.SampleConsole -- capture-video --seconds 5
 dotnet run --project samples/PipeWire.NET.SampleConsole -- filter --seconds 8
 dotnet run --project samples/PipeWire.NET.SampleConsole -- serve
+dotnet run --project samples/PipeWire.NET.SampleConsole -- portal
+dotnet run --project samples/PipeWire.NET.SampleConsole -- screencast
 ```
 
 `filter` plays a quiet generated tone through a gain node into the default sink; `serve` publishes a

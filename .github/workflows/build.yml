@@ -279,6 +279,7 @@ jobs:
         run: |
           dotnet pack src/PipeWire.NET/PipeWire.NET.csproj --no-build -c Release -o ${{ env.NuGetDirectory }}
           dotnet pack src/PipeWire.NET.Media/PipeWire.NET.Media.csproj --no-build -c Release -o ${{ env.NuGetDirectory }}
+          dotnet pack src/PipeWire.NET.Portal/PipeWire.NET.Portal.csproj --no-build -c Release -o ${{ env.NuGetDirectory }}
 
       - name: Attest build provenance
         # Records, in a signed statement GitHub hosts, which workflow and which commit produced these
@@ -364,7 +365,7 @@ jobs:
       - name: Build the libraries for net10.0
         run: |
           dotnet --version
-          for project in src/PipeWire.NET/PipeWire.NET.csproj src/PipeWire.NET.Media/PipeWire.NET.Media.csproj; do
+          for project in src/PipeWire.NET/PipeWire.NET.csproj src/PipeWire.NET.Media/PipeWire.NET.Media.csproj src/PipeWire.NET.Portal/PipeWire.NET.Portal.csproj; do
             dotnet build "$project" -c Release -p:TargetFrameworks=net10.0
           done
 

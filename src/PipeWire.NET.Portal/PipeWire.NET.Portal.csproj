@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- Not VerifyReferenceAotCompatibility: Tmds.DBus.Protocol 0.95.1 is annotated for trimming and
+         AOT but its package does not carry the IsAotCompatible assembly metadata that check reads.
+         The Native AOT publish of the portal sample is the check instead. -->
+    <AssemblyName>PipeWire.NET.Portal</AssemblyName>
+    <RootNamespace>PipeWire.NET.Portal</RootNamespace>
+    <PackageId>PipeWire.NET.Portal</PackageId>
+    <Description>The xdg-desktop-portal ScreenCast and Camera flows for PipeWire.NET: ask the user for screens, windows or cameras over D-Bus and get the PipeWire remote and node ids to stream them. Screen capture on Wayland and in Flatpak sandboxes. Native AOT compatible.</Description>
+    <PackageTags>pipewire;linux;wayland;screencast;screen-capture;camera;portal;xdg-desktop-portal;flatpak;dbus</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- No baseline: this package has never shipped, so there is nothing to compare against.
+         Set PackageValidationBaselineVersion once the first version is published. -->
+    <EnablePackageValidation>true</EnablePackageValidation>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <IsPackable>true</IsPackable>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DotNet.ReproducibleBuilds" PrivateAssets="all" />
+    <PackageReference Include="MinVer" PrivateAssets="all" />
+    <!-- Every change to the public surface shows in PublicAPI.Unshipped.txt, so it is reviewed. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Tmds.DBus.Protocol" />
+    <InternalsVisibleTo Include="PipeWire.NET.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+</Project>
