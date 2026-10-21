@@ -157,7 +157,7 @@ using PipeWire.NET.Media;
 await using var ctx = new PipeWireContext("pwdemo-screen");
 await ctx.StartAsync();
 
-await using var screen = new PipeWireVideoOutput(ctx, "pwdemo_screen", 1280, 720, PixelFormat.Bgra, 30);
+await using var screen = new PipeWireVideoOutput(ctx, "pwdemo_screen", 1280, 720, [PixelFormat.Bgra], 30);
 
 byte tick = 0;
 screen.FillFrame += (_, pixels, stride, width, height, format) =>

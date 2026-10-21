@@ -66,7 +66,7 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
             $"{name}-src",
             Width,
             Height,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             30
         );
 
@@ -402,7 +402,7 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
                 "pwnet-dmabuf-churn-src",
                 Width,
                 Height,
-                PixelFormat.Bgra,
+                [PixelFormat.Bgra],
                 30
             );
 
@@ -581,7 +581,7 @@ public sealed class DmaBufLifetimeTests : PipeWireTestBase
                 $"pwnet-badalloc-src-{mode}",
                 Width,
                 Height,
-                PixelFormat.Bgra,
+                [PixelFormat.Bgra],
                 30
             );
 

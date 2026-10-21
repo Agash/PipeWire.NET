@@ -62,7 +62,7 @@ public sealed class UpstreamExampleTests
             "pwnet-srcreneg-src",
             Width,
             Height,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             30
         );
 
@@ -128,7 +128,7 @@ public sealed class UpstreamExampleTests
             "pwnet-srcfixate-src",
             Width,
             Height,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             30
         );
 
@@ -322,7 +322,7 @@ public sealed class UpstreamExampleTests
             "pwnet-playfixate-src",
             Width,
             Height,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             30
         );
 

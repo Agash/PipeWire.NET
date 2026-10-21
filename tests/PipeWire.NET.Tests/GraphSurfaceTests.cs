@@ -412,7 +412,7 @@ public sealed class GraphSurfaceTests
             "pwnet-cursor-src",
             width,
             height,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             30
         );
 

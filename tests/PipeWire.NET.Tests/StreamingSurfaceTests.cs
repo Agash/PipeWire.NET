@@ -373,7 +373,7 @@ public sealed class StreamingSurfaceTests
             "pwnet-surface-reneg-src",
             320,
             240,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             30
         );
 

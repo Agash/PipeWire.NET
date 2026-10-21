@@ -110,7 +110,7 @@ public sealed class DeviceIdNegotiationEndToEndTests : PipeWireTestBase
                 $"{name}-src",
                 Width,
                 Height,
-                PixelFormat.Bgra,
+                [PixelFormat.Bgra],
                 30
             );
             if (explicitSync)

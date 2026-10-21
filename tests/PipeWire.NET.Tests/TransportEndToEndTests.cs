@@ -69,7 +69,7 @@ public sealed class TransportEndToEndTests
             "pwnet-republish-src",
             Width,
             Height,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             30
         );
 
@@ -182,7 +182,7 @@ public sealed class TransportEndToEndTests
             $"pwnet-avpublish-v-{Environment.ProcessId}",
             Width,
             Height,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             30
         );
 
@@ -358,7 +358,7 @@ public sealed class TransportEndToEndTests
                     "pwnet-republish-gpu-src",
                     Width,
                     Height,
-                    PixelFormat.Bgra,
+                    [PixelFormat.Bgra],
                     30
                 );
 
@@ -507,7 +507,7 @@ public sealed class TransportEndToEndTests
             $"pwnet-avsession-v-{Environment.ProcessId}",
             Width,
             Height,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             30
         );
 

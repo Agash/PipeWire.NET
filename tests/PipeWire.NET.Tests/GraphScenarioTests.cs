@@ -208,7 +208,7 @@ public sealed class GraphScenarioTests : PipeWireTestBase
                 NodeName,
                 320,
                 240,
-                PixelFormat.Bgra
+                [PixelFormat.Bgra]
             );
             publisher.Connect();
 

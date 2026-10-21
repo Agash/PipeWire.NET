@@ -85,7 +85,7 @@ public sealed class TransportRoundTripTests
                 $"pwnet-loop-v0-{Environment.ProcessId}",
                 Width,
                 Height,
-                PixelFormat.Bgra,
+                [PixelFormat.Bgra],
                 30
             );
 
@@ -173,7 +173,7 @@ public sealed class TransportRoundTripTests
                 $"pwnet-loop-v1-{Environment.ProcessId}",
                 Width,
                 Height,
-                PixelFormat.Bgra,
+                [PixelFormat.Bgra],
                 30
             );
 

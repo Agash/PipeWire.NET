@@ -760,7 +760,7 @@ public sealed class NativeLibraryResolutionTests : PipeWireTestBase
             "PipeWire.NET.Test.VideoSource",
             width: width,
             height: height,
-            format: PixelFormat.Bgra,
+            formats: [PixelFormat.Bgra],
             frameRate: 30
         );
 
@@ -857,7 +857,7 @@ public sealed class NativeLibraryResolutionTests : PipeWireTestBase
             "PipeWire.NET.Test.AlphaSource",
             width: width,
             height: height,
-            format: PixelFormat.Bgra,
+            formats: [PixelFormat.Bgra],
             frameRate: 30
         );
         output.FillFrame += (_, pixels, _, _, _, _) =>
@@ -1106,7 +1106,7 @@ public sealed class StreamGuardTests : PipeWireTestBase
             "PipeWire.NET.Test.GuardVideoOut",
             width: 320,
             height: 240,
-            format: PixelFormat.Bgra,
+            formats: [PixelFormat.Bgra],
             frameRate: 30
         );
         Assert.AreEqual(0, output.Controls.Length);
@@ -1178,7 +1178,7 @@ public sealed class StreamGuardTests : PipeWireTestBase
             "PipeWire.NET.Test.RefusedVideo",
             width: 320,
             height: 240,
-            format: PixelFormat.Bgra,
+            formats: [PixelFormat.Bgra],
             frameRate: 30
         );
         Assert.ThrowsExactly<ObjectDisposedException>(() => video.Connect());

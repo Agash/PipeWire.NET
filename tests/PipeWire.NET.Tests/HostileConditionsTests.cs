@@ -39,7 +39,7 @@ public sealed class HostileConditionsTests : PipeWireTestBase
         CancellationToken ct
     )
     {
-        var output = new PipeWireVideoOutput(ctx, name, 64, 48, PixelFormat.Bgra, 30);
+        var output = new PipeWireVideoOutput(ctx, name, 64, 48, [PixelFormat.Bgra], 30);
         output.FillFrame += (_, pixels, _, _, _, _) =>
         {
             pixels.Fill(0x80);

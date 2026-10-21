@@ -82,7 +82,7 @@ public sealed class AvSyncTests
             $"{name}-v",
             Width,
             Height,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             FrameRate
         );
         video.FillFrame += (sender, pixels, _, _, _, _) =>

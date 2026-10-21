@@ -50,7 +50,7 @@ public sealed partial class PushedFrameTests : PipeWireTestBase
                 "stx-pushed-frames",
                 Width,
                 Height,
-                PixelFormat.Bgra,
+                [PixelFormat.Bgra],
                 30
             )
             {
@@ -154,7 +154,7 @@ public sealed partial class PushedFrameTests : PipeWireTestBase
             "stx-pushed-memory",
             Width,
             Height,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             30
         )
         {
@@ -228,7 +228,7 @@ public sealed partial class PushedFrameTests : PipeWireTestBase
             "stx-pushed-unsettled",
             Width,
             Height,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             30
         )
         {

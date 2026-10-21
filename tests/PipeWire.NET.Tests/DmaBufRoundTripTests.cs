@@ -63,7 +63,7 @@ public sealed class DmaBufRoundTripTests : PipeWireTestBase
                 "stx-dmabuf-roundtrip",
                 width,
                 height,
-                PixelFormat.Bgra,
+                [PixelFormat.Bgra],
                 30
             );
             output.AllocateDmaBuf += (_, index, w, h, _, _, planes) =>

@@ -115,7 +115,7 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
             "pwnet-content-src",
             Width,
             Height,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             30
         );
 
@@ -214,7 +214,7 @@ public sealed partial class StreamTransportContractTests : PipeWireTestBase
                 "pwnet-zerocopy-src",
                 Width,
                 Height,
-                PixelFormat.Bgra,
+                [PixelFormat.Bgra],
                 30
             );
 

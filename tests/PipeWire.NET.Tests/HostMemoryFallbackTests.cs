@@ -35,7 +35,7 @@ public sealed class HostMemoryFallbackTests : PipeWireTestBase
             $"pwnet-fallback-src-{Environment.ProcessId}",
             Width,
             Height,
-            PixelFormat.Bgra
+            [PixelFormat.Bgra]
         )
         {
             HostMemoryFallback = true,

@@ -41,7 +41,7 @@ public sealed class PlanarRoundTripTests : PipeWireTestBase
             $"pwnet-planar-src-{format}-{Environment.ProcessId}",
             Width,
             Height,
-            format,
+            [format],
             30,
             new VideoColorInfo(
                 VideoColorRange.Limited_16_235,

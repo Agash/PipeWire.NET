@@ -355,6 +355,7 @@ PipeWire.NET.Media.PipeWireVideoOutput.FillDmaBuf -> PipeWire.NET.Media.PipeWire
 PipeWire.NET.Media.PipeWireVideoOutput.FillDmaBufHandler
 PipeWire.NET.Media.PipeWireVideoOutput.FillFrame -> PipeWire.NET.Media.PipeWireVideoOutput.FillFrameHandler?
 PipeWire.NET.Media.PipeWireVideoOutput.FillFrameHandler
+PipeWire.NET.Media.PipeWireVideoOutput.Formats.get -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Media.PixelFormat>
 PipeWire.NET.Media.PipeWireVideoOutput.GetControl(uint id) -> PipeWire.NET.Media.PipeWireStreamControl?
 PipeWire.NET.Media.PipeWireVideoOutput.GraphClock.get -> PipeWire.NET.Graph.PipeWireGraphClock?
 PipeWire.NET.Media.PipeWireVideoOutput.HostMemoryFallback.get -> bool
@@ -364,10 +365,11 @@ PipeWire.NET.Media.PipeWireVideoOutput.IsLazy.get -> bool
 PipeWire.NET.Media.PipeWireVideoOutput.IsPushing.get -> bool
 PipeWire.NET.Media.PipeWireVideoOutput.LastProcessError.get -> System.Exception?
 PipeWire.NET.Media.PipeWireVideoOutput.NegotiatedDevice.get -> PipeWire.NET.Media.DrmDevice?
+PipeWire.NET.Media.PipeWireVideoOutput.NegotiatedPixelFormat.get -> PipeWire.NET.Media.PixelFormat
 PipeWire.NET.Media.PipeWireVideoOutput.NextPresentationTimestampNs.get -> long?
 PipeWire.NET.Media.PipeWireVideoOutput.NextPresentationTimestampNs.set -> void
 PipeWire.NET.Media.PipeWireVideoOutput.NodeId.get -> uint?
-PipeWire.NET.Media.PipeWireVideoOutput.PipeWireVideoOutput(PipeWire.NET.PipeWireContext! context, string! nodeName, int width, int height, PipeWire.NET.Media.PixelFormat format = PipeWire.NET.Media.PixelFormat.Bgra, int frameRate = 30, PipeWire.NET.Media.VideoColorInfo color = default(PipeWire.NET.Media.VideoColorInfo)) -> void
+PipeWire.NET.Media.PipeWireVideoOutput.PipeWireVideoOutput(PipeWire.NET.PipeWireContext! context, string! nodeName, int width, int height, System.Collections.Immutable.ImmutableArray<PipeWire.NET.Media.PixelFormat> formats = default(System.Collections.Immutable.ImmutableArray<PipeWire.NET.Media.PixelFormat>), int frameRate = 30, PipeWire.NET.Media.VideoColorInfo color = default(PipeWire.NET.Media.VideoColorInfo)) -> void
 PipeWire.NET.Media.PipeWireVideoOutput.ProcessErrorCount.get -> long
 PipeWire.NET.Media.PipeWireVideoOutput.PushFrames.get -> bool
 PipeWire.NET.Media.PipeWireVideoOutput.PushFrames.set -> void

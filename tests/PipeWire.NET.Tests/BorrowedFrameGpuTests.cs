@@ -86,7 +86,7 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
                 "pwnet-borrow-gpu-src",
                 Width,
                 Height,
-                PixelFormat.Bgra,
+                [PixelFormat.Bgra],
                 30
             );
 
@@ -210,7 +210,7 @@ public sealed class BorrowedFrameGpuTests : PipeWireTestBase
                 "pwnet-borrow-once-src",
                 Width,
                 Height,
-                PixelFormat.Bgra,
+                [PixelFormat.Bgra],
                 30
             );
 

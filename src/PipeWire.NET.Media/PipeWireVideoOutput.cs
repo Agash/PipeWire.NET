@@ -173,7 +173,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     private readonly int _width,
         _height,
         _frameRate;
-    private readonly PixelFormat _format;
+    private readonly ImmutableArray<PixelFormat> _formats;
     private readonly ILogger _logger;
     private PipeWireStreamCore? _core;
 
@@ -303,22 +303,34 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     // The colour every format this stream writes declares.
     private readonly VideoColorInfo _color;
 
+    /// <summary>
+    /// A video node offering the given pixel formats; the consumer picks one, as a camera node
+    /// enumerates every format it produces.
+    /// </summary>
     /// <param name="context">A started <see cref="PipeWireContext"/>.</param>
     /// <param name="nodeName">Name visible to consumers.</param>
     /// <param name="width">Frame width in pixels.</param>
     /// <param name="height">Frame height in pixels.</param>
-    /// <param name="format">Pixel format to publish.</param>
+    /// <param name="formats">
+    /// The pixel formats to offer, most preferred first; BGRA alone when default. Shared buffers are offered in each format a
+    /// device offer has modifiers for (in the first alone when connected with modifiers only), memory in
+    /// all of them. The fill handlers are handed the one negotiated, which
+    /// <see cref="NegotiatedPixelFormat"/> also reports.
+    /// </param>
     /// <param name="frameRate">Target frame rate (Hz).</param>
     /// <param name="color">
-    /// The colour of the frames, declared in the format so consumers convert them correctly; unknown
+    /// The colour of the frames, declared in every format so consumers convert them correctly; unknown
     /// fields are left unstated.
     /// </param>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="formats"/> is empty, or names <see cref="PixelFormat.Unknown"/> or a format twice.
+    /// </exception>
     public PipeWireVideoOutput(
         PipeWireContext context,
         string nodeName,
         int width,
         int height,
-        PixelFormat format = PixelFormat.Bgra,
+        ImmutableArray<PixelFormat> formats = default,
         int frameRate = 30,
         VideoColorInfo color = default
     )
@@ -328,15 +340,32 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(frameRate);
+        if (formats.IsDefault)
+            formats = [PixelFormat.Bgra];
+        else if (formats.IsEmpty)
+            throw new ArgumentException(
+                "At least one pixel format must be offered.",
+                nameof(formats)
+            );
+
+        for (int i = 0; i < formats.Length; i++)
+        {
+            if (formats[i] == PixelFormat.Unknown || formats.IndexOf(formats[i]) != i)
+                throw new ArgumentException(
+                    $"{formats[i]} cannot be offered: formats are known and offered once.",
+                    nameof(formats)
+                );
+        }
+
         _ctx = context;
         _name = nodeName;
         _width = width;
         _height = height;
-        _format = format;
+        _formats = formats;
         _frameRate = frameRate;
         _color = color;
         _fmtCell = new NegotiatedFormat(
-            new SpaFormatPod.VideoFormatInfo(format, width, height, color)
+            new SpaFormatPod.VideoFormatInfo(formats[0], width, height, color)
         );
         _logger = context.LoggerFactory.CreateLogger($"PipeWire.NET.{nodeName}");
     }
@@ -399,7 +428,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         Span<byte> pod = stackalloc byte[512];
         int len = SpaFormatPod.WriteVideoFormat(
             pod,
-            stackalloc[] { _format },
+            _formats.AsSpan(),
             (uint)_width,
             (uint)_height,
             (uint)_frameRate,
@@ -609,10 +638,10 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             RequireSyncTimelines();
 
         DeviceIdNegotiation.Validate(offers, nameof(offers));
-        ImmutableArray<long> modifiers = offers[0].ModifiersFor(_format);
+        ImmutableArray<long> modifiers = offers[0].ModifiersFor(_formats[0]);
         if (modifiers.IsEmpty)
             throw new ArgumentException(
-                $"The first offer names no DRM modifiers for this output's {_format}.",
+                $"The first offer names no DRM modifiers for this output's first format, {_formats[0]}.",
                 nameof(offers)
             );
 
@@ -655,7 +684,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
 
         _dmaBufMode = true;
         _modifierFixated = false;
-        _planeCount = SpaFormatPod.PlaneCount(_format);
+        _planeCount = SpaFormatPod.PlaneCount(_formats[0]);
 
         var props = new StreamProperties(StreamMediaType.Video, StreamCategory.Playback)
             .WithRole("Camera")
@@ -690,7 +719,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         byte[] pod = new byte[ModifierPodBytes(modifiers.Length)];
         int len = SpaFormatPod.WriteVideoFormat(
             pod,
-            stackalloc[] { _format },
+            stackalloc[] { _formats[0] },
             (uint)_width,
             (uint)_height,
             (uint)_frameRate,
@@ -769,7 +798,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             byte[] pods = DeviceIdNegotiation.WriteDeviceFormats(
                 peer,
                 _deviceOffers,
-                [_format],
+                _formats.AsSpan(),
                 (uint)_width,
                 (uint)_height,
                 (uint)_frameRate,
@@ -777,7 +806,8 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 hostMemoryFallback: HostMemoryFallback,
                 out int count,
                 out int deviceFormats,
-                _color
+                _color,
+                _formats.AsSpan()
             );
             LogDeviceOffers(peer.NegotiatesDeviceIds, deviceFormats, _deviceOffers.Length);
             rc = core.RequestParamsFromCallback(pods, count);
@@ -785,10 +815,9 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         else
         {
             byte[] pod = new byte[ModifierPodBytes(_modifiers.Length)];
-            ReadOnlySpan<PixelFormat> fmt = [_format];
             int len = SpaFormatPod.WriteVideoFormat(
                 pod,
-                fmt,
+                [_formats[0]],
                 (uint)_width,
                 (uint)_height,
                 (uint)_frameRate,
@@ -797,12 +826,12 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 color: _color
             );
 
-            // The same format in memory, for a consumer that cannot import a shared buffer.
+            // Every format in memory, for a consumer that cannot import a shared buffer.
             byte[] host = HostMemoryFallback ? new byte[1024] : [];
             int hostLen = HostMemoryFallback
                 ? SpaFormatPod.WriteVideoFormat(
                     host,
-                    fmt,
+                    _formats.AsSpan(),
                     (uint)_width,
                     (uint)_height,
                     (uint)_frameRate,
@@ -828,6 +857,18 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     /// </remarks>
     public DrmDevice? NegotiatedDevice =>
         DeviceIdNegotiation.Resolve(Format.DeviceId, _deviceOffers);
+
+    /// <summary>The pixel formats offered, most preferred first.</summary>
+    public ImmutableArray<PixelFormat> Formats => _formats;
+
+    /// <summary>
+    /// The pixel format the consumer settled on, or <see cref="PixelFormat.Unknown"/> while none is.
+    /// </summary>
+    /// <remarks>
+    /// One of <see cref="Formats"/>; frames written in any other are written in the wrong layout. Read
+    /// on any thread.
+    /// </remarks>
+    public PixelFormat NegotiatedPixelFormat => Format.Format;
 
     /// <summary>
     /// Asks for one publish cycle (<c>pw_stream_trigger_process</c>), which fires
@@ -1587,6 +1628,10 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         SpaFormatPod.VideoFormatInfo parsed = SpaFormatPod.ParseVideoFormat(param, Format);
         Volatile.Write(ref _fmtCell, new NegotiatedFormat(parsed));
         _sharedNegotiated = parsed.Modifier != DrmFormatModifier.Invalid;
+
+        // The blocks each shared buffer is declared and backed with follow the format the consumer took.
+        if (parsed.Format != PixelFormat.Unknown)
+            _planeCount = SpaFormatPod.PlaneCount(parsed.Format);
         if (_core is { } core)
             core.ProducerDequeues = PushFrames;
         LogOnFormat(parsed.Modifier, parsed.ModifierNeedsFixation);
@@ -1609,7 +1654,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         if (!_modifierFixated && negotiated.ModifierNeedsFixation)
         {
             Span<byte> fixate = stackalloc byte[512];
-            ReadOnlySpan<PixelFormat> fmt = [_format];
+            ReadOnlySpan<PixelFormat> fmt = [negotiated.Format];
             ReadOnlySpan<long> chosen = [(long)negotiated.Modifier];
             // The device goes with it: every format a negotiating peer offers names one, mandatory,
             // so a fixation without it would match nothing (video-src-fixate's fixate_format).

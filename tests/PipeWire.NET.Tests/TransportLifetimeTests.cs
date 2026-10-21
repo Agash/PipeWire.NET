@@ -87,7 +87,7 @@ public sealed class TransportLifetimeTests : PipeWireTestBase
                     "pwnet-release-src",
                     Width,
                     Height,
-                    PixelFormat.Bgra,
+                    [PixelFormat.Bgra],
                     30
                 );
 
@@ -191,7 +191,7 @@ public sealed class TransportLifetimeTests : PipeWireTestBase
             "pwnet-trigwait-src",
             Width,
             Height,
-            PixelFormat.Bgra,
+            [PixelFormat.Bgra],
             30
         );
 

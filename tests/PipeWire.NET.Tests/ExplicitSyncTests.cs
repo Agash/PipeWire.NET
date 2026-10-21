@@ -72,7 +72,7 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
                 "stx-sync-roundtrip",
                 width,
                 height,
-                PixelFormat.Bgra,
+                [PixelFormat.Bgra],
                 30
             );
             output.AllocateDmaBufSync += (
@@ -249,7 +249,7 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
                 "pwnet-gate",
                 width,
                 height,
-                PixelFormat.Bgra,
+                [PixelFormat.Bgra],
                 30
             );
             output.AllocateDmaBufSync += (
@@ -442,7 +442,7 @@ public sealed class ExplicitSyncTests : PipeWireTestBase
                 "pwnet-appsync",
                 width,
                 height,
-                PixelFormat.Bgra,
+                [PixelFormat.Bgra],
                 30
             );
             try
