@@ -61,7 +61,8 @@ public readonly ref struct PipeWireOutputFrame : IDisposable
     /// <summary>
     /// For a memory buffer, the picture to write, its planes one after another at <see cref="Stride"/>
     /// (the chroma planes of a planar format at the stride their width scales it to); empty for a shared
-    /// buffer.
+    /// buffer. It runs to the end of the picture's last page, page-aligned, so a GPU can import it and
+    /// read a frame back straight into it; only the picture is published.
     /// </summary>
     public Span<byte> Pixels { get; }
 

@@ -480,11 +480,13 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             return;
 
         int stride = SpaFormatPod.VideoStride(fmt.Format, fmt.Width);
-        int size = SpaFormatPod.VideoImageSize(fmt.Format, fmt.Width, fmt.Height);
+        int size = PageRounded(SpaFormatPod.VideoImageSize(fmt.Format, fmt.Width, fmt.Height));
         Span<byte> buffers = stackalloc byte[256];
 
         // One block, planes contiguous inside it. SPA allows either shape for a planar format, and
         // this producer writes the whole image into datas[0] - which is what FillFrame is handed.
+        // Whole pages, page-aligned: a GPU imports such memory as a buffer and reads a frame back
+        // straight into it (VK_EXT_external_memory_host), with no copy on the CPU.
         int bl = SpaFormatPod.WriteVideoBuffersParam(
             buffers,
             size,
@@ -492,7 +494,8 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             // A DMA-BUF stream that fell back backs its buffers itself, with memfd memory the
             // consumer maps; a host-memory stream's buffers come from the daemon.
             dataTypes: 1 << (int)(_dmaBufMode ? SpaDataType.MemFd : SpaDataType.MemPtr),
-            blocks: 1
+            blocks: 1,
+            align: Environment.SystemPageSize
         );
 
         Span<byte> meta = stackalloc byte[64];
@@ -1355,13 +1358,21 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             }
 
             SpaFormatPod.VideoFormatInfo memory = Format;
-            if (!TryOpenMemoryFrame(buf, memory, out Span<byte> pixels, out int stride))
+            if (
+                !TryOpenMemoryFrame(
+                    buf,
+                    memory,
+                    out Span<byte> pixels,
+                    out int stride,
+                    out int imageLength
+                )
+            )
             {
                 _ = core.QueueFromProducer(buf, publish: false);
                 return false;
             }
 
-            Volatile.Write(ref _openFrame, new OpenFrame(core, (nint)buf, default, pixels.Length));
+            Volatile.Write(ref _openFrame, new OpenFrame(core, (nint)buf, default, imageLength));
             frame = new PipeWireOutputFrame(
                 this,
                 -1,
@@ -1433,11 +1444,13 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         pw_buffer* buf,
         SpaFormatPod.VideoFormatInfo fmt,
         out Span<byte> pixels,
-        out int stride
+        out int stride,
+        out int imageLength
     )
     {
         pixels = default;
         stride = 0;
+        imageLength = 0;
         spa_buffer* sb = buf->buffer;
         if (sb is null || sb->n_datas == 0 || sb->datas is null)
             return false;
@@ -1453,14 +1466,16 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             return false;
 
         stride = SpaFormatPod.VideoStride(fmt.Format, fmt.Width);
-        int length = SpaFormatPod.VideoImageSize(fmt.Format, fmt.Width, fmt.Height);
-        if ((uint)length > d->maxsize)
-            length = (int)d->maxsize;
+        imageLength = SpaFormatPod.VideoImageSize(fmt.Format, fmt.Width, fmt.Height);
+        if ((uint)imageLength > d->maxsize)
+            imageLength = (int)d->maxsize;
 
         d->chunk->offset = 0;
         d->chunk->stride = stride;
         d->chunk->size = 0;
-        pixels = new Span<byte>(d->data, length);
+
+        // To the end of the image's last page where the buffer holds it, so a GPU can import it.
+        pixels = new Span<byte>(d->data, (int)Math.Min(d->maxsize, (uint)PageRounded(imageLength)));
         return true;
     }
 
@@ -2076,7 +2091,10 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         const uint CloseOnExec = 1;
         const int ReadWrite = 3,
             Shared = 1;
-        uint size = (uint)SpaFormatPod.VideoImageSize(fmt.Format, fmt.Width, fmt.Height);
+        // Whole pages, as the buffers were declared, so the block can be imported by a GPU.
+        uint size = (uint)PageRounded(
+            SpaFormatPod.VideoImageSize(fmt.Format, fmt.Width, fmt.Height)
+        );
         int fd = NativeLibc.memfd_create("pipewire-net-video", CloseOnExec);
         void* address = (void*)-1;
         if (fd >= 0 && NativeLibc.ftruncate(fd, size) == 0)
@@ -2126,6 +2144,9 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     }
 
     private static readonly TimeSpan WriterTimeout = TimeSpan.FromSeconds(1);
+
+    private static int PageRounded(int bytes) =>
+        (bytes + Environment.SystemPageSize - 1) & ~(Environment.SystemPageSize - 1);
 
     // A daemon-allocated buffer leaving the pool: nothing of ours backs it, but a frame may be open on it.
     private unsafe void OnRemoveMemoryBuffer(pw_buffer* buf) => WaitForWriter(buf);

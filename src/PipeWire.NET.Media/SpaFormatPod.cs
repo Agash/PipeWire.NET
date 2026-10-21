@@ -286,6 +286,10 @@ internal static class SpaFormatPod
     /// requires the <c>SyncTimeline</c> metaType below: without it the pool has nowhere to carry
     /// the points the descriptors order.
     /// </param>
+    /// <param name="align">
+    /// The alignment of each block's data in bytes; SPA's default of 16 when 0. A page aligns memory a
+    /// GPU can import.
+    /// </param>
     internal static int WriteVideoBuffersParam(
         Span<byte> buf,
         int size,
@@ -294,7 +298,8 @@ internal static class SpaFormatPod
         int blocks = 1,
         bool sizeIsAnyOf = false,
         int syncDataBlocks = 0,
-        int minBlocks = 0
+        int minBlocks = 0,
+        int align = 0
     )
     {
         var b = new SpaPodBuilder(buf);
@@ -318,6 +323,11 @@ internal static class SpaFormatPod
             b.AddInt(SpaParamBuffers.Size, size);
 
         b.AddInt(SpaParamBuffers.Stride, stride);
+
+        // The alignment of each block's data, when the producer needs one beyond SPA's default 16.
+        if (align > 0)
+            b.AddInt(SpaParamBuffers.Align, align);
+
         b.AddChoiceFlagsInt(SpaParamBuffers.DataType, dataTypes);
 
         // Mandatory, not advisory: a peer that cannot carry timeline metadata must refuse rather
