@@ -99,7 +99,9 @@ public sealed partial class PipeWireAudioCapture : IAsyncDisposable
 
         var props = new StreamProperties(StreamMediaType.Audio, StreamCategory.Capture)
             .WithRole("Music")
-            .WithNodeName(_name);
+            .WithNodeName(_name)
+            // The name consumers list the node by; a node without one shows as a blank row.
+            .WithNodeDescription(_name);
 
         // After the stream's own defaults, so an explicit media.role or node.description from the
         // caller wins rather than being silently ignored. An explicit method argument still beats

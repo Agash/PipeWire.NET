@@ -232,7 +232,9 @@ public sealed partial class PipeWireVideoCapture : IDisposable, IAsyncDisposable
 
         var props = new StreamProperties(StreamMediaType.Video, StreamCategory.Capture)
             .WithRole("Camera")
-            .WithNodeName(_name);
+            .WithNodeName(_name)
+            // The name consumers list the node by; a node without one shows as a blank row.
+            .WithNodeDescription(_name);
 
         // After the stream's own defaults, so an explicit media.role or node.description from the
         // caller wins rather than being silently ignored. An explicit method argument still beats

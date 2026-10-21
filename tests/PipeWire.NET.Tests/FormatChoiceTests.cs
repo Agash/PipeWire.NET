@@ -1,5 +1,6 @@
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PipeWire.NET.Graph;
 using PipeWire.NET.Media;
 
 namespace PipeWire.NET.Tests;
@@ -182,5 +183,26 @@ public sealed class FormatChoiceTests : PipeWireTestBase
         Assert.AreEqual(PixelFormat.Bgra, (PixelFormat)Volatile.Read(ref filled));
         Assert.AreEqual((byte)0x33, first);
         Assert.AreEqual(0, Volatile.Read(ref shared), "no shared buffer was asked for");
+    }
+
+    [TestMethod]
+    public async Task Output_WithoutADescription_IsListedByItsName()
+    {
+        using var cts = new CancellationTokenSource(Budget);
+        await using var ctx = new PipeWireContext(
+            "pwnet-formats",
+            ConsoleTestLoggerFactory.Instance
+        );
+        await ctx.StartAsync(cts.Token);
+        string name = $"pwnet-described-{Environment.ProcessId}";
+        await using var output = new PipeWireVideoOutput(ctx, name, Width, Height);
+        output.FillFrame += (_, _, _, _, _, _) => false;
+        output.Connect(options: new() { AutoConnect = false });
+        uint node = await output.WaitForNodeIdAsync(cts.Token);
+
+        await using var registry = new PipeWireRegistry(ctx);
+        await registry.WaitForInitialEnumerationAsync(cts.Token);
+        PipeWireNode listed = registry.Nodes.Single(n => n.Id == node);
+        Assert.AreEqual(name, listed.Description);
     }
 }
