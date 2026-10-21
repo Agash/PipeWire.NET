@@ -16,6 +16,9 @@ public readonly ref struct PipeWireOutputFrame : IDisposable
         int bufferIndex,
         Span<byte> pixels,
         int stride,
+        PixelFormat format,
+        int width,
+        int height,
         PipeWireSyncPoint? acquire = null
     )
     {
@@ -23,8 +26,23 @@ public readonly ref struct PipeWireOutputFrame : IDisposable
         BufferIndex = bufferIndex;
         Pixels = pixels;
         Stride = stride;
+        Format = format;
+        Width = width;
+        Height = height;
         Acquire = acquire;
     }
+
+    /// <summary>
+    /// The pixel format the buffer holds, the one negotiated when it was taken. A consumer may settle on
+    /// another of the offered formats at any time; a frame in a different one is not written here.
+    /// </summary>
+    public PixelFormat Format { get; }
+
+    /// <summary>The width the buffer holds, in pixels.</summary>
+    public int Width { get; }
+
+    /// <summary>The height the buffer holds, in pixels.</summary>
+    public int Height { get; }
 
     /// <summary>
     /// Under explicit sync, the point on the buffer's acquire timeline that marks this frame ready for the

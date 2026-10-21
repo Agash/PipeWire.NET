@@ -424,7 +424,8 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             OnBuffer,
             OnState,
             OnFormat,
-            OnPostFormatHostMem
+            OnPostFormatHostMem,
+            onRemoveBuffer: OnRemoveMemoryBuffer
         );
 
         Span<byte> pod = stackalloc byte[512];
@@ -1325,12 +1326,16 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                     return false;
                 }
 
-                _openFrame = new OpenFrame(core, (nint)buf, opened, 0);
+                SpaFormatPod.VideoFormatInfo shared = Format;
+                Volatile.Write(ref _openFrame, new OpenFrame(core, (nint)buf, opened, 0));
                 frame = new PipeWireOutputFrame(
                     this,
                     opened.Index,
                     default,
                     0,
+                    shared.Format,
+                    shared.Width,
+                    shared.Height,
                     opened.SyncReady && opened.AcquireFd >= 0
                         ? new PipeWireSyncPoint(opened.AcquireFd, opened.AcquirePoint)
                         : null
@@ -1338,14 +1343,23 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 return true;
             }
 
-            if (!TryOpenMemoryFrame(buf, out Span<byte> pixels, out int stride))
+            SpaFormatPod.VideoFormatInfo memory = Format;
+            if (!TryOpenMemoryFrame(buf, memory, out Span<byte> pixels, out int stride))
             {
                 _ = core.QueueFromProducer(buf, publish: false);
                 return false;
             }
 
-            _openFrame = new OpenFrame(core, (nint)buf, default, pixels.Length);
-            frame = new PipeWireOutputFrame(this, -1, pixels, stride);
+            Volatile.Write(ref _openFrame, new OpenFrame(core, (nint)buf, default, pixels.Length));
+            frame = new PipeWireOutputFrame(
+                this,
+                -1,
+                pixels,
+                stride,
+                memory.Format,
+                memory.Width,
+                memory.Height
+            );
             return true;
         }
     }
@@ -1359,7 +1373,9 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             if (_openFrame is not { } open)
                 return;
 
-            _openFrame = null;
+            // Before the loop lock: a buffer being removed waits on the loop thread, holding that lock,
+            // until no frame is open on it.
+            Volatile.Write(ref _openFrame, null);
             var buf = (pw_buffer*)open.Buffer;
             if (!_ctx.TryLock(out PipeWireContext.LoopLock scope))
                 return;
@@ -1402,7 +1418,12 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
 
     // Readies a memory buffer to be written: the picture's span of its mapped data, sizes cleared until
     // it is published. False when the buffer is not mapped or no format is settled.
-    private unsafe bool TryOpenMemoryFrame(pw_buffer* buf, out Span<byte> pixels, out int stride)
+    private unsafe bool TryOpenMemoryFrame(
+        pw_buffer* buf,
+        SpaFormatPod.VideoFormatInfo fmt,
+        out Span<byte> pixels,
+        out int stride
+    )
     {
         pixels = default;
         stride = 0;
@@ -1411,7 +1432,6 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             return false;
 
         spa_data* d = &sb->datas[0];
-        SpaFormatPod.VideoFormatInfo fmt = Format;
         if (
             d->data is null
             || d->chunk is null
@@ -2072,8 +2092,36 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         buf->user_data = (void*)(nint)(index + 1);
     }
 
+    // pw_stream's remove_buffer: the buffer is gone once this returns, so a frame the application has
+    // open on it is waited for first, bounded so an application that never ends one cannot stop the
+    // loop. Loop thread, holding the loop lock; ending a frame lets go of the buffer before taking it.
+    private unsafe void WaitForWriter(pw_buffer* buf)
+    {
+        if (Volatile.Read(ref _openFrame)?.Buffer != (nint)buf)
+            return;
+
+        long deadline = Environment.TickCount64 + (long)WriterTimeout.TotalMilliseconds;
+        SpinWait spin = default;
+        while (Volatile.Read(ref _openFrame)?.Buffer == (nint)buf)
+        {
+            if (Environment.TickCount64 > deadline)
+            {
+                LogWriterAbandoned();
+                return;
+            }
+
+            spin.SpinOnce();
+        }
+    }
+
+    private static readonly TimeSpan WriterTimeout = TimeSpan.FromSeconds(1);
+
+    // A daemon-allocated buffer leaving the pool: nothing of ours backs it, but a frame may be open on it.
+    private unsafe void OnRemoveMemoryBuffer(pw_buffer* buf) => WaitForWriter(buf);
+
     private unsafe void OnRemoveBuffer(pw_buffer* buf)
     {
+        WaitForWriter(buf);
         int index = (int)(nint)buf->user_data - 1;
         if (index < 0)
             return;
@@ -2208,6 +2256,13 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         Message = "buffer {Index} declined: timeline descriptors {AcquireFd}/{ReleaseFd} are not usable"
     )]
     private partial void LogInvalidSyncDescriptor(int index, long acquireFd, long releaseFd);
+
+    [LoggerMessage(
+        EventId = 2214,
+        Level = LogLevel.Warning,
+        Message = "a buffer leaving the pool was still open for writing after a second; it goes regardless"
+    )]
+    private partial void LogWriterAbandoned();
 
     /// <summary>Waits until the stream is negotiated and running.</summary>
     /// <param name="cancellationToken">Abandons the wait.</param>

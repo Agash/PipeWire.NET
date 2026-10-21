@@ -242,11 +242,14 @@ PipeWire.NET.Media.PipeWireOutputFrame
 PipeWire.NET.Media.PipeWireOutputFrame.Acquire.get -> PipeWire.NET.Media.PipeWireSyncPoint?
 PipeWire.NET.Media.PipeWireOutputFrame.BufferIndex.get -> int
 PipeWire.NET.Media.PipeWireOutputFrame.Dispose() -> void
+PipeWire.NET.Media.PipeWireOutputFrame.Format.get -> PipeWire.NET.Media.PixelFormat
+PipeWire.NET.Media.PipeWireOutputFrame.Height.get -> int
 PipeWire.NET.Media.PipeWireOutputFrame.PipeWireOutputFrame() -> void
 PipeWire.NET.Media.PipeWireOutputFrame.Pixels.get -> System.Span<byte>
 PipeWire.NET.Media.PipeWireOutputFrame.Publish() -> void
 PipeWire.NET.Media.PipeWireOutputFrame.Publish(bool signalAcquire) -> void
 PipeWire.NET.Media.PipeWireOutputFrame.Stride.get -> int
+PipeWire.NET.Media.PipeWireOutputFrame.Width.get -> int
 PipeWire.NET.Media.PipeWireRateController
 PipeWire.NET.Media.PipeWireRateController.Bandwidth.get -> double
 PipeWire.NET.Media.PipeWireRateController.PipeWireRateController() -> void
