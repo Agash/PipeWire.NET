@@ -718,30 +718,23 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         // unsafe to call from another thread and crashes libpipewire). On a consumer link the daemon delivers
         // SPA_PARAM_PeerCapability, where OnPeerConnected re-announces the EnumFormat and activates the stream,
         // kicking the (now-correct) modifier fixation; the consumer then drives FillDmaBuf.
-        // Sized from the offer, not from a constant. A Choice(Enum) of N modifiers writes
-        // (N+1) * 8 bytes of values, and a modern driver exports dozens per format, so a fixed
-        // 512-byte pod runs out on exactly the hardware zero-copy exists for.
-        byte[] pod = new byte[ModifierPodBytes(modifiers.Length)];
-        int len = SpaFormatPod.WriteVideoFormat(
-            pod,
-            stackalloc[] { _formats[0] },
-            (uint)_width,
-            (uint)_height,
-            (uint)_frameRate,
-            fixedSize: true,
-            modifiers: modifiers,
-            color: _color
-        );
-
-        // Device negotiation is announced, not assumed: the Capability param names the devices this
-        // producer can allocate on, as video-src-fixate's SUPPORT_DEVICE_IDS_LIST build does.
-        byte[] capability = [];
+        // What goes out at connect. With devices, the Capability param alone, as upstream's
+        // video-src-fixate connects: the formats follow once the peer's capabilities are known, so
+        // a consumer that links at once has no partial offer to fail against. With modifiers alone
+        // there is no capability exchange to wait for, so the whole offer goes out now.
+        byte[] pods;
+        int count;
         if (!offers.IsEmpty)
         {
             Span<DrmDevice> devices = new DrmDevice[offers.Length];
             for (int i = 0; i < offers.Length; i++)
                 devices[i] = offers[i].Device;
-            capability = DeviceIdNegotiation.CapabilityParam(devices);
+            pods = DeviceIdNegotiation.CapabilityParam(devices);
+            count = 1;
+        }
+        else
+        {
+            pods = WriteModifierOffer(out count);
         }
 
         // Built before the core exists, so a pod that cannot be written does not leave a native
@@ -763,13 +756,13 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         {
             // Deliberately not PW_STREAM_FLAG_DRIVER. The consumer drives the graph clock, and
             // claiming the driver role stops frames reaching the consumer entirely.
-            core.Connect(
+            core.ConnectWithParams(
                 SpaDirection.Output,
                 NativeConstants.PW_ID_ANY,
                 PipeWireStreamFlags.Inactive | PipeWireStreamFlags.AllocBuffers,
-                pod[..len],
-                capabilityPod: capability,
-                cancellationToken: cancellationToken
+                pods,
+                count,
+                cancellationToken
             );
             _core = core;
         }
@@ -819,9 +812,25 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         }
         else
         {
-            byte[] pod = new byte[ModifierPodBytes(_modifiers.Length)];
-            int len = SpaFormatPod.WriteVideoFormat(
-                pod,
+            byte[] pods = WriteModifierOffer(out int count);
+            rc = core.RequestParamsFromCallback(pods, count);
+        }
+
+        if (rc < 0)
+            LogAnnounceRefused(rc);
+        core.SetActiveFromCallback(true);
+    }
+
+    // The offer without device negotiation: the first format on the GPU with the modifiers, then, for a
+    // consumer that cannot import a shared buffer, every format in memory, a pod each so each declares
+    // the colour that fits it.
+    private byte[] WriteModifierOffer(out int count)
+    {
+        int hostFormats = HostMemoryFallback ? _formats.Length : 0;
+        byte[] pods = new byte[ModifierPodBytes(_modifiers.Length) + (1024 * hostFormats)];
+        int used = Align(
+            SpaFormatPod.WriteVideoFormat(
+                pods,
                 [_formats[0]],
                 (uint)_width,
                 (uint)_height,
@@ -829,27 +838,29 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 fixedSize: true,
                 modifiers: _modifiers,
                 color: _color
-            );
-
-            // Every format in memory, for a consumer that cannot import a shared buffer.
-            byte[] host = HostMemoryFallback ? new byte[1024] : [];
-            int hostLen = HostMemoryFallback
-                ? SpaFormatPod.WriteVideoFormat(
-                    host,
-                    _formats.AsSpan(),
+            )
+        );
+        count = 1;
+        for (int i = 0; i < hostFormats; i++)
+        {
+            used += Align(
+                SpaFormatPod.WriteVideoFormat(
+                    pods.AsSpan(used),
+                    [_formats[i]],
                     (uint)_width,
                     (uint)_height,
                     (uint)_frameRate,
                     fixedSize: true,
                     color: _color
                 )
-                : 0;
-            rc = core.RequestParamsFromCallback(pod[..len], host.AsSpan(0, hostLen));
+            );
+            count++;
         }
 
-        if (rc < 0)
-            LogAnnounceRefused(rc);
-        core.SetActiveFromCallback(true);
+        return pods[..used];
+
+        // SPA pods start on 8-byte boundaries.
+        static int Align(int n) => (n + 7) & ~7;
     }
 
     /// <summary>

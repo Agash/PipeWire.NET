@@ -307,6 +307,36 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
         // and a caller that has already given up should not join that queue.
         cancellationToken.ThrowIfCancellationRequested();
 
+        fixed (byte* fp = formatPod)
+        fixed (byte* fb = fallbackPod)
+        fixed (byte* cp = capabilityPod)
+        {
+            // Offered in preference order. A modifier choice is written mandatory, so with one
+            // pod a producer that cannot do DMA-BUF has nothing left to agree to and
+            // negotiation fails outright; a second pod without modifiers is the host-memory
+            // path it can fall back to. A Capability param rides in the same list, as upstream's
+            // fixate examples pass it to pw_stream_connect.
+            spa_pod** offers = stackalloc spa_pod*[3];
+            uint count = 0;
+            offers[count++] = (spa_pod*)fp;
+            if (!fallbackPod.IsEmpty)
+                offers[count++] = (spa_pod*)fb;
+            if (!capabilityPod.IsEmpty)
+                offers[count++] = (spa_pod*)cp;
+
+            ConnectCore(direction, targetNodeId, flags, offers, count);
+        }
+    }
+
+    // pw_stream_connect with the params in order, under the loop lock.
+    private void ConnectCore(
+        SpaDirection direction,
+        uint targetNodeId,
+        PipeWireStreamFlags flags,
+        spa_pod** offers,
+        uint count
+    )
+    {
         using System.Diagnostics.Activity? span = PipeWireDiagnostics.Source.StartActivity(
             "pipewire.stream.connect"
         );
@@ -317,35 +347,63 @@ internal sealed unsafe partial class PipeWireStreamCore : IDisposable, IAsyncDis
 
         using (_ctx.Lock())
         {
-            int rc;
-            fixed (byte* fp = formatPod)
-            fixed (byte* fb = fallbackPod)
-            fixed (byte* cp = capabilityPod)
-            {
-                // Offered in preference order. A modifier choice is written mandatory, so with one
-                // pod a producer that cannot do DMA-BUF has nothing left to agree to and
-                // negotiation fails outright; a second pod without modifiers is the host-memory
-                // path it can fall back to. A Capability param rides in the same list, as upstream's
-                // fixate examples pass it to pw_stream_connect.
-                spa_pod** offers = stackalloc spa_pod*[3];
-                uint count = 0;
-                offers[count++] = (spa_pod*)fp;
-                if (!fallbackPod.IsEmpty)
-                    offers[count++] = (spa_pod*)fb;
-                if (!capabilityPod.IsEmpty)
-                    offers[count++] = (spa_pod*)cp;
-
-                rc = Native.pw_stream_connect(
-                    _stream,
-                    direction,
-                    targetNodeId,
-                    flags,
-                    offers,
-                    count
-                );
-            }
+            int rc = Native.pw_stream_connect(
+                _stream,
+                direction,
+                targetNodeId,
+                flags,
+                offers,
+                count
+            );
             if (rc < 0)
                 throw new PipeWireInteropException("pw_stream_connect", rc);
+        }
+    }
+
+    /// <summary>
+    /// Connects with any number of params, laid out end to end as <see cref="RequestParamsFromCallback(ReadOnlySpan{byte}, int)"/>
+    /// takes them: the formats in preference order, then a Capability param, or the Capability param
+    /// alone for a producer that announces its formats once the peer's capabilities are known.
+    /// </summary>
+    /// <param name="direction">The stream's direction.</param>
+    /// <param name="targetNodeId">The node to link to, or <c>PW_ID_ANY</c>.</param>
+    /// <param name="flags">How to connect.</param>
+    /// <param name="pods">Concatenated pods, each starting on an 8-byte boundary.</param>
+    /// <param name="count">How many pods are in the buffer.</param>
+    /// <param name="cancellationToken">Abandons the wait for the loop lock.</param>
+    internal void ConnectWithParams(
+        SpaDirection direction,
+        uint targetNodeId,
+        PipeWireStreamFlags flags,
+        ReadOnlySpan<byte> pods,
+        int count,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        RequireLoopThreadProcess(flags);
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(count);
+        fixed (byte* start = pods)
+        {
+            spa_pod** offers = stackalloc spa_pod*[count];
+            byte* p = start;
+            byte* end = start + pods.Length;
+            for (int i = 0; i < count; i++)
+            {
+                if (p + sizeof(spa_pod) > end)
+                    throw new ArgumentException(
+                        "The pods end before the count says.",
+                        nameof(pods)
+                    );
+
+                // A pod is its header plus its body, rounded up to 8, as SPA walks them.
+                offers[i] = (spa_pod*)p;
+                nuint advance = (nuint)sizeof(spa_pod) + ((spa_pod*)p)->size;
+                p += (advance + 7) & ~(nuint)7;
+            }
+
+            ConnectCore(direction, targetNodeId, flags, offers, (uint)count);
         }
     }
 
