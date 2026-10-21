@@ -160,7 +160,7 @@ internal static class DeviceIdNegotiation
     /// device" - so a stream connected with device offers still streams to every current client.
     /// </para>
     /// <para>
-    /// With <paramref name="hostMemoryFallback"/>, a last format with no modifiers: the consumer's
+    /// With <paramref name="hostMemoryFallback"/>, the last formats, one each and without modifiers: the consumer's
     /// <c>build_format(-1)</c>, the shape a producer that cannot do DMA-BUF agrees to.
     /// </para>
     /// </remarks>
@@ -195,7 +195,8 @@ internal static class DeviceIdNegotiation
         ReadOnlySpan<PixelFormat> hostMemoryFormats = default
     )
     {
-        int capacity = 1024;
+        int capacity =
+            1024 * (1 + (hostMemoryFormats.IsEmpty ? formats : hostMemoryFormats).Length);
         foreach (DmaBufDeviceOffer offer in offers)
         {
             foreach (DmaBufFormatModifiers entry in offer.Formats)
@@ -262,20 +263,25 @@ internal static class DeviceIdNegotiation
             }
         }
 
+        // A format to a pod, in preference order, so each declares the colour that fits it: a YUV
+        // format its matrix and range, an RGB one neither.
         if (hostMemoryFallback)
         {
-            used += Align(
-                SpaFormatPod.WriteVideoFormat(
-                    buffer.AsSpan(used),
-                    hostMemoryFormats.IsEmpty ? formats : hostMemoryFormats,
-                    width,
-                    height,
-                    frameRate,
-                    fixedSize,
-                    color: color
-                )
-            );
-            count++;
+            foreach (PixelFormat format in hostMemoryFormats.IsEmpty ? formats : hostMemoryFormats)
+            {
+                used += Align(
+                    SpaFormatPod.WriteVideoFormat(
+                        buffer.AsSpan(used),
+                        [format],
+                        width,
+                        height,
+                        frameRate,
+                        fixedSize,
+                        color: color
+                    )
+                );
+                count++;
+            }
         }
 
         return buffer[..used];

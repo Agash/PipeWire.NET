@@ -957,10 +957,17 @@ internal static class SpaFormatPod
         }
 
         // What the producer knows of its colour. An unknown property is left out, which a consumer
-        // reads as unstated.
-        if (color.Range != VideoColorRange.Unknown)
+        // reads as unstated. The matrix, range and chroma siting describe YUV, and one pod states them
+        // for every format it offers, so a pod with an RGB format among them leaves them out.
+        bool yuv = !formats.ContainsAny([
+            PixelFormat.Rgba,
+            PixelFormat.Bgra,
+            PixelFormat.Rgbx,
+            PixelFormat.Bgrx,
+        ]);
+        if (yuv && color.Range != VideoColorRange.Unknown)
             b.AddId(SpaFormat.VideoColorRange, SpaIdValue.FromRaw((uint)ToSpa(color.Range)));
-        if (color.Matrix != VideoColorMatrix.Unknown)
+        if (yuv && color.Matrix != VideoColorMatrix.Unknown)
             b.AddId(SpaFormat.VideoColorMatrix, SpaIdValue.FromRaw((uint)ToSpa(color.Matrix)));
         if (color.Transfer != VideoTransferFunction.Unknown)
             b.AddId(
@@ -972,7 +979,7 @@ internal static class SpaFormatPod
                 SpaFormat.VideoColorPrimaries,
                 SpaIdValue.FromRaw((uint)ToSpa(color.Primaries))
             );
-        if (color.ChromaSite != VideoChromaSite.Unknown)
+        if (yuv && color.ChromaSite != VideoChromaSite.Unknown)
             b.AddId(SpaFormat.VideoChromaSite, SpaIdValue.FromRaw((uint)color.ChromaSite));
 
         return b.GetPod().Length;

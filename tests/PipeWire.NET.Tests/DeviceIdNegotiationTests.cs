@@ -456,8 +456,15 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
     public void TheHostMemoryFallback_OffersEveryFormatTheConsumerReads()
     {
         // A consumer that imports BGRA on the GPU but reads a camera's YUYV or NV12 from memory: the
-        // DMA-BUF offer stays one format, the fallback lists them all.
+        // DMA-BUF offer stays one format, the fallback lists them all, a pod each in order, so each
+        // declares only the colour that fits it.
         var peer = new PeerCapabilities(true, [CardA.Id]);
+        VideoColorInfo bt709 = new(
+            VideoColorRange.Limited_16_235,
+            VideoColorMatrix.Bt709,
+            VideoTransferFunction.Bt709,
+            VideoColorPrimaries.Bt709
+        );
         byte[] pods = DeviceIdNegotiation.WriteDeviceFormats(
             peer,
             [new(CardA, PixelFormat.Bgra, [0])],
@@ -469,25 +476,31 @@ public sealed unsafe class DeviceIdNegotiationTests : PipeWireTestBase
             hostMemoryFallback: true,
             out int count,
             out _,
+            bt709,
             hostMemoryFormats: [PixelFormat.Bgra, PixelFormat.Yuyv, PixelFormat.Nv12]
         );
 
-        Assert.AreEqual(2, count);
+        Assert.AreEqual(4, count);
         Assert.IsTrue(SpaPod.TryParse(Pod(pods, 0), out SpaValue? device));
         Assert.IsInstanceOfType<SpaId>(
             ((SpaObject)device!)[SpaFormat.VideoFormat],
             "one GPU format"
         );
-        Assert.IsTrue(SpaPod.TryParse(Pod(pods, 1), out SpaValue? host));
-        var formats = (SpaChoice)((SpaObject)host!)[SpaFormat.VideoFormat]!;
-        CollectionAssert.AreEquivalent(
-            new[] { SpaVideoFormat.Bgra, SpaVideoFormat.Yuy2, SpaVideoFormat.Nv12 },
-            formats
-                .Alternatives.OfType<SpaId>()
-                .Select(id => (SpaVideoFormat)id.Value)
-                .Distinct()
-                .ToArray()
-        );
+        SpaVideoFormat[] order = [SpaVideoFormat.Bgra, SpaVideoFormat.Yuy2, SpaVideoFormat.Nv12];
+        for (int i = 0; i < order.Length; i++)
+        {
+            Assert.IsTrue(SpaPod.TryParse(Pod(pods, i + 1), out SpaValue? host));
+            var pod = (SpaObject)host!;
+            Assert.AreEqual(order[i], (SpaVideoFormat)((SpaId)pod[SpaFormat.VideoFormat]!).Value);
+            bool rgb = order[i] == SpaVideoFormat.Bgra;
+            Assert.AreEqual(
+                !rgb,
+                pod[SpaFormat.VideoColorMatrix] is not null,
+                $"{order[i]} matrix"
+            );
+            Assert.AreEqual(!rgb, pod[SpaFormat.VideoColorRange] is not null, $"{order[i]} range");
+            Assert.IsNotNull(pod[SpaFormat.VideoTransferFunction], $"{order[i]} transfer");
+        }
     }
 
     [TestMethod]
