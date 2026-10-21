@@ -721,19 +721,37 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
         // unsafe to call from another thread and crashes libpipewire). On a consumer link the daemon delivers
         // SPA_PARAM_PeerCapability, where OnPeerConnected re-announces the EnumFormat and activates the stream,
         // kicking the (now-correct) modifier fixation; the consumer then drives FillDmaBuf.
-        // What goes out at connect. With devices, the Capability param alone, as upstream's
-        // video-src-fixate connects: the formats follow once the peer's capabilities are known, so
-        // a consumer that links at once has no partial offer to fail against. With modifiers alone
-        // there is no capability exchange to wait for, so the whole offer goes out now.
+        // What goes out at connect: the whole offer a peer without device negotiation gets, so a
+        // consumer that links at once negotiates against it (the daemon configures a link as soon as it
+        // is made, and a port with no EnumFormat fails it), and with devices the Capability param after
+        // it, so a peer that negotiates them is offered one format per device once its capabilities
+        // are known.
         byte[] pods;
         int count;
         if (!offers.IsEmpty)
         {
+            byte[] formats = DeviceIdNegotiation.WriteDeviceFormats(
+                default,
+                offers,
+                _formats.AsSpan(),
+                (uint)_width,
+                (uint)_height,
+                (uint)_frameRate,
+                fixedSize: true,
+                hostMemoryFallback: HostMemoryFallback,
+                out int formatCount,
+                out _,
+                _color,
+                MemoryFormats.AsSpan()
+            );
             Span<DrmDevice> devices = new DrmDevice[offers.Length];
             for (int i = 0; i < offers.Length; i++)
                 devices[i] = offers[i].Device;
-            pods = DeviceIdNegotiation.CapabilityParam(devices);
-            count = 1;
+            byte[] capability = DeviceIdNegotiation.CapabilityParam(devices);
+            pods = new byte[formats.Length + capability.Length];
+            formats.CopyTo(pods, 0);
+            capability.CopyTo(pods, formats.Length);
+            count = formatCount + 1;
         }
         else
         {
@@ -808,7 +826,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
                 out int count,
                 out int deviceFormats,
                 _color,
-                _formats.AsSpan()
+                MemoryFormats.AsSpan()
             );
             LogDeviceOffers(peer.NegotiatesDeviceIds, deviceFormats, _deviceOffers.Length);
             rc = core.RequestParamsFromCallback(pods, count);
@@ -829,7 +847,8 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
     // the colour that fits it.
     private byte[] WriteModifierOffer(out int count)
     {
-        int hostFormats = HostMemoryFallback ? _formats.Length : 0;
+        ImmutableArray<PixelFormat> memory = MemoryFormats;
+        int hostFormats = HostMemoryFallback ? memory.Length : 0;
         byte[] pods = new byte[ModifierPodBytes(_modifiers.Length) + (1024 * hostFormats)];
         int used = Align(
             SpaFormatPod.WriteVideoFormat(
@@ -849,7 +868,7 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
             used += Align(
                 SpaFormatPod.WriteVideoFormat(
                     pods.AsSpan(used),
-                    [_formats[i]],
+                    [memory[i]],
                     (uint)_width,
                     (uint)_height,
                     (uint)_frameRate,
@@ -879,6 +898,38 @@ public sealed partial class PipeWireVideoOutput : IDisposable, IAsyncDisposable
 
     /// <summary>The pixel formats offered, most preferred first.</summary>
     public ImmutableArray<PixelFormat> Formats => _formats;
+
+    /// <summary>
+    /// The order the host-memory fallback offers formats in, for a consumer that cannot import a shared
+    /// buffer; <see cref="Formats"/> when default. Each must be one of <see cref="Formats"/>.
+    /// </summary>
+    /// <remarks>
+    /// Shared buffers lead with the format frames are made in, which costs nothing to hand over; a
+    /// consumer reading memory is handed a read-back anyway, and many read packed RGB best (PipeWire's
+    /// video-src and the desktop screen-cast producers lead with it).
+    /// </remarks>
+    /// <exception cref="ArgumentException">A format that is not offered.</exception>
+    public ImmutableArray<PixelFormat> HostMemoryFormats
+    {
+        get => _memoryFormats.IsDefault ? _formats : _memoryFormats;
+        init
+        {
+            foreach (PixelFormat format in value.IsDefault ? [] : value)
+            {
+                if (!_formats.Contains(format))
+                    throw new ArgumentException(
+                        $"{format} is not one of the offered formats.",
+                        nameof(value)
+                    );
+            }
+
+            _memoryFormats = value;
+        }
+    }
+
+    private readonly ImmutableArray<PixelFormat> _memoryFormats;
+
+    private ImmutableArray<PixelFormat> MemoryFormats => HostMemoryFormats;
 
     /// <summary>
     /// The pixel format the consumer settled on, or <see cref="PixelFormat.Unknown"/> while none is.

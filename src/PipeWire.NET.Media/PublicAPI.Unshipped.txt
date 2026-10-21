@@ -363,6 +363,8 @@ PipeWire.NET.Media.PipeWireVideoOutput.GetControl(uint id) -> PipeWire.NET.Media
 PipeWire.NET.Media.PipeWireVideoOutput.GraphClock.get -> PipeWire.NET.Graph.PipeWireGraphClock?
 PipeWire.NET.Media.PipeWireVideoOutput.HostMemoryFallback.get -> bool
 PipeWire.NET.Media.PipeWireVideoOutput.HostMemoryFallback.set -> void
+PipeWire.NET.Media.PipeWireVideoOutput.HostMemoryFormats.get -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Media.PixelFormat>
+PipeWire.NET.Media.PipeWireVideoOutput.HostMemoryFormats.init -> void
 PipeWire.NET.Media.PipeWireVideoOutput.IsDriving.get -> bool
 PipeWire.NET.Media.PipeWireVideoOutput.IsLazy.get -> bool
 PipeWire.NET.Media.PipeWireVideoOutput.IsPushing.get -> bool
