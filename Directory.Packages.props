@@ -2,6 +2,7 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
+  <!-- $(DotNetPackageVersion) follows the target framework; Directory.Build.targets sets it. -->
   <ItemGroup>
     <PackageVersion Include="DotNet.ReproducibleBuilds" Version="2.0.5" />
     <!-- A stable target should not carry a preview dependency: net10 consumers would otherwise be
@@ -9,12 +10,12 @@
          bump on main moved a single unconditional entry, which would put the preview back on net10. -->
     <PackageVersion
       Include="Microsoft.Extensions.Logging.Abstractions"
-      Version="11.0.0-rc.2.26504.105"
+      Version="$(DotNetPackageVersion)"
       Condition="'$(TargetFramework)' == 'net11.0'"
     />
     <PackageVersion
       Include="Microsoft.Extensions.Logging.Abstractions"
-      Version="10.0.12"
+      Version="$(DotNetPackageVersion)"
       Condition="'$(TargetFramework)' != 'net11.0'"
     />
     <PackageVersion Include="MinVer" Version="8.0.0" />
