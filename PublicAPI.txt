@@ -1295,10 +1295,13 @@ PipeWire.NET.Media.PipeWireOutputFrame
 PipeWire.NET.Media.PipeWireOutputFrame.Acquire : Nullable<PipeWireSyncPoint>
 PipeWire.NET.Media.PipeWireOutputFrame.BufferIndex : Int32
 PipeWire.NET.Media.PipeWireOutputFrame.Dispose()
+PipeWire.NET.Media.PipeWireOutputFrame.Format : PixelFormat
+PipeWire.NET.Media.PipeWireOutputFrame.Height : Int32
 PipeWire.NET.Media.PipeWireOutputFrame.Pixels : Span<Byte>
 PipeWire.NET.Media.PipeWireOutputFrame.Publish()
 PipeWire.NET.Media.PipeWireOutputFrame.Publish(Boolean)
 PipeWire.NET.Media.PipeWireOutputFrame.Stride : Int32
+PipeWire.NET.Media.PipeWireOutputFrame.Width : Int32
 PipeWire.NET.Media.PipeWireRateController
 PipeWire.NET.Media.PipeWireRateController..ctor()
 PipeWire.NET.Media.PipeWireRateController.Bandwidth : Double
@@ -1448,7 +1451,7 @@ PipeWire.NET.Media.PipeWireVideoOutput+StateChangedHandler..ctor(Object, IntPtr)
 PipeWire.NET.Media.PipeWireVideoOutput+StateChangedHandler.BeginInvoke(PipeWireVideoOutput, PipeWireStreamState, PipeWireStreamState, AsyncCallback, Object)
 PipeWire.NET.Media.PipeWireVideoOutput+StateChangedHandler.EndInvoke(IAsyncResult)
 PipeWire.NET.Media.PipeWireVideoOutput+StateChangedHandler.Invoke(PipeWireVideoOutput, PipeWireStreamState, PipeWireStreamState)
-PipeWire.NET.Media.PipeWireVideoOutput..ctor(PipeWireContext, String, Int32, Int32, PixelFormat, Int32, VideoColorInfo)
+PipeWire.NET.Media.PipeWireVideoOutput..ctor(PipeWireContext, String, Int32, Int32, ImmutableArray<PixelFormat>, Int32, VideoColorInfo)
 PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBuf event
 PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBufHandler
 PipeWire.NET.Media.PipeWireVideoOutput.AllocateDmaBufSync event
@@ -1469,14 +1472,17 @@ PipeWire.NET.Media.PipeWireVideoOutput.FillDmaBuf event
 PipeWire.NET.Media.PipeWireVideoOutput.FillDmaBufHandler
 PipeWire.NET.Media.PipeWireVideoOutput.FillFrame event
 PipeWire.NET.Media.PipeWireVideoOutput.FillFrameHandler
+PipeWire.NET.Media.PipeWireVideoOutput.Formats : ImmutableArray<PixelFormat>
 PipeWire.NET.Media.PipeWireVideoOutput.GetControl(UInt32)
 PipeWire.NET.Media.PipeWireVideoOutput.GraphClock : Nullable<PipeWireGraphClock>
 PipeWire.NET.Media.PipeWireVideoOutput.HostMemoryFallback : Boolean
+PipeWire.NET.Media.PipeWireVideoOutput.HostMemoryFormats : ImmutableArray<PixelFormat>
 PipeWire.NET.Media.PipeWireVideoOutput.IsDriving : Boolean
 PipeWire.NET.Media.PipeWireVideoOutput.IsLazy : Boolean
 PipeWire.NET.Media.PipeWireVideoOutput.IsPushing : Boolean
 PipeWire.NET.Media.PipeWireVideoOutput.LastProcessError : Exception
 PipeWire.NET.Media.PipeWireVideoOutput.NegotiatedDevice : Nullable<DrmDevice>
+PipeWire.NET.Media.PipeWireVideoOutput.NegotiatedPixelFormat : PixelFormat
 PipeWire.NET.Media.PipeWireVideoOutput.NextPresentationTimestampNs : Nullable<Int64>
 PipeWire.NET.Media.PipeWireVideoOutput.NodeId : Nullable<UInt32>
 PipeWire.NET.Media.PipeWireVideoOutput.ProcessErrorCount : Int64
