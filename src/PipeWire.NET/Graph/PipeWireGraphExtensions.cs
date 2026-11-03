@@ -152,5 +152,17 @@ public static class PipeWireGraphExtensions
                     n.Media is PipeWireMediaKind.Audio && graph.CanCaptureFrom(n)
                 ),
             ];
+
+        /// <summary>Audio sinks a playback stream can be routed to, such as speakers or a virtual cable.</summary>
+        /// <remarks>Playback streams of other clients are excluded: they are not devices to play on.</remarks>
+        public ImmutableArray<PipeWireNode> GetAudioSinks() =>
+            [
+                .. graph.Nodes.Where(n =>
+                    n.Media is PipeWireMediaKind.Audio
+                    && n.Flow is PipeWireMediaFlow.Sink
+                    && n.MediaClass?.StartsWith("Stream/", StringComparison.Ordinal) != true
+                    && graph.CanSendTo(n)
+                ),
+            ];
     }
 }

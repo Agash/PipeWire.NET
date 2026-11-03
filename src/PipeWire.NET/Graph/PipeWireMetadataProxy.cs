@@ -620,18 +620,22 @@ public sealed partial class PipeWireMetadataProxy : IDisposable, IAsyncDisposabl
             // all and the cache would keep reporting values the server no longer has.
             bool everySubject = subject == NativeConstants.SPA_ID_INVALID;
 
-            // Reported one entry at a time. A subject-wide clear changes the store exactly as an
-            // individual removal does, and a consumer that only listens would otherwise never learn
-            // that the entries went.
+            // The server cleared them in one step and reports it with one event (impl-metadata.c,
+            // clear_subjects), so every entry goes before any is reported: a listener woken by the
+            // first removal must not still find the others, a state the store never had. They are
+            // then reported one at a time, since a consumer that only listens would otherwise never
+            // learn that the entries went.
+            List<PipeWireMetadataEntry> cleared = [];
             foreach ((uint Subject, string Key) existing in _entries.Keys)
             {
                 if (!everySubject && existing.Subject != subject)
                     continue;
                 if (_entries.TryRemove(existing, out PipeWireMetadataEntry? removed))
-                    Raise(
-                        new PipeWireMetadataEntry(removed.Subject, removed.Key, removed.Type, null)
-                    );
+                    cleared.Add(removed);
             }
+
+            foreach (PipeWireMetadataEntry removed in cleared)
+                Raise(new PipeWireMetadataEntry(removed.Subject, removed.Key, removed.Type, null));
 
             return;
         }

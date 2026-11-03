@@ -287,6 +287,11 @@ public sealed class GraphScenarioTests : PipeWireTestBase
                 node,
                 "an audio sink with monitor ports is a legitimate audio source to capture from"
             );
+            CollectionAssert.Contains(
+                graph.GetAudioSinks().ToArray(),
+                node,
+                "an audio sink is somewhere to play"
+            );
 
             foreach (PipeWirePort port in graph.GetPortsForNode(sink.NodeId))
             {

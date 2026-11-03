@@ -192,6 +192,7 @@ PipeWire.NET.Graph.PipeWireGraphExtensions.extension(PipeWire.NET.Graph.IPipeWir
 PipeWire.NET.Graph.PipeWireGraphExtensions.extension(PipeWire.NET.Graph.PipeWireGraphSnapshot!)
 PipeWire.NET.Graph.PipeWireGraphExtensions.extension(PipeWire.NET.Graph.PipeWireGraphSnapshot!).CanCaptureFrom(PipeWire.NET.Graph.PipeWireNode! node) -> bool
 PipeWire.NET.Graph.PipeWireGraphExtensions.extension(PipeWire.NET.Graph.PipeWireGraphSnapshot!).CanSendTo(PipeWire.NET.Graph.PipeWireNode! node) -> bool
+PipeWire.NET.Graph.PipeWireGraphExtensions.extension(PipeWire.NET.Graph.PipeWireGraphSnapshot!).GetAudioSinks() -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Graph.PipeWireNode!>
 PipeWire.NET.Graph.PipeWireGraphExtensions.extension(PipeWire.NET.Graph.PipeWireGraphSnapshot!).GetAudioSources() -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Graph.PipeWireNode!>
 PipeWire.NET.Graph.PipeWireGraphExtensions.extension(PipeWire.NET.Graph.PipeWireGraphSnapshot!).GetEndpoints(PipeWire.NET.Graph.PipeWireLink! link) -> (PipeWire.NET.Graph.PipeWirePort? Output, PipeWire.NET.Graph.PipeWirePort? Input)
 PipeWire.NET.Graph.PipeWireGraphExtensions.extension(PipeWire.NET.Graph.PipeWireGraphSnapshot!).GetNodeForPort(PipeWire.NET.Graph.PipeWirePort! port) -> PipeWire.NET.Graph.PipeWireNode?
@@ -2327,6 +2328,7 @@ static PipeWire.NET.Graph.PipeWireGraphClock.operator !=(PipeWire.NET.Graph.Pipe
 static PipeWire.NET.Graph.PipeWireGraphClock.operator ==(PipeWire.NET.Graph.PipeWireGraphClock left, PipeWire.NET.Graph.PipeWireGraphClock right) -> bool
 static PipeWire.NET.Graph.PipeWireGraphExtensions.CanCaptureFrom(this PipeWire.NET.Graph.PipeWireGraphSnapshot! graph, PipeWire.NET.Graph.PipeWireNode! node) -> bool
 static PipeWire.NET.Graph.PipeWireGraphExtensions.CanSendTo(this PipeWire.NET.Graph.PipeWireGraphSnapshot! graph, PipeWire.NET.Graph.PipeWireNode! node) -> bool
+static PipeWire.NET.Graph.PipeWireGraphExtensions.GetAudioSinks(this PipeWire.NET.Graph.PipeWireGraphSnapshot! graph) -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Graph.PipeWireNode!>
 static PipeWire.NET.Graph.PipeWireGraphExtensions.GetAudioSources(this PipeWire.NET.Graph.PipeWireGraphSnapshot! graph) -> System.Collections.Immutable.ImmutableArray<PipeWire.NET.Graph.PipeWireNode!>
 static PipeWire.NET.Graph.PipeWireGraphExtensions.GetEndpoints(this PipeWire.NET.Graph.PipeWireGraphSnapshot! graph, PipeWire.NET.Graph.PipeWireLink! link) -> (PipeWire.NET.Graph.PipeWirePort? Output, PipeWire.NET.Graph.PipeWirePort? Input)
 static PipeWire.NET.Graph.PipeWireGraphExtensions.GetNodeForPort(this PipeWire.NET.Graph.PipeWireGraphSnapshot! graph, PipeWire.NET.Graph.PipeWirePort! port) -> PipeWire.NET.Graph.PipeWireNode?

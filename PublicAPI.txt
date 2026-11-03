@@ -204,6 +204,7 @@ PipeWire.NET.Graph.PipeWireGraphClock.ToString()
 PipeWire.NET.Graph.PipeWireGraphExtensions
 PipeWire.NET.Graph.PipeWireGraphExtensions.CanCaptureFrom(PipeWireGraphSnapshot, PipeWireNode)
 PipeWire.NET.Graph.PipeWireGraphExtensions.CanSendTo(PipeWireGraphSnapshot, PipeWireNode)
+PipeWire.NET.Graph.PipeWireGraphExtensions.GetAudioSinks(PipeWireGraphSnapshot)
 PipeWire.NET.Graph.PipeWireGraphExtensions.GetAudioSources(PipeWireGraphSnapshot)
 PipeWire.NET.Graph.PipeWireGraphExtensions.GetEndpoints(PipeWireGraphSnapshot, PipeWireLink)
 PipeWire.NET.Graph.PipeWireGraphExtensions.GetNodeForPort(PipeWireGraphSnapshot, PipeWirePort)
