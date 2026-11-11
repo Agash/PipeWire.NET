@@ -223,7 +223,7 @@ internal static class PortalRequests
                     Answered.TrySetException(
                         new PortalException(
                             "The connection to the portal ended.",
-                            notification.Exception
+                            notification.CompletionReason
                         )
                     );
                 }
